@@ -3820,6 +3820,15 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT");
     const bool enable_return_materialization =
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION");
+    // the reads of an integer pair whose index is 0 or 1 but not a constant (ex: pair[x & 1])
+    const bool enable_bounded_pair_reads =
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT");
+    // the reads of a hash with a key that a phi selects from literal keys (ex: h{c ? "a" : "b"})
+    const bool enable_finite_hash_keys =
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT");
+    // the removal of such a phi, of its literals and of the local that holds it when nothing else uses them
+    const bool enable_finite_hash_selector_elision =
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_FINITE_HASH_KEY_SELECTOR_ELISION");
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -3845,6 +3854,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     // locals that a fused instruction reads or writes directly, not with a LoadLocal: their stores are kept, as such an
     // access is not in local_accesses (qore#7634)
     std::unordered_set<const LocalVar*> fused_accessed_locals;
+    // true if an instruction has a handler: the graph has no exception edges, so it does not have every path to a
+    // join, and a finite hash key, whose proof is the joins of a phi, is not projected
+    bool has_exception_edges = false;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -3853,6 +3865,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
             positions.emplace(inst, InstructionPosition{inst, block_id, offset});
+            if (inst->exception_target
+                    || ((inst->opcode == QoreIROpcode::Throw || inst->opcode == QoreIROpcode::Rethrow)
+                        && static_cast<const QoreIRThrowInstruction*>(inst)->exception_target)) {
+                has_exception_edges = true;
+            }
             if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
                 const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
                 fused_accessed_locals.insert(fused->target);
@@ -4043,6 +4060,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::vector<std::pair<QoreIRValue, size_t>> incoming;
     };
     std::vector<ScalarizedAggregatePhi> scalarized_aggregate_phis;
+    //! the phis that select the keys of the hash reads that are projected to phis of the members (see
+    //! resolve_finite_hash_key below)
+    std::unordered_set<const QoreIRPhiInstruction*> finite_hash_selectors;
+    //! set when the analysis is cancelled in a helper that returns no status of its own; the caller returns
+    //! without changing the function
+    bool finite_hash_cancelled = false;
     enum class ScalarizedAggregateMaterializationKind {
         List,
         Hash,
@@ -4071,6 +4094,34 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedLiteralIntQuery>
         scalarized_literal_int_queries;
+    //! the read of an integer pair with an index that is 0 or 1, which the rewrite replaces by an arithmetic selection
+    //! of one of the two members: first ^ ((first ^ second) & -index)
+    struct ScalarizedBoundedPairRead {
+        QoreIRValue first;
+        QoreIRValue second;
+        QoreIRValue index;
+    };
+    std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+        scalarized_bounded_pair_reads;
+    //! returns true if \a selector is a native integer that is 0 or 1: a known range, or the result of an AND with 1
+    auto is_bit_selector = [&](QoreIRValue selector) {
+        const QoreIRValueFacts* facts = func.getValueFacts(selector);
+        if (!facts || facts->representation != QoreIRValueRepresentation::NativeInt
+                || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing) {
+            return false;
+        }
+        if (facts->int_range_known && facts->int_range_min >= 0 && facts->int_range_max <= 1) {
+            return true;
+        }
+        auto definition = definitions.find(selector.id);
+        if (definition == definitions.end() || definition->second.inst->opcode != QoreIROpcode::AndInt
+                || definition->second.inst->operands.size() != 2) {
+            return false;
+        }
+        int64_t mask = 0;
+        return (resolve_int_selector(definition->second.inst->operands[0], mask) && mask == 1)
+            || (resolve_int_selector(definition->second.inst->operands[1], mask) && mask == 1);
+    };
     std::unordered_set<const LocalVar*> scalarized_container_locals;
     size_t scalarized = 0;
 
@@ -4488,6 +4539,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             candidate_aggregate_materializations;
         std::unordered_map<const QoreIRInstruction*,
             ScalarizedLiteralIntQuery> candidate_literal_int_queries;
+        std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+            candidate_bounded_pair_reads;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -4498,6 +4551,159 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 hash_values[hash_keys[i]] = aggregate_values[i];
             }
         }
+        // the phis that select the keys of the reads that are projected to phis of the members' values
+        std::unordered_set<const QoreIRPhiInstruction*> candidate_finite_hash_selectors;
+        // the phi of the members' values made for each selector phi, which every read with the same key reuses
+        std::unordered_map<const QoreIRPhiInstruction*, QoreIRValue> candidate_finite_hash_member_phis;
+        // a read with a key that a phi selects from literal keys of the hash on each of its edges (ex: h{key} after
+        // string key = c ? "a" : "b"): the value is a phi of the members' values on the same edges, which the hash's
+        // store dominates; the members are native scalars, owned by their slots in the interpreter, so the phi can
+        // use them after the statement that built the hash.  The proof is the joins of the graph, which has no
+        // exception edges, so a function with handlers is excluded
+        const bool finite_hash_candidate = enable_finite_hash_keys && cross_block && !has_exception_edges
+            && hash_candidate && !hashdecl_type && !deferred_hashdecl_type && !retain_aggregate_owner;
+        auto resolve_finite_hash_key = [&](const QoreIRInstruction* read,
+                const InstructionPosition& read_pos) -> QoreIRValue {
+            if (!finite_hash_candidate || read->operands.size() != 2
+                    || static_cast<const QoreIRExprInstruction*>(read)->has_ref_args) {
+                return QoreIRValue();
+            }
+            // follows the key through string locals with a single store that dominates their loads to the phi
+            QoreIRValue selector = read->operands[1];
+            InstructionPosition consumer = read_pos;
+            const InstructionPosition* phi_pos = nullptr;
+            for (size_t depth = 0; depth <= 8 && !phi_pos; ++depth) {
+                auto definition = definitions.find(selector.id);
+                if (definition == definitions.end() || definition->second.inst->exception_target
+                        || !dominates(definition->second, consumer, true)) {
+                    return QoreIRValue();
+                }
+                const QoreIRInstruction* inst = definition->second.inst;
+                if (inst->opcode == QoreIROpcode::Phi) {
+                    phi_pos = &definition->second;
+                    break;
+                }
+                if (inst->opcode != QoreIROpcode::LoadLocal) {
+                    return QoreIRValue();
+                }
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto assignment = constant_local_assignments.find(load->local);
+                if (assignment == constant_local_assignments.end() || load->is_closure || load->is_ref
+                        || load->local->getTypeInfo() != stringTypeInfo) {
+                    return QoreIRValue();
+                }
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(assignment->second.store);
+                if (store->mode != AssignmentMode::Normal || store->is_closure || store->is_ref
+                        || store->exception_target) {
+                    return QoreIRValue();
+                }
+                auto store_position = positions.find(store);
+                if (store_position == positions.end()) {
+                    return QoreIRValue();
+                }
+                consumer = store_position->second;
+                selector = assignment->second.value;
+            }
+            // the hash's store dominates the phi, which dominates the read: on every path to the read, the last
+            // join of the phi follows the last store of the hash
+            if (!phi_pos || !dominates(*store_pos, *phi_pos, true) || !dominates(*phi_pos, read_pos, true)) {
+                return QoreIRValue();
+            }
+            const auto* selector_phi = static_cast<const QoreIRPhiInstruction*>(phi_pos->inst);
+            // another read with the same key already has the phi of the members' values: the phi does not depend on
+            // the read, whose own conditions are checked above
+            auto member_phi = candidate_finite_hash_member_phis.find(selector_phi);
+            if (member_phi != candidate_finite_hash_member_phis.end()) {
+                return member_phi->second;
+            }
+            const auto& predecessors = cfg.predecessors[phi_pos->block];
+            if (selector_phi->value_kind != QoreIRPhiValueKind::QoreValue
+                    || predecessors.size() < 2 || predecessors.size() > 4
+                    || selector_phi->incoming.size() != predecessors.size()
+                    || selector_phi->operands.size() != predecessors.size()) {
+                return QoreIRValue();
+            }
+            ScalarizedAggregatePhi phi;
+            phi.block = phi_pos->block;
+            bool range_known = true;
+            std::unordered_set<size_t> seen;
+            for (size_t i = 0; i < selector_phi->incoming.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count, "IR finite hash key analysis")) {
+                    finite_hash_cancelled = true;
+                    return QoreIRValue();
+                }
+                const QoreIRPhiIncoming& incoming = selector_phi->incoming[i];
+                auto block = cfg.block_ids.find(incoming.block);
+                auto literal = definitions.find(incoming.value.id);
+                // each edge is a distinct forward edge from a predecessor with a literal key
+                if (block == cfg.block_ids.end() || !seen.insert(block->second).second
+                        || std::find(predecessors.begin(), predecessors.end(), block->second) == predecessors.end()
+                        || cfg.dominates(phi_pos->block, block->second)
+                        || incoming.value.id != selector_phi->operands[i].id
+                        || literal == definitions.end()
+                        || literal->second.inst->opcode != QoreIROpcode::ConstString
+                        || literal->second.inst->exception_target
+                        || func.blocks[block->second]->instructions.empty()) {
+                    return QoreIRValue();
+                }
+                auto terminator_position = positions.find(func.blocks[block->second]->instructions.back().get());
+                if (terminator_position == positions.end()) {
+                    return QoreIRValue();
+                }
+                const InstructionPosition& terminator = terminator_position->second;
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(literal->second.inst);
+                auto selected = constant->constant.kind == QoreIRConstant::Kind::String
+                    ? hash_values.find(constant->constant.string_value) : hash_values.end();
+                if (!dominates(literal->second, terminator, true) || selected == hash_values.end()) {
+                    return QoreIRValue();
+                }
+                auto value = definitions.find(selected->second.id);
+                const QoreIRValueFacts* facts = func.getValueFacts(selected->second);
+                if (value == definitions.end() || !dominates(value->second, terminator, true) || !facts
+                        || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing
+                        || (facts->representation != QoreIRValueRepresentation::NativeInt
+                            && facts->representation != QoreIRValueRepresentation::NativeFloat
+                            && facts->representation != QoreIRValueRepresentation::NativeBool)) {
+                    return QoreIRValue();
+                }
+                if (phi.incoming.empty()) {
+                    phi.facts = *facts;
+                    phi.value_kind = facts->representation == QoreIRValueRepresentation::NativeInt
+                        ? QoreIRPhiValueKind::NativeInt
+                        : facts->representation == QoreIRValueRepresentation::NativeFloat
+                            ? QoreIRPhiValueKind::NativeFloat
+                            : QoreIRPhiValueKind::NativeBool;
+                    range_known = facts->int_range_known;
+                } else if (facts->representation != phi.facts.representation
+                        || facts->type_info != phi.facts.type_info) {
+                    return QoreIRValue();
+                } else if (range_known && facts->int_range_known) {
+                    phi.facts.int_range_min = std::min(phi.facts.int_range_min, facts->int_range_min);
+                    phi.facts.int_range_max = std::max(phi.facts.int_range_max, facts->int_range_max);
+                } else {
+                    range_known = false;
+                }
+                phi.incoming.push_back({selected->second, block->second});
+            }
+            phi.facts.assigned_state = QoreIRAssignedState::Assigned;
+            phi.facts.never_nothing = true;
+            // the facts that the members do not share are not the phi's: those of a native value made by the IR
+            // builder
+            phi.facts.list_density = QoreIRListDensity::Unknown;
+            phi.facts.ownership = phi.facts.representation == QoreIRValueRepresentation::NativeBool
+                ? QoreIRValueOwnership::ReferenceFree : QoreIRValueOwnership::Unknown;
+            phi.facts.int_range_known = range_known;
+            if (!range_known) {
+                phi.facts.int_range_min = phi.facts.int_range_max = 0;
+            }
+            phi.result = func.createValue();
+            func.max_value_id = std::max(func.max_value_id, phi.result.id);
+            QoreIRValue result = phi.result;
+            candidate_aggregate_phis.push_back(std::move(phi));
+            candidate_finite_hash_selectors.insert(selector_phi);
+            candidate_finite_hash_member_phis.emplace(selector_phi, result);
+            return result;
+        };
         auto local_paths = local_path_operations.find(local);
         bool has_mutation = local_paths != local_path_operations.end()
             && !local_paths->second.empty();
@@ -5560,6 +5766,15 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 == QoreIROpcode::HashDerefDynamic) {
                             if (!resolve_string_selector(
                                     use.inst->operands[1], key)) {
+                                replacement = resolve_finite_hash_key(use.inst, read_position->second);
+                                if (finite_hash_cancelled) {
+                                    return {};
+                                }
+                                if (replacement.isValid()) {
+                                    candidate_replacements.emplace(use.inst->result.id, replacement);
+                                    reads.push_back(use.inst);
+                                    continue;
+                                }
                                 invalid = true;
                                 break;
                             }
@@ -5604,6 +5819,18 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         int64_t index = 0;
                         if (!resolve_int_selector(
                                 use.inst->operands[1], index)) {
+                            // an integer pair read with an index that is 0 or 1: the members are native integers,
+                            // owned by their slots in the interpreter, so the selection can use them after the
+                            // statement that built the list
+                            if (enable_bounded_pair_reads && element_type == bigIntTypeInfo
+                                    && aggregate_values.size() == 2
+                                    && is_bit_selector(use.inst->operands[1])) {
+                                candidate_bounded_pair_reads.emplace(use.inst,
+                                    ScalarizedBoundedPairRead{aggregate_values[0], aggregate_values[1],
+                                        use.inst->operands[1]});
+                                // rewritten in place, not removed
+                                continue;
+                            }
                             invalid = true;
                             break;
                         }
@@ -5844,7 +6071,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         if (invalid || (candidate_replacements.empty()
                 && candidate_path_operations.empty()
                 && candidate_literal_int_queries.empty()
-                && candidate_owned_aggregate_reads.empty())) {
+                && candidate_owned_aggregate_reads.empty()
+                && candidate_bounded_pair_reads.empty())) {
             continue;
         }
         if (!retain_aggregate_owner) {
@@ -5901,6 +6129,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         scalarized_literal_int_queries.insert(
             candidate_literal_int_queries.begin(),
             candidate_literal_int_queries.end());
+        scalarized_bounded_pair_reads.insert(candidate_bounded_pair_reads.begin(),
+            candidate_bounded_pair_reads.end());
+        finite_hash_selectors.insert(candidate_finite_hash_selectors.begin(),
+            candidate_finite_hash_selectors.end());
         if (has_mutation && !retain_aggregate_owner) {
             scalarized_container_locals.insert(local);
         }
@@ -5956,6 +6188,57 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             record_forwarded_load(value);
         }
     }
+    for (const auto& [inst, read] : scalarized_bounded_pair_reads) {
+        (void)inst;
+        record_forwarded_load(read.first);
+        record_forwarded_load(read.second);
+    }
+    // returns true if \a phi is a key selector of the projected hash reads whose uses are all removed, or are
+    // \a store, and whose literal keys have no other use, so that the phi and its literals can be removed too
+    auto finite_hash_selector_removable = [&](const QoreIRInstruction* phi, const QoreIRInstruction* store) {
+        // a phi that the rewrite forwards to other uses, which the use map does not have, is not removable
+        if (!enable_finite_hash_selector_elision || phi->opcode != QoreIROpcode::Phi
+                || !finite_hash_selectors.count(static_cast<const QoreIRPhiInstruction*>(phi))
+                || forwarded_values.count(phi->result.id)) {
+            return false;
+        }
+        auto phi_uses = uses.find(phi->result.id);
+        if (phi_uses != uses.end()) {
+            for (const QoreIRScalarUse& use : phi_uses->second) {
+                if (qore_ir_analysis_cancelled(check_count, "IR finite hash selector use analysis")) {
+                    finite_hash_cancelled = true;
+                    return false;
+                }
+                if (!use.inst || (use.inst != store && !eliminated.count(use.inst))) {
+                    return false;
+                }
+            }
+        }
+        for (QoreIRValue operand : phi->operands) {
+            if (qore_ir_analysis_cancelled(check_count, "IR finite hash selector literal analysis")) {
+                finite_hash_cancelled = true;
+                return false;
+            }
+            auto literal = definitions.find(operand.id);
+            auto literal_uses = uses.find(operand.id);
+            if (literal == definitions.end() || literal->second.inst->opcode != QoreIROpcode::ConstString
+                    || literal->second.inst->exception_target || literal_uses == uses.end()
+                    || literal_uses->second.size() != 1 || literal_uses->second.front().inst != phi) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // removes a removable key selector (see above) and its literals
+    auto remove_finite_hash_selector = [&](const QoreIRInstruction* phi) {
+        eliminated.insert(phi);
+        for (QoreIRValue operand : phi->operands) {
+            auto literal = definitions.find(operand.id);
+            // checked by finite_hash_selector_removable()
+            assert(literal != definitions.end());
+            eliminated.insert(literal->second.inst);
+        }
+    };
     for (const auto& [local, accesses] : local_accesses) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR fixed-aggregate dead constant-local analysis")) {
@@ -6023,7 +6306,14 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 && local->getTypeInfo() == stringTypeInfo)
             || (constant->opcode == QoreIROpcode::ConstInt
                 && local->getTypeInfo() == bigIntTypeInfo);
-        if (!exact_constant) {
+        // a string local that holds the key selector of projected hash reads, which no read uses any more: it is
+        // removed with the selector, which has no other use
+        bool finite_hash_selector = !exact_constant && local->getTypeInfo() == stringTypeInfo
+            && finite_hash_selector_removable(constant, store);
+        if (finite_hash_cancelled) {
+            return {};
+        }
+        if (!exact_constant && !finite_hash_selector) {
             continue;
         }
         for (const InstructionPosition& access : accesses) {
@@ -6032,6 +6322,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return {};
             }
             eliminated.insert(access.inst);
+        }
+        if (finite_hash_selector) {
+            remove_finite_hash_selector(constant);
+            continue;
         }
         auto constant_uses = uses.find(constant->result.id);
         bool constant_dead = constant_uses != uses.end();
@@ -6049,6 +6343,26 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         }
         if (constant_dead) {
             eliminated.insert(constant);
+        }
+    }
+    // the key selectors that the projected reads used directly (ex: h{c ? "a" : "b"}), in the order of the blocks,
+    // so that the result does not depend on the order of the set
+    if (enable_finite_hash_selector_elision && !finite_hash_selectors.empty()) {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR finite hash selector removal")) {
+                    return {};
+                }
+                if (inst->opcode != QoreIROpcode::Phi) {
+                    break;
+                }
+                if (!eliminated.count(inst.get()) && finite_hash_selector_removable(inst.get(), nullptr)) {
+                    remove_finite_hash_selector(inst.get());
+                }
+                if (finite_hash_cancelled) {
+                    return {};
+                }
+            }
         }
     }
     for (auto& [result_id, replacement] : replacements) {
@@ -6180,6 +6494,48 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
             } else {
+                auto pair_read = scalarized_bounded_pair_reads.find(it->get());
+                if (pair_read != scalarized_bounded_pair_reads.end()) {
+                    const QoreIRInstruction* old = it->get();
+                    // first ^ ((first ^ second) & -index) is first for an index of 0 and second for 1, without a
+                    // branch; -index is 0 or -1, so no operation can overflow, whatever the members' values
+                    QoreIRValueFacts facts;
+                    facts.type_info = bigIntTypeInfo;
+                    facts.representation = QoreIRValueRepresentation::NativeInt;
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                    // replaces the read with one instruction per call; the last takes the read's result
+                    auto emit = [&](QoreIROpcode opcode, QoreIRValue left, QoreIRValue right, bool last) {
+                        auto inst = std::make_unique<QoreIRInstruction>(opcode);
+                        inst->loc = old->loc;
+                        inst->stmt_loc = old->stmt_loc;
+                        inst->cached_start_line = old->cached_start_line;
+                        inst->temp_scope_id = old->temp_scope_id;
+                        inst->result = last ? old->result : func.createValue();
+                        func.max_value_id = std::max(func.max_value_id, inst->result.id);
+                        inst->operands.push_back(left);
+                        if (right.isValid()) {
+                            inst->operands.push_back(right);
+                        }
+                        (void)qore_ir_rewrite_value_operands(*inst, replacements, check_count, false);
+                        QoreIRValue result = inst->result;
+                        func.setValueFacts(result, facts);
+                        if (last) {
+                            *it = std::move(inst);
+                        } else {
+                            it = instructions.insert(it, std::move(inst));
+                            ++it;
+                        }
+                        return result;
+                    };
+                    const ScalarizedBoundedPairRead read = pair_read->second;
+                    QoreIRValue mask = emit(QoreIROpcode::UnaryMinusInt, read.index, QoreIRValue(), false);
+                    QoreIRValue diff = emit(QoreIROpcode::XorInt, read.first, read.second, false);
+                    QoreIRValue selected = emit(QoreIROpcode::AndInt, diff, mask, false);
+                    emit(QoreIROpcode::XorInt, read.first, selected, true);
+                    ++it;
+                    continue;
+                }
                 auto owned_read =
                     scalarized_owned_aggregate_reads.find(it->get());
                 if (owned_read
