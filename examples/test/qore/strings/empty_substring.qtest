@@ -149,5 +149,22 @@ class EmptySubstringTest inherits QUnit::Test {
         # replacing or splitting with an empty string does not change the string
         assertEq("abc", replace("abc", "", "x"));
         assertEq(("abc",), "abc".split(""));
+        # a NUL character in the subject is no match of an empty separator (qore#7710)
+        foreach hash<auto> src in (getSources("a\0b,c")) {
+            string str = src.value;
+            string label = sprintf("a string with a NUL from %s", src.source);
+            assertEq((str,), str.split(""), label + ": <string>::split()");
+            assertEq((str,), split("", str), label + ": split()");
+            assertEq((str,), split("", str, "\""), label + ": split() with a quote character");
+        }
+        binary bin = binary("a\0b");
+        assertEq((bin,), bin.split(binary()), "binary data with a NUL byte");
+        assertEq((bin,), split(binary(), bin), "split() of binary data with a NUL byte");
+        # every character of UTF-16 text in the Latin range has a NUL byte, which in big-endian order is at the start
+        # of the character, where a match of a two-byte encoding can be
+        string utf16 = convert_encoding("ab", "UTF-16BE");
+        list<string> l = utf16.split("");
+        assertEq(1, l.size(), "UTF-16BE: one field");
+        assertEq(utf16, l[0], "UTF-16BE: the whole string");
     }
 }
