@@ -1860,8 +1860,8 @@
           "message": "If `True`, the label will be generated asynchronously. Default is `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
-          "message": "Get Shipping Label"
+          "source": "Get shipping label",
+          "message": "Get shipping label"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
           "source": "Get a shipping label by ID",

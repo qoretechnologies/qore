@@ -388,7 +388,7 @@
           "message": "Список одного або більше ідентифікаторів ресурсу Amazon (ARN) роботи з оцінкою, які ви хочете видалити."
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Cancel Automated Reasoning Policy Build Workflow",
+          "source": "Cancel automated reasoning policy build workflow",
           "message": "Скасувати робочий процес збірки політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Значення для теги."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Create Automated Reasoning Policy Test Case",
+          "source": "Create automated reasoning policy test case",
           "message": "Створити випадок випробування автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Мінімальний рівень довіри для логічної перевірки. Вміст, який відповідає порогу, вважається високодовіреним знахідкою, яку можна перевірити."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Create Automated Reasoning Policy Version",
+          "source": "Create automated reasoning policy version",
           "message": "Створити версію автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -3412,7 +3412,7 @@
           "message": "Єдиний, чутливий до регістру ідентифікатор для забезпечення того, що запит API виконаний не більше одного разу. Якщо цей токен відповідає попередньому запиту, Amazon Bedrock ігнорує запит, але не повертає помилку. Для отримання додаткової інформації див. [Забезпечення ідемпотентності](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html) в *Amazon S3 User Guide*."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.display_name": {
-          "source": "Create Guardrail Version",
+          "source": "Create guardrail version",
           "message": "Створити версію захисного механізму"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.short_desc": {
@@ -4936,7 +4936,7 @@
           "message": "Значення для теги."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Delete Automated Reasoning Policy",
+          "source": "Delete automated reasoning policy",
           "message": "Видалити політику автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -4972,7 +4972,7 @@
           "message": "Визначає, чи слід примусово видалити автоматизовану політику логічного висновку навіть у тому випадку, якщо вона має активні ресурси. Коли `false`, Amazon Bedrock перевіряє, чи були видалені всі артефакти (наприклад, версія політики, випробувальний випадок, результат випробування) для політики перед її видаленням. Коли `true`, Amazon Bedrock видалятиме політику та всі її артефакти без перевірки. За замовчуванням `false`."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Delete Automated Reasoning Policy Build Workflow",
+          "source": "Delete automated reasoning policy build workflow",
           "message": "Видалити робочий процес збірки політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Час позначки, коли останній раз було оновлено потік будівництва. Це використовується для оптимістичного контролю одночасності, щоб запобігти випадковому видаленню робіт, які були змінені."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Delete Automated Reasoning Policy Test Case",
+          "source": "Delete automated reasoning policy test case",
           "message": "Видалити випадок випробування автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5068,7 +5068,7 @@
           "message": "Часова мітка останнього оновлення тесту. Це використовується як токен одночасності для запобігання конфліктним змінам."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Delete Custom Model",
+          "source": "Delete custom model",
           "message": "Видалити налаштовану модель"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "Ім'я моделі для видалення."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Delete Custom Model Deployment",
+          "source": "Delete custom model deployment",
           "message": "Видалити власне розгортання моделі"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5116,7 +5116,7 @@
           "message": "Ідентифікатор ресурсу Amazon (ARN) або ім'я налаштованого розгортання моделі, яке потрібно видалити."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Delete Enforced Guardrail Configuration",
+          "source": "Delete enforced guardrail configuration",
           "message": "Видалити налаштування Enforced Guardrail"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -5164,7 +5164,7 @@
           "message": "ID моделі доступу до моделі для видалення."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Delete Guardrail",
+          "source": "Delete guardrail",
           "message": "Видалити захисний бар'єр"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.short_desc": {
@@ -5200,7 +5200,7 @@
           "message": "Версія захисного елемента."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Delete Imported Model",
+          "source": "Delete imported model",
           "message": "Видалити імпортовану модель"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5224,7 +5224,7 @@
           "message": "Назва імпортованої моделі для видалення."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Delete Inference Profile",
+          "source": "Delete inference profile",
           "message": "Видалити профіль виведення"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5248,7 +5248,7 @@
           "message": "Ідентифікатор ресурсу Amazon (ARN) або ID профілю інференції додатка, який потрібно видалити."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Delete Marketplace Model Endpoint",
+          "source": "Delete marketplace model endpoint",
           "message": "Видалити точку маркетплейсу моделі"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5284,7 +5284,7 @@
           "message": "Видалити журнал викликів"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Delete Prompt Router",
+          "source": "Delete prompt router",
           "message": "Видалити маршрутизатор запитів"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Амазонський ресурсний ідентифікатор (ARN) маршрутизатора запитів для видалення."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Delete Provisioned Model Throughput",
+          "source": "Delete provisioned model throughput",
           "message": "Видалити провізійну продуктивність моделі"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -5332,7 +5332,7 @@
           "message": "Amazon Resource Name (ARN) або ім'я наданого пропускної здатності."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Delete Resource Policy",
+          "source": "Delete resource policy",
           "message": "Видалити політику ресурсу"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -5356,7 +5356,7 @@
           "message": "ARN ресурсу Bedrock, до якого застосовується ця політика ресурсу."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.display_name": {
-          "source": "Deregister Marketplace Model Endpoint",
+          "source": "Deregister marketplace model endpoint",
           "message": "Відреєструвати точку маркетплейсу моделі"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.short_desc": {
@@ -5380,7 +5380,7 @@
           "message": "Amazon Resource Name (ARN) ендпоінта, який ви хочете зняти з реєстрації."
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Export Automated Reasoning Policy Version",
+          "source": "Export automated reasoning policy version",
           "message": "Експортувати версію автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -5416,7 +5416,7 @@
           "message": "Повертає режим зберігання даних на рівні рахунку для Amazon Bedrock."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Advanced Prompt Optimization Job",
+          "source": "Get advanced prompt optimization job",
           "message": "Отримати роботу оптимізації просунутих запитів"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.short_desc": {
@@ -5440,7 +5440,7 @@
           "message": "ARN або ID робочого процесу оптимізації просунутих підсказок: ARN або ID робочого процесу оптимізації просунутих підсказок."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Get Automated Reasoning Policy",
+          "source": "Get automated reasoning policy",
           "message": "Отримати політику автоматизованого висновку"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -5464,7 +5464,7 @@
           "message": "Amazon Resource Name (ARN) політики автоматизованого міркування, яку потрібно отримати. Це може бути або неверсійний ARN для чернетки політики, або ARN для конкретної версії політики."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Get Automated Reasoning Policy Annotations",
+          "source": "Get automated reasoning policy annotations",
           "message": "Отримати анотації автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -5500,7 +5500,7 @@
           "message": "Єдиний ідентифікатор робочого процесу створення, для якого ви хочете отримати анотації."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow",
+          "source": "Get automated reasoning policy build workflow",
           "message": "Отримати потік збірки політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5536,7 +5536,7 @@
           "message": "Єдиний ідентифікатор робочого процесу створення для отримання."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow Result Assets",
+          "source": "Get automated reasoning policy build workflow result assets",
           "message": "Отримати результати побудови політики автоматизованого міркування"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.short_desc": {
@@ -5628,7 +5628,7 @@
           "message": "Єдиний ідентифікатор конкретного активу, який потрібно отримати, коли існує кілька активів одного і того ж типу. Це потрібно для отримання активів SOURCE_DOCUMENT, оскільки в робочому процесі можуть використовуватися кілька вихідних документів. Ідентифікатор активу можна отримати з маніфесту активу."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.display_name": {
-          "source": "Get Automated Reasoning Policy Next Scenario",
+          "source": "Get automated reasoning policy next scenario",
           "message": "Отримати наступний сценарій автоматизованої логіки політики"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.short_desc": {
@@ -5664,7 +5664,7 @@
           "message": "Єдиний ідентифікатор робочого процесу створення, пов'язаного з тестовими сценаріями."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Get Automated Reasoning Policy Test Case",
+          "source": "Get automated reasoning policy test case",
           "message": "Отримати випробуваний випадок автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Унікальний ідентифікатор тесту для отримання."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.display_name": {
-          "source": "Get Automated Reasoning Policy Test Result",
+          "source": "Get automated reasoning policy test result",
           "message": "Отримати результат випробування автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "Єдиний ідентифікатор тесту, для якого потрібно отримати результати."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Get Custom Model",
+          "source": "Get custom model",
           "message": "Отримати налаштовану модель"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5772,7 +5772,7 @@
           "message": "Ім'я або Amazon Resource Name (ARN) налаштованої моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Get Custom Model Deployment",
+          "source": "Get custom model deployment",
           "message": "Отримати власне розгортання моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5796,7 +5796,7 @@
           "message": "Amazon Resource Name (ARN) або ім'я власної моделі розгортання, про яку ви хочете отримати інформацію."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "Отримати завдання оцінки"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "Ідентифікатор ресурсу Amazon (ARN) роботи з оцінкою, про яку ви хочете отримати інформацію."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.display_name": {
-          "source": "Get Foundation Model",
+          "source": "Get foundation model",
           "message": "Отримати базову модель"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Ідентифікатор моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.display_name": {
-          "source": "Get Foundation Model Availability",
+          "source": "Get foundation model availability",
           "message": "Отримати доступність фундаментальної моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "ID моделі фундаментальної моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.display_name": {
-          "source": "Get Guardrail",
+          "source": "Get guardrail",
           "message": "Отримати захисний бар'єр"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.short_desc": {
@@ -5904,7 +5904,7 @@
           "message": "Версія ґардраїлу, для якої потрібно отримати деталі. Якщо ви не вказати версію, у відповідь повернуть деталі для версії `DRAFT`."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Get Imported Model",
+          "source": "Get imported model",
           "message": "Отримати імпортовану модель"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Ім'я або Amazon Resource Name (ARN) імпортованої моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Get Inference Profile",
+          "source": "Get inference profile",
           "message": "Отримати профіль виведення"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Ідентифікатор або Амазонський ресурсний ідентифікатор (ARN) профілю інференції."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Get Marketplace Model Endpoint",
+          "source": "Get marketplace model endpoint",
           "message": "Отримати точку кінцевого користувача моделі на маркетплейсі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Ідентифікатор ресурсу Amazon (ARN) кінцевого точки, про який ви хочете отримати інформацію."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.display_name": {
-          "source": "Get Model Copy Job",
+          "source": "Get model copy job",
           "message": "Отримати копію моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "Амазонський ресурсний ідентифікатор (ARN) копійованої моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Model Customization Job",
+          "source": "Get model customization job",
           "message": "Отримати роботу настройки моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Ідентифікатор для налаштування роботи."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.display_name": {
-          "source": "Get Model Import Job",
+          "source": "Get model import job",
           "message": "Отримати робочу зону імпорту"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "Ідентифікатор імпортної роботи."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.display_name": {
-          "source": "Get Model Invocation Job",
+          "source": "Get model invocation job",
           "message": "Отримати робочу зону виклику моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.short_desc": {
@@ -6084,7 +6084,7 @@
           "message": "Отримати поточні значення конфігурації для журналування виклику моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Get Prompt Router",
+          "source": "Get prompt router",
           "message": "Отримати маршрутизатор запитів"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "ARN маршрутизатора запитів"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Get Provisioned Model Throughput",
+          "source": "Get provisioned model throughput",
           "message": "Отримати провізійну продуктивність моделі"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -6132,7 +6132,7 @@
           "message": "Amazon Resource Name (ARN) або ім'я наданого пропускної здатності."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Get Resource Policy",
+          "source": "Get resource policy",
           "message": "Отримати політику ресурсу"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -6288,7 +6288,7 @@
           "message": "Максимальна кількість політиків, які повертаються в одному виклику."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.display_name": {
-          "source": "List Automated Reasoning Policy Build Workflows",
+          "source": "List automated reasoning policy build workflows",
           "message": "Список робочих процесів збірки політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.short_desc": {
@@ -6336,7 +6336,7 @@
           "message": "Максимальна кількість робочих потоків збору, які повертаються в одному відповіді. Діапазон від 1 до 100."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.display_name": {
-          "source": "List Automated Reasoning Policy Test Cases",
+          "source": "List automated reasoning policy test cases",
           "message": "Список випадків випробувань автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.short_desc": {
@@ -6384,7 +6384,7 @@
           "message": "Максимальна кількість тестів, які повертаються в одному виклику."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.display_name": {
-          "source": "List Automated Reasoning Policy Test Results",
+          "source": "List automated reasoning policy test results",
           "message": "Список результатів політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "За спаданням"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.display_name": {
-          "source": "List Foundation Model Agreement Offers",
+          "source": "List foundation model agreement offers",
           "message": "Список пропозицій договорів фундаментальних моделей"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.short_desc": {
@@ -8452,7 +8452,7 @@
           "message": "Запит на встановлення профілю клієнта."
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.display_name": {
-          "source": "Register Marketplace Model Endpoint",
+          "source": "Register marketplace model endpoint",
           "message": "Зареєструвати точку маркетплейсу моделі"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "ARN моделі з Amazon Bedrock Marketplace, яка розгорнута на кінцевій точці."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.display_name": {
-          "source": "Start Automated Reasoning Policy Build Workflow",
+          "source": "Start automated reasoning policy build workflow",
           "message": "Запустити робочий процес збірки політики автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "Єдиний, чутливий до регістру ідентифікатор для забезпечення того, що операція завершується не більше одного разу. Якщо цей токен відповідає попередньому запиту, Amazon Bedrock ігнорує запит, але не повертає помилку."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.display_name": {
-          "source": "Start Automated Reasoning Policy Test Workflow",
+          "source": "Start automated reasoning policy test workflow",
           "message": "Запустити робочий процес тесту автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "Єдиний, чутливий до регістру ідентифікатор для забезпечення того, що операція завершується не більше одного разу. Якщо цей токен відповідає попередньому запиту, Amazon Bedrock ігнорує запит, але не повертає помилку."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Advanced Prompt Optimization Job",
+          "source": "Stop advanced prompt optimization job",
           "message": "Зупинити Advanced Prompt Optimization Job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "ARN або ID налагодженої роботи оптимізації промтів для зупинки: ARN або ID налагодженої роботи оптимізації промтів."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.display_name": {
-          "source": "Stop Evaluation Job",
+          "source": "Stop evaluation job",
           "message": "Зупинити роботу оцінки"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "Amazon Resource Name (ARN) роботи оцінки, яку ви хочете зупинити."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Customization Job",
+          "source": "Stop model customization job",
           "message": "Зупинити роботу настройки моделі"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Ідентифікатор завдання для зупинки роботи."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Invocation Job",
+          "source": "Stop model invocation job",
           "message": "Зупинити роботу виклику моделі"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.short_desc": {
@@ -9292,7 +9292,7 @@
           "message": "Ключі тегів для видалення з ресурсу."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Update Automated Reasoning Policy",
+          "source": "Update automated reasoning policy",
           "message": "Оновити політику автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -9532,7 +9532,7 @@
           "message": "Оновлений опис політики автоматизованого міркування."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Update Automated Reasoning Policy Annotations",
+          "source": "Update automated reasoning policy annotations",
           "message": "Оновити анотації автоматизованої логіки"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -9808,7 +9808,7 @@
           "message": "Хеш-значення набору анотацій, який ви оновлюєте. Це використовується для оптимізаційного контролю конкуренції для запобігання конфліктним оновленням."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Update Automated Reasoning Policy Test Case",
+          "source": "Update automated reasoning policy test case",
           "message": "Оновити тест автоматизованої логіки політики"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "Єдиний, чутливий до регістру ідентифікатор для забезпечення того, що операція завершується не більше одного разу. Якщо цей токен відповідає попередньому запиту, Amazon Bedrock ігнорує запит, але не повертає помилку."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Update Custom Model Deployment",
+          "source": "Update custom model deployment",
           "message": "Оновити власне розгортання моделі"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -9980,7 +9980,7 @@
           "message": "ARN нової налаштованої моделі для розгортання. Це замінює поточну налаштовану модель."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Update Guardrail",
+          "source": "Update guardrail",
           "message": "Оновити захисну перешкоду"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.short_desc": {
@@ -11172,7 +11172,7 @@
           "message": "ARN ключа KMS, з яким шифрувати захисний механізм."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Update Marketplace Model Endpoint",
+          "source": "Update marketplace model endpoint",
           "message": "Оновити точку маркетплейсу моделі"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -11232,7 +11232,7 @@
           "message": "Єдиний, чутливий до регістру ідентифікатор, який ви надаєте для забезпечення ідемпотентності запиту. Цей токен перераховано як необов’язковий, оскільки SDK Amazon Web Services автоматично його генерує і встановлює цей параметр. Якщо ви не використовуєте SDK Amazon Web Services або CLI, вам потрібно надати цей токен або дія буде неефективною."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Update Provisioned Model Throughput",
+          "source": "Update provisioned model throughput",
           "message": "Оновити провізійну продуктивність моделі"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -11280,7 +11280,7 @@
           "message": "Ім'я Amazon Resource Name (ARN) нової моделі, яку потрібно пов'язати з цим резервованим пропуском. Ви не можете вказати це поле, якщо цей резервований пропуск пов'язаний з базовою моделлю.\n\nЯкщо цей резервований пропуск пов'язаний з налаштованою моделлю, ви можете вказати одну з наведених нижче опцій:\n\n- Базову модель, від якої була створена налаштована модель.\n\n- Іншу налаштовану модель, яка була створена від того ж базового моделі, що і налаштована модель."
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.display_name": {
-          "source": "Apply Guardrail",
+          "source": "Apply guardrail",
           "message": "Застосувати захисний бар'єр"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.short_desc": {
@@ -12532,7 +12532,7 @@
           "message": "Структура JSON-схеми, до якої повинна відповідати вихід моделі."
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Підрахувати токени"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -13348,7 +13348,7 @@
           "message": "CachePoint для включення у конфігурацію інструмента."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.display_name": {
-          "source": "Get Async Invoke",
+          "source": "Get async invoke",
           "message": "Отримати асинхронне виконання"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.short_desc": {
@@ -13684,7 +13684,7 @@
           "message": "VEHICLE_IDENTIFICATION_NUMBER"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.display_name": {
-          "source": "Invoke Model",
+          "source": "Invoke model",
           "message": "Виклик моделі"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.short_desc": {
@@ -14088,7 +14088,7 @@
           "message": "Значення тегу."
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Створити ембединги тексту"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {

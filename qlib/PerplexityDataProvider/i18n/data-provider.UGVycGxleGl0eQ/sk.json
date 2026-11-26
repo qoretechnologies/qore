@@ -2476,7 +2476,7 @@
           "message": "Kód jazyka ISO 639-1 určujúci preferovaný jazyk odpovede"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Vyhľadávanie na webe"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

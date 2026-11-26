@@ -447,7 +447,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/contacts/{contact_id}/notes",
                 "operation_id": "createNote",
-                "display_name": "Create Note",
+                "display_name": "Create note",
                 "short_desc": "Add a note to a contact",
                 "desc": "Adds a note to a contact.\n\n"
                     "A note is internal: it is visible to teammates on the contact's record and is never "
@@ -497,7 +497,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/contacts/{contact_id}/tags",
                 "operation_id": "listTagsForAContact",
-                "display_name": "List Tags on Contact",
+                "display_name": "List tags on contact",
                 "short_desc": "List the tags applied to one contact",
                 "desc": "Lists the tags applied to a contact.\n\n"
                     "This is exported so that **Remove Tag from Contact** can offer the tags that contact "
@@ -514,7 +514,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/contacts/{contact_id}/tags",
                 "operation_id": "attachTagToContact",
-                "display_name": "Add Tag to Contact",
+                "display_name": "Add tag to contact",
                 "short_desc": "Apply an existing tag to a contact",
                 "desc": "Applies a tag to a contact.\n\n"
                     "The tag has to exist already: this attaches one, it does not create one.",
@@ -532,7 +532,7 @@ public class IntercomManifest {
                 "method": "DELETE",
                 "path": "/contacts/{contact_id}/tags/{tag_id}",
                 "operation_id": "detachTagFromContact",
-                "display_name": "Remove Tag from Contact",
+                "display_name": "Remove tag from contact",
                 "short_desc": "Remove a tag from a contact",
                 "desc": "Removes a tag from a contact.\n\n"
                     "The tag itself is untouched; only its application to this contact is removed.\n\n"
@@ -921,7 +921,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/contacts/{contact_id}",
                 "operation_id": "ShowContact",
-                "display_name": "Get Contact",
+                "display_name": "Get contact",
                 "short_desc": "Retrieve a contact by its identity",
                 "desc": "Retrieves one contact by the identity Intercom gave it.\n\n"
                     "To find a contact by your own identifier instead, search for it: "
@@ -934,7 +934,7 @@ public class IntercomManifest {
                 "method": "PUT",
                 "path": "/contacts/{contact_id}",
                 "operation_id": "UpdateContact",
-                "display_name": "Update Contact",
+                "display_name": "Update contact",
                 "short_desc": "Update an existing contact",
                 "desc": "Updates a contact that already exists, named by the identity Intercom gave it.\n\n"
                     "Only the attributes supplied are changed. A field Intercom does not define on a "
@@ -951,7 +951,7 @@ public class IntercomManifest {
                 "method": "DELETE",
                 "path": "/contacts/{contact_id}",
                 "operation_id": "DeleteContact",
-                "display_name": "Delete Contact",
+                "display_name": "Delete contact",
                 "short_desc": "Delete a contact",
                 "desc": "Deletes a contact.\n\n"
                     "This is a hard delete and is not reversible. To keep the record and stop messaging "
@@ -964,7 +964,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/conversations/{conversation_id}",
                 "operation_id": "retrieveConversation",
-                "display_name": "Get Conversation",
+                "display_name": "Get conversation",
                 "short_desc": "Retrieve a conversation by its identity",
                 "desc": "Retrieves one conversation, including its parts - the messages and notes it holds",
                 "groups": (GroupConversations,),
@@ -975,7 +975,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/companies/{company_id}",
                 "operation_id": "RetrieveACompanyById",
-                "display_name": "Get Company",
+                "display_name": "Get company",
                 "short_desc": "Retrieve a company by its identity",
                 "desc": "Retrieves one company by the identity Intercom gave it.\n\n"
                     "To find a company by your own identifier instead, use **Create Or Update Company**, "
@@ -996,7 +996,7 @@ public class IntercomManifest {
                 "method": "PUT",
                 "path": "/companies/{company_id}",
                 "operation_id": "UpdateCompany",
-                "display_name": "Update Company",
+                "display_name": "Update company",
                 "short_desc": "Update an existing company by its identity",
                 "desc": "Updates a company that already exists, named by the identity **Intercom** gave "
                     "it.\n\n"
@@ -1020,7 +1020,7 @@ public class IntercomManifest {
                 "method": "DELETE",
                 "path": "/companies/{company_id}",
                 "operation_id": "deleteCompany",
-                "display_name": "Delete Company",
+                "display_name": "Delete company",
                 "short_desc": "Delete a company",
                 "desc": "Deletes a company.\n\n"
                     "The contacts attached to it are **not** deleted; they simply stop belonging to it.",
@@ -1040,7 +1040,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/articles/{article_id}",
                 "operation_id": "retrieveArticle",
-                "display_name": "Get Article",
+                "display_name": "Get article",
                 "short_desc": "Retrieve a help center article by its identity",
                 "desc": "Retrieves one help center article",
                 "groups": (GroupArticles,),
@@ -1057,7 +1057,7 @@ public class IntercomManifest {
                 "method": "PUT",
                 "path": "/articles/{article_id}",
                 "operation_id": "updateArticle",
-                "display_name": "Update Article",
+                "display_name": "Update article",
                 "short_desc": "Update an existing help center article",
                 "desc": "Updates a help center article that already exists.\n\n"
                     "Only the attributes supplied are changed. An article's parent can only be a "
@@ -1077,7 +1077,7 @@ public class IntercomManifest {
                 "method": "DELETE",
                 "path": "/articles/{article_id}",
                 "operation_id": "deleteArticle",
-                "display_name": "Delete Article",
+                "display_name": "Delete article",
                 "short_desc": "Delete a help center article",
                 "desc": "Deletes a help center article",
                 "groups": (GroupArticles,),
@@ -1094,7 +1094,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/help_center/collections/{collection_id}",
                 "operation_id": "retrieveCollection",
-                "display_name": "Get Collection",
+                "display_name": "Get collection",
                 "short_desc": "Retrieve a help center collection by its identity",
                 "desc": "Retrieves one help center collection.\n\n"
                     "What used to be a **section** is now a collection with a parent, which is how "
@@ -1115,7 +1115,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/tags/{tag_id}",
                 "operation_id": "findTag",
-                "display_name": "Get Tag",
+                "display_name": "Get tag",
                 "short_desc": "Retrieve a tag by its identity",
                 "desc": "Retrieves one tag",
                 "groups": (GroupTags,),
@@ -1126,7 +1126,7 @@ public class IntercomManifest {
                 "method": "DELETE",
                 "path": "/tags/{tag_id}",
                 "operation_id": "deleteTag",
-                "display_name": "Delete Tag",
+                "display_name": "Delete tag",
                 "short_desc": "Delete a tag",
                 "desc": "Deletes a tag.\n\n"
                     "Intercom **refuses** to delete a tag that is still applied to any contact or company, "

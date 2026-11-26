@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
-          "source": "List Workspace Repositories",
-          "message": "List Workspace Repositories"
+          "source": "List workspace repositories",
+          "message": "List workspace repositories"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
           "source": "List the repositories in a workspace",
@@ -436,8 +436,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
-          "source": "Get Repository",
-          "message": "Get Repository"
+          "source": "Get repository",
+          "message": "Get repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
           "source": "Retrieve one repository",
@@ -472,8 +472,8 @@
           "message": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
-          "source": "Create Repository",
-          "message": "Create Repository"
+          "source": "Create repository",
+          "message": "Create repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
           "source": "Create a repository",
@@ -796,8 +796,8 @@
           "message": "repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
-          "source": "Update Repository",
-          "message": "Update Repository"
+          "source": "Update repository",
+          "message": "Update repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
           "source": "Update a repository's settings",
@@ -1832,8 +1832,8 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
-          "source": "Delete Repository",
-          "message": "Delete Repository"
+          "source": "Delete repository",
+          "message": "Delete repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
           "source": "Delete a repository permanently",
@@ -1880,8 +1880,8 @@
           "message": "If a repository has been moved to a new location, use this parameter to\nshow users a friendly message in the Bitbucket UI that the repository\nhas moved to a new location. However, a GET to this endpoint will still\nreturn a 404.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
-          "source": "List Branches",
-          "message": "List Branches"
+          "source": "List branches",
+          "message": "List branches"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
           "source": "List a repository's branches",
@@ -1964,8 +1964,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
-          "source": "List Commits",
-          "message": "List Commits"
+          "source": "List commits",
+          "message": "List commits"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
           "source": "List a repository's commits",
@@ -2024,8 +2024,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
-          "source": "Get Commit",
-          "message": "Get Commit"
+          "source": "Get commit",
+          "message": "Get commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
           "source": "Retrieve one commit",
@@ -2072,8 +2072,8 @@
           "message": "The commit's SHA1."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
-          "source": "List Commit Reports",
-          "message": "List Commit Reports"
+          "source": "List commit reports",
+          "message": "List commit reports"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
           "source": "List the code insights reports on a commit",
@@ -2144,8 +2144,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Commit Comments",
-          "message": "List Commit Comments"
+          "source": "List commit comments",
+          "message": "List commit comments"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
           "source": "List the comments on a commit",
@@ -2240,8 +2240,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Commit",
-          "message": "Comment on Commit"
+          "source": "Comment on commit",
+          "message": "Comment on commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
           "source": "Add a comment to a commit",
@@ -2420,8 +2420,8 @@
           "message": "commit_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
-          "source": "Approve Commit",
-          "message": "Approve Commit"
+          "source": "Approve commit",
+          "message": "Approve commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
           "source": "Approve a commit as the authenticated user",
@@ -2468,8 +2468,8 @@
           "message": "The commit's SHA1."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
-          "source": "Unapprove Commit",
-          "message": "Unapprove Commit"
+          "source": "Unapprove commit",
+          "message": "Unapprove commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
           "source": "Withdraw the authenticated user's approval of a commit",
@@ -2516,8 +2516,8 @@
           "message": "The commit's SHA1."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
-          "source": "List Deployments",
-          "message": "List Deployments"
+          "source": "List deployments",
+          "message": "List deployments"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
           "source": "List a repository's deployments",
@@ -2576,8 +2576,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
-          "source": "List Pull Requests",
-          "message": "List Pull Requests"
+          "source": "List pull requests",
+          "message": "List pull requests"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
           "source": "List a repository's pull requests",
@@ -2664,8 +2664,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
-          "source": "Create Pull Request",
-          "message": "Create Pull Request"
+          "source": "Create pull request",
+          "message": "Create pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
           "source": "Open a pull request",
@@ -2784,8 +2784,8 @@
           "message": "pullrequest"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
-          "source": "Get Pull Request",
-          "message": "Get Pull Request"
+          "source": "Get pull request",
+          "message": "Get pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
           "source": "Retrieve one pull request",
@@ -2832,8 +2832,8 @@
           "message": "The id of the pull request."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
-          "source": "Update Pull Request",
-          "message": "Update Pull Request"
+          "source": "Update pull request",
+          "message": "Update pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
           "source": "Update a pull request",
@@ -2964,8 +2964,8 @@
           "message": "A boolean flag indicating whether the pull request is a draft."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Pull Request Comments",
-          "message": "List Pull Request Comments"
+          "source": "List pull request comments",
+          "message": "List pull request comments"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
           "source": "List the comments on a pull request",
@@ -3036,8 +3036,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Pull Request",
-          "message": "Comment on Pull Request"
+          "source": "Comment on pull request",
+          "message": "Comment on pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
           "source": "Add a comment to a pull request",
@@ -3476,8 +3476,8 @@
           "message": "pullrequest_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
-          "source": "Get Pull Request Comment",
-          "message": "Get Pull Request Comment"
+          "source": "Get pull request comment",
+          "message": "Get pull request comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
           "source": "Retrieve one comment on a pull request",
@@ -3536,8 +3536,8 @@
           "message": "The id of the comment."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
-          "source": "Update Pull Request Comment",
-          "message": "Update Pull Request Comment"
+          "source": "Update pull request comment",
+          "message": "Update pull request comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
           "source": "Update a comment on a pull request",
@@ -3728,8 +3728,8 @@
           "message": "The comment's anchor line in the new version of the file. If the comment is a multi-line comment, this is the ending line number in the new version of the file."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
-          "source": "Delete Pull Request Comment",
-          "message": "Delete Pull Request Comment"
+          "source": "Delete pull request comment",
+          "message": "Delete pull request comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
           "source": "Delete a comment on a pull request",
@@ -3788,8 +3788,8 @@
           "message": "The id of the comment."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
-          "source": "Search Code in a Workspace",
-          "message": "Search Code in a Workspace"
+          "source": "Search code in a workspace",
+          "message": "Search code in a workspace"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
           "source": "Search the code in a workspace's repositories",
@@ -3848,8 +3848,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
-          "source": "Search Code in a User's Repositories",
-          "message": "Search Code in a User's Repositories"
+          "source": "Search code in a user's repositories",
+          "message": "Search code in a user's repositories"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
           "source": "Search the code in one user's repositories",
@@ -3908,8 +3908,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
-          "source": "Search Code in a Team's Repositories",
-          "message": "Search Code in a Team's Repositories"
+          "source": "Search code in a Team's repositories",
+          "message": "Search code in a Team's repositories"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
           "source": "Search the code in a team's repositories (deprecated by Bitbucket)",
@@ -4028,8 +4028,8 @@
           "message": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
-          "source": "Get Workspace",
-          "message": "Get Workspace"
+          "source": "Get workspace",
+          "message": "Get workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
           "source": "Retrieve one workspace",
@@ -4052,8 +4052,8 @@
           "message": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
-          "source": "List Workspace Members",
-          "message": "List Workspace Members"
+          "source": "List workspace members",
+          "message": "List workspace members"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
           "source": "List the members of a workspace",
@@ -4100,8 +4100,8 @@
           "message": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
-          "source": "List Workspace Projects",
-          "message": "List Workspace Projects"
+          "source": "List workspace projects",
+          "message": "List workspace projects"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
           "source": "List the projects in a workspace",
@@ -4268,8 +4268,8 @@
           "message": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
-          "message": "New Commit"
+          "source": "New commit",
+          "message": "New commit"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
           "source": "Fires when a commit is pushed to the watched repository",
@@ -4280,8 +4280,8 @@
           "message": "Fires for each new commit in the watched repository, across every branch.\n\nThe event carries the commit record Bitbucket returns, including its hash, message, author and date."
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
-          "source": "New Deployment",
-          "message": "New Deployment"
+          "source": "New deployment",
+          "message": "New deployment"
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
           "source": "Fires when a deployment is created for the watched repository",
@@ -4292,8 +4292,8 @@
           "message": "Fires for each new deployment in the watched repository.\n\nThe event carries the deployment record Bitbucket returns, including the environment it went to, the state it reached and the release it deployed."
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
-          "message": "New Pull Request"
+          "source": "New pull request",
+          "message": "New pull request"
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
           "source": "Fires when a pull request is opened in the watched repository",

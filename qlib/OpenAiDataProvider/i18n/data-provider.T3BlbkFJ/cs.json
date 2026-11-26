@@ -860,7 +860,7 @@
           "message": "Jedinečný identifikátor představující vašeho koncového uživatele, který může pomoci OpenAI sledovat a zjišťovat zneužití"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Jednoduchý chat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Sada 16 párů klíč-hodnota, které lze připojit k objektu. To může být užitečné pro ukládání dalších informací o objektu ve strukturovaném formátu a dotazování na objekty prostřednictvím API nebo řídicího panelu. Klíče jsou řetězce o maximální délce 64 znaků; hodnoty jsou řetězce o maximální délce 512 znaků"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Získat konverzaci"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "ID konverzace"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Vypsat položky konverzace"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Další pole, která mají být zahrnuta v odpovědi.\n\nPodporované hodnoty naleznete v dokumentaci k [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Získat položku konverzace"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "ID odpovědi, která se má načíst"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Vypsat vstupní položky odpovědi"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

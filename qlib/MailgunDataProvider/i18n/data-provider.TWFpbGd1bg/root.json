@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
-          "message": "Send Email"
+          "source": "Send email",
+          "message": "Send email"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
           "source": "Send an email via Mailgun",
@@ -496,8 +496,8 @@
           "message": "Email address for replies"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
-          "message": "Validate Email"
+          "source": "Validate email",
+          "message": "Validate email"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
           "source": "Validate an email address",

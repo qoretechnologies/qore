@@ -1108,7 +1108,7 @@
           "message": "Un identifiant unique représentant votre utilisateur final pour la surveillance des abus"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat simple"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "Ne pas tronquer ; renvoyer une erreur si le contexte dépasse la limite"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Obtenir la réponse"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

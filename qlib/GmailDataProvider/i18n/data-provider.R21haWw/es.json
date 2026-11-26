@@ -852,7 +852,7 @@
           "message": "El ID del mensaje a eliminar permanentemente; los eventos de escucha portan este valor como `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Enviar un mensaje"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

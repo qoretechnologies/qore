@@ -1048,7 +1048,7 @@
           "message": "Zda ignorovat chybějící ID zákazníků"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
-          "source": "Send Transactional Email",
+          "source": "Send transactional email",
           "message": "Odeslat transakční e-mail"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
+          "source": "Detect document text",
           "message": "Rileva testo documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "ID versione dell'oggetto S3 opzionale per bucket con controllo delle versioni."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "Analizza documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Versione della risorsa selezionata."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
+          "source": "Analyze expense",
           "message": "Analizzare le spese"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Oggetto di origine in un bucket S3 nella regione AWS della connessione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
+          "source": "Create adapter",
           "message": "Crea adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Tag delle risorse come mappa di nomi in valori; un valore di tag vuoto è valido."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
+          "source": "Create adapter version",
           "message": "Crea versione dell'adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Tag delle risorse come mappa di nomi in valori; un valore di tag vuoto è valido."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
+          "source": "Delete adapter",
           "message": "Elimina adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Adattatore nell'account AWS e nella regione della connessione."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
+          "source": "Delete adapter version",
           "message": "Elimina versione adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Versione appartenente all'adattatore selezionato."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
+          "source": "Get adapter",
           "message": "Ottieni l'adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Adattatore nell'account AWS e nella regione della connessione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
+          "source": "Get adapter version",
           "message": "Ottieni la versione dell'adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Versione appartenente all'adattatore selezionato."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
+          "source": "Get document analysis",
           "message": "Ottieni l'analisi dei documenti"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
+          "source": "Get document text detection",
           "message": "Ottieni il rilevamento del testo del documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
@@ -1212,7 +1212,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
+          "source": "Get expense analysis",
           "message": "Ottieni l'analisi delle spese"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
+          "source": "Get lending analysis",
           "message": "Ottieni l'analisi dei prestiti"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
+          "source": "Get lending analysis summary",
           "message": "Ottieni il riepilogo dell'analisi dei prestiti"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "ID lavoro restituito dall'azione di avvio corrispondente; AWS non fornisce annunci di lavoro."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
+          "source": "List adapter versions",
           "message": "Elenca le versioni dell'adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
+          "source": "List adapters",
           "message": "Elenco adattatori"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Token di continuazione della risposta precedente nella stessa operazione."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
+          "source": "List tags for resource",
           "message": "Elenca tag per risorsa"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "ARN della risorsa Texttract nell'account AWS e nella regione della connessione."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
+          "source": "Start document analysis",
           "message": "Avvia l'analisi del documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Versione della risorsa selezionata."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
+          "source": "Start document text detection",
           "message": "Avvia il rilevamento del testo del documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "ID chiave KMS o ARN per la crittografia dell'output; devono essere concesse le autorizzazioni necessarie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
+          "source": "Start expense analysis",
           "message": "Avvia l'analisi delle spese"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "ID chiave KMS o ARN per la crittografia dell'output; devono essere concesse le autorizzazioni necessarie."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
+          "source": "Start lending analysis",
           "message": "Avvia l'analisi dei prestiti"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "ID chiave KMS o ARN per la crittografia dell'output; devono essere concesse le autorizzazioni necessarie."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
+          "source": "Tag resource",
           "message": "Tag Risorsa"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Tag delle risorse come mappa di nomi in valori; un valore di tag vuoto è valido."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
+          "source": "Untag resource",
           "message": "Rimuovi Tag Risorsa"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Nomi dei tag delle risorse da rimuovere."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
+          "source": "Update adapter",
           "message": "Aggiorna adattatore"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {

@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
+          "source": "Detect document text",
           "message": "偵測文件文字"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "已啟用版本控制的儲存貯體之選填 S3 物件版本 ID。"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "分析文件"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
@@ -672,7 +672,7 @@
           "message": "所選資源的版本。"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
+          "source": "Analyze expense",
           "message": "分析費用"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
@@ -760,7 +760,7 @@
           "message": "位於連線 AWS 區域的 S3 儲存貯體中的來源物件。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
+          "source": "Create adapter",
           "message": "建立適配器"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
@@ -856,7 +856,7 @@
           "message": "資源標籤，以名稱對應至值的映射表示；允許空的標籤值。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
+          "source": "Create adapter version",
           "message": "建立適配器版本"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -996,7 +996,7 @@
           "message": "資源標籤，以名稱對應至值的映射表示；允許空的標籤值。"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
+          "source": "Delete adapter",
           "message": "刪除適配器"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "連接的 AWS 帳戶和區域中的適配器。"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
+          "source": "Delete adapter version",
           "message": "刪除適配器版本"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "屬於所選轉接器的版本。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
+          "source": "Get adapter",
           "message": "取得適配器"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "連接的 AWS 帳戶和區域中的適配器。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
+          "source": "Get adapter version",
           "message": "取得適配器版本"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "屬於所選轉接器的版本。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
+          "source": "Get document analysis",
           "message": "取得文件分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
+          "source": "Get document text detection",
           "message": "取得文件文字檢測"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
@@ -1212,7 +1212,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
+          "source": "Get expense analysis",
           "message": "取得費用分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
+          "source": "Get lending analysis",
           "message": "獲取貸款分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
+          "source": "Get lending analysis summary",
           "message": "取得貸款分析摘要"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "符合的啟動操作傳回的作業ID； AWS 不提供職位列表。"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
+          "source": "List adapter versions",
           "message": "列出適配器版本"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
+          "source": "List adapters",
           "message": "列出適配器"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "同一操作中先前回應的繼續標記。"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
+          "source": "List tags for resource",
           "message": "列出資源的標籤"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "位於連線 AWS 帳戶與區域的 Textract 資源 ARN。"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
+          "source": "Start document analysis",
           "message": "啟動文件分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "所選資源的版本。"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
+          "source": "Start document text detection",
           "message": "啟動文件文字偵測"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "用於加密輸出的KMS金鑰ID或ARN；必須授予所需的權限。"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
+          "source": "Start expense analysis",
           "message": "啟動費用分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "用於加密輸出的KMS金鑰ID或ARN；必須授予所需的權限。"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
+          "source": "Start lending analysis",
           "message": "啟動貸款文件分析"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "用於加密輸出的KMS金鑰ID或ARN；必須授予所需的權限。"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
+          "source": "Tag resource",
           "message": "標記資源"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "資源標籤，以名稱對應至值的映射表示；允許空的標籤值。"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
+          "source": "Untag resource",
           "message": "移除標籤資源"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "要移除的資源標籤名稱。"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
+          "source": "Update adapter",
           "message": "更新轉接器"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {

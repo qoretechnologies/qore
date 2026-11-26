@@ -808,7 +808,7 @@
           "message": "El nombre de un almacén de búsqueda de archivos que se utilizará para la generación aumentada por recuperación (RAG). El modelo buscará en los documentos del almacén para fundamentar su respuesta con contenido relevante"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat simple"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "El nombre de un almacén de búsqueda de archivos que se utilizará para la generación aumentada por recuperación (RAG). El modelo buscará en los documentos del almacén para fundamentar su respuesta con contenido relevante"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Incrustar contenido"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Contenido del modelo"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Incrustar por lotes"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

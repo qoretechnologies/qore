@@ -808,7 +808,7 @@
           "message": "검색 증강 생성(RAG)에 사용할 파일 검색 저장소의 이름입니다. 모델이 저장소의 문서를 검색하여 관련 콘텐츠를 기반으로 응답을 생성합니다"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Simple Chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "검색 증강 생성(RAG)에 사용할 파일 검색 저장소의 이름입니다. 모델이 저장소의 문서를 검색하여 관련 콘텐츠를 기반으로 응답을 생성합니다"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "콘텐츠 임베드"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "모델에서 생성된 콘텐츠"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "배치 임베딩"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

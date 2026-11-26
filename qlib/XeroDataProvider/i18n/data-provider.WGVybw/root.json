@@ -8244,8 +8244,8 @@
           "message": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
-          "message": "Find Invoice History"
+          "source": "Find invoice history",
+          "message": "Find invoice history"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
           "source": "Read an invoice's history and notes",
@@ -8268,8 +8268,8 @@
           "message": "Unique identifier for an Invoice"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
-          "message": "Add Note to Invoice"
+          "source": "Add note to invoice",
+          "message": "Add note to invoice"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
           "source": "Record a note against an invoice",
@@ -8336,8 +8336,8 @@
           "message": "has a value of 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
-          "message": "Email Invoice"
+          "source": "Email invoice",
+          "message": "Email invoice"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
           "source": "Send an invoice to its contact by email",
@@ -32424,8 +32424,8 @@
           "message": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
-          "message": "Allocate Credit Note"
+          "source": "Allocate credit note",
+          "message": "Allocate credit note"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
           "source": "Apply a credit note to an invoice",
@@ -49540,8 +49540,8 @@
           "message": "How many records to return in one page. Xero's default is 100 and its maximum is 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
-          "message": "Find Tasks"
+          "source": "Find tasks",
+          "message": "Find tasks"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks in a project",
@@ -49624,8 +49624,8 @@
           "message": "How many records to return in one page. Xero's default is 100 and its maximum is 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
-          "message": "Create Task"
+          "source": "Create task",
+          "message": "Create task"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
           "source": "Add a task to a project",
@@ -50464,8 +50464,8 @@
           "message": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
-          "message": "Find Employees"
+          "source": "Find employees",
+          "message": "Find employees"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
           "source": "List the employees in the payroll organisation",
@@ -50476,8 +50476,8 @@
           "message": "Lists the employees in the organisation's payroll.\n\n**Which payroll API is used comes from the connection's `payroll_region`**, because Xero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe regions wrap the result differently - `{Employees: [...]}` in Australia and `{employees: [...], pagination}` in the other two - and this action returns the employees as a plain list either way.\n\nThe application this module replaces read employees through the accounting API, where they do not exist, so this never returned anything at all."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
-          "message": "Create Employees"
+          "source": "Create employees",
+          "message": "Create employees"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
           "source": "Create employees in the payroll organisation",
@@ -50488,8 +50488,8 @@
           "message": "Creates employees in the organisation's payroll.\n\n`Employees` is a list even for one employee. Australia's payroll API takes a list directly; New Zealand's and the United Kingdom's take one employee per call, so a list of several is sent one at a time and the results collected.\n\n**Which payroll API is used comes from the connection's `payroll_region`.** The fields an employee needs differ by region - a United Kingdom employee has a National Insurance number where a New Zealand one has an IRD number - so this passes the employee through as given rather than declaring one region's shape for all of them."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
           "source": "Fires when a contact is created or changed",
@@ -50500,8 +50500,8 @@
           "message": "Fires for each contact created or changed in the organisation.\n\nXero positions a contact by `UpdatedDateUTC` and offers no \"created since\" filter, so a contact edited later fires this again. The event carries the contact record Xero returns."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
-          "message": "New Bill"
+          "source": "New bill",
+          "message": "New bill"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
           "source": "Fires when a bill is created or changed",
@@ -50512,8 +50512,8 @@
           "message": "Fires for each bill created or changed.\n\nA bill is an invoice of type `ACCPAY`, which is the filter this event applies; a sales invoice (`ACCREC`) does not fire it. The event carries the invoice record Xero returns."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
-          "message": "New Credit Note"
+          "source": "New credit note",
+          "message": "New credit note"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
           "source": "Fires when a credit note is created or changed",
@@ -50524,8 +50524,8 @@
           "message": "Fires for each credit note created or changed.\n\nThe event carries the credit note record Xero returns. The application this module replaces polled credit notes without exporting any way to list or read one; **Find Credit Notes** exists so that this event has a counterpart."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
-          "message": "New Bank Transaction"
+          "source": "New bank transaction",
+          "message": "New bank transaction"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
           "source": "Fires when a bank transaction is created or changed",
@@ -50536,8 +50536,8 @@
           "message": "Fires for each bank transaction created or changed - money spent or received against a bank account.\n\nThe event carries the bank transaction record Xero returns."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
-          "message": "New Payment"
+          "source": "New payment",
+          "message": "New payment"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
           "source": "Fires when a payment is created or changed",
@@ -50548,8 +50548,8 @@
           "message": "Fires for each payment created or changed against an invoice or a credit note.\n\nThe event carries the payment record Xero returns."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
-          "message": "New Purchase Order"
+          "source": "New purchase order",
+          "message": "New purchase order"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
           "source": "Fires when a purchase order is created or changed",
@@ -50560,8 +50560,8 @@
           "message": "Fires for each purchase order created or changed.\n\nThe event carries the purchase order record Xero returns."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
-          "message": "New Employee"
+          "source": "New employee",
+          "message": "New employee"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {
           "source": "Fires when an employee is added to payroll or changed",

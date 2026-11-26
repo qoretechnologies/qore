@@ -852,7 +852,7 @@
           "message": "Ідентифікатор повідомлення для остаточного видалення; події стеження містять це значення як `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Надіслати повідомлення"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

@@ -556,8 +556,8 @@
           "message": "Name of the platform or provider where this entity was imported from."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
           "source": "Retrieve one customer",
@@ -580,8 +580,8 @@
           "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
           "source": "Update a customer",
@@ -720,8 +720,8 @@
           "message": "Name of the platform or provider where this entity was imported from."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
-          "message": "Get Customer Authentication Token"
+          "source": "Get customer authentication token",
+          "message": "Get customer authentication token"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
           "source": "Generate a short-lived token identifying a customer to Paddle.js",
@@ -744,8 +744,8 @@
           "message": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
-          "message": "List Customer Credit Balances"
+          "source": "List customer credit balances",
+          "message": "List customer credit balances"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
           "source": "List a customer's credit balances, by currency",
@@ -1084,8 +1084,8 @@
           "message": "Name of the platform or provider where this entity was imported from."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
           "source": "Retrieve one catalog product",
@@ -1120,8 +1120,8 @@
           "message": "Include related entities in the response. Use a comma-separated list to specify multiple entities."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
           "source": "Update a catalog product",
@@ -1280,8 +1280,8 @@
           "message": "website-hosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
-          "message": "Archive Product"
+          "source": "Archive product",
+          "message": "Archive product"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
           "source": "Retire a catalog product",
@@ -2528,8 +2528,8 @@
           "message": "Name of the platform or provider where this entity was imported from."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
-          "message": "Get Price"
+          "source": "Get price",
+          "message": "Get price"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
           "source": "Retrieve one catalog price",
@@ -2564,8 +2564,8 @@
           "message": "Include related entities in the response."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
-          "message": "Update Price"
+          "source": "Update price",
+          "message": "Update price"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
           "source": "Update a catalog price",
@@ -3728,8 +3728,8 @@
           "message": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
-          "message": "Get Subscription"
+          "source": "Get subscription",
+          "message": "Get subscription"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
           "source": "Retrieve one subscription",
@@ -5264,8 +5264,8 @@
           "message": "Checkout URL to use for the payment link for this transaction. Pass the URL for an approved domain, or `null` to set to your default payment URL.\n\nPaddle returns a unique payment link composed of the URL passed or your default payment URL + `?_ptxn=` and the Paddle ID for this transaction."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
-          "message": "Get Transaction"
+          "source": "Get transaction",
+          "message": "Get transaction"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
           "source": "Retrieve one transaction",
@@ -6008,8 +6008,8 @@
           "message": "checkouts"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
-          "message": "Get Report"
+          "source": "Get report",
+          "message": "Get report"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
           "source": "Retrieve one report and its status",
@@ -6032,8 +6032,8 @@
           "message": "Paddle ID of the report entity."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
-          "message": "Get Report File"
+          "source": "Get report file",
+          "message": "Get report file"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
           "source": "Get a download URL for a report's CSV file",
@@ -6152,8 +6152,8 @@
           "message": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
-          "message": "Customer Created"
+          "source": "Customer created",
+          "message": "Customer created"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
           "source": "React to a customer being created",
@@ -6164,8 +6164,8 @@
           "message": "Fires when a customer is created, however it happened -- through the API, a checkout, or the Paddle dashboard.\n\nThis replaces polling the customer listing: a poll ordered by creation time cannot see a customer that was created and removed between two runs, and costs a request per interval whether or not anything happened."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
-          "message": "Customer Updated"
+          "source": "Customer updated",
+          "message": "Customer updated"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
           "source": "React to a customer's details changing",
@@ -6176,8 +6176,8 @@
           "message": "Fires when a customer changes, including when one is archived -- `status` becomes `archived` rather than the customer being deleted.\n\nPaddle sends the whole customer, not a diff, so compare against what you hold if you need to know which field moved."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
-          "message": "Product Created"
+          "source": "Product created",
+          "message": "Product created"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
           "source": "React to a catalog product being created",
@@ -6188,8 +6188,8 @@
           "message": "Fires when a product is added to the catalog.\n\nA product carries no price of its own, so a newly created product cannot be sold until a price exists for it; watch `price.created` for that.\n\nThis replaces polling the product listing."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
-          "message": "Product Updated"
+          "source": "Product updated",
+          "message": "Product updated"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
           "source": "React to a catalog product changing",
@@ -6200,8 +6200,8 @@
           "message": "Fires when a product changes, including when one is archived -- `status` becomes `archived`, which withdraws it from sale without affecting existing subscriptions.\n\n**Archiving a product does not archive its prices**, so a price of an archived product can still be billed unless it is archived too."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
-          "message": "Price Created"
+          "source": "Price created",
+          "message": "Price created"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
           "source": "React to a catalog price being created",
@@ -6212,8 +6212,8 @@
           "message": "Fires when a price is created against a product.\n\n`unit_price.amount` is a string in the **smallest unit of its currency**, so `1000` is $10.00 in USD but 1000 yen in JPY. A `billing_cycle` makes it a subscription price; without one it is a one-off charge."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
-          "message": "Price Updated"
+          "source": "Price updated",
+          "message": "Price updated"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
           "source": "React to a catalog price changing",
@@ -6224,8 +6224,8 @@
           "message": "Fires when a price changes, including when one is archived.\n\n**A change to `unit_price` affects new purchases only**; subscriptions already billing this price keep the amount they were created with until they are explicitly updated. A price change is therefore not a signal that anyone's bill changed."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
-          "message": "Subscription Created"
+          "source": "Subscription created",
+          "message": "Subscription created"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
           "source": "React to a subscription being created",
@@ -6236,8 +6236,8 @@
           "message": "Fires when a subscription is created.\n\n**Created is not the same as paid.** A new subscription is often `trialing`, and one created for a transaction that has not been collected yet is not earning anything; check `status` before provisioning. `subscription.activated` is the signal that billing has actually begun.\n\nThis replaces polling the subscription listing."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
-          "message": "Subscription Activated"
+          "source": "Subscription activated",
+          "message": "Subscription activated"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
           "source": "React to a subscription becoming active",
@@ -6248,8 +6248,8 @@
           "message": "Fires when a subscription first becomes `active` -- a trial ended and was paid for, or a scheduled start arrived.\n\nThis is the signal to provision a paid plan: it means Paddle has collected, where `subscription.created` only means the record exists."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
-          "message": "Subscription Updated"
+          "source": "Subscription updated",
+          "message": "Subscription updated"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
           "source": "React to a subscription changing",
@@ -6260,8 +6260,8 @@
           "message": "Fires for any change to a subscription: a plan change, a quantity change, a renewal moving `next_billed_at`, or a pause or cancellation being **scheduled**.\n\n`scheduled_change` is the field that distinguishes those last cases -- a subscription can be `active` and still be booked to end. Paddle sends the whole subscription rather than a diff."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
-          "message": "Subscription Canceled"
+          "source": "Subscription canceled",
+          "message": "Subscription canceled"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
           "source": "React to a subscription ending",
@@ -6272,8 +6272,8 @@
           "message": "Fires when a subscription actually ends and `status` becomes `canceled`.\n\n**This is the deprovisioning signal, not the cancellation request.** A cancellation booked for the end of the billing period appears first as a `scheduled_change` on `subscription.updated`, and the customer has paid up to that date; this event is when the date arrives."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
-          "message": "Subscription Past Due"
+          "source": "Subscription past due",
+          "message": "Subscription past due"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
           "source": "React to a subscription's payment failing",
@@ -6284,8 +6284,8 @@
           "message": "Fires when a renewal could not be collected and the subscription becomes `past_due`.\n\nPaddle retries on its dunning schedule, so this is not yet the end: the subscription recovers to `active` if a retry succeeds, or is canceled when the retries run out. Treat it as a warning to prompt the customer, not as a reason to cut off access."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
-          "message": "Transaction Created"
+          "source": "Transaction created",
+          "message": "Transaction created"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
           "source": "React to a transaction being created",
@@ -6296,8 +6296,8 @@
           "message": "Fires when a transaction is created, including the draft Paddle raises for an upcoming renewal.\n\n**A created transaction has not been paid**; most are `draft` or `ready` at this point. Use `transaction.completed` for money actually collected.\n\nThis replaces polling the transaction listing."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
-          "message": "Transaction Completed"
+          "source": "Transaction completed",
+          "message": "Transaction completed"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
           "source": "React to a transaction being paid in full",
@@ -6308,8 +6308,8 @@
           "message": "Fires when a transaction is `completed`: the money has been collected and the invoice is settled.\n\nThis is the event to fulfil an order on. `details.totals` breaks the amount down into subtotal, tax and the grand total, all as strings in the smallest unit of `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
-          "message": "Transaction Payment Failed"
+          "source": "Transaction payment failed",
+          "message": "Transaction payment failed"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
           "source": "React to a payment attempt failing",
@@ -6320,8 +6320,8 @@
           "message": "Fires when an attempt to collect a transaction fails.\n\n`payments` carries the attempt and the reason it failed. Paddle retries automatically for a subscription renewal, so a single failure is not final; the subscription moving to `past_due` is the point at which the customer needs to act."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
-          "message": "Report Created"
+          "source": "Report created",
+          "message": "Report created"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
           "source": "React to a report being requested",
@@ -6332,8 +6332,8 @@
           "message": "Fires when a report is requested. It arrives `pending`: Paddle generates the file in the background, so there is nothing to download yet.\n\nWait for `report.updated` with `status` of `ready` before asking for the file.\n\nThis replaces polling the report listing."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
-          "message": "Report Updated"
+          "source": "Report updated",
+          "message": "Report updated"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
           "source": "React to a report becoming ready",

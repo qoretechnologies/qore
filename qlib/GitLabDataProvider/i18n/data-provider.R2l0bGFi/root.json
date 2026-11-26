@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.display_name": {
-          "source": "List Branches",
-          "message": "List Branches"
+          "source": "List branches",
+          "message": "List branches"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.short_desc": {
           "source": "List a project's repository branches",
@@ -448,8 +448,8 @@
           "message": "Name of branch to start the pagination from"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.display_name": {
-          "source": "Create Branch",
-          "message": "Create Branch"
+          "source": "Create branch",
+          "message": "Create branch"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.short_desc": {
           "source": "Create a branch in a project's repository",
@@ -496,8 +496,8 @@
           "message": "Create branch from commit sha or existing branch"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Get Branch",
-          "message": "Get Branch"
+          "source": "Get branch",
+          "message": "Get branch"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
           "source": "Retrieve one repository branch",
@@ -532,8 +532,8 @@
           "message": "The name of the branch"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Delete Branch",
-          "message": "Delete Branch"
+          "source": "Delete branch",
+          "message": "Delete branch"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
           "source": "Delete a repository branch",
@@ -568,8 +568,8 @@
           "message": "The name of the branch"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.display_name": {
-          "source": "Delete Merged Branches",
-          "message": "Delete Merged Branches"
+          "source": "Delete merged branches",
+          "message": "Delete merged branches"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.short_desc": {
           "source": "Delete every branch already merged into the default branch",
@@ -592,8 +592,8 @@
           "message": "The project this action works on, given as its numeric ID or as its path (`group/project`).\n\nGive the path as it reads; the transport escapes it into the single path segment GitLab expects. A path escaped by hand would be escaped a second time and would not resolve.\n\nEvery other option scoped by a project - branches, issues, members, variables - is listed from this project, so changing it re-reads them."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.display_name": {
-          "source": "List Commits",
-          "message": "List Commits"
+          "source": "List commits",
+          "message": "List commits"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.short_desc": {
           "source": "List a project's repository commits",
@@ -812,8 +812,8 @@
           "message": "Record from which to start the keyset pagination"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.display_name": {
-          "source": "Get Commit",
-          "message": "Get Commit"
+          "source": "Get commit",
+          "message": "Get commit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.short_desc": {
           "source": "Retrieve one commit",
@@ -860,8 +860,8 @@
           "message": "Include commit stats"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.display_name": {
-          "source": "List Commit Comments",
-          "message": "List Commit Comments"
+          "source": "List commit comments",
+          "message": "List commit comments"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.short_desc": {
           "source": "List the comments on a commit",
@@ -920,8 +920,8 @@
           "message": "How many records to return in one request, up to GitLab's maximum of `100`.\n\nThe total and the next page are reported in the `X-Total`, `X-Page` and `X-Next-Page` **response headers**, not in the body, so paging means asking for the next page until fewer than `per_page` records come back."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.display_name": {
-          "source": "Comment on Commit",
-          "message": "Comment on Commit"
+          "source": "Comment on commit",
+          "message": "Comment on commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.short_desc": {
           "source": "Add a comment to a commit",
@@ -1012,8 +1012,8 @@
           "message": "old"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.display_name": {
-          "source": "List Deploy Keys",
-          "message": "List Deploy Keys"
+          "source": "List deploy keys",
+          "message": "List deploy keys"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.short_desc": {
           "source": "List the deploy keys enabled for a project",
@@ -1060,8 +1060,8 @@
           "message": "How many records to return in one request, up to GitLab's maximum of `100`.\n\nThe total and the next page are reported in the `X-Total`, `X-Page` and `X-Next-Page` **response headers**, not in the body, so paging means asking for the next page until fewer than `per_page` records come back."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.display_name": {
-          "source": "Add Deploy Key",
-          "message": "Add Deploy Key"
+          "source": "Add deploy key",
+          "message": "Add deploy key"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.short_desc": {
           "source": "Add a deploy key to a project",
@@ -1132,8 +1132,8 @@
           "message": "The expiration date of the SSH key in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Get Deploy Key",
-          "message": "Get Deploy Key"
+          "source": "Get deploy key",
+          "message": "Get deploy key"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
           "source": "Retrieve one deploy key",
@@ -1168,8 +1168,8 @@
           "message": "The ID of the deploy key"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Update Deploy Key",
-          "message": "Update Deploy Key"
+          "source": "Update deploy key",
+          "message": "Update deploy key"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
           "source": "Update a deploy key's title or push access",
@@ -1228,8 +1228,8 @@
           "message": "Can deploy key push to the project's repository"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Delete Deploy Key",
-          "message": "Delete Deploy Key"
+          "source": "Delete deploy key",
+          "message": "Delete deploy key"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
           "source": "Remove a deploy key from a project",
@@ -1264,8 +1264,8 @@
           "message": "The ID of the deploy key"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.display_name": {
-          "source": "Enable Deploy Key",
-          "message": "Enable Deploy Key"
+          "source": "Enable deploy key",
+          "message": "Enable deploy key"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.short_desc": {
           "source": "Enable an existing deploy key for another project",
@@ -2704,8 +2704,8 @@
           "message": "interrupt"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Get Group",
-          "message": "Get Group"
+          "source": "Get group",
+          "message": "Get group"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.short_desc": {
           "source": "Retrieve one group",
@@ -2764,8 +2764,8 @@
           "message": "Filter with custom attributes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Update Group",
-          "message": "Update Group"
+          "source": "Update group",
+          "message": "Update group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.short_desc": {
           "source": "Update a group's attributes",
@@ -4332,8 +4332,8 @@
           "message": "When true, records explicit namespace consent for DAP-based Code Review routing"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Delete Group",
-          "message": "Delete Group"
+          "source": "Delete group",
+          "message": "Delete group"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.short_desc": {
           "source": "Schedule a group for deletion",
@@ -5084,8 +5084,8 @@
           "message": "Return issues from non archived projects"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.display_name": {
-          "source": "List Project Issues",
-          "message": "List Project Issues"
+          "source": "List project issues",
+          "message": "List project issues"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.short_desc": {
           "source": "List the issues in one project",
@@ -5824,8 +5824,8 @@
           "message": "Cursor for obtaining the next set of records"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.display_name": {
-          "source": "Create Issue",
-          "message": "Create Issue"
+          "source": "Create issue",
+          "message": "Create issue"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.short_desc": {
           "source": "Create an issue in a project",
@@ -6156,8 +6156,8 @@
           "message": "The IID of an epic to associate the issue with (deprecated)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Get Issue",
-          "message": "Get Issue"
+          "source": "Get issue",
+          "message": "Get issue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
           "source": "Retrieve one issue",
@@ -6192,8 +6192,8 @@
           "message": "The issue's **IID**: the project-relative number shown in the web UI and written `#42`.\n\nThis is not the instance-wide `id` that the global issue listing filters by; the two are different numbers for the same issue."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Update Issue",
-          "message": "Update Issue"
+          "source": "Update issue",
+          "message": "Update issue"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
           "source": "Update an issue, or close or reopen it",
@@ -6524,8 +6524,8 @@
           "message": "Created at"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Delete Issue",
-          "message": "Delete Issue"
+          "source": "Delete issue",
+          "message": "Delete issue"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
           "source": "Delete an issue permanently",
@@ -6560,8 +6560,8 @@
           "message": "The issue's **IID**: the project-relative number shown in the web UI and written `#42`.\n\nThis is not the instance-wide `id` that the global issue listing filters by; the two are different numbers for the same issue."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.display_name": {
-          "source": "Get Issue Time Stats",
-          "message": "Get Issue Time Stats"
+          "source": "Get issue time stats",
+          "message": "Get issue time stats"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.short_desc": {
           "source": "Retrieve the time estimate and time spent on an issue",
@@ -6596,8 +6596,8 @@
           "message": "The issue's **IID**: the project-relative number shown in the web UI and written `#42`.\n\nThis is not the instance-wide `id` that the global issue listing filters by; the two are different numbers for the same issue."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.display_name": {
-          "source": "List Milestones",
-          "message": "List Milestones"
+          "source": "List milestones",
+          "message": "List milestones"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.short_desc": {
           "source": "List a project's milestones",
@@ -7116,8 +7116,8 @@
           "message": "Filters only auditor users"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.display_name": {
-          "source": "List Project Users",
-          "message": "List Project Users"
+          "source": "List project users",
+          "message": "List project users"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.short_desc": {
           "source": "List every user with access to a project",
@@ -7188,8 +7188,8 @@
           "message": "Filter out users with the specified IDs"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.display_name": {
-          "source": "List Project Members",
-          "message": "List Project Members"
+          "source": "List project members",
+          "message": "List project members"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.short_desc": {
           "source": "List the direct members of a project",
@@ -7296,8 +7296,8 @@
           "message": "List only members with linked SAML identity"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.display_name": {
-          "source": "Add Project Member",
-          "message": "Add Project Member"
+          "source": "Add project member",
+          "message": "Add project member"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.short_desc": {
           "source": "Add a user to a project",
@@ -7376,8 +7376,8 @@
           "message": "Source that triggered the member creation process"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Get Project Member",
-          "message": "Get Project Member"
+          "source": "Get project member",
+          "message": "Get project member"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
           "source": "Retrieve one direct member of a project",
@@ -7412,8 +7412,8 @@
           "message": "The user ID of the member"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Update Project Member",
-          "message": "Update Project Member"
+          "source": "Update project member",
+          "message": "Update project member"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
           "source": "Change a project member's access level or expiry",
@@ -7484,8 +7484,8 @@
           "message": "The ID of the Member Role to be updated"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Remove Project Member",
-          "message": "Remove Project Member"
+          "source": "Remove project member",
+          "message": "Remove project member"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
           "source": "Remove a user from a project",
@@ -7544,8 +7544,8 @@
           "message": "If `true`, the member retains any direct memberships in subgroups or projects."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.display_name": {
-          "source": "List Group Members",
-          "message": "List Group Members"
+          "source": "List group members",
+          "message": "List group members"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.short_desc": {
           "source": "List the direct members of a group",
@@ -7652,8 +7652,8 @@
           "message": "List only members with linked SAML identity"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.display_name": {
-          "source": "Add Group Member",
-          "message": "Add Group Member"
+          "source": "Add group member",
+          "message": "Add group member"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.short_desc": {
           "source": "Add a user to a group",
@@ -7732,8 +7732,8 @@
           "message": "Source that triggered the member creation process"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Get Group Member",
-          "message": "Get Group Member"
+          "source": "Get group member",
+          "message": "Get group member"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
           "source": "Retrieve one direct member of a group",
@@ -7768,8 +7768,8 @@
           "message": "The user ID of the member"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Update Group Member",
-          "message": "Update Group Member"
+          "source": "Update group member",
+          "message": "Update group member"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
           "source": "Change a group member's access level or expiry",
@@ -7840,8 +7840,8 @@
           "message": "The ID of the Member Role to be updated"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Remove Group Member",
-          "message": "Remove Group Member"
+          "source": "Remove group member",
+          "message": "Remove group member"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
           "source": "Remove a user from a group",
@@ -7900,8 +7900,8 @@
           "message": "If `true`, unassigns the member from any issues or merge requests in the group."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.display_name": {
-          "source": "List Merge Requests",
-          "message": "List Merge Requests"
+          "source": "List merge requests",
+          "message": "List merge requests"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
           "source": "List the merge requests in a project",
@@ -8620,8 +8620,8 @@
           "message": "Returns the request having the given `iid`."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.display_name": {
-          "source": "Create Merge Request",
-          "message": "Create Merge Request"
+          "source": "Create merge request",
+          "message": "Create merge request"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.short_desc": {
           "source": "Open a merge request",
@@ -8900,8 +8900,8 @@
           "message": "The ID of a rule"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Get Merge Request",
-          "message": "Get Merge Request"
+          "source": "Get merge request",
+          "message": "Get merge request"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
           "source": "Retrieve one merge request",
@@ -8972,8 +8972,8 @@
           "message": "If `true`, response includes whether a rebase operation is in progress."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Update Merge Request",
-          "message": "Update Merge Request"
+          "source": "Update merge request",
+          "message": "Update merge request"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
           "source": "Update a merge request, or close or reopen it",
@@ -9272,8 +9272,8 @@
           "message": "The ID of a rule"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Delete Merge Request",
-          "message": "Delete Merge Request"
+          "source": "Delete merge request",
+          "message": "Delete merge request"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
           "source": "Delete a merge request permanently",
@@ -9308,8 +9308,8 @@
           "message": "The merge request's **IID**: the project-relative number shown in the web UI and written `!7`, not the instance-wide `id`."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.display_name": {
-          "source": "Approve Merge Request",
-          "message": "Approve Merge Request"
+          "source": "Approve merge request",
+          "message": "Approve merge request"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.short_desc": {
           "source": "Approve a merge request as the authenticated user",
@@ -9380,8 +9380,8 @@
           "message": "Current user's password if project is set to require explicit auth on approval"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.display_name": {
-          "source": "Unapprove Merge Request",
-          "message": "Unapprove Merge Request"
+          "source": "Unapprove merge request",
+          "message": "Unapprove merge request"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.short_desc": {
           "source": "Withdraw the authenticated user's approval",
@@ -11640,8 +11640,8 @@
           "message": "Project ID of template from which to create project"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Get Project",
-          "message": "Get Project"
+          "source": "Get project",
+          "message": "Get project"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.short_desc": {
           "source": "Retrieve one project",
@@ -11712,8 +11712,8 @@
           "message": "Filter with custom attributes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Update Project",
-          "message": "Update Project"
+          "source": "Update project",
+          "message": "Update project"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.short_desc": {
           "source": "Update a project's attributes",
@@ -13740,8 +13740,8 @@
           "message": "dap_powered"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Delete Project",
-          "message": "Delete Project"
+          "source": "Delete project",
+          "message": "Delete project"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.short_desc": {
           "source": "Schedule a project for deletion",
@@ -13836,8 +13836,8 @@
           "message": "The organization id for the topics"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.display_name": {
-          "source": "List Project Variables",
-          "message": "List Project Variables"
+          "source": "List project variables",
+          "message": "List project variables"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.short_desc": {
           "source": "List a project's CI/CD variables",
@@ -13884,8 +13884,8 @@
           "message": "How many records to return in one request, up to GitLab's maximum of `100`.\n\nThe total and the next page are reported in the `X-Total`, `X-Page` and `X-Next-Page` **response headers**, not in the body, so paging means asking for the next page until fewer than `per_page` records come back."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "Create Project Variable",
-          "message": "Create Project Variable"
+          "source": "Create project variable",
+          "message": "Create project variable"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.short_desc": {
           "source": "Create a CI/CD variable on a project",
@@ -14024,8 +14024,8 @@
           "message": "Whether the variable will be expanded"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Get Project Variable",
-          "message": "Get Project Variable"
+          "source": "Get project variable",
+          "message": "Get project variable"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
           "source": "Retrieve one of a project's CI/CD variables",
@@ -14084,8 +14084,8 @@
           "message": "Available filters: [environment_scope]. Example: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Update Project Variable",
-          "message": "Update Project Variable"
+          "source": "Update project variable",
+          "message": "Update project variable"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
           "source": "Update one of a project's CI/CD variables",
@@ -14236,8 +14236,8 @@
           "message": "The description of the variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Delete Project Variable",
-          "message": "Delete Project Variable"
+          "source": "Delete project variable",
+          "message": "Delete project variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
           "source": "Delete one of a project's CI/CD variables",
@@ -14296,8 +14296,8 @@
           "message": "Available filters: [environment_scope]. Example: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "List Group Variables",
-          "message": "List Group Variables"
+          "source": "List group variables",
+          "message": "List group variables"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.short_desc": {
           "source": "List a group's CI/CD variables",
@@ -14344,8 +14344,8 @@
           "message": "How many records to return in one request, up to GitLab's maximum of `100`.\n\nThe total and the next page are reported in the `X-Total`, `X-Page` and `X-Next-Page` **response headers**, not in the body, so paging means asking for the next page until fewer than `per_page` records come back."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.display_name": {
-          "source": "Create Group Variable",
-          "message": "Create Group Variable"
+          "source": "Create group variable",
+          "message": "Create group variable"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.short_desc": {
           "source": "Create a CI/CD variable on a group",
@@ -14484,8 +14484,8 @@
           "message": "Whether the variable will be expanded"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Get Group Variable",
-          "message": "Get Group Variable"
+          "source": "Get group variable",
+          "message": "Get group variable"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
           "source": "Retrieve one of a group's CI/CD variables",
@@ -14520,8 +14520,8 @@
           "message": "The key of the variable"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Update Group Variable",
-          "message": "Update Group Variable"
+          "source": "Update group variable",
+          "message": "Update group variable"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
           "source": "Update one of a group's CI/CD variables",
@@ -14648,8 +14648,8 @@
           "message": "The description of the variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Delete Group Variable",
-          "message": "Delete Group Variable"
+          "source": "Delete group variable",
+          "message": "Delete group variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
           "source": "Delete one of a group's CI/CD variables",
@@ -14684,8 +14684,8 @@
           "message": "The key of a variable"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.display_name": {
-          "source": "List Wiki Pages",
-          "message": "List Wiki Pages"
+          "source": "List wiki pages",
+          "message": "List wiki pages"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.short_desc": {
           "source": "List a project's wiki pages",
@@ -14720,8 +14720,8 @@
           "message": "Include pages' content"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.display_name": {
-          "source": "Create Wiki Page",
-          "message": "Create Wiki Page"
+          "source": "Create wiki page",
+          "message": "Create wiki page"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.short_desc": {
           "source": "Create a wiki page in a project",
@@ -14820,8 +14820,8 @@
           "message": "Frontmatter title of a wiki page"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Get Wiki Page",
-          "message": "Get Wiki Page"
+          "source": "Get wiki page",
+          "message": "Get wiki page"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
           "source": "Retrieve one wiki page",
@@ -14880,8 +14880,8 @@
           "message": "Render content to HTML"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Update Wiki Page",
-          "message": "Update Wiki Page"
+          "source": "Update wiki page",
+          "message": "Update wiki page"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
           "source": "Update a wiki page's title or content",
@@ -14992,8 +14992,8 @@
           "message": "Frontmatter title of a wiki page"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Delete Wiki Page",
-          "message": "Delete Wiki Page"
+          "source": "Delete wiki page",
+          "message": "Delete wiki page"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
           "source": "Delete a wiki page",
@@ -15148,8 +15148,8 @@
           "message": "The table to work with: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` or `wikis`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
-          "source": "Create Commit",
-          "message": "Create Commit"
+          "source": "Create commit",
+          "message": "Create commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.short_desc": {
           "source": "Commit one or more file changes",
@@ -15404,8 +15404,8 @@
           "message": "Overwrite the target branch with a new commit based on `start_branch` or `start_sha`.\n\n**This discards whatever was on the target branch**, so it is the one option here that can lose work"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.display_name": {
-          "source": "Get Project ID by URL",
-          "message": "Get Project ID by URL"
+          "source": "Get project ID by URL",
+          "message": "Get project ID by URL"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.short_desc": {
           "source": "Resolve a GitLab project URL to the project's ID and path",
@@ -15428,8 +15428,8 @@
           "message": "The URL of the project, as copied from a browser.\n\nAny URL **within** the project works, not only its front page: `https://gitlab.com/group/project`, `https://gitlab.com/group/project/-/issues/17` and `https://gitlab.com/group/project.git` all identify the same project."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
-          "message": "New Commit"
+          "source": "New commit",
+          "message": "New commit"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.short_desc": {
           "source": "Fires when a commit is pushed to the watched project",
@@ -15440,8 +15440,8 @@
           "message": "Fires for each new commit in the watched project.\n\nRestrict it to one branch or tag with `ref_name`, to commits touching one file or directory with `path`, or to one author with `author`. The event carries the commit record GitLab returns, including its message, author and web URL."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
-          "message": "New Commit Comment"
+          "source": "New commit comment",
+          "message": "New commit comment"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {
           "source": "Fires when a comment is added to the watched commit",
@@ -15452,8 +15452,8 @@
           "message": "Fires for each new comment on one commit.\n\nThe commit is a required option, so this watches the comments on that commit rather than every comment in the project. The event carries the note, its position in the diff when it has one, and its author."
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.display_name": {
-          "source": "New Issue",
-          "message": "New Issue"
+          "source": "New issue",
+          "message": "New issue"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.short_desc": {
           "source": "Fires when an issue is raised in the watched project",
@@ -15464,8 +15464,8 @@
           "message": "Fires for each new issue in the watched project.\n\nThe event carries the issue record GitLab returns, including its IID, title, labels, assignees and web URL. An issue that is edited later does not fire this event again; it reports creation only."
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.display_name": {
-          "source": "New Merge Request",
-          "message": "New Merge Request"
+          "source": "New merge request",
+          "message": "New merge request"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.short_desc": {
           "source": "Fires when a merge request is opened in the watched project",

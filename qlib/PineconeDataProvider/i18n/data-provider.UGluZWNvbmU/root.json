@@ -352,8 +352,8 @@
           "message": "Lists every index in the project the API key belongs to, with the host, the schema and the current state of each.\n\nThis is also the cheapest call that proves a key works, which is what the connection pings."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.display_name": {
-          "source": "Describe Index",
-          "message": "Describe Index"
+          "source": "Describe index",
+          "message": "Describe index"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.short_desc": {
           "source": "Get one index, including its data-plane host",
@@ -1220,8 +1220,8 @@
           "message": "The write parameters for the embedding model."
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.display_name": {
-          "source": "Configure Index",
-          "message": "Configure Index"
+          "source": "Configure index",
+          "message": "Configure index"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.short_desc": {
           "source": "Change an existing index's settings",
@@ -1484,8 +1484,8 @@
           "message": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.display_name": {
-          "source": "Delete Index",
-          "message": "Delete Index"
+          "source": "Delete index",
+          "message": "Delete index"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.short_desc": {
           "source": "Delete an index and everything in it",
@@ -1544,8 +1544,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.display_name": {
-          "source": "List Index Backups",
-          "message": "List Index Backups"
+          "source": "List index backups",
+          "message": "List index backups"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.short_desc": {
           "source": "List the backups taken from one index",
@@ -1604,8 +1604,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.display_name": {
-          "source": "Create Backup",
-          "message": "Create Backup"
+          "source": "Create backup",
+          "message": "Create backup"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.short_desc": {
           "source": "Back an index up now",
@@ -1652,8 +1652,8 @@
           "message": "A description of the backup."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.display_name": {
-          "source": "Describe Backup",
-          "message": "Describe Backup"
+          "source": "Describe backup",
+          "message": "Describe backup"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.short_desc": {
           "source": "Get one backup",
@@ -1676,8 +1676,8 @@
           "message": "The ID of the backup to describe."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.display_name": {
-          "source": "Delete Backup",
-          "message": "Delete Backup"
+          "source": "Delete backup",
+          "message": "Delete backup"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.short_desc": {
           "source": "Delete a backup permanently",
@@ -1700,8 +1700,8 @@
           "message": "The ID of the backup to delete."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.display_name": {
-          "source": "Create Index from Backup",
-          "message": "Create Index from Backup"
+          "source": "Create index from backup",
+          "message": "Create index from backup"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.short_desc": {
           "source": "Restore a backup into a new index",
@@ -1916,8 +1916,8 @@
           "message": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.display_name": {
-          "source": "List Backup Schedules",
-          "message": "List Backup Schedules"
+          "source": "List backup schedules",
+          "message": "List backup schedules"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.short_desc": {
           "source": "List the backup schedules of an index",
@@ -1964,8 +1964,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Create Backup Schedule",
-          "message": "Create Backup Schedule"
+          "source": "Create backup schedule",
+          "message": "Create backup schedule"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
           "source": "Back an index up automatically on a schedule",
@@ -2092,8 +2092,8 @@
           "message": "Number of days to retain each backup created by this schedule. Must be at least 1 and no more than the service-configured maximum; a value outside that range is rejected with `400`."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.display_name": {
-          "source": "Describe Backup Schedule",
-          "message": "Describe Backup Schedule"
+          "source": "Describe backup schedule",
+          "message": "Describe backup schedule"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.short_desc": {
           "source": "Get one backup schedule",
@@ -2116,8 +2116,8 @@
           "message": "The ID of the backup schedule, as returned by **List Backup Schedules** for the index it belongs to."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Update Backup Schedule",
-          "message": "Update Backup Schedule"
+          "source": "Update backup schedule",
+          "message": "Update backup schedule"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
           "source": "Change a backup schedule's frequency, retention or state",
@@ -2212,8 +2212,8 @@
           "message": "Number of days to retain each backup created by this schedule. Must be at least 1 and no more than the service-configured maximum; a value outside that range is rejected with `400`."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Delete Backup Schedule",
-          "message": "Delete Backup Schedule"
+          "source": "Delete backup schedule",
+          "message": "Delete backup schedule"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
           "source": "Remove a backup schedule",
@@ -2236,8 +2236,8 @@
           "message": "The ID of the backup schedule, as returned by **List Backup Schedules** for the index it belongs to."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.display_name": {
-          "source": "List Backup Schedule History",
-          "message": "List Backup Schedule History"
+          "source": "List backup schedule history",
+          "message": "List backup schedule history"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.short_desc": {
           "source": "List the backups a schedule has taken",
@@ -2320,8 +2320,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.display_name": {
-          "source": "Describe Restore Job",
-          "message": "Describe Restore Job"
+          "source": "Describe restore job",
+          "message": "Describe restore job"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.short_desc": {
           "source": "Get one restore job and its progress",
@@ -2392,8 +2392,8 @@
           "message": "The name of the index to be used as the source for the collection."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.display_name": {
-          "source": "Describe Collection",
-          "message": "Describe Collection"
+          "source": "Describe collection",
+          "message": "Describe collection"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.short_desc": {
           "source": "Get one collection (pod-based indexes only)",
@@ -2416,8 +2416,8 @@
           "message": "The name of the collection to be described."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
-          "message": "Delete Collection"
+          "source": "Delete collection",
+          "message": "Delete collection"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Delete a collection permanently",
@@ -3280,8 +3280,8 @@
           "message": "A map of metadata field names to their configuration. The field name must be a valid metadata field name. The field name must be unique. At most 50 fields may be declared.\nField names may not begin with `$`, which introduces a filter operator. When declared at index creation, names beginning with `_` are also rejected (reserved for internal use)."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.display_name": {
-          "source": "Describe Namespace",
-          "message": "Describe Namespace"
+          "source": "Describe namespace",
+          "message": "Describe namespace"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.short_desc": {
           "source": "Get one namespace and its record count",
@@ -3316,8 +3316,8 @@
           "message": "The namespace to work in.  Use `__default__` for the namespace requests address when they name none."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Delete Namespace",
-          "message": "Delete Namespace"
+          "source": "Delete namespace",
+          "message": "Delete namespace"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.short_desc": {
           "source": "Delete a namespace and everything in it",
@@ -3352,8 +3352,8 @@
           "message": "The namespace to work in.  Use `__default__` for the namespace requests address when they name none."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.display_name": {
-          "source": "Upsert Text",
-          "message": "Upsert Text"
+          "source": "Upsert text",
+          "message": "Upsert text"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.short_desc": {
           "source": "Write text records and let Pinecone embed them",
@@ -3412,8 +3412,8 @@
           "message": "The unique ID of the record to upsert. The service also accepts `id` as an alias, which this schema does not model."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.display_name": {
-          "source": "Search with Text",
-          "message": "Search with Text"
+          "source": "Search with text",
+          "message": "Search with text"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.short_desc": {
           "source": "Search with a query text and optionally rerank",
@@ -3672,8 +3672,8 @@
           "message": "A list of terms that must be present in the text of each search hit based on the specified strategy."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.display_name": {
-          "source": "Upsert Documents",
-          "message": "Upsert Documents"
+          "source": "Upsert documents",
+          "message": "Upsert documents"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.short_desc": {
           "source": "Write documents into a namespace",
@@ -3732,8 +3732,8 @@
           "message": "The unique identifier for the document."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.display_name": {
-          "source": "Search Documents",
-          "message": "Search Documents"
+          "source": "Search documents",
+          "message": "Search documents"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.short_desc": {
           "source": "Search documents by vector, text or query string",
@@ -3944,8 +3944,8 @@
           "message": "Which document fields to return on each hit.  Empty returns every field, as does `[\"*\"]`."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.display_name": {
-          "source": "Fetch Documents",
-          "message": "Fetch Documents"
+          "source": "Fetch documents",
+          "message": "Fetch documents"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.short_desc": {
           "source": "Read documents by ID or by metadata filter",
@@ -4040,8 +4040,8 @@
           "message": "The pagination token from the previous response.  Only valid together with a **Metadata Filter**."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Update Documents",
-          "message": "Update Documents"
+          "source": "Update documents",
+          "message": "Update documents"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.short_desc": {
           "source": "Patch documents by ID, or set fields across a filter",
@@ -4148,8 +4148,8 @@
           "message": "Fields to remove from every document the filter matches.  Only valid with a **Metadata Filter**."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Delete Documents",
-          "message": "Delete Documents"
+          "source": "Delete documents",
+          "message": "Delete documents"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.short_desc": {
           "source": "Delete documents by ID, by filter, or the whole namespace",
@@ -4220,8 +4220,8 @@
           "message": "If `true`, delete all documents in the namespace. Mutually exclusive with `ids` and `filter`. `false` is treated as if the field were omitted."
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.display_name": {
-          "source": "List Documents",
-          "message": "List Documents"
+          "source": "List documents",
+          "message": "List documents"
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.short_desc": {
           "source": "List the documents in a namespace",
@@ -4428,8 +4428,8 @@
           "message": "Stop the whole import at the first record that fails."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.display_name": {
-          "source": "Describe Import",
-          "message": "Describe Import"
+          "source": "Describe import",
+          "message": "Describe import"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.short_desc": {
           "source": "Get one import and its progress",
@@ -4464,8 +4464,8 @@
           "message": "Unique identifier for the import operation."
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.display_name": {
-          "source": "Cancel Import",
-          "message": "Cancel Import"
+          "source": "Cancel import",
+          "message": "Cancel import"
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.short_desc": {
           "source": "Stop an import that is still running",
@@ -4724,8 +4724,8 @@
           "message": "Mostly-zero vectors keyed by term, for keyword-style matching."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.display_name": {
-          "source": "Describe Model",
-          "message": "Describe Model"
+          "source": "Describe model",
+          "message": "Describe model"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.short_desc": {
           "source": "Get one hosted model and what it supports",

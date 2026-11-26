@@ -524,7 +524,7 @@
           "message": "次のページのカーソル: 前回のレスポンスの`links.next`の値を渡します。\n\nこれは不透明な値であり、手動で構築してはなりません。最初のページを読み込むには設定しないでください。"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "プロファイルを取得"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "IPアドレス"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "プロファイルの更新"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "リストを取得"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "生成負荷が高いためKlaviyoがデフォルトで省略する、各プロファイルに含める計算済みブロック:\n\n- `subscriptions`: チャネルごとのプロファイルの同意状態\n- `predictive_analytics`: Klaviyoによる予測生涯価値および解約確率"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "リストの更新"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "リストを削除"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "1ページで返すレコード数。\n\nKlaviyoはエンドポイントごとにこれを制限しており、制限より大きい値を丸めるのではなく拒否します。最大値は引数自体の説明に記載されています。"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "セグメントを取得"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "Klaviyo UIでセグメントにスターが付いているかどうか"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "セグメントの更新"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "セグメントを無効化するには false に設定します。無効化する際、これはリクエストボディ内で唯一の属性である必要があります。無効化を他の更新と組み合わせることはできません。セグメントを非アクティブに設定すると、このセグメントを参照するキャンペーン、フロー、広告同期、フォーム、ヘルプデスクルーティングなどの機能に影響します。無効化されたセグメントを再有効化するには true に設定します。"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "セグメントを削除"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "1ページで返すレコード数。\n\nKlaviyoはエンドポイントごとにこれを制限しており、制限より大きい値を丸めるのではなく拒否します。最大値は引数自体の説明に記載されています。"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "タグを取得"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "tag-group"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "タグを更新"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "タグ名"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "タグを削除"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "次のページのカーソル: 前回のレスポンスの`links.next`の値を渡します。\n\nこれは不透明な値であり、手動で構築してはなりません。最初のページを読み込むには設定しないでください。"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "キャンペーンの取得"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "カスタムトラッキングパラメータのリスト。空のリストが指定された場合、add_tracking_paramsがTrueであれば会社のデフォルトを使用します。"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "キャンペーンの更新"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "カスタムトラッキングパラメータのリスト。空のリストが指定された場合、add_tracking_paramsがTrueであれば会社のデフォルトを使用します。"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "キャンペーンの削除"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "一致するイベントに一覧を絞り込みます（Klaviyoのフィルター構文）。\n\n`equals(metric_id,\"…\")`と`equals(profile_id,\"…\")`は1つのメトリクスまたは1つのプロファイルを選択し、`datetime`と`timestamp`は4つの範囲比較（例: `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`）を取ります。述語はカンマで結合され、**AND**を意味します。Klaviyoにはここで使える`or`はありません。"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "イベントを取得"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "次のページのカーソル: 前回のレスポンスの`links.next`の値を渡します。\n\nこれは不透明な値であり、手動で構築してはなりません。最初のページを読み込むには設定しないでください。"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "メトリックの取得"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "タグを削除するセグメント"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "イベントを作成"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "イベントとともに記録する独自のプロパティ（名前/値のペア）"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "プロファイルの登録"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "**このリスト経由**でプロファイルを登録します。これによりリストに追加され、リストに設定されている場合はダブルオプトインプロセスが適用されます。\n\n指定しない場合、同意はプロファイルに対して直接記録され、確認は送信されません。"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "プロファイルの登録解除"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "同意を取り消すSMSメッセージの種類。\n\n`phoneNumber`と一緒に指定した場合のみ有効です。デフォルトはマーケティングです。"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "新規プロファイル"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "アカウントでプロファイルが作成されるたびに実行されます。\n\nイベントには、**Get Profile**および**List Profiles**が返すのと同じ形式で、IDに加えて属性を含むプロファイルが含まれます。\n\n後から編集されたプロファイルでは再実行**されません**。フィードは`created`によって配置されます。"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "新しいイベント"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "選択されたメトリクスに対して記録されたイベントごとにトリガーされます。\n\n`metric`は必須であり、メトリクスを**ID**で指定します。アカウント内のすべてのイベントのフィードは肥大化して実用に耐えず、「注文済み (Placed Order)」に反応するワークフローに「製品の閲覧 (Viewed Product)」は不要なためです。\n\nイベントにはIDに加え、その属性を含むイベントレコードが含まれます。フィードの位置付けは、Klaviyoが受信した日時ではなくイベントが発生した日時である`datetime`によって行われます。"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "リストに追加されたプロファイル"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "選択されたリストに追加されたプロファイルごとにトリガーされます。\n\nフィードの位置付けは`joined_group_at`によって行われるため、プロファイル自体が作成された時ではなくプロファイルが**リストに追加された**時にトリガーされます（1年前から存在するプロファイルであっても追加された瞬間にトリガーされます）。\n\nイベントにはIDに加え、その属性を含むプロファイルが含まれます。"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "セグメントに追加されたプロファイル"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

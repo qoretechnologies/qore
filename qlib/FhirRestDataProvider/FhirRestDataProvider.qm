@@ -258,7 +258,7 @@ namespace Priv {
         },
         {
             "operation": "search-all",
-            "display_name": "Search All",
+            "display_name": "Search all",
             "short_desc": "Search all FHIR %s resource pages",
             "desc": "Search FHIR `%s` resources and follow Bundle `next` pagination links.",
             "mutates_state": False,
@@ -277,7 +277,7 @@ namespace Priv {
         },
         {
             "operation": "conditional-update",
-            "display_name": "Conditional Update",
+            "display_name": "Conditional update",
             "short_desc": "Conditionally update a FHIR %s resource",
             "desc": "Conditionally update a FHIR `%s` resource by search criteria.",
         },

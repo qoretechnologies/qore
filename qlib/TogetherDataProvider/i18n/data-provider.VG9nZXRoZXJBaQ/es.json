@@ -792,7 +792,7 @@
           "message": "La versión es la versión del volumen que montar. Al crear, predeterminado a la versión más reciente. Al actualizar, predeterminado a la versión actualmente montada."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "Eliminar despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "Identificación o nombre del despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.display_name": {
-          "source": "Get Deployment By ID Or Name",
+          "source": "Get deployment by ID or name",
           "message": "Obtener despliegue por ID o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.short_desc": {
@@ -840,7 +840,7 @@
           "message": "Identificación o nombre del despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "Actualizar Despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "La versión es la versión del volumen que montar. Al crear, predeterminado a la versión más reciente. Al actualizar, predeterminado a la versión actualmente montada."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Logs For Deployment",
+          "source": "Get logs for deployment",
           "message": "Obtener registros para el despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "El valor es los datos sensibles para almacenar de forma segura (por ejemplo, API claves, contraseñas, fichas). Encriptado en reposo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.display_name": {
-          "source": "Delete Secret",
+          "source": "Delete secret",
           "message": "Eliminar secreto"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "ID secreto o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Secret By ID Or Name",
+          "source": "Get secret by ID or name",
           "message": "Consiga Secreto por ID o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "ID secreto o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.display_name": {
-          "source": "Update Secret",
+          "source": "Update secret",
           "message": "Actualizar Secret"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "El valor es los nuevos datos sensibles para almacenar de forma segura. Actualizar esto reemplaza el valor secreto existente."
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.display_name": {
-          "source": "Download Storage File",
+          "source": "Download storage file",
           "message": "Descargar Archivo de almacenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Nombre de archivo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.display_name": {
-          "source": "Get File Download URL",
+          "source": "Get file download URL",
           "message": "Obtener URL de descarga del archivo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "readOnly"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.display_name": {
-          "source": "Delete Volume",
+          "source": "Delete volume",
           "message": "Eliminar el volumen"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "ID de volumen o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Volume By ID Or Name",
+          "source": "Get volume by ID or name",
           "message": "Obtener volumen por ID o nombre"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Versión de volumen para describir (defaults a la versión actual)"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.display_name": {
-          "source": "Update Volume",
+          "source": "Update volume",
           "message": "Volumen de actualización"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.short_desc": {
@@ -2996,7 +2996,7 @@
           "message": "La piscina de lora para utilizar para un adaptador si se fija para correr contra, por ejemplo, una piscina dedicada. Sólo se utiliza para model_type `adapter`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.display_name": {
-          "source": "Get Model Upload Job",
+          "source": "Get model upload job",
           "message": "Obtener modelo de carga de trabajo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Lista los metadatos para todos los archivos de datos cargados."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Obtener archivo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "La identificación del archivo para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Eliminar archivo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "El ID del archivo para eliminar"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Descargar archivo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -4476,7 +4476,7 @@
           "message": "Número máximo de filas desde el inicio del archivo de entrenamiento para tokenizar."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.display_name": {
-          "source": "Get Fine-Tune",
+          "source": "Get fine-tune",
           "message": "Consigue un buen tono."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "La identificación del trabajo para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "Eliminar Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Parámetro deprecatado y no utilizado."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.display_name": {
-          "source": "List Fine-Tune Events",
+          "source": "List fine-tune events",
           "message": "List Fine-Tune Events"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "El ID del trabajo fino para listar eventos para"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tune Checkpoints",
+          "source": "List fine-tune checkpoints",
           "message": "List Fine-Tune Checkpoints"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.short_desc": {
@@ -4584,7 +4584,7 @@
           "message": "Identificación del trabajo fino para enumerar los puestos de control"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.display_name": {
-          "source": "Download Tokenized Dataset",
+          "source": "Download tokenized dataset",
           "message": "Descargar Dataset Tokenized"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Model Output Path"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.display_name": {
-          "source": "Cancel Fine-Tune",
+          "source": "Cancel fine-tune",
           "message": "Cancelar Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.short_desc": {
@@ -4692,7 +4692,7 @@
           "message": "Identificación fina para cancelar. Una cuerda que comienza con `ft-`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.display_name": {
-          "source": "Get Fine-Tune Metrics",
+          "source": "Get fine-tune metrics",
           "message": "Obtenga las métricas de tono fino"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.short_desc": {
@@ -6544,7 +6544,7 @@
           "message": "Nombre legible por humanos para esta instancia adicional."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Get GPU Cluster By Cluster ID",
+          "source": "Get GPU cluster by cluster ID",
           "message": "¡Vamos! GPU Cluster por identificación de grupo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -6568,7 +6568,7 @@
           "message": "El ID del clúster para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.display_name": {
-          "source": "Update GPU Cluster",
+          "source": "Update GPU cluster",
           "message": "Actualización GPU Clúster"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.short_desc": {
@@ -6980,7 +6980,7 @@
           "message": "Nombre del complemento que se actualizará. Debe coincidir con un complemento existente en el clúster."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Delete GPU Cluster By Cluster ID",
+          "source": "Delete GPU cluster by cluster ID",
           "message": "Eliminar GPU Cluster por identificación de grupo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -7148,7 +7148,7 @@
           "message": "Identificación del proyecto que poseerá el volumen. Cuando se omite, se utiliza el proyecto predeterminado del callador."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Get Shared Volume By ID",
+          "source": "Get shared volume by ID",
           "message": "Obtener volumen compartido por ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "El ID del volumen para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Delete Shared Volume By ID",
+          "source": "Delete shared volume by ID",
           "message": "Suprimir volumen compartido por ID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "Crear el punto final en una zona de disponibilidad especificada (por ejemplo, nosotros-central-4b)"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.display_name": {
-          "source": "Get Endpoint",
+          "source": "Get endpoint",
           "message": "Get Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.short_desc": {
@@ -7448,7 +7448,7 @@
           "message": "El ID del punto final para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.display_name": {
-          "source": "Update Endpoint",
+          "source": "Update endpoint",
           "message": "Actualización Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.short_desc": {
@@ -7552,7 +7552,7 @@
           "message": "El número de minutos de inactividad después de lo cual el punto final se detiene automáticamente. Se establece a 0 para desactivar el tiempo automático."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.display_name": {
-          "source": "Delete Endpoint",
+          "source": "Delete endpoint",
           "message": "Eliminar el punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.short_desc": {
@@ -7576,7 +7576,7 @@
           "message": "El ID del endpoint para eliminar"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.display_name": {
-          "source": "Add LoRA Adapter To Endpoint",
+          "source": "Add LoRA adapter to endpoint",
           "message": "Añadir LoRA Adaptador a Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.short_desc": {
@@ -7612,7 +7612,7 @@
           "message": "Identificador combinado en formato \"endpoint_name:adapter_model_name\"."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.display_name": {
-          "source": "List Adapters On Endpoint",
+          "source": "List adapters on endpoint",
           "message": "Adaptadores de lista en punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "El ID de punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.display_name": {
-          "source": "Remove LoRA Adapter From Endpoint",
+          "source": "Remove LoRA adapter from endpoint",
           "message": "Eliminar LoRA Adaptador desde Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.short_desc": {
@@ -7896,7 +7896,7 @@
           "message": "Modelo a utilizar para procesar solicitudes por lotes"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Obtener lote"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "La identificación del trabajo del lote para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Cancelar lote"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "Modelos de filtro por fuente"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Obtener Evaluación"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "El ID del trabajo de evaluación para recuperar"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.display_name": {
-          "source": "Get Evaluation Results",
+          "source": "Get evaluation results",
           "message": "Obtener resultados de evaluación"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.short_desc": {
@@ -9560,7 +9560,7 @@
           "message": "Estrategia de escalado Moe Original"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.display_name": {
-          "source": "Get Model Resources",
+          "source": "Get model resources",
           "message": "Obtener recursos modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.short_desc": {
@@ -9584,7 +9584,7 @@
           "message": "ID del recurso modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.display_name": {
-          "source": "Stop Model Resources",
+          "source": "Stop model resources",
           "message": "Stop Model Resources"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "Devuelve los modelos apoyados por el servicio RL y sus límites para las operaciones de entrenamiento y muestreo."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Get Training Session",
+          "source": "Get training session",
           "message": "Sesión de entrenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -9968,7 +9968,7 @@
           "message": "ID of the training session"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Update Training Session",
+          "source": "Update training session",
           "message": "Sesión de entrenamiento actualizada"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -10100,7 +10100,7 @@
           "message": "URL HTTPS para la ejecución de Weights & Biases"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.display_name": {
-          "source": "Stop Training Session",
+          "source": "Stop training session",
           "message": "Stop Training Session"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.short_desc": {
@@ -10124,7 +10124,7 @@
           "message": "ID of the training session"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Backward Operation",
+          "source": "Get forward backward operation",
           "message": "Retrocedan la Operación Atrás"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.short_desc": {
@@ -10160,7 +10160,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.display_name": {
-          "source": "Get Optim Step Operation",
+          "source": "Get optim step operation",
           "message": "Obtener operación de paso óptimo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.short_desc": {
@@ -10196,7 +10196,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.display_name": {
-          "source": "Get Weights Sync Operation",
+          "source": "Get weights sync operation",
           "message": "Obtenga la operación Sincronización de Pesos"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.short_desc": {
@@ -10232,7 +10232,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.display_name": {
-          "source": "Get Sample Operation",
+          "source": "Get sample operation",
           "message": "Obtenga la operación de muestra"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.short_desc": {
@@ -10268,7 +10268,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.display_name": {
-          "source": "Forward Backward Pass",
+          "source": "Forward backward pass",
           "message": "Avance hacia atrás"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.short_desc": {
@@ -10616,7 +10616,7 @@
           "message": "Tipo de pérdida Dro"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.display_name": {
-          "source": "Custom Forward Backward Pass",
+          "source": "Custom forward backward pass",
           "message": "Pase trasero de avance personalizado"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.short_desc": {
@@ -10796,7 +10796,7 @@
           "message": "D Tipo Bfloat16"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.display_name": {
-          "source": "Get Custom Forward Backward Operation",
+          "source": "Get custom forward backward operation",
           "message": "Obtenga la operación de avance hacia atrás"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.short_desc": {
@@ -10832,7 +10832,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.display_name": {
-          "source": "Forward Pass",
+          "source": "Forward pass",
           "message": "Pase adelante"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.short_desc": {
@@ -10968,7 +10968,7 @@
           "message": "Forma de búfer como `[num_tokens, num_layers, width]`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Operation",
+          "source": "Get forward operation",
           "message": "¡Adelante!"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.short_desc": {
@@ -11004,7 +11004,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.display_name": {
-          "source": "Optimizer Step",
+          "source": "Optimizer step",
           "message": "Optimizador paso"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.short_desc": {
@@ -11268,7 +11268,7 @@
           "message": "Coeficiente de decaimiento de peso"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.display_name": {
-          "source": "Weights Sync",
+          "source": "Weights sync",
           "message": "Sincronización de pesos"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.short_desc": {
@@ -11528,7 +11528,7 @@
           "message": "Cuando es verdad junto con `return_routed_experts`, devolver cada captura de enrutamiento como un backend propiedad `object_uri` más la forma en lugar de datos de base en línea 64. Clientes que no optan por mantener la respuesta inline heredada."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.display_name": {
-          "source": "Create Inference Checkpoint",
+          "source": "Create inference checkpoint",
           "message": "Crear punto de control de referencia"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.short_desc": {
@@ -11552,7 +11552,7 @@
           "message": "ID de sesión de entrenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Inference Checkpoint Operation",
+          "source": "Get inference checkpoint operation",
           "message": "Obtenga la operación de punto de referencia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.short_desc": {
@@ -11588,7 +11588,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Save Training Checkpoint",
+          "source": "Save training checkpoint",
           "message": "Guardar el punto de control de entrenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.short_desc": {
@@ -11612,7 +11612,7 @@
           "message": "ID de sesión de entrenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.display_name": {
-          "source": "Get Save Training Checkpoint Operation",
+          "source": "Get save training checkpoint operation",
           "message": "Guardar la operación de punto de control de entrenamiento"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.short_desc": {
@@ -11648,7 +11648,7 @@
           "message": "Operación ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.display_name": {
-          "source": "Get Checkpoint",
+          "source": "Get checkpoint",
           "message": "Obtener punto de control"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.short_desc": {
@@ -11672,7 +11672,7 @@
           "message": "ID del puesto de control"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.display_name": {
-          "source": "Download Checkpoint",
+          "source": "Download checkpoint",
           "message": "Descargar Checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.short_desc": {
@@ -11720,7 +11720,7 @@
           "message": "Adaptador Variante de punto de control"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.display_name": {
-          "source": "List Addons",
+          "source": "List addons",
           "message": "List Addons"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.short_desc": {
@@ -11744,7 +11744,7 @@
           "message": "La identificación del grupo cuyos complementos a la lista."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.display_name": {
-          "source": "Create Addon",
+          "source": "Create addon",
           "message": "Crear Addon"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "Si habilitar el complemento Model Aware TorchPass."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.display_name": {
-          "source": "Get Addon",
+          "source": "Get addon",
           "message": "Consigue Addon."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.short_desc": {
@@ -11928,7 +11928,7 @@
           "message": "La identificación del add-on para recuperar."
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.display_name": {
-          "source": "Update Addon",
+          "source": "Update addon",
           "message": "Actualizar Addon"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "Si habilitar el complemento Model Aware TorchPass."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.display_name": {
-          "source": "Delete Addon",
+          "source": "Delete addon",
           "message": "Suprímase Addon"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.short_desc": {
@@ -12100,7 +12100,7 @@
           "message": "El ID del add-on para borrar."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.display_name": {
-          "source": "List Remediations",
+          "source": "List remediations",
           "message": "List Remediations"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.short_desc": {
@@ -12204,7 +12204,7 @@
           "message": "Filtro por modo de remediación (s). Devuelve las remediaciones que coincidan con cualquiera de los modos especificados."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Create Remediation",
+          "source": "Create remediation",
           "message": "Crear Remediación"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.short_desc": {
@@ -12288,7 +12288,7 @@
           "message": "ID especificado por el cliente para la idempotencia."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Get Remediation",
+          "source": "Get remediation",
           "message": "Remediación"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12324,7 +12324,7 @@
           "message": "Valor para la identificación de la reparación"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.display_name": {
-          "source": "Approve Remediation",
+          "source": "Approve remediation",
           "message": "Aprobar la rehabilitación"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.short_desc": {
@@ -12404,7 +12404,7 @@
           "message": "Modo de Remediación Ciclo de Poder Host"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Cancel Remediation",
+          "source": "Cancel remediation",
           "message": "Cancel Remediación"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.short_desc": {
@@ -12452,7 +12452,7 @@
           "message": "La identificación de remediación."
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Reject Remediation",
+          "source": "Reject remediation",
           "message": "Rechazo Remediación"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "El cursor opaco de una respuesta anterior `next_cursor`. Sólo válida para el mes y la granularidad para la que se emitió. Los datos del mes actual son una instantánea en movimiento: cada página refleja los datos a partir de su solicitud, por lo que las ventanas recién terminadas pueden aparecer al final de la secuencia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.display_name": {
-          "source": "Dedicated: List Organization Endpoints",
+          "source": "Dedicated: list organization endpoints",
           "message": "Dedicado: Lista de puntos finales de la Organización"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "Expresión de filtro `name`, `created_at`, `updated_at` con los operadores de comparación y/OR/NOT; los horarios deben ser las cadenas RFC 3339. `name` soportes de subestring coinciden con `:` y prefijo / suffix comodines con `*`, y debe ser un nombre de punto final desnudo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.display_name": {
-          "source": "Dedicated: List Organization Models",
+          "source": "Dedicated: list organization models",
           "message": "Dedicado: Modelos de organización de listas"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.short_desc": {
@@ -12840,7 +12840,7 @@
           "message": "Cursor de una respuesta anterior de la lista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.display_name": {
-          "source": "Dedicated: List Model Configurations",
+          "source": "Dedicated: list model configurations",
           "message": "Dedicado: Configuraciones modelo de lista"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.short_desc": {
@@ -12912,7 +12912,7 @@
           "message": "Cursor de una respuesta anterior de la lista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Dedicated: Get Model Configuration",
+          "source": "Dedicated: get model configuration",
           "message": "Dedicado: Consiga la configuración de modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -12948,7 +12948,7 @@
           "message": "Identificador de revisión de Config."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.display_name": {
-          "source": "Dedicated: List Endpoints",
+          "source": "Dedicated: list endpoints",
           "message": "Dedicado: Lista de puntos finales"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.short_desc": {
@@ -13020,7 +13020,7 @@
           "message": "Expresión de filtro `name`, `created_at`, `updated_at` con los operadores de comparación y/OR/NOT; los horarios deben ser las cadenas RFC 3339. `name` soportes de subestring coinciden con `:` y prefijo / suffix comodines con `*`, y acepta un nombre de punta desnuda o `<project_slug>/<endpoint_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Create Endpoint",
+          "source": "Dedicated: create endpoint",
           "message": "Dedicado: Crear punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.short_desc": {
@@ -13076,7 +13076,7 @@
           "message": "Visibilidad interna"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Update Endpoint",
+          "source": "Dedicated: update endpoint",
           "message": "Dedicado: Actualización Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.short_desc": {
@@ -13204,7 +13204,7 @@
           "message": "Campos para actualizar. Si no se establece, los campos poblados se actualizan."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Get Endpoint",
+          "source": "Dedicated: get endpoint",
           "message": "Dedicado: Obtener punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.short_desc": {
@@ -13240,7 +13240,7 @@
           "message": "Identificador de punto final."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Delete Endpoint",
+          "source": "Dedicated: delete endpoint",
           "message": "Dedicado: Eliminar el punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.short_desc": {
@@ -13288,7 +13288,7 @@
           "message": "Etiqueta para la concurrencia optimista. Si se establece, el borrador es rechazado si el etag actual no coincide."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.display_name": {
-          "source": "Dedicated: List Deployments",
+          "source": "Dedicated: list deployments",
           "message": "Dedicados: Despliegue de listas"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.short_desc": {
@@ -13372,7 +13372,7 @@
           "message": "Expresión de filtro `name`, `state`, `model`, `created_at`, `updated_at` con los operadores de comparación y AND/OR/NOT; `state` toma un nombre del estado de despliegue y `model` toma un nombre de recurso modelo. `name` soportes de subestring coinciden con `:` y prefijo / suffix comodines con `*`, y acepta un nombre de despliegue desnudo o `<project_slug>/<endpoint_name>/<deployment_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Create Deployment",
+          "source": "Dedicated: create deployment",
           "message": "Dedicado: Crear Despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13716,7 +13716,7 @@
           "message": "Cuando es cierto, valida la solicitud sin crear o proporcionar un despliegue."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Update Deployment",
+          "source": "Dedicated: update deployment",
           "message": "Dedicado: Despliegue de actualización"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13976,7 +13976,7 @@
           "message": "Campos para actualizar. Si no se establece, los campos se poblaron en `deployment` se actualizan."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Get Deployment",
+          "source": "Dedicated: get deployment",
           "message": "Dedicado: Consiga el Despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "Identificador de Despliegue."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Delete Deployment",
+          "source": "Dedicated: delete deployment",
           "message": "Dedicado: Eliminar el Despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "Etiqueta para la concurrencia optimista. Si se establece, el borrador es rechazado si el etag actual no coincide."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.display_name": {
-          "source": "Dedicated: List Deployment Adapters",
+          "source": "Dedicated: list deployment adapters",
           "message": "Dedicados: Adaptadores de Despliegue de Lista"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.short_desc": {
@@ -14156,7 +14156,7 @@
           "message": "Cursor de una respuesta previa de la lista de adaptadores."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Add Deployment Adapter",
+          "source": "Dedicated: add deployment adapter",
           "message": "Dedicado: Add Deployment Adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14240,7 +14240,7 @@
           "message": "Ya sea para desalojar el adaptador más antiguo si el despliegue está en capacidad de adaptador."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Get Deployment Adapter",
+          "source": "Dedicated: get deployment adapter",
           "message": "Dedicado: Consiga el adaptador de despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "Identificador modelo de adaptador."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Remove Deployment Adapter",
+          "source": "Dedicated: remove deployment adapter",
           "message": "Dedicado: Remove Deployment Adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14372,7 +14372,7 @@
           "message": "Etiqueta de adaptador de una adición anterior, actualización, obtener o lista de respuesta. La eliminación es rechazada si el adaptador cambió después de esa respuesta."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Update Deployment Adapter",
+          "source": "Dedicated: update deployment adapter",
           "message": "Dedicado: Actualización Adaptador de Despliegue"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14456,7 +14456,7 @@
           "message": "Etiqueta de nivel de fila de una respuesta anterior AddAdapter, UpdateAdapter, GetAdapter o ListAdapters."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.display_name": {
-          "source": "Dedicated: List Endpoint Rollouts",
+          "source": "Dedicated: list endpoint rollouts",
           "message": "Dedicado: Lista de Rollouts Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.short_desc": {
@@ -14536,7 +14536,7 @@
           "message": "Terminal de filtros de rodillos"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Create Rollout",
+          "source": "Dedicated: create rollout",
           "message": "Dedicado: Crear Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.short_desc": {
@@ -14816,7 +14816,7 @@
           "message": "Fase de reproducción de objetivos opcionales al finalizar. Debe ser por lo menos 1 cuando se establece; por defecto a la cuenta de réplica del despliegue de la fuente en el tiempo de creación, o a la réplica combinada de fuente y destino de las implementaciones cuentan cuando ambos ya están de pie en el punto final de tráfico división después de una cancelación. Si esto supera el objetivo de autoescalamiento max, el despliegue aumenta que max una vez cuando se necesita primero a menos que un operador cambie max mid-run; el techo elevado permanece después de la terminación. Un objetivo pre-existente cuyo propio min de autoscaling es más alto mantiene ese piso, reportado como FINAL_BELOW_INHERITED_MIN. Un objetivo que empieza a detener tierras exactamente a este valor; si el min fuente era más alto, PreviewRolloutDefaults reporta FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.display_name": {
-          "source": "Dedicated: Preview Rollout Defaults",
+          "source": "Dedicated: preview rollout defaults",
           "message": "Dedicado: Preview Rollout Defaults"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.short_desc": {
@@ -15096,7 +15096,7 @@
           "message": "Fase de reproducción de objetivos opcionales al finalizar. Debe ser por lo menos 1 cuando se establece; por defecto a la cuenta de réplica del despliegue de la fuente en el tiempo de creación, o a la réplica combinada de fuente y destino de las implementaciones cuentan cuando ambos ya están de pie en el punto final de tráfico división después de una cancelación. Si esto supera el objetivo de autoescalamiento max, el despliegue aumenta que max una vez cuando se necesita primero a menos que un operador cambie max mid-run; el techo elevado permanece después de la terminación. Un objetivo pre-existente cuyo propio min de autoscaling es más alto mantiene ese piso, reportado como FINAL_BELOW_INHERITED_MIN. Un objetivo que empieza a detener tierras exactamente a este valor; si el min fuente era más alto, PreviewRolloutDefaults reporta FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Get Rollout",
+          "source": "Dedicated: get rollout",
           "message": "Dedicado: Obtener Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.short_desc": {
@@ -15144,7 +15144,7 @@
           "message": "Identificador de Rollout."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Delete Rollout",
+          "source": "Dedicated: delete rollout",
           "message": "Dedicado: Eliminar el Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.short_desc": {
@@ -15204,7 +15204,7 @@
           "message": "Etiqueta para la concurrencia optimista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Start Rollout",
+          "source": "Dedicated: start rollout",
           "message": "Dedicado: Start Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.short_desc": {
@@ -15252,7 +15252,7 @@
           "message": "Identificador de Rollout."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Pause Rollout",
+          "source": "Dedicated: pause rollout",
           "message": "Dedicado: Rollout de pausa"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.short_desc": {
@@ -15324,7 +15324,7 @@
           "message": "Opcional razón legible humana grabada en los metadatos de pausa de despliegue."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Resume Rollout",
+          "source": "Dedicated: resume rollout",
           "message": "Dedicado: Resume Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.short_desc": {
@@ -15384,7 +15384,7 @@
           "message": "Etiqueta opcional para la concurrencia optimista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Cancel Rollout",
+          "source": "Dedicated: cancel rollout",
           "message": "Dedicado: Cancelar Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.short_desc": {
@@ -15476,7 +15476,7 @@
           "message": "Cancel Disposition Revert"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.display_name": {
-          "source": "Dedicated: Promote Rollout",
+          "source": "Dedicated: promote rollout",
           "message": "Dedicado: Promover el Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.short_desc": {
@@ -15536,7 +15536,7 @@
           "message": "Etiqueta opcional para la concurrencia optimista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List A B Experiments",
+          "source": "Dedicated: list A B experiments",
           "message": "Dedicado: Lista A B Experimentos"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.short_desc": {
@@ -15596,7 +15596,7 @@
           "message": "Cursor de un anterior A/B respuesta de la lista de experimentos."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create A B Experiment",
+          "source": "Dedicated: create A B experiment",
           "message": "Dedicado: Crear un Experimento B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15712,7 +15712,7 @@
           "message": "Variante de rol de miembro de experimento A/B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update A B Experiment",
+          "source": "Dedicated: update A B experiment",
           "message": "Dedicado: Actualización Un Experimento B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15852,7 +15852,7 @@
           "message": "Campos para actualizar. Si se omite, todos los campos mutables están sobrescritos."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get A B Experiment",
+          "source": "Dedicated: get A B experiment",
           "message": "Dedicado: Consigue un experimento B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15900,7 +15900,7 @@
           "message": "A/B Experimente identificador."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete A B Experiment",
+          "source": "Dedicated: delete A B experiment",
           "message": "Dedicado: Eliminar un Experimento B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15960,7 +15960,7 @@
           "message": "Etiqueta para la concurrencia optimista. Si se establece, el borrador es rechazado si el etag actual no coincide."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List Shadow Experiments",
+          "source": "Dedicated: list shadow experiments",
           "message": "Dedicado: List Shadow Experiments"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.short_desc": {
@@ -16032,7 +16032,7 @@
           "message": "Ya sea para incluir despliegues de objetivos en cada experimento de sombra devuelto."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create Shadow Experiment",
+          "source": "Dedicated: create shadow experiment",
           "message": "Dedicado: Crear Experimento Sombra"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16200,7 +16200,7 @@
           "message": "Despliegue bajo el punto final de los padres que recibe tráfico reflejado. No debe ser un miembro de tráfico en vivo o la fuente o el objetivo de un despliegue activo; el peso del multiplicador de tráfico 0 objetivos de calentamiento se permiten."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update Shadow Experiment",
+          "source": "Dedicated: update shadow experiment",
           "message": "Dedicado: Actualización Experimento Sombra"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16356,7 +16356,7 @@
           "message": "Campos obligatorios para actualizar, como descripción o fuente."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get Shadow Experiment",
+          "source": "Dedicated: get shadow experiment",
           "message": "Dedicado: Experimento de sombras"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16404,7 +16404,7 @@
           "message": "Identificador de experimentos de sombras."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment",
+          "source": "Dedicated: delete shadow experiment",
           "message": "Dedicado: Eliminar Experimento Sombra"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16464,7 +16464,7 @@
           "message": "Etiqueta para la concurrencia optimista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.display_name": {
-          "source": "Dedicated: List Shadow Experiment Targets",
+          "source": "Dedicated: list shadow experiment targets",
           "message": "Dedicado: Lista de objetivos del experimento de sombras"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.short_desc": {
@@ -16536,7 +16536,7 @@
           "message": "Cursor de una respuesta anterior de la lista de objetivos del experimento de sombra."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Create Shadow Experiment Target",
+          "source": "Dedicated: create shadow experiment target",
           "message": "Dedicado: Crear objetivo Experimento Sombra"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16620,7 +16620,7 @@
           "message": "Opcional descripción del objetivo de forma libre."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Update Shadow Experiment Target",
+          "source": "Dedicated: update shadow experiment target",
           "message": "Dedicado: Actualización del objetivo del Experimento Sombra"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16740,7 +16740,7 @@
           "message": "Campos separados para actualizar. Los campos apoyados son `name`, `targetDeploymentId`, `description`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Get Shadow Experiment Target",
+          "source": "Dedicated: get shadow experiment target",
           "message": "Dedicado: Obtenga el objetivo Experimento de Sombras"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16800,7 +16800,7 @@
           "message": "Experimento de la sombra identificador objetivo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment Target",
+          "source": "Dedicated: delete shadow experiment target",
           "message": "Dedicado: Eliminar el objetivo del experimento de sombras"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16872,7 +16872,7 @@
           "message": "Etiqueta para la concurrencia optimista."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.display_name": {
-          "source": "Dedicated: Get Endpoint Analytics",
+          "source": "Dedicated: get endpoint analytics",
           "message": "Dedicado: Consigue análisis de endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.short_desc": {
@@ -16968,7 +16968,7 @@
           "message": "Duración del cubo de las series temporales, como `1m`, `1h`, `1d`. Defaults to `1d`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.display_name": {
-          "source": "Dedicated: List Endpoint Events",
+          "source": "Dedicated: list endpoint events",
           "message": "Dedicado: Lista de eventos de punto final"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.short_desc": {
@@ -17128,7 +17128,7 @@
           "message": "ID de un sujeto asociado con el evento, como una salida. Combinado con otros filtros usando AND."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.display_name": {
-          "source": "Dedicated: List Project Models",
+          "source": "Dedicated: list project models",
           "message": "Dedicado: Modelos de Proyecto de Lista"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.short_desc": {
@@ -17208,7 +17208,7 @@
           "message": "Cursor de una respuesta anterior de la lista de modelos."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Create Model",
+          "source": "Dedicated: create model",
           "message": "Dedicado: Crear modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.short_desc": {
@@ -17280,7 +17280,7 @@
           "message": "ID del modelo base soportado del que se deriva este modelo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.display_name": {
-          "source": "Dedicated: Get Model",
+          "source": "Dedicated: get model",
           "message": "Dedicado: Obtener modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.short_desc": {
@@ -17316,7 +17316,7 @@
           "message": "Identificador modelo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Delete Model",
+          "source": "Dedicated: delete model",
           "message": "Dedicado: Borrar el modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.short_desc": {
@@ -17352,7 +17352,7 @@
           "message": "Identificador modelo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Update Model",
+          "source": "Dedicated: update model",
           "message": "Dedicado: Modelo de actualización"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.short_desc": {
@@ -17444,7 +17444,7 @@
           "message": "Campos para actualizar. Si se omite, todos los campos mutables están sobrescritos."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.display_name": {
-          "source": "Dedicated: List Placement Profiles",
+          "source": "Dedicated: list placement profiles",
           "message": "Dedicado: Perfiles de Colocación de Lista"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.short_desc": {
@@ -17492,7 +17492,7 @@
           "message": "Cursor de una respuesta anterior del perfil de colocación."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.display_name": {
-          "source": "Dedicated: Get Placement Profile",
+          "source": "Dedicated: get placement profile",
           "message": "Dedicado: Obtener Perfil de Colocación"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.short_desc": {
@@ -17528,7 +17528,7 @@
           "message": "Identificador de perfil de ubicación."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.display_name": {
-          "source": "Dedicated: List Model Files",
+          "source": "Dedicated: list model files",
           "message": "Dedicado: Lista de archivos modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.short_desc": {
@@ -17576,7 +17576,7 @@
           "message": "Revision identifier para leer de."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.display_name": {
-          "source": "Dedicated: List Model Revisions",
+          "source": "Dedicated: list model revisions",
           "message": "Dedicado: Revisiones modelo de lista"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.short_desc": {
@@ -17612,7 +17612,7 @@
           "message": "Identificador modelo."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.display_name": {
-          "source": "Dedicated: Get Model Volume Revision",
+          "source": "Dedicated: get model volume revision",
           "message": "Dedicado: Obtener revisión del volumen modelo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.short_desc": {
@@ -17660,7 +17660,7 @@
           "message": "Identificador de revisión."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.display_name": {
-          "source": "Dedicated: List Remote Model Uploads",
+          "source": "Dedicated: list remote model uploads",
           "message": "Dedicado: List Remote Model Uploads"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.short_desc": {
@@ -17708,7 +17708,7 @@
           "message": "Cursor de una respuesta anterior de la lista de carga remota."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Create Remote Model Upload",
+          "source": "Dedicated: create remote model upload",
           "message": "Dedicado: Crear la descarga del modelo remoto"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17768,7 +17768,7 @@
           "message": "Opcional fuente credencial utilizado para acceder a una ubicación remota privada. El valor es sólo escritura y no se devuelve."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Get Remote Model Upload",
+          "source": "Dedicated: get remote model upload",
           "message": "Dedicado: Obtener la carga del modelo remoto"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17804,7 +17804,7 @@
           "message": "Identificador de carga remota."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.display_name": {
-          "source": "Dedicated: List Remote Model Upload Events",
+          "source": "Dedicated: list remote model upload events",
           "message": "Dedicado: Lista de eventos de carga de modelos remotos"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.short_desc": {
@@ -17936,7 +17936,7 @@
           "message": "Lista de tipos de instancias de hardware disponibles actualmente para despliegues de inferencias, incluyendo GPU recursos, fijación de precios, regiones, y la mejor calidad de los baños."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.display_name": {
-          "source": "Dedicated: Get Inference Instance Type",
+          "source": "Dedicated: get inference instance type",
           "message": "Dedicado: Obtener el tipo de instalación de la inferencia"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.short_desc": {
@@ -18060,7 +18060,7 @@
           "message": "Cursor de una respuesta anterior de la lista de modelos apoyados."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.display_name": {
-          "source": "Dedicated: Get Supported Model",
+          "source": "Dedicated: get supported model",
           "message": "Dedicado: Consiga el modelo compatible"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.short_desc": {
@@ -18084,7 +18084,7 @@
           "message": "Identificador modelo compatible."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
+          "source": "Get video",
           "message": "Obtener vídeo"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.short_desc": {

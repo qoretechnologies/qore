@@ -165,7 +165,7 @@ module SendCloudDataProvider {
             "action": "create-parcel",
             "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Parcels",
-            "display_name": "Create Parcel",
+            "display_name": "Create parcel",
             "short_desc": "Create a new parcel",
             "desc": "Create a new parcel in SendCloud, optionally requesting a shipping label and announcing "
                 "the parcel to the selected carrier.",
@@ -542,7 +542,7 @@ module SendCloudDataProvider {
             "action": "create-return",
             "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Returns",
-            "display_name": "Create Return",
+            "display_name": "Create return",
             "short_desc": "Create a new return",
             "desc": "Create a new return in SendCloud for an outgoing parcel, optionally including refund "
                 "details and the list of returned items.",

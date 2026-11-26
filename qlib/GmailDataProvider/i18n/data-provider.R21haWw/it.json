@@ -852,7 +852,7 @@
           "message": "L'ID del messaggio da eliminare definitivamente; gli eventi watch contengono questo valore come `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Invia un messaggio"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

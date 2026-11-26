@@ -808,7 +808,7 @@
           "message": "Názov úložiska vyhľadávania súborov, ktoré sa má použiť pre generovanie rozšírené o vyhľadávanie (RAG). Model prehľadá dokumenty úložiska, aby svoju odpoveď podložil relevantným obsahom"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Jednoduchý chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Názov úložiska vyhľadávania súborov, ktoré sa má použiť pre generovanie rozšírené o vyhľadávanie (RAG). Model prehľadá dokumenty úložiska, aby svoju odpoveď podložil relevantným obsahom"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Generovať embedding obsahu"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Obsah z modelu"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Dávkový embedding"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

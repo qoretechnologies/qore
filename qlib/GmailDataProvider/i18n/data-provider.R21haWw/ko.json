@@ -852,7 +852,7 @@
           "message": "영구 삭제할 메시지의 ID입니다. 감시(watch) 이벤트는 이 값을 `message_id`(으)로 전달합니다."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "메시지 보내기"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

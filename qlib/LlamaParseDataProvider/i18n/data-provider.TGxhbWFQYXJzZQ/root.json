@@ -2384,8 +2384,8 @@
           "message": "Include items created at or before this timestamp (inclusive)"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhcnNlLWpvYg.display_name": {
-          "source": "Get Parse Job",
-          "message": "Get Parse Job"
+          "source": "Get parse job",
+          "message": "Get parse job"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhcnNlLWpvYg.short_desc": {
           "source": "Get a parse job and the content it produced",
@@ -2516,8 +2516,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXBhcnNlLWpvYg.display_name": {
-          "source": "Cancel Parse Job",
-          "message": "Cancel Parse Job"
+          "source": "Cancel parse job",
+          "message": "Cancel parse job"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXBhcnNlLWpvYg.short_desc": {
           "source": "Cancel a running parse job",
@@ -2708,8 +2708,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get one file's metadata",
@@ -2768,8 +2768,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file from the project",
@@ -2812,8 +2812,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGUtY29udGVudC11cmw.display_name": {
-          "source": "Get File Download URL",
-          "message": "Get File Download URL"
+          "source": "Get file download URL",
+          "message": "Get file download URL"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGUtY29udGVudC11cmw.short_desc": {
           "source": "Get a temporary URL to download a file's content",
@@ -2864,8 +2864,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXM.display_name": {
-          "source": "List Page Figures",
-          "message": "List Page Figures"
+          "source": "List page figures",
+          "message": "List page figures"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXM.short_desc": {
           "source": "List the figures extracted from a document's pages",
@@ -2908,8 +2908,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXMtZm9yLXBhZ2U.display_name": {
-          "source": "List Figures on a Page",
-          "message": "List Figures on a Page"
+          "source": "List figures on a page",
+          "message": "List figures on a page"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXMtZm9yLXBhZ2U.short_desc": {
           "source": "List the figures extracted from one page",
@@ -2960,8 +2960,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLXNjcmVlbnNob3Rz.display_name": {
-          "source": "List Page Screenshots",
-          "message": "List Page Screenshots"
+          "source": "List page screenshots",
+          "message": "List page screenshots"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLXNjcmVlbnNob3Rz.short_desc": {
           "source": "List the page screenshots parsing produced",
@@ -3004,8 +3004,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhZ2Utc2NyZWVuc2hvdA.display_name": {
-          "source": "Get Page Screenshot",
-          "message": "Get Page Screenshot"
+          "source": "Get page screenshot",
+          "message": "Get page screenshot"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhZ2Utc2NyZWVuc2hvdA.short_desc": {
           "source": "Get the rendered image of one page",
@@ -3624,8 +3624,8 @@
           "message": "Include items created at or before this timestamp (inclusive)"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWV4dHJhY3Qtam9i.display_name": {
-          "source": "Get Extraction Job",
-          "message": "Get Extraction Job"
+          "source": "Get extraction job",
+          "message": "Get extraction job"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWV4dHJhY3Qtam9i.short_desc": {
           "source": "Get an extraction job and its extracted data",
@@ -3680,8 +3680,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWV4dHJhY3Qtam9i.display_name": {
-          "source": "Cancel Extraction Job",
-          "message": "Cancel Extraction Job"
+          "source": "Cancel extraction job",
+          "message": "Cancel extraction job"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWV4dHJhY3Qtam9i.short_desc": {
           "source": "Cancel a running extraction job",
@@ -3724,8 +3724,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWV4dHJhY3Qtam9i.display_name": {
-          "source": "Delete Extraction Job",
-          "message": "Delete Extraction Job"
+          "source": "Delete extraction job",
+          "message": "Delete extraction job"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWV4dHJhY3Qtam9i.short_desc": {
           "source": "Delete an extraction job and its result",
@@ -4284,8 +4284,8 @@
           "message": "Include items created at or before this timestamp (inclusive)"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNsYXNzaWZ5LWpvYg.display_name": {
-          "source": "Get Classification Job",
-          "message": "Get Classification Job"
+          "source": "Get classification job",
+          "message": "Get classification job"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNsYXNzaWZ5LWpvYg.short_desc": {
           "source": "Get a classification job and its result",
@@ -4328,8 +4328,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWNsYXNzaWZ5LWpvYg.display_name": {
-          "source": "Cancel Classification Job",
-          "message": "Cancel Classification Job"
+          "source": "Cancel classification job",
+          "message": "Cancel classification job"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWNsYXNzaWZ5LWpvYg.short_desc": {
           "source": "Cancel a running classification job",
@@ -4756,8 +4756,8 @@
           "message": "Include items created at or before this timestamp (inclusive)"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXNwbGl0LWpvYg.display_name": {
-          "source": "Get Split Job",
-          "message": "Get Split Job"
+          "source": "Get split job",
+          "message": "Get split job"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXNwbGl0LWpvYg.short_desc": {
           "source": "Get a split job and the parts it found",
@@ -4800,8 +4800,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXNwbGl0LWpvYg.display_name": {
-          "source": "Cancel Split Job",
-          "message": "Cancel Split Job"
+          "source": "Cancel split job",
+          "message": "Cancel split job"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXNwbGl0LWpvYg.short_desc": {
           "source": "Cancel a running split job",
@@ -4844,8 +4844,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLXNwbGl0LWpvYg.display_name": {
-          "source": "Delete Split Job",
-          "message": "Delete Split Job"
+          "source": "Delete split job",
+          "message": "Delete split job"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLXNwbGl0LWpvYg.short_desc": {
           "source": "Delete a split job and its result",
@@ -5176,8 +5176,8 @@
           "message": "Return only batches over this directory"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
-          "message": "Get Batch"
+          "source": "Get batch",
+          "message": "Get batch"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Get a batch and its per-file outcomes",
@@ -5236,8 +5236,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
-          "message": "Cancel Batch"
+          "source": "Cancel batch",
+          "message": "Cancel batch"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancel a running batch",
@@ -7908,8 +7908,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Get Configuration",
-          "message": "Get Configuration"
+          "source": "Get configuration",
+          "message": "Get configuration"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNvbmZpZ3VyYXRpb24.short_desc": {
           "source": "Get one saved configuration",
@@ -7952,8 +7952,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Update Configuration",
-          "message": "Update Configuration"
+          "source": "Update configuration",
+          "message": "Update configuration"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.short_desc": {
           "source": "Update a saved configuration",
@@ -10468,8 +10468,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Delete Configuration",
-          "message": "Delete Configuration"
+          "source": "Delete configuration",
+          "message": "Delete configuration"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWNvbmZpZ3VyYXRpb24.short_desc": {
           "source": "Delete a saved configuration",
@@ -10728,8 +10728,8 @@
           "message": "The next_page_token of the previous response"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeQ.display_name": {
-          "source": "Get Directory",
-          "message": "Get Directory"
+          "source": "Get directory",
+          "message": "Get directory"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeQ.short_desc": {
           "source": "Get one directory",
@@ -10772,8 +10772,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeQ.display_name": {
-          "source": "Update Directory",
-          "message": "Update Directory"
+          "source": "Update directory",
+          "message": "Update directory"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeQ.short_desc": {
           "source": "Rename a directory or change its description",
@@ -10840,8 +10840,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeQ.display_name": {
-          "source": "Delete Directory",
-          "message": "Delete Directory"
+          "source": "Delete directory",
+          "message": "Delete directory"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeQ.short_desc": {
           "source": "Delete a directory",
@@ -10884,8 +10884,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.YWRkLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Add File to Directory",
-          "message": "Add File to Directory"
+          "source": "Add file to directory",
+          "message": "Add file to directory"
         },
         "app.TGxhbWFQYXJzZQ.action.YWRkLWRpcmVjdG9yeS1maWxl.short_desc": {
           "source": "Put an uploaded file into a directory",
@@ -10976,8 +10976,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3RvcnktZmlsZXM.display_name": {
-          "source": "List Files in a Directory",
-          "message": "List Files in a Directory"
+          "source": "List files in a directory",
+          "message": "List files in a directory"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3RvcnktZmlsZXM.short_desc": {
           "source": "List the files a directory holds",
@@ -11120,8 +11120,8 @@
           "message": "Include items updated at or before this timestamp (inclusive)"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Get a File in a Directory",
-          "message": "Get a File in a Directory"
+          "source": "Get a file in a directory",
+          "message": "Get a file in a directory"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeS1maWxl.short_desc": {
           "source": "Get one file's entry in a directory",
@@ -11184,8 +11184,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Update a File in a Directory",
-          "message": "Update a File in a Directory"
+          "source": "Update a file in a directory",
+          "message": "Update a file in a directory"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeS1maWxl.short_desc": {
           "source": "Rename a file in a directory or move it to another",
@@ -11284,8 +11284,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Remove a File from a Directory",
-          "message": "Remove a File from a Directory"
+          "source": "Remove a file from a directory",
+          "message": "Remove a file from a directory"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxl.short_desc": {
           "source": "Remove one file from a directory",
@@ -11336,8 +11336,8 @@
           "message": "The organization to work in.  Leave unset to use the organization the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxlcw.display_name": {
-          "source": "Remove Files from a Directory",
-          "message": "Remove Files from a Directory"
+          "source": "Remove files from a directory",
+          "message": "Remove files from a directory"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxlcw.short_desc": {
           "source": "Remove several files from a directory at once",
@@ -11436,8 +11436,8 @@
           "message": "The next_page_token of the previous response"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
-          "message": "Get Project"
+          "source": "Get project",
+          "message": "Get project"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXByb2plY3Q.short_desc": {
           "source": "Get one project",
@@ -11628,8 +11628,8 @@
           "message": "The project to upload into.  Leave unset to use the project the API key belongs to."
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.display_name": {
-          "source": "Parse Document and Wait",
-          "message": "Parse Document and Wait"
+          "source": "Parse document and wait",
+          "message": "Parse document and wait"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {
           "source": "Parse a document and wait for the extracted content",

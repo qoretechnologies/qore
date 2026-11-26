@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Szukaj w sieci"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Ogranicza wyszukiwanie `news` do ostatnich N dni.\n\n**Zastąpione przez `time_range`**, które działa dla każdego tematu; ta opcja jest nadal przyjmowana, aby istniejące przepływy dalej działały."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "Czytaj strony"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Zwróć koszt tego żądania w kredytach, jako `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "Zindeksuj witrynę"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Zwróć koszt tego żądania w kredytach, jako `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "Zmapuj witrynę"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Zwróć koszt tego żądania w kredytach, jako `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "Rozpocznij badanie"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Sposób kodowania treści. Domyślnie `base64`, który jest jedynym kodowaniem używanym przez dokumenty Tavily."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "Pobierz raport z badania"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Zadanie badawcze do odczytania, zwrócone przez akcję **Rozpocznij badanie** w `request_id`.\n\nLista rozwijana pokazuje zadania badawcze rozpoczęte przez to konto, wzięte z dziennika użycia.  Dziennik jest zapisywany kilka minut po rozpoczęciu zadania, więc zadanie właśnie rozpoczęte jeszcze się w nim nie znajduje: użyj wtedy `request_id` zwróconego przez **Rozpocznij badanie**."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "Pobierz zużycie kredytów"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Zgłoś użycie tylko dla tego projektu, a nie dla całego konta.  Wysyłane w nagłówku `X-Project-ID`.\n\nTavily nie udostępnia punktu końcowego, który wypisuje projekty, więc nie można tego zaoferować jako listy rozwijanej; weź wartość z pulpitu Tavily."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "Wypisz dzienniki użycia API"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

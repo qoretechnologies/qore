@@ -611,7 +611,7 @@ public class ExaManifest {
                 "action": "get-agent-run",
                 "method": "GET",
                 "path": "/agent/runs/{id}",
-                "display_name": "Get a Research Run",
+                "display_name": "Get a research run",
                 "short_desc": "Get a research run and its answer",
                 "desc": "Returns a research run, including its answer once it has finished.",
                 "groups": (GroupAgent,),
@@ -628,7 +628,7 @@ public class ExaManifest {
                 "action": "list-agent-run-events",
                 "method": "GET",
                 "path": "/agent/runs/{id}/events",
-                "display_name": "List Research Run Events",
+                "display_name": "List research run events",
                 "short_desc": "See what the agent did during a run",
                 "desc": "Lists the stored events of a research run - the searches it made and the "
                     "pages it read.  Use it to show how an answer was reached, or to see where a long "
@@ -647,7 +647,7 @@ public class ExaManifest {
                 "action": "cancel-agent-run",
                 "method": "POST",
                 "path": "/agent/runs/{id}/cancel",
-                "display_name": "Cancel a Research Run",
+                "display_name": "Cancel a research run",
                 "short_desc": "Stop a research run and discard its results",
                 "desc": "Cancels a queued or running research run without returning results.  Usage "
                     "accrued before the cancellation is still billed.\n\n"
@@ -666,7 +666,7 @@ public class ExaManifest {
                 "action": "stop-agent-run",
                 "method": "POST",
                 "path": "/agent/runs/{id}/stop",
-                "display_name": "Stop a Research Run",
+                "display_name": "Stop a research run",
                 "short_desc": "End a research run early but keep its results",
                 "desc": "Ends a running research run early and returns what the agent has gathered so "
                     "far - the difference from **Cancel a Research Run**, which discards it.\n\n"
@@ -685,7 +685,7 @@ public class ExaManifest {
                 "action": "delete-agent-run",
                 "method": "DELETE",
                 "path": "/agent/runs/{id}",
-                "display_name": "Delete a Research Run",
+                "display_name": "Delete a research run",
                 "short_desc": "Delete a stored research run",
                 "desc": "Deletes a stored research run and its answer.",
                 "groups": (GroupAgent,),
@@ -744,7 +744,7 @@ public class ExaManifest {
                 "action": "get-batch",
                 "method": "GET",
                 "path": "/batches/{id}",
-                "display_name": "Get a Batch",
+                "display_name": "Get a batch",
                 "short_desc": "Get a batch and where to download its results",
                 "desc": "Returns a batch, including how many of its requests have finished and the "
                     "`resultsUrl` to download them from once it is complete.",
@@ -762,7 +762,7 @@ public class ExaManifest {
                 "action": "cancel-batch",
                 "method": "POST",
                 "path": "/batches/{id}/cancel",
-                "display_name": "Cancel a Batch",
+                "display_name": "Cancel a batch",
                 "short_desc": "Stop a batch scheduling further requests",
                 "desc": "Asks a batch to stop.  It schedules no further requests, lets the work already "
                     "in flight finish, and then settles as cancelled; requests that already completed "
@@ -782,7 +782,7 @@ public class ExaManifest {
                 "action": "delete-batch",
                 "method": "DELETE",
                 "path": "/batches/{id}",
-                "display_name": "Delete a Batch",
+                "display_name": "Delete a batch",
                 "short_desc": "Delete a finished batch",
                 "desc": "Deletes a batch that has reached a terminal status.",
                 "groups": (GroupBatches,),
@@ -886,7 +886,7 @@ public class ExaManifest {
                 "action": "get-monitor",
                 "method": "GET",
                 "path": "/monitors/{id}",
-                "display_name": "Get a Search Monitor",
+                "display_name": "Get a search monitor",
                 "short_desc": "Get one search monitor",
                 "desc": "Returns one search monitor, its schedule and its webhook.",
                 "groups": (GroupMonitors,),
@@ -903,7 +903,7 @@ public class ExaManifest {
                 "action": "update-monitor",
                 "method": "PATCH",
                 "path": "/monitors/{id}",
-                "display_name": "Update a Search Monitor",
+                "display_name": "Update a search monitor",
                 "short_desc": "Change a monitor's search, schedule or status",
                 "desc": "Updates a search monitor.  Use `status` to pause it without deleting it: a "
                     "paused monitor keeps its definition and stops running.  Omit a field to leave it "
@@ -952,7 +952,7 @@ public class ExaManifest {
                 "action": "delete-monitor",
                 "method": "DELETE",
                 "path": "/monitors/{id}",
-                "display_name": "Delete a Search Monitor",
+                "display_name": "Delete a search monitor",
                 "short_desc": "Delete a search monitor",
                 "desc": "Deletes a search monitor.  Results already delivered to the webhook are "
                     "unaffected.",
@@ -1006,7 +1006,7 @@ public class ExaManifest {
                 "action": "trigger-monitor",
                 "method": "POST",
                 "path": "/monitors/{id}/trigger",
-                "display_name": "Run a Search Monitor Now",
+                "display_name": "Run a search monitor now",
                 "short_desc": "Run a monitor immediately, whatever its schedule says",
                 "desc": "Runs a search monitor immediately rather than waiting for its next scheduled "
                     "cycle.  New results are delivered to its webhook as usual.",
@@ -1024,7 +1024,7 @@ public class ExaManifest {
                 "action": "list-monitor-runs",
                 "method": "GET",
                 "path": "/monitors/{id}/runs",
-                "display_name": "List Search Monitor Runs",
+                "display_name": "List search monitor runs",
                 "short_desc": "List the cycles a search monitor has run",
                 "desc": "Lists the cycles a search monitor has run, newest first, with what each one "
                     "found.",
@@ -1042,7 +1042,7 @@ public class ExaManifest {
                 "action": "get-monitor-run",
                 "method": "GET",
                 "path": "/monitors/{id}/runs/{runId}",
-                "display_name": "Get a Search Monitor Run",
+                "display_name": "Get a search monitor run",
                 "short_desc": "Get one cycle of a search monitor",
                 "desc": "Returns one cycle of a search monitor, including what it found and why it "
                     "failed if it did.",

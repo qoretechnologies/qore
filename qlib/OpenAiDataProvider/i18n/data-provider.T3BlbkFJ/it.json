@@ -860,7 +860,7 @@
           "message": "Un identificatore univoco che rappresenta l'utente finale, utile a OpenAI per monitorare e rilevare abusi"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat semplice"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Insieme di 16 coppie chiave-valore che possono essere associate a un oggetto. Può essere utile per memorizzare informazioni aggiuntive sull'oggetto in formato strutturato e per eseguire query sugli oggetti tramite API o dashboard. Le chiavi sono stringhe con una lunghezza massima di 64 caratteri; i valori sono stringhe con una lunghezza massima di 512 caratteri"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Ottieni una conversazione"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "L'ID della conversazione"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Elenca elementi della conversazione"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Campi aggiuntivi da includere nella risposta.\n\nConsulta la documentazione del [parametro include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) per i valori supportati"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Ottieni un elemento della conversazione"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "L'ID della risposta da ottenere"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Elenca elementi di input della risposta"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

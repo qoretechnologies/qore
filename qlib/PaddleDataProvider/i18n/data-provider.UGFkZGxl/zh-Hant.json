@@ -556,7 +556,7 @@
           "message": "此實體匯入來源的平台或提供者名稱。"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "此實體匯入來源的平台或提供者名稱。"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "取得客戶驗證權杖"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "列出客戶抵用金餘額"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "此實體匯入來源的平台或提供者名稱。"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "取得產品"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "更新產品"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "網站託管"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "封存產品"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "此實體匯入來源的平台或提供者名稱。"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "取得價格"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "在回應中包含相關實體。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "更新價格"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "取得訂閱"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "用於此交易付款連結的結帳 URL。請傳遞已核准網域的 URL，或使用 `null` 以設定為您的預設付款 URL。\n\nPaddle 會回傳一個由傳入的 URL 或您的預設付款 URL + `?_ptxn=` 及此交易的 Paddle ID 組成的唯一付款連結。"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "取得交易"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "結帳"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "取得報告"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "報告實體的 Paddle ID。"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "取得報告檔案"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "客戶已建立"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "在建立客戶時觸發，無論是透過 API、結帳或 Paddle 儀表板建立。\n\n這取代了輪詢客戶清單：依建立時間排序的輪詢無法偵測在兩次執行之間建立並刪除的客戶，且無論是否有事件發生都會在每個間隔消耗一次請求。"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "客戶已更新"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "在客戶變更時觸發，包括封存客戶 —— `status` 會變為 `archived`，而非刪除客戶。\n\nPaddle 會傳送完整的客戶資料而非差異，因此如果需要知道哪個欄位發生變更，請與您持有的資料進行比較。"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "產品已建立"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "當產品新增至型錄時觸發。\n\n產品本身不帶有價格，因此新建立的產品在為其設定價格之前無法銷售；請監聽 `price.created` 以獲取此資訊。\n\n這取代了輪詢產品清單的做法。"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "產品已更新"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "當產品變更時觸發，包括產品被封存時——`status` 變更為 `archived`，這會將其下架停售，但不會影響現有訂閱。\n\n**封存產品不會封存其價格**，因此已封存產品的價格仍可進行計費，除非該價格也一併被封存。"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "價格已建立"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "當為產品建立價格時觸發。\n\n`unit_price.amount` 是以**該貨幣的最小單位**表示的字串，例如 `1000` 在 USD 中為 $10.00，但在 JPY 中為 1000 日圓。具備 `billing_cycle` 會使其成為訂閱價格；沒有則為單次收費。"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "價格已更新"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "當價格變更時觸發，包括價格被封存時。\n\n**對 `unit_price` 的變更僅會影響新購買**；已按此價格計費的訂閱將保留建立時的金額，直到被明確更新為止。因此，價格變更並不代表任何人的帳單已變更。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "訂閱已建立"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "當訂閱建立時觸發。\n\n**已建立不等於已付款。** 新訂閱通常處於 `trialing` 狀態，而針對尚未收款的交易建立的訂閱並未產生任何收入；在佈署前請檢查 `status`。`subscription.activated` 才是計費實際開始的信號。\n\n這取代了輪詢訂閱清單的做法。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "訂閱已啟用"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "當訂閱首次變為 `active` 時觸發 —— 試用結束並已付款，或已到達排定的開始時間。\n\n這是佈建付費方案的信號：這代表 Paddle 已收款，而 `subscription.created` 僅代表記錄存在。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "訂閱已更新"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "當訂閱發生任何變更時觸發：方案變更、數量變更、推進 `next_billed_at` 的續訂，或是**已排程**暫停或取消。\n\n`scheduled_change` 是用來區分後者情況的欄位——訂閱可能處於 `active` 狀態，但仍已預定結束。Paddle 會發送完整的訂閱物件而非差異。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "訂閱已取消"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "當訂閱實際結束且 `status` 變更為 `canceled` 時觸發。\n\n**這是取消佈署信號，而不是取消請求。** 預定在計費週期結束時取消的訂閱，首先會顯示為 `subscription.updated` 上的 `scheduled_change`，且客戶已支付至該日期為止的費用；此事件會在該日期到達時觸發。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "訂閱逾期"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "當續訂無法收款且訂閱變更為 `past_due` 時觸發。\n\nPaddle 會依催收排程重試，因此這尚未結束：如果重試成功，訂閱將恢復為 `active`；若重試次數用盡則會取消。請將此視為提醒客戶的警告，而非切斷存取權限的理由。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "交易已建立"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "當交易建立時觸發，包括 Paddle 為即將到來的續訂所產生的草稿。\n\n**已建立的交易尚未付款**；此時大多數處於 `draft` 或 `ready` 狀態。請使用 `transaction.completed` 來確認實際收取的款項。\n\n這取代了輪詢交易清單的做法。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "交易已完成"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "當交易為 `completed` 時觸發：款項已收取且發票已結清。\n\n這是履行訂單的事件。`details.totals` 將金額細分為小計、稅額與總計，全部皆以 `currency_code` 的最小單位字串表示。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "交易付款失敗"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "當收取交易款項嘗試失敗時觸發。\n\n`payments` 包含嘗試紀錄及失敗原因。Paddle 會自動重試訂閱續訂，因此單次失敗並非最終結果；當訂閱轉為 `past_due` 時，客戶才需要採取行動。"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "報表已建立"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "當請求報表時觸發。回傳狀態為 `pending`：Paddle 會在背景產生檔案，因此目前尚無可下載內容。\n\n請等待 `status` 為 `ready` 的 `report.updated` 事件，然後再索取檔案。\n\n這取代了輪詢報表清單的做法。"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "報表已更新"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

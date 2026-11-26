@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "웹 검색"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "특정 `news` 검색을 최근 N일로 제한합니다.\n\n`time_range`에 의해 대체되었으며, 이는 모든 주제에 적용됩니다. 기존 흐름이 계속 작동하도록 하기 위해 이 옵션은 여전히 지원됩니다."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "페이지 읽기"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "이 요청이 소모한 크레딧을 `usage`로 반환합니다."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "사이트 크롤링"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "이 요청이 소모한 크레딧을 `usage`로 반환합니다."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "사이트 매핑"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "이 요청이 소모한 크레딧을 `usage`로 반환합니다."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "리서치 시작"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "내용이 어떻게 인코딩되는지. 기본값은 `base64`이며, 이는 Tavily 문서에서 유일하게 사용되는 인코딩입니다."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "리서치 보고서 가져오기"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "읽을 리서치 작업. **리서치 시작**이 `request_id`로 반환한 값입니다.\n\n드롭다운에는 사용 로그에서 가져온, 이 계정이 시작한 리서치 작업이 표시됩니다. 로그는 작업이 시작되고 몇 분 뒤에 기록되므로 방금 시작한 작업은 아직 없습니다. 그럴 때는 **리서치 시작**이 반환한 `request_id`를 사용하세요."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "크레딧 사용량 가져오기"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "계정 전체가 아니라 이 프로젝트의 사용량만 보고합니다. `X-Project-ID` 헤더로 전송됩니다.\n\nTavily는 프로젝트를 나열하는 엔드포인트를 제공하지 않으므로 드롭다운으로 제공할 수 없습니다. 값은 Tavily 대시보드에서 확인하세요."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "API 사용 로그 나열"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

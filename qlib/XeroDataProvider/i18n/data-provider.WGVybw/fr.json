@@ -8244,7 +8244,7 @@
           "message": "Permet la création d'une facture même lorsqu'une ou plusieurs lignes contiennent des articles en stock suivi dont la quantité facturée rendrait la quantité disponible négative"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Rechercher l'historique de facture"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Identifiant unique pour une facture"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Ajouter une note à la facture"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "a une valeur de 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Envoyer la facture par e-mail"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Affecter un avoir"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Rechercher des tâches"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Créer une tâche"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "La table avec laquelle travailler : `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` ou `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Rechercher des employés"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Répertorie les employés dans la paie de l'organisation.\n\n**L'API de paie utilisée provient de `payroll_region` de la connexion**, car Xero ne dispose pas d'une API de paie unique : l'Australie est desservie à l'adresse `payroll.xro/1.0`, et la Nouvelle-Zélande ainsi que le Royaume-Uni à l'adresse `payroll.xro/2.0`. Une connexion sans région définie le signale plutôt que d'en deviner une.\n\nLes régions encapsulent le résultat différemment - `{Employees: [...]}` en Australie et `{employees: [...], pagination}` dans les deux autres - et cette action renvoie les employés sous forme de liste simple dans les deux cas.\n\nL'application que ce module remplace lisait les employés via l'API de comptabilité, où ils n'existent pas, donc cela ne renvoyait jamais rien du tout."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Créer des employés"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Crée des employés dans la paie de l'organisation.\n\n`Employees` est une liste même pour un seul employé. L'API de paie australienne accepte directement une liste ; celles de Nouvelle-Zélande et du Royaume-Uni prennent un employé par appel, donc une liste comportant plusieurs employés est envoyée un par un et les résultats sont rassemblés.\n\n**L'API de paie utilisée dépend du paramètre `payroll_region` de la connexion.** Les champs requis pour un employé diffèrent selon la région (un employé du Royaume-Uni a un numéro de sécurité sociale National Insurance là où un employé de Nouvelle-Zélande a un numéro IRD), ce qui permet de transmettre l'employé tel quel plutôt que d'imposer la structure d'une seule région pour tous."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nouveau contact"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Se déclenche pour chaque contact créé ou modifié dans l'organisation.\n\nXero positionne un contact par `UpdatedDateUTC` et ne propose aucun filtre « créé depuis », de sorte qu'un contact modifié ultérieurement déclenche à nouveau cet événement. L'événement transmet l'enregistrement de contact renvoyé par Xero."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Nouvelle facture fournisseur"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Se déclenche pour chaque facture fournisseur créée ou modifiée.\n\nUne facture fournisseur est une facture de type `ACCPAY`, qui est le filtre appliqué par cet événement ; une facture client (`ACCREC`) ne le déclenche pas. L'événement transmet l'enregistrement de facture renvoyé par Xero."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Nouvel avoir"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Se déclenche pour chaque avoir créé ou modifié.\n\nL'événement transmet l'enregistrement d'avoir renvoyé par Xero. L'application que ce module remplace interrogeait les avoirs sans exporter aucun moyen d'en lister ou d'en lire un ; **Rechercher des avoirs** existe afin que cet événement ait un équivalent."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Nouvelle transaction bancaire"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Se déclenche pour chaque transaction bancaire créée ou modifiée - argent dépensé ou reçu sur un compte bancaire.\n\nL'événement transmet l'enregistrement de transaction bancaire renvoyé par Xero."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nouveau paiement"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Se déclenche pour chaque paiement créé ou modifié associé à une facture ou à un avoir.\n\nL'événement transmet l'enregistrement de paiement renvoyé par Xero."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nouveau bon de commande"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Se déclenche pour chaque bon de commande créé ou modifié.\n\nL'événement transmet l'enregistrement de bon de commande renvoyé par Xero."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Nouvel employé"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

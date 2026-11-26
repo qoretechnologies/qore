@@ -1108,8 +1108,8 @@
           "message": "A unique identifier representing your end-user for abuse monitoring"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
-          "message": "Simple Chat"
+          "source": "Simple chat",
+          "message": "Simple chat"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat with Grok by sending a single message and receiving a single reply",
@@ -4528,8 +4528,8 @@
           "message": "Do not truncate; return an error if the context exceeds the limit"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
-          "message": "Get Response"
+          "source": "Get response",
+          "message": "Get response"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
           "source": "Retrieve a previously stored response by ID",

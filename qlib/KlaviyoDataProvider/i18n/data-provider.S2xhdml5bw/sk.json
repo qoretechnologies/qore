@@ -524,7 +524,7 @@
           "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "Získať profil"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "IP adresa"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "Aktualizovať profil"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Získať zoznam"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "Aktualizovať zoznam"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Vymazať zoznam"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Získať segment"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "Určuje, či je segment označený hviezdičkou v rozhraní Klaviyo"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "Aktualizovať segment"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "Nastavte na false pre deaktiváciu segmentu. Pri deaktivácii musí ísť o jediný atribút v tele požiadavky. Deaktiváciu nie je možné kombinovať s inými aktualizáciami. Označenie segmentu ako neaktívneho ovplyvní kampane, toky, synchronizácie reklám, formuláre, smerovanie helpdesku a ďalšie funkcie odkazujúce na tento segment. Nastavte na true na reaktiváciu deaktivovaného segmentu."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "Odstrániť segment"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Získať značku"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "skupina_značiek"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Aktualizovať štítok"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "Názov značky"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Odstrániť značku"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Získať kampaň"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "Zoznam vlastných sledovacích parametrov. Ak je zadaný prázdny zoznam a add_tracking_params je True, použijú sa predvolené hodnoty spoločnosti."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "Aktualizovať kampaň"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "Zoznam vlastných sledovacích parametrov. Ak je zadaný prázdny zoznam a add_tracking_params je True, použijú sa predvolené hodnoty spoločnosti."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "Odstrániť kampaň"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Zúžte zoznam na zodpovedajúce udalosti pomocou syntaxe filtrovania služby Klaviyo.\n\n`equals(metric_id,\"…\")` a `equals(profile_id,\"…\")` vyberajú jednu metriku alebo jeden profil a `datetime` a `timestamp` prijímajú štyri porovnania rozsahov – napríklad `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predikáty sú oddelené čiarkami a znamenajú **and**; Klaviyo tu nepodporuje `or`."
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Získať udalosť"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "Získať metriku"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "Segment, z ktorého sa má štítok odstrániť"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Vytvoriť udalosť"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Vaše vlastné vlastnosti, ktoré sa majú zaznamenať s udalosťou ako dvojice názov/hodnota"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "Prihlásiť profil na odber"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Prihlásiť profil na odber **prostredníctvom tohto zoznamu**, čo ho pridá do zoznamu a uplatní proces dvojitého potvrdenia (double opt-in) zoznamu, ak je nastavený.\n\nBez toho sa súhlas zaznamená priamo k profilu a neodošle sa žiadne potvrdenie."
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "Zrušiť odber profilu"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Aké typy SMS správ majú mať odvolaný súhlas.\n\nMá zmysel len spolu s `phoneNumber`; predvolená hodnota je marketing."
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "Nový profil"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Spustí sa pre každý profil vytvorený v účte.\n\nUdalosť obsahuje profil s jeho atribútmi popri jeho identite, čo je rovnaká štruktúra, akú vracajú akcie **Získať profil** a **Zoznam profilov**.\n\nProfil upravený neskôr toto **znova nespustí**: kanál je poziciovaný pomocou `created`."
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "Nová udalosť"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Spustí sa pre každú udalosť zaznamenanú pre vybranú metriku.\n\n`metric` je povinný a určuje metriku podľa **ID** – kanál všetkých udalostí v účte by bol nepoužiteľne veľký a pracovný postup reagujúci na „Placed Order“ nepotrebuje „Viewed Product“.\n\nUdalosť obsahuje záznam udalosti s jej atribútmi popri jej identite. Kanál je poziciovaný pomocou `datetime`, čo predstavuje čas, kedy k udalosti došlo, a nie kedy ju služba Klaviyo prijala."
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "Profil pridaný do zoznamu"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Spustí sa pre každý profil pridaný do vybraného zoznamu.\n\nKanál je poziciovaný pomocou `joined_group_at`, takže sa spustí, keď sa profil **pripojí k zoznamu**, a nie pri samotnom vytvorení profilu – profil existujúci rok toto spustí v momente jeho pridania.\n\nUdalosť obsahuje profil s jeho atribútmi popri jeho identite."
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "Profil pridaný do segmentu"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

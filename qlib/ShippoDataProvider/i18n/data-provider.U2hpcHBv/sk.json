@@ -1860,7 +1860,7 @@
           "message": "Ak je nastavené `True`, štítok sa vygeneruje asynchrónne. Predvolená hodnota je `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Získať prepravný štítok"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {

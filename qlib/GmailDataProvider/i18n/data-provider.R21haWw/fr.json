@@ -852,7 +852,7 @@
           "message": "L'identifiant du message à supprimer définitivement ; les événements de surveillance transmettent cette valeur sous le nom `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Envoyer un message"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

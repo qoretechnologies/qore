@@ -852,7 +852,7 @@
           "message": "要永久刪除的郵件 ID；監看事件會將此值以 `message_id` 攜帶"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "發送訊息"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

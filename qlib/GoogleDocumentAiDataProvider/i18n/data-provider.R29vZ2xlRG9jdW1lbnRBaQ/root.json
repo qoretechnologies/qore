@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
-          "message": "List Locations"
+          "source": "List locations",
+          "message": "List locations"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
           "source": "List locations available to this project",
@@ -400,8 +400,8 @@
           "message": "A page token received from the `next_page_token` field in the response. Send that page token to receive the subsequent page."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
-          "message": "Get Location"
+          "source": "Get location",
+          "message": "Get location"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.short_desc": {
           "source": "Read information about the connection's location",
@@ -412,8 +412,8 @@
           "message": "Read information about the connection's location.\n\nGets information about a location."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.display_name": {
-          "source": "List Processor Types",
-          "message": "List Processor Types"
+          "source": "List processor types",
+          "message": "List processor types"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.short_desc": {
           "source": "List processor types available in this location",
@@ -448,8 +448,8 @@
           "message": "Used to retrieve the next page of results, empty if at the end of the list."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.display_name": {
-          "source": "Get Processor Type",
-          "message": "Get Processor Type"
+          "source": "Get processor type",
+          "message": "Get processor type"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.short_desc": {
           "source": "Read a processor type and its supported capabilities",
@@ -472,8 +472,8 @@
           "message": "Identifier or full resource name for the selected processor type."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.display_name": {
-          "source": "List Processors",
-          "message": "List Processors"
+          "source": "List processors",
+          "message": "List processors"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.short_desc": {
           "source": "List processors in this project and location",
@@ -508,8 +508,8 @@
           "message": "We will return the processors sorted by creation time. The page token will point to the next processor."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.display_name": {
-          "source": "Get Processor",
-          "message": "Get Processor"
+          "source": "Get processor",
+          "message": "Get processor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.short_desc": {
           "source": "Read a processor's configuration and state",
@@ -532,8 +532,8 @@
           "message": "Identifier or full resource name for the selected processor id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Create Processor",
-          "message": "Create Processor"
+          "source": "Create processor",
+          "message": "Create processor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.short_desc": {
           "source": "Create a processor of an available type",
@@ -604,8 +604,8 @@
           "message": "The processor type, such as: `OCR_PROCESSOR`, `INVOICE_PROCESSOR`. To get a list of processor types, see FetchProcessorTypes."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Delete Processor",
-          "message": "Delete Processor"
+          "source": "Delete processor",
+          "message": "Delete processor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.short_desc": {
           "source": "Start deleting a processor and all its versions",
@@ -628,8 +628,8 @@
           "message": "Identifier or full resource name for the selected processor id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Enable Processor",
-          "message": "Enable Processor"
+          "source": "Enable processor",
+          "message": "Enable processor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.short_desc": {
           "source": "Start enabling a processor for document processing",
@@ -652,8 +652,8 @@
           "message": "Identifier or full resource name for the selected processor id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.display_name": {
-          "source": "Disable Processor",
-          "message": "Disable Processor"
+          "source": "Disable processor",
+          "message": "Disable processor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.short_desc": {
           "source": "Start disabling a processor",
@@ -676,8 +676,8 @@
           "message": "Identifier or full resource name for the selected processor id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.display_name": {
-          "source": "Set Default Version",
-          "message": "Set Default Version"
+          "source": "Set default version",
+          "message": "Set default version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.short_desc": {
           "source": "Select the version used when processing without a version ID",
@@ -712,8 +712,8 @@
           "message": "The resource name of child ProcessorVersion to use as default. Format: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.display_name": {
-          "source": "Start Batch Processing",
-          "message": "Start Batch Processing"
+          "source": "Start batch processing",
+          "message": "Start batch processing"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.short_desc": {
           "source": "Submit documents in Cloud Storage for batch processing",
@@ -1552,8 +1552,8 @@
           "message": "If set, this will skip the naming format validation in the schema. So the string values in `DocumentSchema.EntityType.name` and `DocumentSchema.EntityType.Property.name` will not be checked."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.display_name": {
-          "source": "Start Version Batch Processing",
-          "message": "Start Version Batch Processing"
+          "source": "Start version batch processing",
+          "message": "Start version batch processing"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.short_desc": {
           "source": "Submit a batch using a selected processor version",
@@ -2404,8 +2404,8 @@
           "message": "If set, this will skip the naming format validation in the schema. So the string values in `DocumentSchema.EntityType.name` and `DocumentSchema.EntityType.Property.name` will not be checked."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.display_name": {
-          "source": "List Processor Versions",
-          "message": "List Processor Versions"
+          "source": "List processor versions",
+          "message": "List processor versions"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.short_desc": {
           "source": "List the versions belonging to a processor",
@@ -2452,8 +2452,8 @@
           "message": "We will return the processor versions sorted by creation time. The page token will point to the next processor version."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Get Processor Version",
-          "message": "Get Processor Version"
+          "source": "Get processor version",
+          "message": "Get processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
           "source": "Read a processor version and its document schema",
@@ -2488,8 +2488,8 @@
           "message": "Identifier or full resource name for the selected processor version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Delete Processor Version",
-          "message": "Delete Processor Version"
+          "source": "Delete processor version",
+          "message": "Delete processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
           "source": "Start deleting a processor version",
@@ -2524,8 +2524,8 @@
           "message": "Identifier or full resource name for the selected processor version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Train Processor Version",
-          "message": "Train Processor Version"
+          "source": "Train processor version",
+          "message": "Train processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
           "source": "Start training a version from a processor's training dataset",
@@ -3112,8 +3112,8 @@
           "message": "Identifier. The resource name of the processor version. Format: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Deploy Processor Version",
-          "message": "Deploy Processor Version"
+          "source": "Deploy processor version",
+          "message": "Deploy processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
           "source": "Start deploying a version for document processing",
@@ -3148,8 +3148,8 @@
           "message": "Identifier or full resource name for the selected processor version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Undeploy Processor Version",
-          "message": "Undeploy Processor Version"
+          "source": "Undeploy processor version",
+          "message": "Undeploy processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
           "source": "Start removing a processor version from serving",
@@ -3184,8 +3184,8 @@
           "message": "Identifier or full resource name for the selected processor version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Evaluate Processor Version",
-          "message": "Evaluate Processor Version"
+          "source": "Evaluate processor version",
+          "message": "Evaluate processor version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
           "source": "Start an evaluation using labeled documents",
@@ -3304,8 +3304,8 @@
           "message": "The URI prefix."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
-          "message": "List Evaluations"
+          "source": "List evaluations",
+          "message": "List evaluations"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
           "source": "List evaluation results for a processor version",
@@ -3364,8 +3364,8 @@
           "message": "A page token, received from a previous `ListEvaluations` call. Provide this to retrieve the subsequent page."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
-          "message": "Get Evaluation"
+          "source": "Get evaluation",
+          "message": "Get evaluation"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
           "source": "Read extraction quality metrics from an evaluation",
@@ -3412,8 +3412,8 @@
           "message": "Identifier or full resource name for the selected evaluation id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
-          "message": "List Operations"
+          "source": "List operations",
+          "message": "List operations"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
           "source": "List processing and management jobs using an operation filter",
@@ -3472,8 +3472,8 @@
           "message": "When set to `true`, operations that are reachable are returned as normal, and those that are unreachable are returned in the ListOperationsResponse.unreachable field. This can only be `true` when reading across collections. For example, when `parent` is set to `\"projects/example/locations/-\"`. This field is not supported by default and will result in an `UNIMPLEMENTED` error if set unless explicitly documented otherwise in service or product specific documentation."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
-          "message": "Get Operation"
+          "source": "Get operation",
+          "message": "Get operation"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
           "source": "Read a job's status, metadata, result, and error",
@@ -3496,8 +3496,8 @@
           "message": "Identifier or full resource name for the selected operation id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.display_name": {
-          "source": "Cancel Operation",
-          "message": "Cancel Operation"
+          "source": "Cancel operation",
+          "message": "Cancel operation"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.short_desc": {
           "source": "Request cancellation of a running job",
@@ -3520,8 +3520,8 @@
           "message": "Identifier or full resource name for the selected operation id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.display_name": {
-          "source": "List Schemas",
-          "message": "List Schemas"
+          "source": "List schemas",
+          "message": "List schemas"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.short_desc": {
           "source": "List document schemas in this project and location",
@@ -3556,8 +3556,8 @@
           "message": "Returns the schema groups sorted by creation time. The page token will point to the next Schema."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.display_name": {
-          "source": "Get Schema",
-          "message": "Get Schema"
+          "source": "Get schema",
+          "message": "Get schema"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.short_desc": {
           "source": "Read a document schema's configuration",
@@ -3580,8 +3580,8 @@
           "message": "Identifier or full resource name for the selected schema id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.display_name": {
-          "source": "Create Schema",
-          "message": "Create Schema"
+          "source": "Create schema",
+          "message": "Create schema"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.short_desc": {
           "source": "Create a named collection of document schema versions",
@@ -3628,8 +3628,8 @@
           "message": "Identifier. The resource name of the Schema. Format: `projects/{project}/locations/{location}/schemas/{schema}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.display_name": {
-          "source": "Update Schema",
-          "message": "Update Schema"
+          "source": "Update schema",
+          "message": "Update schema"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.short_desc": {
           "source": "Update selected fields of a document schema",
@@ -3688,8 +3688,8 @@
           "message": "The update mask to apply to the resource. **Note:** Only the following fields can be updated: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.display_name": {
-          "source": "Delete Schema",
-          "message": "Delete Schema"
+          "source": "Delete schema",
+          "message": "Delete schema"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.short_desc": {
           "source": "Delete a document schema",
@@ -3724,8 +3724,8 @@
           "message": "If set to true, any child resources of this Schema will also be deleted. (Otherwise, the request will only work if the Schema has no child resources.)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.display_name": {
-          "source": "List Schema Versions",
-          "message": "List Schema Versions"
+          "source": "List schema versions",
+          "message": "List schema versions"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.short_desc": {
           "source": "List versions belonging to a document schema",
@@ -3772,8 +3772,8 @@
           "message": "Returns the SchemaVersion sorted by creation time. The page token will point to the next SchemaVersion."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Get Schema Version",
-          "message": "Get Schema Version"
+          "source": "Get schema version",
+          "message": "Get schema version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.short_desc": {
           "source": "Read a schema version and its extraction fields",
@@ -3808,8 +3808,8 @@
           "message": "Identifier or full resource name for the selected schema version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Create Schema Version",
-          "message": "Create Schema Version"
+          "source": "Create schema version",
+          "message": "Create schema version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
           "source": "Create a version of a document schema",
@@ -4192,8 +4192,8 @@
           "message": "If set, this will skip the naming format validation in the schema. So the string values in `DocumentSchema.EntityType.name` and `DocumentSchema.EntityType.Property.name` will not be checked."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Update Schema Version",
-          "message": "Update Schema Version"
+          "source": "Update schema version",
+          "message": "Update schema version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
           "source": "Update selected fields of a schema version",
@@ -4588,8 +4588,8 @@
           "message": "The update mask to apply to the resource. **Note:** Only the following fields can be updated: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Delete Schema Version",
-          "message": "Delete Schema Version"
+          "source": "Delete schema version",
+          "message": "Delete schema version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
           "source": "Delete a document schema version",
@@ -4624,8 +4624,8 @@
           "message": "Identifier or full resource name for the selected schema version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.display_name": {
-          "source": "Generate Schema Version",
-          "message": "Generate Schema Version"
+          "source": "Generate schema version",
+          "message": "Generate schema version"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.short_desc": {
           "source": "Generate a schema version from example documents",
@@ -9164,8 +9164,8 @@
           "message": "An IANA MIME type (RFC6838) indicating the nature and format of the content."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.display_name": {
-          "source": "Update Dataset (Beta)",
-          "message": "Update Dataset (Beta)"
+          "source": "Update dataset (beta)",
+          "message": "Update dataset (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.short_desc": {
           "source": "Update a processor's dataset storage configuration",
@@ -9248,8 +9248,8 @@
           "message": "The update mask applies to the resource."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Get Dataset Schema (Beta)",
-          "message": "Get Dataset Schema (Beta)"
+          "source": "Get dataset schema (beta)",
+          "message": "Get dataset schema (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.short_desc": {
           "source": "Read the labeling schema of a processor's dataset",
@@ -9284,8 +9284,8 @@
           "message": "If set, only returns the visible fields of the schema."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Update Dataset Schema (Beta)",
-          "message": "Update Dataset Schema (Beta)"
+          "source": "Update dataset schema (beta)",
+          "message": "Update dataset schema (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.short_desc": {
           "source": "Update the labeling schema of a processor's dataset",
@@ -9820,8 +9820,8 @@
           "message": "The update mask applies to the resource."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.display_name": {
-          "source": "Get Dataset Document (Beta)",
-          "message": "Get Dataset Document (Beta)"
+          "source": "Get dataset document (beta)",
+          "message": "Get dataset document (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.short_desc": {
           "source": "Read a selected dataset document and its annotations",
@@ -9984,8 +9984,8 @@
           "message": "If set, only fields listed here will be returned. Otherwise, all fields will be returned by default."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.display_name": {
-          "source": "List Dataset Documents (Beta)",
-          "message": "List Dataset Documents (Beta)"
+          "source": "List dataset documents (beta)",
+          "message": "List dataset documents (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.short_desc": {
           "source": "List documents in a selected processor's dataset",
@@ -10068,8 +10068,8 @@
           "message": "Number of results to skip beginning from the `page_token` if provided. https://google.aip.dev/158#skipping-results. It must be a non-negative integer. Negative values will be rejected. Note that this is not the number of pages to skip. If this value causes the cursor to move past the end of results, ListDocumentsResponse.document_metadata and ListDocumentsResponse.next_page_token will be empty."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Import Dataset Documents (Beta)",
-          "message": "Import Dataset Documents (Beta)"
+          "source": "Import dataset documents (beta)",
+          "message": "Import dataset documents (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
           "source": "Start importing labeled documents from Cloud Storage",
@@ -10268,8 +10268,8 @@
           "message": "If set, determines the type of the documents to be imported in this batch. It can be used to auto-label the documents with a single entity of the provided type. This field can only be used with a classifier or splitter processor. Providing this field is mutually exclusive with `entities` and `auto_labeling_config`."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Dataset Documents (Beta)",
-          "message": "Delete Dataset Documents (Beta)"
+          "source": "Delete dataset documents (beta)",
+          "message": "Delete dataset documents (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
           "source": "Start deleting explicitly selected dataset documents",
@@ -10480,8 +10480,8 @@
           "message": "The ID of the document."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Import Processor Version (Beta)",
-          "message": "Import Processor Version (Beta)"
+          "source": "Import processor version (beta)",
+          "message": "Import processor version (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
           "source": "Start importing a processor version from another processor",
@@ -15204,8 +15204,8 @@
           "message": "Identifier or full resource name for the selected processor version id."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.display_name": {
-          "source": "Wait for Operation",
-          "message": "Wait for Operation"
+          "source": "Wait for operation",
+          "message": "Wait for operation"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.short_desc": {
           "source": "Wait for a job and return its complete final outcome",

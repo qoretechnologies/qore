@@ -524,8 +524,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Get Balance Transaction",
-          "message": "Get Balance Transaction"
+          "source": "Get balance transaction",
+          "message": "Get balance transaction"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
           "source": "Retrieve one balance transaction",
@@ -644,8 +644,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Get Connected Account",
-          "message": "Get Connected Account"
+          "source": "Get connected account",
+          "message": "Get connected account"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
           "source": "Retrieve one connected account",
@@ -672,8 +672,8 @@
           "message": "Specifies which fields in the response should be expanded."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Update Connected Account",
-          "message": "Update Connected Account"
+          "source": "Update connected account",
+          "message": "Update connected account"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
           "source": "Update a connected account",
@@ -2416,8 +2416,8 @@
           "message": "User agent"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Delete Connected Account",
-          "message": "Delete Connected Account"
+          "source": "Delete connected account",
+          "message": "Delete connected account"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
           "source": "Delete a connected account",
@@ -2568,8 +2568,8 @@
           "message": "Specifies which fields in the response should be expanded."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.display_name": {
-          "source": "Create Login Link",
-          "message": "Create Login Link"
+          "source": "Create login link",
+          "message": "Create login link"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.short_desc": {
           "source": "Create a single-use link into a connected account's Express dashboard",
@@ -2596,8 +2596,8 @@
           "message": "Specifies which fields in the response should be expanded."
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.display_name": {
-          "source": "List External Accounts",
-          "message": "List External Accounts"
+          "source": "List external accounts",
+          "message": "List external accounts"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.short_desc": {
           "source": "List a connected account's payout destinations",
@@ -2680,8 +2680,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.display_name": {
-          "source": "Create External Account",
-          "message": "Create External Account"
+          "source": "Create external account",
+          "message": "Create external account"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
           "source": "Attach a payout destination to a connected account",
@@ -2828,8 +2828,8 @@
           "message": "Specifies which fields in the response should be expanded."
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.display_name": {
-          "source": "List Account People",
-          "message": "List Account People"
+          "source": "List account people",
+          "message": "List account people"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
           "source": "List the people associated with a connected account",
@@ -2928,8 +2928,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.display_name": {
-          "source": "Create Account Person",
-          "message": "Create Account Person"
+          "source": "Create account person",
+          "message": "Create account person"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.short_desc": {
           "source": "Add a person to a connected account",
@@ -3664,8 +3664,8 @@
           "message": "Only return charges for this transfer group, limited to 100."
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.display_name": {
-          "source": "Get Charge",
-          "message": "Get Charge"
+          "source": "Get charge",
+          "message": "Get charge"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.short_desc": {
           "source": "Retrieve one charge",
@@ -4068,8 +4068,8 @@
           "message": "A string that identifies this transaction as part of a group. For details, see [Grouping transactions](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.display_name": {
-          "source": "Update Charge",
-          "message": "Update Charge"
+          "source": "Update charge",
+          "message": "Update charge"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.short_desc": {
           "source": "Update a charge's description, metadata or fraud details",
@@ -4348,8 +4348,8 @@
           "message": "Provides a list of customers that are associated with the specified test clock. The response will not include customers with test clocks if this parameter is not set."
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Retrieve one customer",
@@ -5260,8 +5260,8 @@
           "message": "ID of the test clock to attach to the customer."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update a customer",
@@ -5832,8 +5832,8 @@
           "message": "reverse"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -5848,8 +5848,8 @@
           "message": "Customer"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.display_name": {
-          "source": "List Customer Balance Transactions",
-          "message": "List Customer Balance Transactions"
+          "source": "List customer balance transactions",
+          "message": "List customer balance transactions"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.short_desc": {
           "source": "List the entries in a customer's credit balance",
@@ -5952,8 +5952,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Create Customer Balance Transaction",
-          "message": "Create Customer Balance Transaction"
+          "source": "Create customer balance transaction",
+          "message": "Create customer balance transaction"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
           "source": "Credit or debit a customer's balance",
@@ -6028,8 +6028,8 @@
           "message": "Set of [key-value pairs](https://docs.stripe.com/api/metadata) that you can attach to an object. This can be useful for storing additional information about the object in a structured format. Individual keys can be unset by posting an empty value to them. All keys can be unset by posting an empty value to `metadata`."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.display_name": {
-          "source": "List Customer Sources",
-          "message": "List Customer Sources"
+          "source": "List customer sources",
+          "message": "List customer sources"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.short_desc": {
           "source": "List a customer's saved payment sources",
@@ -6104,8 +6104,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.display_name": {
-          "source": "Create Customer Source",
-          "message": "Create Customer Source"
+          "source": "Create customer source",
+          "message": "Create customer source"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
           "source": "Attach a payment source to a customer",
@@ -6304,8 +6304,8 @@
           "message": "Specifies which fields in the response should be expanded."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Customer Subscriptions",
-          "message": "List Customer Subscriptions"
+          "source": "List customer subscriptions",
+          "message": "List customer subscriptions"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.short_desc": {
           "source": "List a customer's subscriptions",
@@ -6368,8 +6368,8 @@
           "message": "A cursor for use in pagination. `starting_after` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with `obj_foo`, your subsequent call can include `starting_after=obj_foo` in order to fetch the next page of the list."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Customer Subscription",
-          "message": "Create Customer Subscription"
+          "source": "Create customer subscription",
+          "message": "Create customer subscription"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Subscribe a customer to one or more prices",
@@ -7716,8 +7716,8 @@
           "message": "Only return invoices for the subscription specified by this subscription ID."
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
-          "message": "Get Invoice"
+          "source": "Get invoice",
+          "message": "Get invoice"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Retrieve one invoice",
@@ -8768,8 +8768,8 @@
           "message": "Destination"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
-          "message": "Update Invoice"
+          "source": "Update invoice",
+          "message": "Update invoice"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an invoice",
@@ -9704,8 +9704,8 @@
           "message": "Destination"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
-          "message": "Delete Invoice"
+          "source": "Delete invoice",
+          "message": "Delete invoice"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
           "source": "Delete a draft invoice",

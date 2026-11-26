@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
+          "source": "Detect document text",
           "message": "Виявити текст документа"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Необов'язковий ідентифікатор версії об'єкта S3 для версіонованих бакетів."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "Аналізувати документ"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Версія вибраного ресурсу."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
+          "source": "Analyze expense",
           "message": "Аналіз витрат"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
+          "source": "Create adapter",
           "message": "Створити адаптер"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
+          "source": "Create adapter version",
           "message": "Створити версію адаптера"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
+          "source": "Delete adapter",
           "message": "Видалити адаптер"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Адаптер в обліковому записі AWS і регіоні підключення."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
+          "source": "Delete adapter version",
           "message": "Видалити версію адаптера"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Версія, що належить вибраному адаптеру."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
+          "source": "Get adapter",
           "message": "Отримати адаптер"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Адаптер в обліковому записі AWS і регіоні підключення."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
+          "source": "Get adapter version",
           "message": "Отримати версію адаптера"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Версія, що належить вибраному адаптеру."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
+          "source": "Get document analysis",
           "message": "Отримати аналіз документів"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
+          "source": "Get document text detection",
           "message": "Отримайте функцію виявлення тексту документа"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
@@ -1212,7 +1212,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
+          "source": "Get expense analysis",
           "message": "Отримати аналіз витрат"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
+          "source": "Get lending analysis",
           "message": "Отримати кредитний аналіз"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
+          "source": "Get lending analysis summary",
           "message": "Отримайте підсумок аналізу кредитування"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
+          "source": "List adapter versions",
           "message": "Список версій адаптера"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
+          "source": "List adapters",
           "message": "Список адаптерів"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Маркер продовження з попередньої відповіді в тій самій операції."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
+          "source": "List tags for resource",
           "message": "Список тегів для ресурсу"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
+          "source": "Start document analysis",
           "message": "Запустіть аналіз документів"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Версія вибраного ресурсу."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
+          "source": "Start document text detection",
           "message": "Запустіть функцію виявлення тексту документа"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
+          "source": "Start expense analysis",
           "message": "Розпочати аналіз витрат"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
+          "source": "Start lending analysis",
           "message": "Розпочніть аналіз позик"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
+          "source": "Tag resource",
           "message": "Тегувати ресурс"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
+          "source": "Untag resource",
           "message": "Зняти тег ресурсу"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Назви тегів ресурсів, які потрібно видалити."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
+          "source": "Update adapter",
           "message": "Оновити адаптер"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {

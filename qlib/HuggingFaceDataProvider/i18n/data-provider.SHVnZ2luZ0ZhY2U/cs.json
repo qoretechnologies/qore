@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Seznam modelů"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -500,7 +500,7 @@
           "message": "Zda zahrnout metadata karty modelu, jako jsou emise uhlíku, metriky a značky datasetů"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získat model"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
@@ -676,7 +676,7 @@
           "message": "ID repozitáře modelu ve formátu `namespace/name`, který se má smazat"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Seznam datových sad"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Zda načíst všechna metadata včetně času poslední změny, SHA, souborů a štítků"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Získat datovou sadu"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -976,7 +976,7 @@
           "message": "ID repozitáře datové sady ve formátu `namespace/name`, který se má smazat"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "Vypsat prostory"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Zda načíst všechna metadata včetně času poslední změny, SHA, souborů a štítků"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "Získat prostor"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "ID repozitáře Space ve formátu `namespace/name`, který se má smazat"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
-          "source": "Chat Completions",
+          "source": "Chat completions",
           "message": "Doplňování chatu"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {

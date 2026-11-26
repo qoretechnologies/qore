@@ -516,7 +516,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/repository/branches",
                 "operation_id": "getApiV4ProjectsIdRepositoryBranches",
-                "display_name": "List Branches",
+                "display_name": "List branches",
                 "short_desc": "List a project's repository branches",
                 "desc": "Lists the branches of a project's repository, with the commit each one points at "
                     "and whether it is protected, merged or the default branch.\n\n"
@@ -534,7 +534,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/repository/branches",
                 "operation_id": "postApiV4ProjectsIdRepositoryBranches",
-                "display_name": "Create Branch",
+                "display_name": "Create branch",
                 "short_desc": "Create a branch in a project's repository",
                 "desc": "Creates a branch from an existing commit, branch or tag.\n\n"
                     "`ref` is where the new branch starts; `branch` is the name to give it. Creating a "
@@ -563,7 +563,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/repository/branches/{branch}",
                 "operation_id": "getApiV4ProjectsIdRepositoryBranchesBranch",
-                "display_name": "Get Branch",
+                "display_name": "Get branch",
                 "short_desc": "Retrieve one repository branch",
                 "desc": "Retrieves a single branch, including the commit it points at and its protection "
                     "status.",
@@ -579,7 +579,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/repository/branches/{branch}",
                 "operation_id": "deleteApiV4ProjectsIdRepositoryBranchesBranch",
-                "display_name": "Delete Branch",
+                "display_name": "Delete branch",
                 "short_desc": "Delete a repository branch",
                 "desc": "Deletes a branch.\n\n"
                     "The commits themselves are not deleted, but a branch is the only thing keeping them "
@@ -596,7 +596,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/repository/merged_branches",
                 "operation_id": "deleteApiV4ProjectsIdRepositoryMergedBranches",
-                "display_name": "Delete Merged Branches",
+                "display_name": "Delete merged branches",
                 "short_desc": "Delete every branch already merged into the default branch",
                 "desc": "Deletes every branch that has already been merged into the project's default "
                     "branch, leaving protected branches alone.\n\n"
@@ -614,7 +614,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/repository/commits",
                 "operation_id": "getApiV4ProjectsIdRepositoryCommits",
-                "display_name": "List Commits",
+                "display_name": "List commits",
                 "short_desc": "List a project's repository commits",
                 "desc": "Lists commits, newest first.\n\n"
                     "`ref_name` selects the branch or tag to read (the default branch when unset), `path` "
@@ -641,7 +641,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/repository/commits/{sha}",
                 "operation_id": "getApiV4ProjectsIdRepositoryCommitsSha",
-                "display_name": "Get Commit",
+                "display_name": "Get commit",
                 "short_desc": "Retrieve one commit",
                 "desc": "Retrieves a commit by SHA, branch name or tag name.\n\n"
                     "Set `stats` to include the lines added and removed.",
@@ -657,7 +657,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/repository/commits/{sha}/comments",
                 "operation_id": "getApiV4ProjectsIdRepositoryCommitsShaComments",
-                "display_name": "List Commit Comments",
+                "display_name": "List commit comments",
                 "short_desc": "List the comments on a commit",
                 "desc": "Lists the comments made on a commit, both the standalone notes and the ones "
                     "attached to a specific line of a diff.",
@@ -673,7 +673,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/repository/commits/{sha}/comments",
                 "operation_id": "postApiV4ProjectsIdRepositoryCommitsShaComments",
-                "display_name": "Comment on Commit",
+                "display_name": "Comment on commit",
                 "short_desc": "Add a comment to a commit",
                 "desc": "Adds a comment to a commit.\n\n"
                     "Supplying `path`, `line` and `line_type` attaches the comment to that line of the "
@@ -698,7 +698,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/deploy_keys",
                 "operation_id": "getApiV4ProjectsIdDeployKeys",
-                "display_name": "List Deploy Keys",
+                "display_name": "List deploy keys",
                 "short_desc": "List the deploy keys enabled for a project",
                 "desc": "Lists the deploy keys enabled for a project, with whether each may push as well "
                     "as pull.",
@@ -713,7 +713,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/deploy_keys",
                 "operation_id": "postApiV4ProjectsIdDeployKeys",
-                "display_name": "Add Deploy Key",
+                "display_name": "Add deploy key",
                 "short_desc": "Add a deploy key to a project",
                 "desc": "Adds an SSH public key that can clone the repository without belonging to a "
                     "user.\n\n"
@@ -741,7 +741,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/deploy_keys/{key_id}",
                 "operation_id": "getApiV4ProjectsIdDeployKeysKeyId",
-                "display_name": "Get Deploy Key",
+                "display_name": "Get deploy key",
                 "short_desc": "Retrieve one deploy key",
                 "desc": "Retrieves a deploy key enabled for a project.",
                 "groups": (GroupDeployKeys,),
@@ -756,7 +756,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/deploy_keys/{key_id}",
                 "operation_id": "putApiV4ProjectsIdDeployKeysKeyId",
-                "display_name": "Update Deploy Key",
+                "display_name": "Update deploy key",
                 "short_desc": "Update a deploy key's title or push access",
                 "desc": "Updates a deploy key's title, or grants and revokes its push access.\n\n"
                     "The key material itself cannot be changed; replace the key to do that.",
@@ -772,7 +772,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/deploy_keys/{key_id}",
                 "operation_id": "deleteApiV4ProjectsIdDeployKeysKeyId",
-                "display_name": "Delete Deploy Key",
+                "display_name": "Delete deploy key",
                 "short_desc": "Remove a deploy key from a project",
                 "desc": "Disables a deploy key for this project. A key still enabled for another project "
                     "continues to work there.",
@@ -788,7 +788,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/deploy_keys/{key_id}/enable",
                 "operation_id": "postApiV4ProjectsIdDeployKeysKeyIdEnable",
-                "display_name": "Enable Deploy Key",
+                "display_name": "Enable deploy key",
                 "short_desc": "Enable an existing deploy key for another project",
                 "desc": "Enables a deploy key that already exists elsewhere for this project as well, "
                     "without having to supply the key material again.",
@@ -866,7 +866,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups/{id}",
                 "operation_id": "getApiV4GroupsId",
-                "display_name": "Get Group",
+                "display_name": "Get group",
                 "short_desc": "Retrieve one group",
                 "desc": "Retrieves a group, optionally with the projects it contains.\n\n"
                     "`with_projects` is expensive on a large group; leave it unset and list the projects "
@@ -882,7 +882,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/groups/{id}",
                 "operation_id": "putApiV4GroupsId",
-                "display_name": "Update Group",
+                "display_name": "Update group",
                 "short_desc": "Update a group's attributes",
                 "desc": "Updates a group's name, path, visibility and settings.\n\n"
                     "Only the fields supplied are changed. Narrowing `visibility` also narrows every "
@@ -898,7 +898,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/groups/{id}",
                 "operation_id": "deleteApiV4GroupsId",
-                "display_name": "Delete Group",
+                "display_name": "Delete group",
                 "short_desc": "Schedule a group for deletion",
                 "desc": "Schedules a group for deletion, together with every project and subgroup in "
                     "it.\n\n"
@@ -957,7 +957,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/issues",
                 "operation_id": "getApiV4ProjectsIdIssues",
-                "display_name": "List Project Issues",
+                "display_name": "List project issues",
                 "short_desc": "List the issues in one project",
                 "desc": "Lists the issues in a project.\n\n"
                     "The user filters here offer the project's own members, because an issue in a project "
@@ -1003,7 +1003,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/issues",
                 "operation_id": "postApiV4ProjectsIdIssues",
-                "display_name": "Create Issue",
+                "display_name": "Create issue",
                 "short_desc": "Create an issue in a project",
                 "desc": "Creates an issue.\n\n"
                     "`title` is the only required field. `labels` is a comma-separated list and creates "
@@ -1041,7 +1041,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/issues/{issue_iid}",
                 "operation_id": "getApiV4ProjectsIdIssuesIssueIid",
-                "display_name": "Get Issue",
+                "display_name": "Get issue",
                 "short_desc": "Retrieve one issue",
                 "desc": "Retrieves an issue by its project-relative IID.",
                 "groups": (GroupIssues,),
@@ -1056,7 +1056,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/issues/{issue_iid}",
                 "operation_id": "putApiV4ProjectsIdIssuesIssueIid",
-                "display_name": "Update Issue",
+                "display_name": "Update issue",
                 "short_desc": "Update an issue, or close or reopen it",
                 "desc": "Updates an issue.\n\n"
                     "`state_event` is how an issue is closed (`close`) or reopened (`reopen`); there is no "
@@ -1090,7 +1090,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/issues/{issue_iid}",
                 "operation_id": "deleteApiV4ProjectsIdIssuesIssueIid",
-                "display_name": "Delete Issue",
+                "display_name": "Delete issue",
                 "short_desc": "Delete an issue permanently",
                 "desc": "Deletes an issue.\n\n"
                     "This is permanent and needs Owner rights; closing an issue with **Update Issue** is "
@@ -1107,7 +1107,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/issues/{issue_iid}/time_stats",
                 "operation_id": "getApiV4ProjectsIdIssuesIssueIidTimeStats",
-                "display_name": "Get Issue Time Stats",
+                "display_name": "Get issue time stats",
                 "short_desc": "Retrieve the time estimate and time spent on an issue",
                 "desc": "Retrieves the time tracking figures for an issue: the estimate, the total spent, "
                     "and both as human-readable strings.",
@@ -1123,7 +1123,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/milestones",
                 "operation_id": "getApiV4ProjectsIdMilestones",
-                "display_name": "List Milestones",
+                "display_name": "List milestones",
                 "short_desc": "List a project's milestones",
                 "desc": "Lists the milestones defined on a project.\n\n"
                     "This is what backs the milestone dropdowns on the issue and merge request actions; "
@@ -1170,7 +1170,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/users",
                 "operation_id": "getApiV4ProjectsIdUsers",
-                "display_name": "List Project Users",
+                "display_name": "List project users",
                 "short_desc": "List every user with access to a project",
                 "desc": "Lists the users of a project, including those who reach it through a group or an "
                     "ancestor group.\n\n"
@@ -1187,7 +1187,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/members",
                 "operation_id": "getApiV4ProjectsIdMembers",
-                "display_name": "List Project Members",
+                "display_name": "List project members",
                 "short_desc": "List the direct members of a project",
                 "desc": "Lists the direct members of a project with their access levels.\n\n"
                     "Members who reach the project through a group are **not** included; use **List "
@@ -1203,7 +1203,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/members",
                 "operation_id": "postApiV4ProjectsIdMembers",
-                "display_name": "Add Project Member",
+                "display_name": "Add project member",
                 "short_desc": "Add a user to a project",
                 "desc": "Adds a user to a project at a given access level.\n\n"
                     "`access_level` is GitLab's numeric scale: 10 Guest, 20 Reporter, 30 Developer, "
@@ -1228,7 +1228,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/members/{user_id}",
                 "operation_id": "getApiV4ProjectsIdMembersUserId",
-                "display_name": "Get Project Member",
+                "display_name": "Get project member",
                 "short_desc": "Retrieve one direct member of a project",
                 "desc": "Retrieves a direct member of a project with their access level and expiry.\n\n"
                     "A user who reaches the project only through a group is reported as not found.",
@@ -1244,7 +1244,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/members/{user_id}",
                 "operation_id": "putApiV4ProjectsIdMembersUserId",
-                "display_name": "Update Project Member",
+                "display_name": "Update project member",
                 "short_desc": "Change a project member's access level or expiry",
                 "desc": "Changes a member's access level or the date their access expires.",
                 "groups": (GroupMembers,),
@@ -1264,7 +1264,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/members/{user_id}",
                 "operation_id": "deleteApiV4ProjectsIdMembersUserId",
-                "display_name": "Remove Project Member",
+                "display_name": "Remove project member",
                 "short_desc": "Remove a user from a project",
                 "desc": "Removes a direct member from a project.\n\n"
                     "Set `unassign_issuables` to take them off the issues and merge requests they were "
@@ -1281,7 +1281,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups/{id}/members",
                 "operation_id": "getApiV4GroupsIdMembers",
-                "display_name": "List Group Members",
+                "display_name": "List group members",
                 "short_desc": "List the direct members of a group",
                 "desc": "Lists the direct members of a group with their access levels.\n\n"
                     "Members inherited from a parent group are not included.",
@@ -1296,7 +1296,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/groups/{id}/members",
                 "operation_id": "postApiV4GroupsIdMembers",
-                "display_name": "Add Group Member",
+                "display_name": "Add group member",
                 "short_desc": "Add a user to a group",
                 "desc": "Adds a user to a group at a given access level, which also grants that access to "
                     "every project in the group.\n\n"
@@ -1322,7 +1322,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups/{id}/members/{user_id}",
                 "operation_id": "getApiV4GroupsIdMembersUserId",
-                "display_name": "Get Group Member",
+                "display_name": "Get group member",
                 "short_desc": "Retrieve one direct member of a group",
                 "desc": "Retrieves a direct member of a group with their access level and expiry.",
                 "groups": (GroupMembers,),
@@ -1337,7 +1337,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/groups/{id}/members/{user_id}",
                 "operation_id": "putApiV4GroupsIdMembersUserId",
-                "display_name": "Update Group Member",
+                "display_name": "Update group member",
                 "short_desc": "Change a group member's access level or expiry",
                 "desc": "Changes a member's access level in a group, or the date their access expires.",
                 "groups": (GroupMembers,),
@@ -1357,7 +1357,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/groups/{id}/members/{user_id}",
                 "operation_id": "deleteApiV4GroupsIdMembersUserId",
-                "display_name": "Remove Group Member",
+                "display_name": "Remove group member",
                 "short_desc": "Remove a user from a group",
                 "desc": "Removes a member from a group, and with it their access to every project in the "
                     "group.\n\n"
@@ -1377,7 +1377,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/merge_requests",
                 "operation_id": "getApiV4ProjectsIdMergeRequests",
-                "display_name": "List Merge Requests",
+                "display_name": "List merge requests",
                 "short_desc": "List the merge requests in a project",
                 "desc": "Lists merge requests.\n\n"
                     "`state` is `opened`, `closed`, `merged` or `locked`. Every user filter has a "
@@ -1435,7 +1435,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/merge_requests",
                 "operation_id": "postApiV4ProjectsIdMergeRequests",
-                "display_name": "Create Merge Request",
+                "display_name": "Create merge request",
                 "short_desc": "Open a merge request",
                 "desc": "Opens a merge request from one branch into another.\n\n"
                     "`source_branch` and `target_branch` are both in this project unless "
@@ -1489,7 +1489,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/merge_requests/{merge_request_iid}",
                 "operation_id": "getApiV4ProjectsIdMergeRequestsMergeRequestIid",
-                "display_name": "Get Merge Request",
+                "display_name": "Get merge request",
                 "short_desc": "Retrieve one merge request",
                 "desc": "Retrieves a merge request by its project-relative IID, with its state, its "
                     "mergeability and its pipeline.",
@@ -1505,7 +1505,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/merge_requests/{merge_request_iid}",
                 "operation_id": "putApiV4ProjectsIdMergeRequestsMergeRequestIid",
-                "display_name": "Update Merge Request",
+                "display_name": "Update merge request",
                 "short_desc": "Update a merge request, or close or reopen it",
                 "desc": "Updates a merge request.\n\n"
                     "`state_event` closes (`close`) or reopens (`reopen`) it; this does **not** merge it. "
@@ -1549,7 +1549,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/merge_requests/{merge_request_iid}",
                 "operation_id": "deleteApiV4ProjectsIdMergeRequestsMergeRequestIid",
-                "display_name": "Delete Merge Request",
+                "display_name": "Delete merge request",
                 "short_desc": "Delete a merge request permanently",
                 "desc": "Deletes a merge request.\n\n"
                     "This is permanent and needs Owner rights; closing it with **Update Merge Request** is "
@@ -1566,7 +1566,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve",
                 "operation_id": "postApiV4ProjectsIdMergeRequestsMergeRequestIidApprove",
-                "display_name": "Approve Merge Request",
+                "display_name": "Approve merge request",
                 "short_desc": "Approve a merge request as the authenticated user",
                 "desc": "Approves a merge request on behalf of the authenticated user.\n\n"
                     "Supplying `sha` makes the approval conditional on the merge request still being at "
@@ -1588,7 +1588,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/merge_requests/{merge_request_iid}/unapprove",
                 "operation_id": "postApiV4ProjectsIdMergeRequestsMergeRequestIidUnapprove",
-                "display_name": "Unapprove Merge Request",
+                "display_name": "Unapprove merge request",
                 "short_desc": "Withdraw the authenticated user's approval",
                 "desc": "Withdraws the authenticated user's approval of a merge request. Another user's "
                     "approval is untouched.",
@@ -1675,7 +1675,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}",
                 "operation_id": "getApiV4ProjectsId",
-                "display_name": "Get Project",
+                "display_name": "Get project",
                 "short_desc": "Retrieve one project",
                 "desc": "Retrieves a project, including its namespace, default branch and enabled "
                     "features.\n\n"
@@ -1692,7 +1692,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}",
                 "operation_id": "putApiV4ProjectsId",
-                "display_name": "Update Project",
+                "display_name": "Update project",
                 "short_desc": "Update a project's attributes",
                 "desc": "Updates a project's name, description, visibility, default branch, merge "
                     "settings and feature access levels.\n\n"
@@ -1711,7 +1711,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}",
                 "operation_id": "deleteApiV4ProjectsId",
-                "display_name": "Delete Project",
+                "display_name": "Delete project",
                 "short_desc": "Schedule a project for deletion",
                 "desc": "Schedules a project for deletion, together with its repository, issues, merge "
                     "requests and wiki.\n\n"
@@ -1748,7 +1748,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/variables",
                 "operation_id": "getApiV4ProjectsIdVariables",
-                "display_name": "List Project Variables",
+                "display_name": "List project variables",
                 "short_desc": "List a project's CI/CD variables",
                 "desc": "Lists the CI/CD variables defined on a project.\n\n"
                     "A masked variable's value is returned; a **hidden** variable's is not, and never can "
@@ -1764,7 +1764,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/variables",
                 "operation_id": "postApiV4ProjectsIdVariables",
-                "display_name": "Create Project Variable",
+                "display_name": "Create project variable",
                 "short_desc": "Create a CI/CD variable on a project",
                 "desc": "Creates a CI/CD variable.\n\n"
                     "`protected` restricts it to pipelines on protected branches and tags; `masked` hides "
@@ -1794,7 +1794,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/variables/{key}",
                 "operation_id": "getApiV4ProjectsIdVariablesKey",
-                "display_name": "Get Project Variable",
+                "display_name": "Get project variable",
                 "short_desc": "Retrieve one of a project's CI/CD variables",
                 "desc": "Retrieves a CI/CD variable by key.\n\n"
                     "When the same key exists for several environments, `filter[environment_scope]` "
@@ -1811,7 +1811,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/variables/{key}",
                 "operation_id": "putApiV4ProjectsIdVariablesKey",
-                "display_name": "Update Project Variable",
+                "display_name": "Update project variable",
                 "short_desc": "Update one of a project's CI/CD variables",
                 "desc": "Updates a CI/CD variable's value or flags.\n\n"
                     "When the same key exists for several environments, `filter` selects which one.",
@@ -1832,7 +1832,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/variables/{key}",
                 "operation_id": "deleteApiV4ProjectsIdVariablesKey",
-                "display_name": "Delete Project Variable",
+                "display_name": "Delete project variable",
                 "short_desc": "Delete one of a project's CI/CD variables",
                 "desc": "Deletes a CI/CD variable. Pipelines already running keep the value they started "
                     "with.",
@@ -1848,7 +1848,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups/{id}/variables",
                 "operation_id": "getApiV4GroupsIdVariables",
-                "display_name": "List Group Variables",
+                "display_name": "List group variables",
                 "short_desc": "List a group's CI/CD variables",
                 "desc": "Lists the CI/CD variables defined on a group; every project in the group "
                     "inherits them unless it defines a variable with the same key.",
@@ -1863,7 +1863,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/groups/{id}/variables",
                 "operation_id": "postApiV4GroupsIdVariables",
-                "display_name": "Create Group Variable",
+                "display_name": "Create group variable",
                 "short_desc": "Create a CI/CD variable on a group",
                 "desc": "Creates a CI/CD variable on a group, inherited by every project in it.\n\n"
                     "The flags mean the same as on a project variable: `masked_and_hidden` in particular "
@@ -1890,7 +1890,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups/{id}/variables/{key}",
                 "operation_id": "getApiV4GroupsIdVariablesKey",
-                "display_name": "Get Group Variable",
+                "display_name": "Get group variable",
                 "short_desc": "Retrieve one of a group's CI/CD variables",
                 "desc": "Retrieves a CI/CD variable defined on a group.",
                 "groups": (GroupVariables,),
@@ -1905,7 +1905,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/groups/{id}/variables/{key}",
                 "operation_id": "putApiV4GroupsIdVariablesKey",
-                "display_name": "Update Group Variable",
+                "display_name": "Update group variable",
                 "short_desc": "Update one of a group's CI/CD variables",
                 "desc": "Updates a group CI/CD variable's value or flags. Every project inheriting it "
                     "sees the new value on its next pipeline.",
@@ -1926,7 +1926,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/groups/{id}/variables/{key}",
                 "operation_id": "deleteApiV4GroupsIdVariablesKey",
-                "display_name": "Delete Group Variable",
+                "display_name": "Delete group variable",
                 "short_desc": "Delete one of a group's CI/CD variables",
                 "desc": "Deletes a group CI/CD variable. Projects that inherited it lose the value; one "
                     "that defined its own variable with the same key is unaffected.",
@@ -1944,7 +1944,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/wikis",
                 "operation_id": "getApiV4ProjectsIdWikis",
-                "display_name": "List Wiki Pages",
+                "display_name": "List wiki pages",
                 "short_desc": "List a project's wiki pages",
                 "desc": "Lists the wiki pages of a project.\n\n"
                     "The content is omitted unless `with_content` is set, which is worth leaving unset "
@@ -1960,7 +1960,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects/{id}/wikis",
                 "operation_id": "postApiV4ProjectsIdWikis",
-                "display_name": "Create Wiki Page",
+                "display_name": "Create wiki page",
                 "short_desc": "Create a wiki page in a project",
                 "desc": "Creates a wiki page.\n\n"
                     "The slug is derived from the title; a title containing `/` creates the page in a "
@@ -1985,7 +1985,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects/{id}/wikis/{slug}",
                 "operation_id": "getApiV4ProjectsIdWikisSlug",
-                "display_name": "Get Wiki Page",
+                "display_name": "Get wiki page",
                 "short_desc": "Retrieve one wiki page",
                 "desc": "Retrieves a wiki page with its content.\n\n"
                     "`version` reads an earlier revision by commit SHA, and `render_html` returns the "
@@ -2002,7 +2002,7 @@ public class GitLabManifest {
                 "method": "PUT",
                 "path": "/api/v4/projects/{id}/wikis/{slug}",
                 "operation_id": "putApiV4ProjectsIdWikisSlug",
-                "display_name": "Update Wiki Page",
+                "display_name": "Update wiki page",
                 "short_desc": "Update a wiki page's title or content",
                 "desc": "Updates a wiki page.\n\n"
                     "Changing the title moves the page, which changes its slug and breaks links to the "
@@ -2019,7 +2019,7 @@ public class GitLabManifest {
                 "method": "DELETE",
                 "path": "/api/v4/projects/{id}/wikis/{slug}",
                 "operation_id": "deleteApiV4ProjectsIdWikisSlug",
-                "display_name": "Delete Wiki Page",
+                "display_name": "Delete wiki page",
                 "short_desc": "Delete a wiki page",
                 "desc": "Deletes a wiki page. The wiki is a git repository, so the page remains in its "
                     "history.",

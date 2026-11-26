@@ -808,7 +808,7 @@
           "message": "Nazwa magazynu wyszukiwania plików do użycia w generowaniu wspomaganym wyszukiwaniem (RAG). Model przeszuka dokumenty magazynu, aby ugruntować swoją odpowiedź w oparciu o odpowiednią zawartość"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Prosty czat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Nazwa magazynu wyszukiwania plików do użycia w generowaniu wspomaganym wyszukiwaniem (RAG). Model przeszuka dokumenty magazynu, aby ugruntować swoją odpowiedź w oparciu o odpowiednią zawartość"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Osadź zawartość"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Treść z modelu"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Osadzanie wsadowe"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

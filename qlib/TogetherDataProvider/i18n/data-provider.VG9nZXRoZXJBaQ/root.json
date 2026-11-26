@@ -792,8 +792,8 @@
           "message": "Version is the volume version to mount. On create, defaults to the latest version. On update, defaults to the currently mounted version."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
-          "message": "Delete Deployment"
+          "source": "Delete deployment",
+          "message": "Delete deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
           "source": "Delete a deployment",
@@ -816,8 +816,8 @@
           "message": "Deployment ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.display_name": {
-          "source": "Get Deployment By ID Or Name",
-          "message": "Get Deployment By ID Or Name"
+          "source": "Get deployment by ID or name",
+          "message": "Get deployment by ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.short_desc": {
           "source": "Get a deployment by ID or name",
@@ -840,8 +840,8 @@
           "message": "Deployment ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
-          "message": "Update Deployment"
+          "source": "Update deployment",
+          "message": "Update deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
           "source": "Update a deployment",
@@ -1292,8 +1292,8 @@
           "message": "Version is the volume version to mount. On create, defaults to the latest version. On update, defaults to the currently mounted version."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Logs For Deployment",
-          "message": "Get Logs For Deployment"
+          "source": "Get logs for deployment",
+          "message": "Get logs for deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.short_desc": {
           "source": "Get logs for a deployment",
@@ -1424,8 +1424,8 @@
           "message": "Value is the sensitive data to store securely (e.g., API keys, passwords, tokens). Encrypted at rest."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.display_name": {
-          "source": "Delete Secret",
-          "message": "Delete Secret"
+          "source": "Delete secret",
+          "message": "Delete secret"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.short_desc": {
           "source": "Delete a secret",
@@ -1448,8 +1448,8 @@
           "message": "Secret ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Secret By ID Or Name",
-          "message": "Get Secret By ID Or Name"
+          "source": "Get secret by ID or name",
+          "message": "Get secret by ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.short_desc": {
           "source": "Get a secret by ID or name",
@@ -1472,8 +1472,8 @@
           "message": "Secret ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.display_name": {
-          "source": "Update Secret",
-          "message": "Update Secret"
+          "source": "Update secret",
+          "message": "Update secret"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.short_desc": {
           "source": "Update a secret",
@@ -1544,8 +1544,8 @@
           "message": "Value is the new sensitive data to store securely. Updating this replaces the existing secret value."
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.display_name": {
-          "source": "Download Storage File",
-          "message": "Download Storage File"
+          "source": "Download storage file",
+          "message": "Download storage file"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.short_desc": {
           "source": "Download a file",
@@ -1568,8 +1568,8 @@
           "message": "Filename"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.display_name": {
-          "source": "Get File Download URL",
-          "message": "Get File Download URL"
+          "source": "Get file download URL",
+          "message": "Get file download URL"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.short_desc": {
           "source": "Get a file download URL",
@@ -1684,8 +1684,8 @@
           "message": "readOnly"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.display_name": {
-          "source": "Delete Volume",
-          "message": "Delete Volume"
+          "source": "Delete volume",
+          "message": "Delete volume"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.short_desc": {
           "source": "Delete a volume",
@@ -1708,8 +1708,8 @@
           "message": "Volume ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Volume By ID Or Name",
-          "message": "Get Volume By ID Or Name"
+          "source": "Get volume by ID or name",
+          "message": "Get volume by ID or name"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.short_desc": {
           "source": "Get a volume by ID or name",
@@ -1744,8 +1744,8 @@
           "message": "Volume version to describe (defaults to current version)"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.display_name": {
-          "source": "Update Volume",
-          "message": "Update Volume"
+          "source": "Update volume",
+          "message": "Update volume"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.short_desc": {
           "source": "Update a volume",
@@ -2996,8 +2996,8 @@
           "message": "The lora pool to use for an adapter if setting it to run against, say, a dedicated pool.  Only used for model_type `adapter`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.display_name": {
-          "source": "Get Model Upload Job",
-          "message": "Get Model Upload Job"
+          "source": "Get model upload job",
+          "message": "Get model upload job"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.short_desc": {
           "source": "Get job status",
@@ -3276,8 +3276,8 @@
           "message": "List the metadata for all uploaded data files."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Retrieve file metadata",
@@ -3300,8 +3300,8 @@
           "message": "The ID of the file to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file",
@@ -3324,8 +3324,8 @@
           "message": "The ID of the file to delete"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Get file contents",
@@ -4476,8 +4476,8 @@
           "message": "Maximum number of rows from the start of the training file to tokenize."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.display_name": {
-          "source": "Get Fine-Tune",
-          "message": "Get Fine-Tune"
+          "source": "Get fine-tune",
+          "message": "Get fine-tune"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.short_desc": {
           "source": "List job",
@@ -4500,8 +4500,8 @@
           "message": "The ID of the job to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.display_name": {
-          "source": "Delete Fine-Tune",
-          "message": "Delete Fine-Tune"
+          "source": "Delete fine-tune",
+          "message": "Delete fine-tune"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.short_desc": {
           "source": "Delete a fine-tune job",
@@ -4536,8 +4536,8 @@
           "message": "Deprecated and unused parameter."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.display_name": {
-          "source": "List Fine-Tune Events",
-          "message": "List Fine-Tune Events"
+          "source": "List fine-tune events",
+          "message": "List fine-tune events"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.short_desc": {
           "source": "List job events",
@@ -4560,8 +4560,8 @@
           "message": "The ID of the fine-tune job to list events for"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tune Checkpoints",
-          "message": "List Fine-Tune Checkpoints"
+          "source": "List fine-tune checkpoints",
+          "message": "List fine-tune checkpoints"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.short_desc": {
           "source": "List checkpoints",
@@ -4584,8 +4584,8 @@
           "message": "The ID of the fine-tune job to list checkpoints for"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.display_name": {
-          "source": "Download Tokenized Dataset",
-          "message": "Download Tokenized Dataset"
+          "source": "Download tokenized dataset",
+          "message": "Download tokenized dataset"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.short_desc": {
           "source": "Download tokenized dataset",
@@ -4668,8 +4668,8 @@
           "message": "Model Output Path"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.display_name": {
-          "source": "Cancel Fine-Tune",
-          "message": "Cancel Fine-Tune"
+          "source": "Cancel fine-tune",
+          "message": "Cancel fine-tune"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.short_desc": {
           "source": "Cancel job",
@@ -4692,8 +4692,8 @@
           "message": "Fine-tune ID to cancel. A string that starts with `ft-`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.display_name": {
-          "source": "Get Fine-Tune Metrics",
-          "message": "Get Fine-Tune Metrics"
+          "source": "Get fine-tune metrics",
+          "message": "Get fine-tune metrics"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.short_desc": {
           "source": "Get metrics",
@@ -6544,8 +6544,8 @@
           "message": "Human-readable name for this add-on instance."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Get GPU Cluster By Cluster ID",
-          "message": "Get GPU Cluster By Cluster ID"
+          "source": "Get GPU cluster by cluster ID",
+          "message": "Get GPU cluster by cluster ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
           "source": "Get GPU cluster by cluster ID",
@@ -6568,8 +6568,8 @@
           "message": "The ID of the cluster to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.display_name": {
-          "source": "Update GPU Cluster",
-          "message": "Update GPU Cluster"
+          "source": "Update GPU cluster",
+          "message": "Update GPU cluster"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.short_desc": {
           "source": "Update a GPU cluster",
@@ -6980,8 +6980,8 @@
           "message": "Name of the add-on to update. Must match an existing add-on on the cluster."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Delete GPU Cluster By Cluster ID",
-          "message": "Delete GPU Cluster By Cluster ID"
+          "source": "Delete GPU cluster by cluster ID",
+          "message": "Delete GPU cluster by cluster ID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
           "source": "Delete GPU cluster by cluster ID",
@@ -7148,8 +7148,8 @@
           "message": "Project ID that will own the volume. When omitted, the caller's default project is used."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Get Shared Volume By ID",
-          "message": "Get Shared Volume By ID"
+          "source": "Get shared volume by ID",
+          "message": "Get shared volume by ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
           "source": "Get a shared volume by ID",
@@ -7172,8 +7172,8 @@
           "message": "The ID of the volume to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Delete Shared Volume By ID",
-          "message": "Delete Shared Volume By ID"
+          "source": "Delete shared volume by ID",
+          "message": "Delete shared volume by ID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
           "source": "Delete a shared volume by ID",
@@ -7424,8 +7424,8 @@
           "message": "Create the endpoint in a specified availability zone (e.g., us-central-4b)"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.display_name": {
-          "source": "Get Endpoint",
-          "message": "Get Endpoint"
+          "source": "Get endpoint",
+          "message": "Get endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.short_desc": {
           "source": "Get endpoint by ID",
@@ -7448,8 +7448,8 @@
           "message": "The ID of the endpoint to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.display_name": {
-          "source": "Update Endpoint",
-          "message": "Update Endpoint"
+          "source": "Update endpoint",
+          "message": "Update endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.short_desc": {
           "source": "Update endpoint, this can also be used to start or stop a dedicated endpoint",
@@ -7552,8 +7552,8 @@
           "message": "The number of minutes of inactivity after which the endpoint stops automatically. Set to 0 to disable automatic timeout."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.display_name": {
-          "source": "Delete Endpoint",
-          "message": "Delete Endpoint"
+          "source": "Delete endpoint",
+          "message": "Delete endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.short_desc": {
           "source": "Delete endpoint",
@@ -7576,8 +7576,8 @@
           "message": "The ID of the endpoint to delete"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.display_name": {
-          "source": "Add LoRA Adapter To Endpoint",
-          "message": "Add LoRA Adapter To Endpoint"
+          "source": "Add LoRA adapter to endpoint",
+          "message": "Add LoRA adapter to endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.short_desc": {
           "source": "Add a LoRA adapter to an endpoint",
@@ -7612,8 +7612,8 @@
           "message": "Combined identifier in format \"endpoint_name:adapter_model_name\"."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.display_name": {
-          "source": "List Adapters On Endpoint",
-          "message": "List Adapters On Endpoint"
+          "source": "List adapters on endpoint",
+          "message": "List adapters on endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.short_desc": {
           "source": "List adapters on an endpoint",
@@ -7636,8 +7636,8 @@
           "message": "The endpoint ID"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.display_name": {
-          "source": "Remove LoRA Adapter From Endpoint",
-          "message": "Remove LoRA Adapter From Endpoint"
+          "source": "Remove LoRA adapter from endpoint",
+          "message": "Remove LoRA adapter from endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.short_desc": {
           "source": "Remove a LoRA adapter from an endpoint",
@@ -7896,8 +7896,8 @@
           "message": "Model to use for processing batch requests"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
-          "message": "Get Batch"
+          "source": "Get batch",
+          "message": "Get batch"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Get a batch job",
@@ -7920,8 +7920,8 @@
           "message": "The ID of the batch job to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
-          "message": "Cancel Batch"
+          "source": "Cancel batch",
+          "message": "Cancel batch"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancel a batch job",
@@ -9008,8 +9008,8 @@
           "message": "Filter models by source"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
-          "message": "Get Evaluation"
+          "source": "Get evaluation",
+          "message": "Get evaluation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
           "source": "Get evaluation job details",
@@ -9032,8 +9032,8 @@
           "message": "The ID of the evaluation job to retrieve"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.display_name": {
-          "source": "Get Evaluation Results",
-          "message": "Get Evaluation Results"
+          "source": "Get evaluation results",
+          "message": "Get evaluation results"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.short_desc": {
           "source": "Get evaluation job status and results",
@@ -9560,8 +9560,8 @@
           "message": "Muon Scaling Strategy Original"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.display_name": {
-          "source": "Get Model Resources",
-          "message": "Get Model Resources"
+          "source": "Get model resources",
+          "message": "Get model resources"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.short_desc": {
           "source": "Get model resources",
@@ -9584,8 +9584,8 @@
           "message": "ID of the model resource"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.display_name": {
-          "source": "Stop Model Resources",
-          "message": "Stop Model Resources"
+          "source": "Stop model resources",
+          "message": "Stop model resources"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.short_desc": {
           "source": "Stop model resources",
@@ -9944,8 +9944,8 @@
           "message": "Returns the models supported by the RL service and their limits for training/sampling operations."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Get Training Session",
-          "message": "Get Training Session"
+          "source": "Get training session",
+          "message": "Get training session"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.short_desc": {
           "source": "Get training session",
@@ -9968,8 +9968,8 @@
           "message": "ID of the training session"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Update Training Session",
-          "message": "Update Training Session"
+          "source": "Update training session",
+          "message": "Update training session"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.short_desc": {
           "source": "Update a training session",
@@ -10100,8 +10100,8 @@
           "message": "HTTPS URL for the Weights & Biases run"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.display_name": {
-          "source": "Stop Training Session",
-          "message": "Stop Training Session"
+          "source": "Stop training session",
+          "message": "Stop training session"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.short_desc": {
           "source": "Stop training session",
@@ -10124,8 +10124,8 @@
           "message": "ID of the training session"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Backward Operation",
-          "message": "Get Forward Backward Operation"
+          "source": "Get forward backward operation",
+          "message": "Get forward backward operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.short_desc": {
           "source": "Get forward-backward operation",
@@ -10160,8 +10160,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.display_name": {
-          "source": "Get Optim Step Operation",
-          "message": "Get Optim Step Operation"
+          "source": "Get optim step operation",
+          "message": "Get optim step operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.short_desc": {
           "source": "Get optim-step operation",
@@ -10196,8 +10196,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.display_name": {
-          "source": "Get Weights Sync Operation",
-          "message": "Get Weights Sync Operation"
+          "source": "Get weights sync operation",
+          "message": "Get weights sync operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.short_desc": {
           "source": "Get weights-sync operation",
@@ -10232,8 +10232,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.display_name": {
-          "source": "Get Sample Operation",
-          "message": "Get Sample Operation"
+          "source": "Get sample operation",
+          "message": "Get sample operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.short_desc": {
           "source": "Get sample operation",
@@ -10268,8 +10268,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.display_name": {
-          "source": "Forward Backward Pass",
-          "message": "Forward Backward Pass"
+          "source": "Forward backward pass",
+          "message": "Forward backward pass"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.short_desc": {
           "source": "Forward-backward pass",
@@ -10616,8 +10616,8 @@
           "message": "Loss Type Dro"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.display_name": {
-          "source": "Custom Forward Backward Pass",
-          "message": "Custom Forward Backward Pass"
+          "source": "Custom forward backward pass",
+          "message": "Custom forward backward pass"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.short_desc": {
           "source": "Custom forward-backward pass",
@@ -10796,8 +10796,8 @@
           "message": "D Type Bfloat16"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.display_name": {
-          "source": "Get Custom Forward Backward Operation",
-          "message": "Get Custom Forward Backward Operation"
+          "source": "Get custom forward backward operation",
+          "message": "Get custom forward backward operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.short_desc": {
           "source": "Get custom forward-backward operation",
@@ -10832,8 +10832,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.display_name": {
-          "source": "Forward Pass",
-          "message": "Forward Pass"
+          "source": "Forward pass",
+          "message": "Forward pass"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.short_desc": {
           "source": "Forward pass",
@@ -10968,8 +10968,8 @@
           "message": "Buffer shape as `[num_tokens, num_layers, width]`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Operation",
-          "message": "Get Forward Operation"
+          "source": "Get forward operation",
+          "message": "Get forward operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.short_desc": {
           "source": "Get forward operation",
@@ -11004,8 +11004,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.display_name": {
-          "source": "Optimizer Step",
-          "message": "Optimizer Step"
+          "source": "Optimizer step",
+          "message": "Optimizer step"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.short_desc": {
           "source": "Optimizer step",
@@ -11268,8 +11268,8 @@
           "message": "Weight decay coefficient"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.display_name": {
-          "source": "Weights Sync",
-          "message": "Weights Sync"
+          "source": "Weights sync",
+          "message": "Weights sync"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.short_desc": {
           "source": "Weights sync",
@@ -11528,8 +11528,8 @@
           "message": "When true together with `return_routed_experts`, return each routing capture as a backend-owned `object_uri` plus shape instead of inline base64 data. Clients that do not opt in keep the legacy inline response."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.display_name": {
-          "source": "Create Inference Checkpoint",
-          "message": "Create Inference Checkpoint"
+          "source": "Create inference checkpoint",
+          "message": "Create inference checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.short_desc": {
           "source": "Create inference checkpoint",
@@ -11552,8 +11552,8 @@
           "message": "Training session ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Inference Checkpoint Operation",
-          "message": "Get Inference Checkpoint Operation"
+          "source": "Get inference checkpoint operation",
+          "message": "Get inference checkpoint operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.short_desc": {
           "source": "Get inference checkpoint operation",
@@ -11588,8 +11588,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Save Training Checkpoint",
-          "message": "Save Training Checkpoint"
+          "source": "Save training checkpoint",
+          "message": "Save training checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.short_desc": {
           "source": "Save training checkpoint",
@@ -11612,8 +11612,8 @@
           "message": "Training session ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.display_name": {
-          "source": "Get Save Training Checkpoint Operation",
-          "message": "Get Save Training Checkpoint Operation"
+          "source": "Get save training checkpoint operation",
+          "message": "Get save training checkpoint operation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.short_desc": {
           "source": "Get save training checkpoint operation",
@@ -11648,8 +11648,8 @@
           "message": "Operation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.display_name": {
-          "source": "Get Checkpoint",
-          "message": "Get Checkpoint"
+          "source": "Get checkpoint",
+          "message": "Get checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.short_desc": {
           "source": "Get checkpoint",
@@ -11672,8 +11672,8 @@
           "message": "ID of the checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.display_name": {
-          "source": "Download Checkpoint",
-          "message": "Download Checkpoint"
+          "source": "Download checkpoint",
+          "message": "Download checkpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.short_desc": {
           "source": "Download checkpoint",
@@ -11720,8 +11720,8 @@
           "message": "Checkpoint Variant Adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.display_name": {
-          "source": "List Addons",
-          "message": "List Addons"
+          "source": "List addons",
+          "message": "List addons"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.short_desc": {
           "source": "List Addons",
@@ -11744,8 +11744,8 @@
           "message": "The ID of the cluster whose add-ons to list."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.display_name": {
-          "source": "Create Addon",
-          "message": "Create Addon"
+          "source": "Create addon",
+          "message": "Create addon"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.short_desc": {
           "source": "Create Addon",
@@ -11892,8 +11892,8 @@
           "message": "Whether to enable the Model Aware TorchPass add-on."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.display_name": {
-          "source": "Get Addon",
-          "message": "Get Addon"
+          "source": "Get addon",
+          "message": "Get addon"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.short_desc": {
           "source": "Get Addon",
@@ -11928,8 +11928,8 @@
           "message": "The ID of the add-on to retrieve."
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.display_name": {
-          "source": "Update Addon",
-          "message": "Update Addon"
+          "source": "Update addon",
+          "message": "Update addon"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.short_desc": {
           "source": "Update Addon",
@@ -12064,8 +12064,8 @@
           "message": "Whether to enable the Model Aware TorchPass add-on."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.display_name": {
-          "source": "Delete Addon",
-          "message": "Delete Addon"
+          "source": "Delete addon",
+          "message": "Delete addon"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.short_desc": {
           "source": "Delete Addon",
@@ -12100,8 +12100,8 @@
           "message": "The ID of the add-on to delete."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.display_name": {
-          "source": "List Remediations",
-          "message": "List Remediations"
+          "source": "List remediations",
+          "message": "List remediations"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.short_desc": {
           "source": "List remediations",
@@ -12204,8 +12204,8 @@
           "message": "Filter by remediation mode(s). Returns remediations matching any of the specified modes."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Create Remediation",
-          "message": "Create Remediation"
+          "source": "Create remediation",
+          "message": "Create remediation"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.short_desc": {
           "source": "Create Remediation",
@@ -12288,8 +12288,8 @@
           "message": "Client-specified ID for idempotency."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Get Remediation",
-          "message": "Get Remediation"
+          "source": "Get remediation",
+          "message": "Get remediation"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.short_desc": {
           "source": "Get Remediation",
@@ -12324,8 +12324,8 @@
           "message": "Value for Remediation ID"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.display_name": {
-          "source": "Approve Remediation",
-          "message": "Approve Remediation"
+          "source": "Approve remediation",
+          "message": "Approve remediation"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.short_desc": {
           "source": "Approve Remediation",
@@ -12404,8 +12404,8 @@
           "message": "Remediation Mode Host Power Cycle"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Cancel Remediation",
-          "message": "Cancel Remediation"
+          "source": "Cancel remediation",
+          "message": "Cancel remediation"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.short_desc": {
           "source": "Cancel Remediation",
@@ -12452,8 +12452,8 @@
           "message": "The remediation ID."
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Reject Remediation",
-          "message": "Reject Remediation"
+          "source": "Reject remediation",
+          "message": "Reject remediation"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.short_desc": {
           "source": "Reject Remediation",
@@ -12720,8 +12720,8 @@
           "message": "Opaque cursor from a previous response's `next_cursor`. Only valid for the month and granularity it was issued for. Current-month data is a moving snapshot: each page reflects data as of its request, so newly completed windows may appear at the end of the sequence."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.display_name": {
-          "source": "Dedicated: List Organization Endpoints",
-          "message": "Dedicated: List Organization Endpoints"
+          "source": "Dedicated: list organization endpoints",
+          "message": "Dedicated: list organization endpoints"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.short_desc": {
           "source": "List organization endpoints",
@@ -12792,8 +12792,8 @@
           "message": "Filter expression using `name`, `created_at`, or `updated_at` with comparison operators and AND/OR/NOT; timestamps must be RFC 3339 strings. `name` supports substring matching with `:` and prefix/suffix wildcards with `*`, and must be a bare endpoint name."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.display_name": {
-          "source": "Dedicated: List Organization Models",
-          "message": "Dedicated: List Organization Models"
+          "source": "Dedicated: list organization models",
+          "message": "Dedicated: list organization models"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.short_desc": {
           "source": "List organization models",
@@ -12840,8 +12840,8 @@
           "message": "Cursor from a previous list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.display_name": {
-          "source": "Dedicated: List Model Configurations",
-          "message": "Dedicated: List Model Configurations"
+          "source": "Dedicated: list model configurations",
+          "message": "Dedicated: list model configurations"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.short_desc": {
           "source": "List model configurations",
@@ -12912,8 +12912,8 @@
           "message": "Cursor from a previous list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Dedicated: Get Model Configuration",
-          "message": "Dedicated: Get Model Configuration"
+          "source": "Dedicated: get model configuration",
+          "message": "Dedicated: get model configuration"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.short_desc": {
           "source": "Get a model configuration",
@@ -12948,8 +12948,8 @@
           "message": "Config revision identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.display_name": {
-          "source": "Dedicated: List Endpoints",
-          "message": "Dedicated: List Endpoints"
+          "source": "Dedicated: list endpoints",
+          "message": "Dedicated: list endpoints"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.short_desc": {
           "source": "List endpoints",
@@ -13020,8 +13020,8 @@
           "message": "Filter expression using `name`, `created_at`, or `updated_at` with comparison operators and AND/OR/NOT; timestamps must be RFC 3339 strings. `name` supports substring matching with `:` and prefix/suffix wildcards with `*`, and accepts a bare endpoint name or `<project_slug>/<endpoint_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Create Endpoint",
-          "message": "Dedicated: Create Endpoint"
+          "source": "Dedicated: create endpoint",
+          "message": "Dedicated: create endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.short_desc": {
           "source": "Create an endpoint",
@@ -13076,8 +13076,8 @@
           "message": "Visibility Internal"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Update Endpoint",
-          "message": "Dedicated: Update Endpoint"
+          "source": "Dedicated: update endpoint",
+          "message": "Dedicated: update endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.short_desc": {
           "source": "Update an endpoint",
@@ -13204,8 +13204,8 @@
           "message": "Fields to update. If not set, the fields populated are updated."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Get Endpoint",
-          "message": "Dedicated: Get Endpoint"
+          "source": "Dedicated: get endpoint",
+          "message": "Dedicated: get endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.short_desc": {
           "source": "Get an endpoint",
@@ -13240,8 +13240,8 @@
           "message": "Endpoint identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Delete Endpoint",
-          "message": "Dedicated: Delete Endpoint"
+          "source": "Dedicated: delete endpoint",
+          "message": "Dedicated: delete endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.short_desc": {
           "source": "Delete an endpoint",
@@ -13288,8 +13288,8 @@
           "message": "Etag for optimistic concurrency. If set, the delete is rejected if the current etag does not match."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.display_name": {
-          "source": "Dedicated: List Deployments",
-          "message": "Dedicated: List Deployments"
+          "source": "Dedicated: list deployments",
+          "message": "Dedicated: list deployments"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.short_desc": {
           "source": "List deployments",
@@ -13372,8 +13372,8 @@
           "message": "Filter expression using `name`, `state`, `model`, `created_at`, or `updated_at` with comparison operators and AND/OR/NOT; `state` takes a DeploymentState enum name and `model` takes a model resource name. `name` supports substring matching with `:` and prefix/suffix wildcards with `*`, and accepts a bare deployment name or `<project_slug>/<endpoint_name>/<deployment_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Create Deployment",
-          "message": "Dedicated: Create Deployment"
+          "source": "Dedicated: create deployment",
+          "message": "Dedicated: create deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.short_desc": {
           "source": "Create a deployment",
@@ -13748,8 +13748,8 @@
           "message": "When true, validates the request without creating or provisioning a deployment."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Update Deployment",
-          "message": "Dedicated: Update Deployment"
+          "source": "Dedicated: update deployment",
+          "message": "Dedicated: update deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.short_desc": {
           "source": "Update a deployment",
@@ -14008,8 +14008,8 @@
           "message": "Fields to update. If not set, the fields populated on `deployment` are updated."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Get Deployment",
-          "message": "Dedicated: Get Deployment"
+          "source": "Dedicated: get deployment",
+          "message": "Dedicated: get deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.short_desc": {
           "source": "Get a deployment",
@@ -14056,8 +14056,8 @@
           "message": "Deployment identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Delete Deployment",
-          "message": "Dedicated: Delete Deployment"
+          "source": "Dedicated: delete deployment",
+          "message": "Dedicated: delete deployment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.short_desc": {
           "source": "Delete a deployment",
@@ -14116,8 +14116,8 @@
           "message": "Etag for optimistic concurrency. If set, the delete is rejected if the current etag does not match."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.display_name": {
-          "source": "Dedicated: List Deployment Adapters",
-          "message": "Dedicated: List Deployment Adapters"
+          "source": "Dedicated: list deployment adapters",
+          "message": "Dedicated: list deployment adapters"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.short_desc": {
           "source": "List deployment adapters",
@@ -14188,8 +14188,8 @@
           "message": "Cursor from a previous adapter list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Add Deployment Adapter",
-          "message": "Dedicated: Add Deployment Adapter"
+          "source": "Dedicated: add deployment adapter",
+          "message": "Dedicated: add deployment adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
           "source": "Add a deployment adapter",
@@ -14272,8 +14272,8 @@
           "message": "Whether to evict the oldest adapter if the deployment is at adapter capacity."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Get Deployment Adapter",
-          "message": "Dedicated: Get Deployment Adapter"
+          "source": "Dedicated: get deployment adapter",
+          "message": "Dedicated: get deployment adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
           "source": "Get a deployment adapter",
@@ -14332,8 +14332,8 @@
           "message": "Adapter model identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Remove Deployment Adapter",
-          "message": "Dedicated: Remove Deployment Adapter"
+          "source": "Dedicated: remove deployment adapter",
+          "message": "Dedicated: remove deployment adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
           "source": "Remove a deployment adapter",
@@ -14404,8 +14404,8 @@
           "message": "Adapter etag from a previous add, update, get, or list response. The removal is rejected if the adapter changed after that response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Update Deployment Adapter",
-          "message": "Dedicated: Update Deployment Adapter"
+          "source": "Dedicated: update deployment adapter",
+          "message": "Dedicated: update deployment adapter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
           "source": "Update a deployment adapter",
@@ -14488,8 +14488,8 @@
           "message": "Row-level etag from a prior AddAdapter, UpdateAdapter, GetAdapter, or ListAdapters response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.display_name": {
-          "source": "Dedicated: List Endpoint Rollouts",
-          "message": "Dedicated: List Endpoint Rollouts"
+          "source": "Dedicated: list endpoint rollouts",
+          "message": "Dedicated: list endpoint rollouts"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.short_desc": {
           "source": "List endpoint rollouts",
@@ -14568,8 +14568,8 @@
           "message": "Rollout Filter Terminal"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Create Rollout",
-          "message": "Dedicated: Create Rollout"
+          "source": "Dedicated: create rollout",
+          "message": "Dedicated: create rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.short_desc": {
           "source": "Create a rollout",
@@ -14920,8 +14920,8 @@
           "message": "Optional target replica floor at completion. Must be at least 1 when set; defaults to the source deployment's replica count at create time, or to the source and target deployments' combined replica count when both already stand in the endpoint traffic split after a cancel. If this exceeds the target autoscaling max, the rollout raises that max once when first needed unless an operator changes max mid-run; the raised ceiling remains after completion. A pre-existing target whose own autoscaling min is higher keeps that floor, reported as FINAL_BELOW_INHERITED_MIN. A target that starts stopped lands exactly at this value; if the source min was higher, PreviewRolloutDefaults reports FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.display_name": {
-          "source": "Dedicated: Preview Rollout Defaults",
-          "message": "Dedicated: Preview Rollout Defaults"
+          "source": "Dedicated: preview rollout defaults",
+          "message": "Dedicated: preview rollout defaults"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.short_desc": {
           "source": "Preview rollout defaults",
@@ -15272,8 +15272,8 @@
           "message": "Optional target replica floor at completion. Must be at least 1 when set; defaults to the source deployment's replica count at create time, or to the source and target deployments' combined replica count when both already stand in the endpoint traffic split after a cancel. If this exceeds the target autoscaling max, the rollout raises that max once when first needed unless an operator changes max mid-run; the raised ceiling remains after completion. A pre-existing target whose own autoscaling min is higher keeps that floor, reported as FINAL_BELOW_INHERITED_MIN. A target that starts stopped lands exactly at this value; if the source min was higher, PreviewRolloutDefaults reports FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Get Rollout",
-          "message": "Dedicated: Get Rollout"
+          "source": "Dedicated: get rollout",
+          "message": "Dedicated: get rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.short_desc": {
           "source": "Get a rollout",
@@ -15320,8 +15320,8 @@
           "message": "Rollout identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Delete Rollout",
-          "message": "Dedicated: Delete Rollout"
+          "source": "Dedicated: delete rollout",
+          "message": "Dedicated: delete rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.short_desc": {
           "source": "Delete a rollout",
@@ -15380,8 +15380,8 @@
           "message": "Etag for optimistic concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Start Rollout",
-          "message": "Dedicated: Start Rollout"
+          "source": "Dedicated: start rollout",
+          "message": "Dedicated: start rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.short_desc": {
           "source": "Start a rollout",
@@ -15428,8 +15428,8 @@
           "message": "Rollout identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Pause Rollout",
-          "message": "Dedicated: Pause Rollout"
+          "source": "Dedicated: pause rollout",
+          "message": "Dedicated: pause rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.short_desc": {
           "source": "Pause a rollout",
@@ -15500,8 +15500,8 @@
           "message": "Optional human-readable reason recorded on the rollout pause metadata."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Resume Rollout",
-          "message": "Dedicated: Resume Rollout"
+          "source": "Dedicated: resume rollout",
+          "message": "Dedicated: resume rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.short_desc": {
           "source": "Resume a rollout",
@@ -15560,8 +15560,8 @@
           "message": "Optional etag for optimistic concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Cancel Rollout",
-          "message": "Dedicated: Cancel Rollout"
+          "source": "Dedicated: cancel rollout",
+          "message": "Dedicated: cancel rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.short_desc": {
           "source": "Cancel a rollout",
@@ -15652,8 +15652,8 @@
           "message": "Cancel Disposition Revert"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.display_name": {
-          "source": "Dedicated: Promote Rollout",
-          "message": "Dedicated: Promote Rollout"
+          "source": "Dedicated: promote rollout",
+          "message": "Dedicated: promote rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.short_desc": {
           "source": "Promote a rollout",
@@ -15712,8 +15712,8 @@
           "message": "Optional etag for optimistic concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List A B Experiments",
-          "message": "Dedicated: List A B Experiments"
+          "source": "Dedicated: list A B experiments",
+          "message": "Dedicated: list A B experiments"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.short_desc": {
           "source": "List A/B experiments",
@@ -15772,8 +15772,8 @@
           "message": "Cursor from a previous A/B experiment list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create A B Experiment",
-          "message": "Dedicated: Create A B Experiment"
+          "source": "Dedicated: create A B experiment",
+          "message": "Dedicated: create A B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
           "source": "Create an A/B experiment",
@@ -15888,8 +15888,8 @@
           "message": "A/B Experiment Member Role Variant"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update A B Experiment",
-          "message": "Dedicated: Update A B Experiment"
+          "source": "Dedicated: update A B experiment",
+          "message": "Dedicated: update A B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
           "source": "Update an A/B experiment",
@@ -16028,8 +16028,8 @@
           "message": "Fields to update. If omitted, all mutable fields are overwritten."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get A B Experiment",
-          "message": "Dedicated: Get A B Experiment"
+          "source": "Dedicated: get A B experiment",
+          "message": "Dedicated: get A B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.short_desc": {
           "source": "Get an A/B experiment",
@@ -16076,8 +16076,8 @@
           "message": "A/B experiment identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete A B Experiment",
-          "message": "Dedicated: Delete A B Experiment"
+          "source": "Dedicated: delete A B experiment",
+          "message": "Dedicated: delete A B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
           "source": "Delete an A/B experiment",
@@ -16136,8 +16136,8 @@
           "message": "Etag for optimistic concurrency. If set, the delete is rejected if the current etag does not match."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List Shadow Experiments",
-          "message": "Dedicated: List Shadow Experiments"
+          "source": "Dedicated: list shadow experiments",
+          "message": "Dedicated: list shadow experiments"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.short_desc": {
           "source": "List shadow experiments",
@@ -16208,8 +16208,8 @@
           "message": "Whether to include target deployments in each returned shadow experiment."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create Shadow Experiment",
-          "message": "Dedicated: Create Shadow Experiment"
+          "source": "Dedicated: create shadow experiment",
+          "message": "Dedicated: create shadow experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
           "source": "Create a shadow experiment",
@@ -16484,8 +16484,8 @@
           "message": "Deployment under the parent endpoint that receives mirrored traffic. It must not be a live traffic-split member or the source or target of an active rollout; traffic-split weight 0 warm-up targets are allowed."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update Shadow Experiment",
-          "message": "Dedicated: Update Shadow Experiment"
+          "source": "Dedicated: update shadow experiment",
+          "message": "Dedicated: update shadow experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
           "source": "Update a shadow experiment",
@@ -16748,8 +16748,8 @@
           "message": "Required fields to update, such as description or source."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get Shadow Experiment",
-          "message": "Dedicated: Get Shadow Experiment"
+          "source": "Dedicated: get shadow experiment",
+          "message": "Dedicated: get shadow experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
           "source": "Get a shadow experiment",
@@ -16796,8 +16796,8 @@
           "message": "Shadow experiment identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment",
-          "message": "Dedicated: Delete Shadow Experiment"
+          "source": "Dedicated: delete shadow experiment",
+          "message": "Dedicated: delete shadow experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
           "source": "Delete a shadow experiment",
@@ -16856,8 +16856,8 @@
           "message": "Etag for optimistic concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.display_name": {
-          "source": "Dedicated: List Shadow Experiment Targets",
-          "message": "Dedicated: List Shadow Experiment Targets"
+          "source": "Dedicated: list shadow experiment targets",
+          "message": "Dedicated: list shadow experiment targets"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.short_desc": {
           "source": "List shadow experiment targets",
@@ -16928,8 +16928,8 @@
           "message": "Cursor from a previous shadow experiment target list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Create Shadow Experiment Target",
-          "message": "Dedicated: Create Shadow Experiment Target"
+          "source": "Dedicated: create shadow experiment target",
+          "message": "Dedicated: create shadow experiment target"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
           "source": "Create a shadow experiment target",
@@ -17012,8 +17012,8 @@
           "message": "Optional free-form target description."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Update Shadow Experiment Target",
-          "message": "Dedicated: Update Shadow Experiment Target"
+          "source": "Dedicated: update shadow experiment target",
+          "message": "Dedicated: update shadow experiment target"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
           "source": "Update a shadow experiment target",
@@ -17132,8 +17132,8 @@
           "message": "Comma-separated fields to update. Supported fields are `name`, `targetDeploymentId`, and `description`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Get Shadow Experiment Target",
-          "message": "Dedicated: Get Shadow Experiment Target"
+          "source": "Dedicated: get shadow experiment target",
+          "message": "Dedicated: get shadow experiment target"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
           "source": "Get a shadow experiment target",
@@ -17192,8 +17192,8 @@
           "message": "Shadow experiment target identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment Target",
-          "message": "Dedicated: Delete Shadow Experiment Target"
+          "source": "Dedicated: delete shadow experiment target",
+          "message": "Dedicated: delete shadow experiment target"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
           "source": "Delete a shadow experiment target",
@@ -17264,8 +17264,8 @@
           "message": "Etag for optimistic concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.display_name": {
-          "source": "Dedicated: Get Endpoint Analytics",
-          "message": "Dedicated: Get Endpoint Analytics"
+          "source": "Dedicated: get endpoint analytics",
+          "message": "Dedicated: get endpoint analytics"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.short_desc": {
           "source": "Get endpoint analytics",
@@ -17360,8 +17360,8 @@
           "message": "Time-series bucket duration, such as `1m`, `1h`, or `1d`. Defaults to `1d`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.display_name": {
-          "source": "Dedicated: List Endpoint Events",
-          "message": "Dedicated: List Endpoint Events"
+          "source": "Dedicated: list endpoint events",
+          "message": "Dedicated: list endpoint events"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.short_desc": {
           "source": "List endpoint events",
@@ -17520,8 +17520,8 @@
           "message": "ID of a subject associated with the event, such as a rollout. Combined with other filters using AND."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.display_name": {
-          "source": "Dedicated: List Project Models",
-          "message": "Dedicated: List Project Models"
+          "source": "Dedicated: list project models",
+          "message": "Dedicated: list project models"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.short_desc": {
           "source": "List project models",
@@ -17600,8 +17600,8 @@
           "message": "Cursor from a previous model list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Create Model",
-          "message": "Dedicated: Create Model"
+          "source": "Dedicated: create model",
+          "message": "Dedicated: create model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.short_desc": {
           "source": "Create a model",
@@ -17672,8 +17672,8 @@
           "message": "ID of the supported base model from which this model was derived."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.display_name": {
-          "source": "Dedicated: Get Model",
-          "message": "Dedicated: Get Model"
+          "source": "Dedicated: get model",
+          "message": "Dedicated: get model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.short_desc": {
           "source": "Get a model",
@@ -17708,8 +17708,8 @@
           "message": "Model identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Delete Model",
-          "message": "Dedicated: Delete Model"
+          "source": "Dedicated: delete model",
+          "message": "Dedicated: delete model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.short_desc": {
           "source": "Delete a model",
@@ -17744,8 +17744,8 @@
           "message": "Model identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Update Model",
-          "message": "Dedicated: Update Model"
+          "source": "Dedicated: update model",
+          "message": "Dedicated: update model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.short_desc": {
           "source": "Update a model",
@@ -17836,8 +17836,8 @@
           "message": "Fields to update. If omitted, all mutable fields are overwritten."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.display_name": {
-          "source": "Dedicated: List Placement Profiles",
-          "message": "Dedicated: List Placement Profiles"
+          "source": "Dedicated: list placement profiles",
+          "message": "Dedicated: list placement profiles"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.short_desc": {
           "source": "List placement profiles",
@@ -17884,8 +17884,8 @@
           "message": "Cursor from a previous placement profile list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.display_name": {
-          "source": "Dedicated: Get Placement Profile",
-          "message": "Dedicated: Get Placement Profile"
+          "source": "Dedicated: get placement profile",
+          "message": "Dedicated: get placement profile"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.short_desc": {
           "source": "Get a placement profile",
@@ -17920,8 +17920,8 @@
           "message": "Placement profile identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.display_name": {
-          "source": "Dedicated: List Model Files",
-          "message": "Dedicated: List Model Files"
+          "source": "Dedicated: list model files",
+          "message": "Dedicated: list model files"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.short_desc": {
           "source": "List model files",
@@ -17968,8 +17968,8 @@
           "message": "Revision identifier to read from."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.display_name": {
-          "source": "Dedicated: List Model Revisions",
-          "message": "Dedicated: List Model Revisions"
+          "source": "Dedicated: list model revisions",
+          "message": "Dedicated: list model revisions"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.short_desc": {
           "source": "List model revisions",
@@ -18004,8 +18004,8 @@
           "message": "Model identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.display_name": {
-          "source": "Dedicated: Get Model Volume Revision",
-          "message": "Dedicated: Get Model Volume Revision"
+          "source": "Dedicated: get model volume revision",
+          "message": "Dedicated: get model volume revision"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.short_desc": {
           "source": "Get a model volume revision",
@@ -18052,8 +18052,8 @@
           "message": "Revision identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.display_name": {
-          "source": "Dedicated: List Remote Model Uploads",
-          "message": "Dedicated: List Remote Model Uploads"
+          "source": "Dedicated: list remote model uploads",
+          "message": "Dedicated: list remote model uploads"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.short_desc": {
           "source": "List remote model uploads",
@@ -18100,8 +18100,8 @@
           "message": "Cursor from a previous remote upload list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Create Remote Model Upload",
-          "message": "Dedicated: Create Remote Model Upload"
+          "source": "Dedicated: create remote model upload",
+          "message": "Dedicated: create remote model upload"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
           "source": "Create a remote model upload",
@@ -18160,8 +18160,8 @@
           "message": "Optional source credential used to access a private remote location. The value is write-only and is not returned."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Get Remote Model Upload",
-          "message": "Dedicated: Get Remote Model Upload"
+          "source": "Dedicated: get remote model upload",
+          "message": "Dedicated: get remote model upload"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
           "source": "Get a remote model upload",
@@ -18196,8 +18196,8 @@
           "message": "Remote upload identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.display_name": {
-          "source": "Dedicated: List Remote Model Upload Events",
-          "message": "Dedicated: List Remote Model Upload Events"
+          "source": "Dedicated: list remote model upload events",
+          "message": "Dedicated: list remote model upload events"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.short_desc": {
           "source": "List remote model upload events",
@@ -18328,8 +18328,8 @@
           "message": "Lists hardware instance types currently available to inference deployments, including GPU resources, pricing, regions, and best-effort capacity headroom."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.display_name": {
-          "source": "Dedicated: Get Inference Instance Type",
-          "message": "Dedicated: Get Inference Instance Type"
+          "source": "Dedicated: get inference instance type",
+          "message": "Dedicated: get inference instance type"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.short_desc": {
           "source": "Get an inference instance type",
@@ -18452,8 +18452,8 @@
           "message": "Cursor from a previous supported-model list response."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.display_name": {
-          "source": "Dedicated: Get Supported Model",
-          "message": "Dedicated: Get Supported Model"
+          "source": "Dedicated: get supported model",
+          "message": "Dedicated: get supported model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.short_desc": {
           "source": "Get a supported model",
@@ -18476,8 +18476,8 @@
           "message": "Supported model identifier."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
-          "message": "Get Video"
+          "source": "Get video",
+          "message": "Get video"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.short_desc": {
           "source": "Fetch video metadata",

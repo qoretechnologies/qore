@@ -684,7 +684,7 @@
           "message": "Předejte `true` pro zahrnutí pole `merge_history` u každého kontaktu v odpovědi. Vrací se pouze pro kontakty s rolí `user`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Vytvořit poznámku"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Vypíše všechny štítky definované v pracovním prostoru.\n\nTento výpis není stránkovaný: Intercom vrací celou sadu v jedné odpovědi."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
+          "source": "List tags on contact",
           "message": "Vypsat štítky u kontaktu"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Jedinečný identifikátor kontaktu přidělený službou Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
+          "source": "Add tag to contact",
           "message": "Přidat štítek ke kontaktu"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Jedinečný identifikátor štítku přidělený službou Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Odebrat štítek z kontaktu"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Pokud je nastaveno na true, odpověď bude obsahovat objekt avatara administrátora s adresou URL obrázku. Výchozí hodnota je false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Získat kontakt"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Předejte `true`, chcete-li do odpovědi zahrnout historii sloučení kontaktu. Vrací se pouze u kontaktů s rolí `user`."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Aktualizovat kontakt"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Předejte `true`, chcete-li do odpovědi zahrnout historii sloučení kontaktu. Vrací se pouze u kontaktů s rolí `user`."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Smazat kontakt"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Získat konverzaci"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Pokud je nastaveno na true, části konverzace budou přeloženy do zjištěného jazyka konverzace."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
+          "source": "Get company",
           "message": "Získat společnost"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Jedinečný identifikátor společnosti přidělený systémem Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
+          "source": "Update company",
           "message": "Aktualizovat společnost"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Výše tržeb, které společnost generuje pro vaše podnikání. Desetinná čísla budou zkrácena na celá čísla, např. 155.98 se zkrátí na 155. Maximální hodnota je 2**31-1 neboli 2147483647."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
+          "source": "Delete company",
           "message": "Odstranit společnost"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "Jedinečný identifikátor společnosti přidělený systémem Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
+          "source": "Get article",
           "message": "Získat článek"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "Jedinečný identifikátor článku přidělený službou Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
+          "source": "Update article",
           "message": "Aktualizovat článek"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
@@ -4200,7 +4200,7 @@
           "message": "Časové razítko ISO 8601, na kdy naplánovat budoucí zrušení publikování článku. Nastavení `null` zruší čekající plán zrušení publikování. Časová razítka v minulosti nebo rovna aktuálnímu času jsou odmítnuta s chybou 400 `parameter_invalid` – hodnota musí být striktně v budoucnosti. Odmítnuto s chybou 400 `parameter_invalid`, pokud článek nebyl nikdy publikován. Odeslání ve stejném požadavku jako `scheduled_publish_at` vrací 400 – na článek lze mít pouze jeden čekající plán. Prázdný řetězec vrací 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
+          "source": "Delete article",
           "message": "Odstranit článek"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
@@ -4224,7 +4224,7 @@
           "message": "Jedinečný identifikátor článku přidělený službou Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Získat kolekci"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
@@ -4248,7 +4248,7 @@
           "message": "Jedinečný identifikátor kolekce přidělený Intercomem."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Získat štítek"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
@@ -4272,7 +4272,7 @@
           "message": "Jedinečný identifikátor daného tagu"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Smazat štítek"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "Tabulka, se kterou se má pracovat: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` nebo `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
+          "source": "Reply to conversation",
           "message": "Odpovědět na konverzaci"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
@@ -4524,7 +4524,7 @@
           "message": "Přidat odpověď bez odeslání oznámení kontaktu"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Spustí se pro každý kontakt vytvořený v pracovním prostoru.\n\n`role` zúží kanál na uživatele (kontakt, který se zaregistroval) nebo na leady (kontakt, který se nezaregistroval); pokud není nastaveno, hlásí se oba typy. Událost přenáší záznam kontaktu vrácený Intercomem.\n\nPři pozdější úpravě kontaktu se tato událost **znovu nespustí**: kanál je pozicován pomocí `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
+          "source": "New conversation",
           "message": "Nová konverzace"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {

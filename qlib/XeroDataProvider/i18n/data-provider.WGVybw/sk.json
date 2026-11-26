@@ -8244,7 +8244,7 @@
           "message": "Umožňuje vytvoriť faktúru aj vtedy, keď jedna alebo viacero položiek riadka obsahuje sledované zásoby, pri ktorých by množstvo na faktúre spôsobilo záporné dostupné množstvo"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Nájsť históriu faktúry"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Jedinečný identifikátor faktúry"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Pridať poznámku k faktúre"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "má hodnotu 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Odoslať faktúru e-mailom"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Alokovať dobropis"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Nájsť úlohy"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Vytvoriť úlohu"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` alebo `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Nájsť zamestnancov"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Zobrazí zamestnancov vo mzdovej agende organizácie.\n\n**To, ktoré mzdové API sa použije, vychádza z `payroll_region` pripojenia**, pretože Xero nemá jednotné mzdové API: pre Austráliu slúži `payroll.xro/1.0` a pre Nový Zéland a Spojené kráľovstvo `payroll.xro/2.0`. Pripojenie bez nastaveného regiónu to nahlási namiesto toho, aby región odhadovalo.\n\nRegióny zabaľujú výsledok odlišne – `{Employees: [...]}` v Austrálii a `{employees: [...], pagination}` v ostatných dvoch – a táto akcia vráti zamestnancov v oboch prípadoch ako jednoduchý zoznam.\n\nAplikácia, ktorú tento modul nahrádza, načítavala zamestnancov cez účtovné API, kde neexistujú, takže toto nikdy nič nevrátilo."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Vytvoriť zamestnancov"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Vytvorí zamestnancov v mzdovom systéme organizácie.\n\n`Employees` je zoznam aj pre jedného zamestnanca. Mzdové API pre Austráliu prijíma zoznam priamo; API pre Nový Zéland a Spojené kráľovstvo prijímajú jedného zamestnanca na jedno volanie, takže zoznam viacerých zamestnancov sa odosiela po jednom a výsledky sa zhromažďujú.\n\n**To, ktoré mzdové rozhranie API sa použije, závisí od parametra `payroll_region` pripojenia.** Polia, ktoré zamestnanec potrebuje, sa líšia podľa regiónu – zamestnanec v Spojenom kráľovstve má číslo národného poistenia, zatiaľ čo zamestnanec na Novom Zélande má číslo IRD – preto táto akcia odovzdáva zamestnanca v zadanej podobe namiesto deklarovania jednotného formátu pre všetky regióny."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Spustí sa pre každý kontakt vytvorený alebo zmenený v organizácii.\n\nXero určuje pozíciu kontaktu podľa `UpdatedDateUTC` a neponúka filter „created since“, takže kontakt upravený neskôr toto spustí znova. Udalosť nesie záznam o kontakte, ktorý Xero vráti."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Nový prijatý účet"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Spustí sa pre každý prijatý účet vytvorený alebo zmenený.\n\nPrijatý účet je faktúra typu `ACCPAY`, čo je filter, ktorý táto udalosť aplikuje; odoslaná faktúra (`ACCREC`) ju nespustí. Udalosť nesie záznam o faktúre, ktorý Xero vráti."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Nový dobropis"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Spustí sa pre každý vytvorený alebo zmenený dobropis.\n\nUdalosť nesie záznam o dobropise, ktorý Xero vráti. Aplikácia, ktorú tento modul nahrádza, dopytovala dobropisy bez exportovania akéhokoľvek spôsobu na ich výpis alebo čítanie; akcia **Find Credit Notes** existuje preto, aby mala táto udalosť svoj náprotivok."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Nová banková transakcia"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Spustí sa pre každú vytvorenú alebo zmenenú bankovú transakciu – peniaze vydané alebo prijaté na bankovom účte.\n\nUdalosť nesie záznam o bankovej transakcii, ktorý Xero vráti."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nová platba"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Spustí sa pre každú vytvorenú alebo zmenenú platbu priradenú k faktúre alebo dobropisu.\n\nUdalosť nesie záznam o platbe, ktorý Xero vráti."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nová objednávka"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Spustí sa pre každú vytvorenú alebo zmenenú objednávku.\n\nUdalosť nesie záznam o objednávke, ktorý Xero vráti."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Nový zamestnanec"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

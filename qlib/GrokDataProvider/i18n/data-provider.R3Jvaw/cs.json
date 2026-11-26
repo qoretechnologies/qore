@@ -1108,7 +1108,7 @@
           "message": "Jedinečný identifikátor představující vašeho koncového uživatele pro monitorování zneužití"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Jednoduchý chat"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "Nezkracovat; pokud kontext překročí limit, vrátit chybu"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Získat odpověď"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

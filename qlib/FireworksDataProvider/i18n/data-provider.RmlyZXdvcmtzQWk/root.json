@@ -412,8 +412,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
-          "message": "Get Account"
+          "source": "Get account",
+          "message": "Get account"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Get Account in Fireworks AI",
@@ -448,8 +448,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.display_name": {
-          "source": "Get Account Usage Filter Options",
-          "message": "Get Account Usage Filter Options"
+          "source": "Get account usage filter options",
+          "message": "Get account usage filter options"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.short_desc": {
           "source": "Get Account Usage Filter Options in Fireworks AI",
@@ -524,8 +524,8 @@
           "message": "Training"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
-          "message": "List Audit Logs"
+          "source": "List audit logs",
+          "message": "List audit logs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
           "source": "List Audit Logs in Fireworks AI",
@@ -644,8 +644,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.display_name": {
-          "source": "List Batch Inference Jobs",
-          "message": "List Batch Inference Jobs"
+          "source": "List batch inference jobs",
+          "message": "List batch inference jobs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.short_desc": {
           "source": "List Batch Inference Jobs in Fireworks AI",
@@ -728,8 +728,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Create Batch Inference Job",
-          "message": "Create Batch Inference Job"
+          "source": "Create batch inference job",
+          "message": "Create batch inference job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
           "source": "Create Batch Inference Job in Fireworks AI",
@@ -1176,8 +1176,8 @@
           "message": "ID of the batch inference job."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Get Batch Inference Job",
-          "message": "Get Batch Inference Job"
+          "source": "Get batch inference job",
+          "message": "Get batch inference job"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
           "source": "Get Batch Inference Job in Fireworks AI",
@@ -1224,8 +1224,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Delete Batch Inference Job",
-          "message": "Delete Batch Inference Job"
+          "source": "Delete batch inference job",
+          "message": "Delete batch inference job"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
           "source": "Delete Batch Inference Job in Fireworks AI",
@@ -1260,8 +1260,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.display_name": {
-          "source": "Get Billing Summary",
-          "message": "Get Billing Summary"
+          "source": "Get billing summary",
+          "message": "Get billing summary"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.short_desc": {
           "source": "Get Billing Summary in Fireworks AI",
@@ -1328,8 +1328,8 @@
           "message": "Daily"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.display_name": {
-          "source": "Query Usage Costs",
-          "message": "Query Usage Costs"
+          "source": "Query usage costs",
+          "message": "Query usage costs"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.short_desc": {
           "source": "Query Usage Costs in Fireworks AI",
@@ -1472,8 +1472,8 @@
           "message": "Opaque token from a previous response. Set this to retrieve the next page\nwhile keeping all other request fields unchanged."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.display_name": {
-          "source": "Get Billing Settings",
-          "message": "Get Billing Settings"
+          "source": "Get billing settings",
+          "message": "Get billing settings"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.short_desc": {
           "source": "Get Billing Settings in Fireworks AI",
@@ -1508,8 +1508,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.display_name": {
-          "source": "Get Account Usage",
-          "message": "Get Account Usage"
+          "source": "Get account usage",
+          "message": "Get account usage"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.short_desc": {
           "source": "Get Account Usage in Fireworks AI",
@@ -1620,8 +1620,8 @@
           "message": "Filter the results using the [Fireworks filter syntax](https://docs.fireworks.ai/api-reference/list-models)."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
-          "message": "List Datasets"
+          "source": "List datasets",
+          "message": "List datasets"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.short_desc": {
           "source": "List Datasets in Fireworks AI",
@@ -1704,8 +1704,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
-          "message": "Create Dataset"
+          "source": "Create dataset",
+          "message": "Create dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
           "source": "Create Dataset in Fireworks AI",
@@ -1844,8 +1844,8 @@
           "message": "Filter"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
-          "message": "Get Dataset"
+          "source": "Get dataset",
+          "message": "Get dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.short_desc": {
           "source": "Get Dataset in Fireworks AI",
@@ -1892,8 +1892,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
-          "message": "Update Dataset"
+          "source": "Update dataset",
+          "message": "Update dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
           "source": "Update Dataset in Fireworks AI",
@@ -2028,8 +2028,8 @@
           "message": "The resource name of the job that created this dataset (e.g., batch inference job).\nUsed for lineage tracking to understand dataset provenance."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
-          "message": "Delete Dataset"
+          "source": "Delete dataset",
+          "message": "Delete dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
           "source": "Delete Dataset in Fireworks AI",
@@ -2064,8 +2064,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Dataset Download Endpoint",
-          "message": "Get Dataset Download Endpoint"
+          "source": "Get dataset download endpoint",
+          "message": "Get dataset download endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.short_desc": {
           "source": "Get Dataset Download Endpoint in Fireworks AI",
@@ -2124,8 +2124,8 @@
           "message": "If true, downloads entire lineage chain (all related datasets).\nFilenames will be prefixed with dataset IDs to avoid collisions."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Dataset Upload Endpoint",
-          "message": "Get Dataset Upload Endpoint"
+          "source": "Get dataset upload endpoint",
+          "message": "Get dataset upload endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.short_desc": {
           "source": "Get Dataset Upload Endpoint in Fireworks AI",
@@ -2184,8 +2184,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.display_name": {
-          "source": "Split Dataset",
-          "message": "Split Dataset"
+          "source": "Split dataset",
+          "message": "Split dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.short_desc": {
           "source": "Split Dataset in Fireworks AI",
@@ -2236,8 +2236,8 @@
           "message": "The parent account ID of the requester."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.display_name": {
-          "source": "Validate Dataset Upload",
-          "message": "Validate Dataset Upload"
+          "source": "Validate dataset upload",
+          "message": "Validate dataset upload"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.short_desc": {
           "source": "Validate Dataset Upload in Fireworks AI",
@@ -2272,8 +2272,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.display_name": {
-          "source": "List Deployed Models",
-          "message": "List Deployed Models"
+          "source": "List deployed models",
+          "message": "List deployed models"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.short_desc": {
           "source": "List Deployed Models in Fireworks AI",
@@ -2356,8 +2356,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Create Deployed Model",
-          "message": "Create Deployed Model"
+          "source": "Create deployed model",
+          "message": "Create deployed model"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
           "source": "Create Deployed Model in Fireworks AI",
@@ -2452,8 +2452,8 @@
           "message": "Merges new addon to the base model, while unmerging/deleting any existing addon in the deployment. Must be specified for hot reload deployments"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Get Deployed Model",
-          "message": "Get Deployed Model"
+          "source": "Get deployed model",
+          "message": "Get deployed model"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.short_desc": {
           "source": "Get Deployed Model in Fireworks AI",
@@ -2500,8 +2500,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Update Deployed Model",
-          "message": "Update Deployed Model"
+          "source": "Update deployed model",
+          "message": "Update deployed model"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
           "source": "Update Deployed Model in Fireworks AI",
@@ -2596,8 +2596,8 @@
           "message": "If true, the deployed model will be publicly reachable."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Delete Deployed Model",
-          "message": "Delete Deployed Model"
+          "source": "Delete deployed model",
+          "message": "Delete deployed model"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
           "source": "Delete Deployed Model in Fireworks AI",
@@ -2632,8 +2632,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.display_name": {
-          "source": "List Deployment Shapes",
-          "message": "List Deployment Shapes"
+          "source": "List deployment shapes",
+          "message": "List deployment shapes"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.short_desc": {
           "source": "List Deployment Shapes in Fireworks AI",
@@ -2728,8 +2728,8 @@
           "message": "Target model that the returned deployment shapes should be compatible with."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.display_name": {
-          "source": "Get Deployment Shape",
-          "message": "Get Deployment Shape"
+          "source": "Get deployment shape",
+          "message": "Get deployment shape"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.short_desc": {
           "source": "Get Deployment Shape in Fireworks AI",
@@ -2788,8 +2788,8 @@
           "message": "If true, returns the latest version regardless of validation status.\nBy default, returns the latest validated version."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.display_name": {
-          "source": "List Deployment Shape Versions",
-          "message": "List Deployment Shape Versions"
+          "source": "List deployment shape versions",
+          "message": "List deployment shape versions"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.short_desc": {
           "source": "List Deployment Shape Versions in Fireworks AI",
@@ -2884,8 +2884,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.display_name": {
-          "source": "Get Deployment Shape Version",
-          "message": "Get Deployment Shape Version"
+          "source": "Get deployment shape version",
+          "message": "Get deployment shape version"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.short_desc": {
           "source": "Get Deployment Shape Version in Fireworks AI",
@@ -2944,8 +2944,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.display_name": {
-          "source": "List Deployments",
-          "message": "List Deployments"
+          "source": "List deployments",
+          "message": "List deployments"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.short_desc": {
           "source": "List Deployments in Fireworks AI",
@@ -3040,8 +3040,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Create Deployment",
-          "message": "Create Deployment"
+          "source": "Create deployment",
+          "message": "Create deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.short_desc": {
           "source": "Create Deployment in Fireworks AI",
@@ -3904,8 +3904,8 @@
           "message": "If true, skip the image tag policy validation that blocks certain image tags.\nThis allows creating deployments with image tags that would otherwise be blocked."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Deployment",
-          "message": "Get Deployment"
+          "source": "Get deployment",
+          "message": "Get deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.short_desc": {
           "source": "Get Deployment in Fireworks AI",
@@ -3952,8 +3952,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
-          "message": "Update Deployment"
+          "source": "Update deployment",
+          "message": "Update deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
           "source": "Update Deployment in Fireworks AI",
@@ -4768,8 +4768,8 @@
           "message": "By default, updating a deployment shape will ensure the new deployment shape provided is validated.\nIf true, we will not require the deployment shape to be validated."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
-          "message": "Delete Deployment"
+          "source": "Delete deployment",
+          "message": "Delete deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
           "source": "Delete Deployment in Fireworks AI",
@@ -4828,8 +4828,8 @@
           "message": "If true, this will ignore checks and force the deletion of a deployment that is currently\ndeployed and is in use."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.display_name": {
-          "source": "Get Ledger",
-          "message": "Get Ledger"
+          "source": "Get ledger",
+          "message": "Get ledger"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.short_desc": {
           "source": "Get Ledger in Fireworks AI",
@@ -4864,8 +4864,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.display_name": {
-          "source": "Reset Ledger",
-          "message": "Reset Ledger"
+          "source": "Reset ledger",
+          "message": "Reset ledger"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.short_desc": {
           "source": "Reset Ledger in Fireworks AI",
@@ -4900,8 +4900,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.display_name": {
-          "source": "List Deployment Shards",
-          "message": "List Deployment Shards"
+          "source": "List deployment shards",
+          "message": "List deployment shards"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.short_desc": {
           "source": "List Deployment Shards in Fireworks AI",
@@ -4996,8 +4996,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.display_name": {
-          "source": "Get Termination Message",
-          "message": "Get Termination Message"
+          "source": "Get termination message",
+          "message": "Get termination message"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.short_desc": {
           "source": "Get Termination Message in Fireworks AI",
@@ -5032,8 +5032,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.display_name": {
-          "source": "Get Deployment Metrics",
-          "message": "Get Deployment Metrics"
+          "source": "Get deployment metrics",
+          "message": "Get deployment metrics"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.short_desc": {
           "source": "Get Deployment Metrics in Fireworks AI",
@@ -5092,8 +5092,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.display_name": {
-          "source": "Scale Deployment",
-          "message": "Scale Deployment"
+          "source": "Scale deployment",
+          "message": "Scale deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.short_desc": {
           "source": "Scale Deployment in Fireworks AI",
@@ -5140,8 +5140,8 @@
           "message": "The desired number of replicas."
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.display_name": {
-          "source": "Undelete Deployment",
-          "message": "Undelete Deployment"
+          "source": "Undelete deployment",
+          "message": "Undelete deployment"
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.short_desc": {
           "source": "Undelete Deployment in Fireworks AI",
@@ -5176,8 +5176,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.display_name": {
-          "source": "List DPO Jobs",
-          "message": "List DPO Jobs"
+          "source": "List DPO jobs",
+          "message": "List DPO jobs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.short_desc": {
           "source": "List DPO Jobs in Fireworks AI",
@@ -5272,8 +5272,8 @@
           "message": "If true, include archived (post-delete retention) jobs in the response.\nArchived jobs are inert (no resources running, no further billing) but\ntheir checkpoints remain promotable until the retention window expires."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.display_name": {
-          "source": "Create DPO Job",
-          "message": "Create DPO Job"
+          "source": "Create DPO job",
+          "message": "Create DPO job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.short_desc": {
           "source": "Create DPO Job in Fireworks AI",
@@ -5968,8 +5968,8 @@
           "message": "ID of the DPO job, a random ID will be generated if not specified."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.display_name": {
-          "source": "Get DPO Job",
-          "message": "Get DPO Job"
+          "source": "Get DPO job",
+          "message": "Get DPO job"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.short_desc": {
           "source": "Get DPO Job in Fireworks AI",
@@ -6016,8 +6016,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.display_name": {
-          "source": "Delete DPO Job",
-          "message": "Delete DPO Job"
+          "source": "Delete DPO job",
+          "message": "Delete DPO job"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.short_desc": {
           "source": "Delete DPO Job in Fireworks AI",
@@ -6052,8 +6052,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.display_name": {
-          "source": "Cancel DPO Job",
-          "message": "Cancel DPO Job"
+          "source": "Cancel DPO job",
+          "message": "Cancel DPO job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.short_desc": {
           "source": "Cancel DPO Job in Fireworks AI",
@@ -6088,8 +6088,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.display_name": {
-          "source": "Get DPO Job Metrics File Endpoint",
-          "message": "Get DPO Job Metrics File Endpoint"
+          "source": "Get DPO job metrics file endpoint",
+          "message": "Get DPO job metrics file endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.short_desc": {
           "source": "Get DPO Job Metrics File Endpoint in Fireworks AI",
@@ -6124,8 +6124,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.display_name": {
-          "source": "Resume DPO Job",
-          "message": "Resume DPO Job"
+          "source": "Resume DPO job",
+          "message": "Resume DPO job"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.short_desc": {
           "source": "Resume DPO Job in Fireworks AI",
@@ -6160,8 +6160,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.display_name": {
-          "source": "List Evaluation Jobs",
-          "message": "List Evaluation Jobs"
+          "source": "List evaluation jobs",
+          "message": "List evaluation jobs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.short_desc": {
           "source": "List Evaluation Jobs in Fireworks AI",
@@ -6236,8 +6236,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Create Evaluation Job",
-          "message": "Create Evaluation Job"
+          "source": "Create evaluation job",
+          "message": "Create evaluation job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.short_desc": {
           "source": "Create Evaluation Job in Fireworks AI",
@@ -6340,8 +6340,8 @@
           "message": "Evaluation job ID"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
-          "message": "Get Evaluation Job"
+          "source": "Get evaluation job",
+          "message": "Get evaluation job"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
           "source": "Get Evaluation Job in Fireworks AI",
@@ -6388,8 +6388,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Delete Evaluation Job",
-          "message": "Delete Evaluation Job"
+          "source": "Delete evaluation job",
+          "message": "Delete evaluation job"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.short_desc": {
           "source": "Delete Evaluation Job in Fireworks AI",
@@ -6424,8 +6424,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluation Job Execution Log Endpoint",
-          "message": "Get Evaluation Job Execution Log Endpoint"
+          "source": "Get evaluation job execution log endpoint",
+          "message": "Get evaluation job execution log endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.short_desc": {
           "source": "Get Evaluation Job Execution Log Endpoint in Fireworks AI",
@@ -6460,8 +6460,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
-          "message": "List Evaluations"
+          "source": "List evaluations",
+          "message": "List evaluations"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
           "source": "List Evaluations in Fireworks AI",
@@ -6536,8 +6536,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Create Evaluation",
-          "message": "Create Evaluation"
+          "source": "Create evaluation",
+          "message": "Create evaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.short_desc": {
           "source": "Create Evaluation in Fireworks AI",
@@ -6680,8 +6680,8 @@
           "message": "Evaluation ID"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
-          "message": "Get Evaluation"
+          "source": "Get evaluation",
+          "message": "Get evaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
           "source": "Get Evaluation in Fireworks AI",
@@ -6728,8 +6728,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
-          "message": "Delete Evaluation"
+          "source": "Delete evaluation",
+          "message": "Delete evaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
           "source": "Delete Evaluation in Fireworks AI",
@@ -6764,8 +6764,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.display_name": {
-          "source": "Preview Evaluation",
-          "message": "Preview Evaluation"
+          "source": "Preview evaluation",
+          "message": "Preview evaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.short_desc": {
           "source": "Preview Evaluation in Fireworks AI",
@@ -6808,8 +6808,8 @@
           "message": "Max samples"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.display_name": {
-          "source": "Validate Assertions",
-          "message": "Validate Assertions"
+          "source": "Validate assertions",
+          "message": "Validate assertions"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.short_desc": {
           "source": "Validate Assertions in Fireworks AI",
@@ -6932,8 +6932,8 @@
           "message": "Metric name"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.display_name": {
-          "source": "List Evaluators",
-          "message": "List Evaluators"
+          "source": "List evaluators",
+          "message": "List evaluators"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.short_desc": {
           "source": "List Evaluators in Fireworks AI",
@@ -7008,8 +7008,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.display_name": {
-          "source": "Get Evaluator",
-          "message": "Get Evaluator"
+          "source": "Get evaluator",
+          "message": "Get evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.short_desc": {
           "source": "Get Evaluator in Fireworks AI",
@@ -7056,8 +7056,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Update Evaluator",
-          "message": "Update Evaluator"
+          "source": "Update evaluator",
+          "message": "Update evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.short_desc": {
           "source": "Update Evaluator in Fireworks AI",
@@ -7208,8 +7208,8 @@
           "message": "If true, prepare a new code upload/build attempt by transitioning the\nevaluator to BUILDING state. Can be used without update_mask."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Delete Evaluator",
-          "message": "Delete Evaluator"
+          "source": "Delete evaluator",
+          "message": "Delete evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.short_desc": {
           "source": "Delete Evaluator in Fireworks AI",
@@ -7244,8 +7244,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.display_name": {
-          "source": "List Evaluator Versions",
-          "message": "List Evaluator Versions"
+          "source": "List evaluator versions",
+          "message": "List evaluator versions"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.short_desc": {
           "source": "List Evaluator Versions in Fireworks AI",
@@ -7332,8 +7332,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Get Evaluator Version",
-          "message": "Get Evaluator Version"
+          "source": "Get evaluator version",
+          "message": "Get evaluator version"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
           "source": "Get Evaluator Version in Fireworks AI",
@@ -7392,8 +7392,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Delete Evaluator Version",
-          "message": "Delete Evaluator Version"
+          "source": "Delete evaluator version",
+          "message": "Delete evaluator version"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
           "source": "Delete Evaluator Version in Fireworks AI",
@@ -7440,8 +7440,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.display_name": {
-          "source": "Alias Evaluator Version",
-          "message": "Alias Evaluator Version"
+          "source": "Alias evaluator version",
+          "message": "Alias evaluator version"
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.short_desc": {
           "source": "Alias Evaluator Version in Fireworks AI",
@@ -7500,8 +7500,8 @@
           "message": "The alias ID (e.g., \"current\", a semver tag, etc.)."
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.display_name": {
-          "source": "Rollback Evaluator",
-          "message": "Rollback Evaluator"
+          "source": "Rollback evaluator",
+          "message": "Rollback evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.short_desc": {
           "source": "Rollback Evaluator in Fireworks AI",
@@ -7548,8 +7548,8 @@
           "message": "The Version Id\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Build Log Endpoint",
-          "message": "Get Evaluator Build Log Endpoint"
+          "source": "Get evaluator build log endpoint",
+          "message": "Get evaluator build log endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.short_desc": {
           "source": "Get Evaluator Build Log Endpoint in Fireworks AI",
@@ -7596,8 +7596,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.display_name": {
-          "source": "Get Evaluator Source Code Endpoint",
-          "message": "Get Evaluator Source Code Endpoint"
+          "source": "Get evaluator source code endpoint",
+          "message": "Get evaluator source code endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.short_desc": {
           "source": "Get Evaluator Source Code Endpoint in Fireworks AI",
@@ -7644,8 +7644,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Upload Endpoint",
-          "message": "Get Evaluator Upload Endpoint"
+          "source": "Get evaluator upload endpoint",
+          "message": "Get evaluator upload endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.short_desc": {
           "source": "Get Evaluator Upload Endpoint in Fireworks AI",
@@ -7688,8 +7688,8 @@
           "message": "Read mask"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.display_name": {
-          "source": "Validate Evaluator Upload",
-          "message": "Validate Evaluator Upload"
+          "source": "Validate evaluator upload",
+          "message": "Validate evaluator upload"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.short_desc": {
           "source": "Validate Evaluator Upload in Fireworks AI",
@@ -7724,8 +7724,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.display_name": {
-          "source": "Preview Evaluator",
-          "message": "Preview Evaluator"
+          "source": "Preview evaluator",
+          "message": "Preview evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.short_desc": {
           "source": "Preview Evaluator in Fireworks AI",
@@ -7864,8 +7864,8 @@
           "message": "Max samples"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Create Evaluator",
-          "message": "Create Evaluator"
+          "source": "Create evaluator",
+          "message": "Create evaluator"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.short_desc": {
           "source": "Create Evaluator in Fireworks AI",
@@ -8000,8 +8000,8 @@
           "message": "Evaluator ID"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List Models in Fireworks AI",
@@ -8084,8 +8084,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
-          "message": "Create Model"
+          "source": "Create model",
+          "message": "Create model"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.short_desc": {
           "source": "Create Model in Fireworks AI",
@@ -8612,8 +8612,8 @@
           "message": "The resource name of the BYOC cluster to which this model belongs.\ne.g. accounts/my-account/clusters/my-cluster. Empty if it belongs to\na Fireworks cluster."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Get Model in Fireworks AI",
@@ -8660,8 +8660,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
-          "message": "Update Model"
+          "source": "Update model",
+          "message": "Update model"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.short_desc": {
           "source": "Update Model in Fireworks AI",
@@ -9172,8 +9172,8 @@
           "message": "If true, SFT jobs for this base model use service-mode (StatefulSet +\norchestration sidecar) instead of the legacy batch Job path."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
-          "message": "Delete Model"
+          "source": "Delete model",
+          "message": "Delete model"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.short_desc": {
           "source": "Delete Model in Fireworks AI",
@@ -9208,8 +9208,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Create Model Version",
-          "message": "Create Model Version"
+          "source": "Create model version",
+          "message": "Create model version"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.short_desc": {
           "source": "Create Model Version in Fireworks AI",
@@ -9248,8 +9248,8 @@
           "message": "Version ID"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Deploy Model Version",
-          "message": "Deploy Model Version"
+          "source": "Deploy model version",
+          "message": "Deploy model version"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.short_desc": {
           "source": "Deploy Model Version in Fireworks AI",
@@ -9324,8 +9324,8 @@
           "message": "Hot Reload"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.display_name": {
-          "source": "Get Model Version Count",
-          "message": "Get Model Version Count"
+          "source": "Get model version count",
+          "message": "Get model version count"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.short_desc": {
           "source": "Get Model Version Count in Fireworks AI",
@@ -9360,8 +9360,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Model Download Endpoint",
-          "message": "Get Model Download Endpoint"
+          "source": "Get model download endpoint",
+          "message": "Get model download endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.short_desc": {
           "source": "Get Model Download Endpoint in Fireworks AI",
@@ -9408,8 +9408,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.display_name": {
-          "source": "Get Model Upload Endpoint",
-          "message": "Get Model Upload Endpoint"
+          "source": "Get model upload endpoint",
+          "message": "Get model upload endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.short_desc": {
           "source": "Get Model Upload Endpoint in Fireworks AI",
@@ -9480,8 +9480,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.display_name": {
-          "source": "Import Model",
-          "message": "Import Model"
+          "source": "Import model",
+          "message": "Import model"
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.short_desc": {
           "source": "Import Model in Fireworks AI",
@@ -9632,8 +9632,8 @@
           "message": "Azure AD tenant ID for authentication.\nIf set, client_id must also be set."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.display_name": {
-          "source": "Prepare Model",
-          "message": "Prepare Model"
+          "source": "Prepare model",
+          "message": "Prepare model"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.short_desc": {
           "source": "Prepare Model in Fireworks AI",
@@ -9760,8 +9760,8 @@
           "message": "If true, abort an active prepare job and clear prepare tracking state.\nNo new prepare job is launched in this request."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Validate Model Upload",
-          "message": "Validate Model Upload"
+          "source": "Validate model upload",
+          "message": "Validate model upload"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.short_desc": {
           "source": "Validate Model Upload in Fireworks AI",
@@ -9832,8 +9832,8 @@
           "message": "If true, skip tokenizer and parameter name validation."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.display_name": {
-          "source": "List Pricing Plans",
-          "message": "List Pricing Plans"
+          "source": "List pricing plans",
+          "message": "List pricing plans"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.short_desc": {
           "source": "List Pricing Plans in Fireworks AI",
@@ -9916,8 +9916,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.display_name": {
-          "source": "Get Pricing Plan",
-          "message": "Get Pricing Plan"
+          "source": "Get pricing plan",
+          "message": "Get pricing plan"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.short_desc": {
           "source": "Get Pricing Plan in Fireworks AI",
@@ -9964,8 +9964,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.display_name": {
-          "source": "List Quotas",
-          "message": "List Quotas"
+          "source": "List quotas",
+          "message": "List quotas"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.short_desc": {
           "source": "List Quotas in Fireworks AI",
@@ -10048,8 +10048,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.display_name": {
-          "source": "Get Quota",
-          "message": "Get Quota"
+          "source": "Get quota",
+          "message": "Get quota"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.short_desc": {
           "source": "Get Quota in Fireworks AI",
@@ -10096,8 +10096,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Reinforcement Fine Tuning Jobs",
-          "message": "List Reinforcement Fine Tuning Jobs"
+          "source": "List reinforcement fine tuning jobs",
+          "message": "List reinforcement fine tuning jobs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
           "source": "List Reinforcement Fine Tuning Jobs in Fireworks AI",
@@ -10180,8 +10180,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Reinforcement Fine Tuning Job",
-          "message": "Create Reinforcement Fine Tuning Job"
+          "source": "Create reinforcement fine tuning job",
+          "message": "Create reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Create Reinforcement Fine Tuning Job in Fireworks AI",
@@ -11032,8 +11032,8 @@
           "message": "ID of the reinforcement fine-tuning job, a random UUID will be generated if not specified."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job",
-          "message": "Get Reinforcement Fine Tuning Job"
+          "source": "Get reinforcement fine tuning job",
+          "message": "Get reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Get Reinforcement Fine Tuning Job in Fireworks AI",
@@ -11080,8 +11080,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Update Reinforcement Fine Tuning Job",
-          "message": "Update Reinforcement Fine Tuning Job"
+          "source": "Update reinforcement fine tuning job",
+          "message": "Update reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Update Reinforcement Fine Tuning Job in Fireworks AI",
@@ -11920,8 +11920,8 @@
           "message": "Pilot"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Reinforcement Fine Tuning Job",
-          "message": "Delete Reinforcement Fine Tuning Job"
+          "source": "Delete reinforcement fine tuning job",
+          "message": "Delete reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Delete Reinforcement Fine Tuning Job in Fireworks AI",
@@ -11956,8 +11956,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Reinforcement Fine Tuning Job",
-          "message": "Cancel Reinforcement Fine Tuning Job"
+          "source": "Cancel reinforcement fine tuning job",
+          "message": "Cancel reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Cancel Reinforcement Fine Tuning Job in Fireworks AI",
@@ -11992,8 +11992,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job Metrics File Endpoint",
-          "message": "Get Reinforcement Fine Tuning Job Metrics File Endpoint"
+          "source": "Get reinforcement fine tuning job metrics file endpoint",
+          "message": "Get reinforcement fine tuning job metrics file endpoint"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.short_desc": {
           "source": "Get Reinforcement Fine Tuning Job Metrics File Endpoint in Fireworks AI",
@@ -12028,8 +12028,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Reinforcement Fine Tuning Job",
-          "message": "Resume Reinforcement Fine Tuning Job"
+          "source": "Resume reinforcement fine tuning job",
+          "message": "Resume reinforcement fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Resume Reinforcement Fine Tuning Job in Fireworks AI",
@@ -12064,8 +12064,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.display_name": {
-          "source": "List Routers",
-          "message": "List Routers"
+          "source": "List routers",
+          "message": "List routers"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.short_desc": {
           "source": "List Routers in Fireworks AI",
@@ -12148,8 +12148,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.display_name": {
-          "source": "Create Router",
-          "message": "Create Router"
+          "source": "Create router",
+          "message": "Create router"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.short_desc": {
           "source": "Create Router in Fireworks AI",
@@ -12248,8 +12248,8 @@
           "message": "ID of the router."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.display_name": {
-          "source": "Get Router",
-          "message": "Get Router"
+          "source": "Get router",
+          "message": "Get router"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.short_desc": {
           "source": "Get Router in Fireworks AI",
@@ -12296,8 +12296,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.display_name": {
-          "source": "Update Router",
-          "message": "Update Router"
+          "source": "Update router",
+          "message": "Update router"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.short_desc": {
           "source": "Update Router in Fireworks AI",
@@ -12396,8 +12396,8 @@
           "message": "True if the router is public (any account can query the underlying workload), false if the router is private\n(only the account that owns the router can query the underlying workload)."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.display_name": {
-          "source": "Delete Router",
-          "message": "Delete Router"
+          "source": "Delete router",
+          "message": "Delete router"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.short_desc": {
           "source": "Delete Router in Fireworks AI",
@@ -12432,8 +12432,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.display_name": {
-          "source": "List Serverless Models",
-          "message": "List Serverless Models"
+          "source": "List serverless models",
+          "message": "List serverless models"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.short_desc": {
           "source": "List Serverless Models in Fireworks AI",
@@ -12516,8 +12516,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields\nwill be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.display_name": {
-          "source": "List Account Serverless Rate Limits",
-          "message": "List Account Serverless Rate Limits"
+          "source": "List account serverless rate limits",
+          "message": "List account serverless rate limits"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.short_desc": {
           "source": "List Account Serverless Rate Limits in Fireworks AI",
@@ -12588,8 +12588,8 @@
           "message": "Step size for the time series: each point is the peak effective limit observed within that\nwindow. Defaults to 4 hours."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.display_name": {
-          "source": "Get Account Serverless Token Usage",
-          "message": "Get Account Serverless Token Usage"
+          "source": "Get account serverless token usage",
+          "message": "Get account serverless token usage"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.short_desc": {
           "source": "Get Account Serverless Token Usage in Fireworks AI",
@@ -12664,8 +12664,8 @@
           "message": "Include Average Tokens Per Minute By Base Model"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Supervised Fine Tuning Jobs",
-          "message": "List Supervised Fine Tuning Jobs"
+          "source": "List supervised fine tuning jobs",
+          "message": "List supervised fine tuning jobs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
           "source": "List Supervised Fine Tuning Jobs in Fireworks AI",
@@ -12748,8 +12748,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Supervised Fine Tuning Job",
-          "message": "Create Supervised Fine Tuning Job"
+          "source": "Create supervised fine tuning job",
+          "message": "Create supervised fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Create Supervised Fine Tuning Job in Fireworks AI",
@@ -13296,8 +13296,8 @@
           "message": "ID of the supervised fine-tuning job, a random UUID will be generated if not specified."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Supervised Fine Tuning Job",
-          "message": "Get Supervised Fine Tuning Job"
+          "source": "Get supervised fine tuning job",
+          "message": "Get supervised fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Get Supervised Fine Tuning Job in Fireworks AI",
@@ -13344,8 +13344,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Supervised Fine Tuning Job",
-          "message": "Delete Supervised Fine Tuning Job"
+          "source": "Delete supervised fine tuning job",
+          "message": "Delete supervised fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Delete Supervised Fine Tuning Job in Fireworks AI",
@@ -13380,8 +13380,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Supervised Fine Tuning Job",
-          "message": "Cancel Supervised Fine Tuning Job"
+          "source": "Cancel supervised fine tuning job",
+          "message": "Cancel supervised fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Cancel Supervised Fine Tuning Job in Fireworks AI",
@@ -13416,8 +13416,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Supervised Fine Tuning Job",
-          "message": "Resume Supervised Fine Tuning Job"
+          "source": "Resume supervised fine tuning job",
+          "message": "Resume supervised fine tuning job"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Resume Supervised Fine Tuning Job in Fireworks AI",
@@ -13452,8 +13452,8 @@
           "message": "Select a resource or enter its ID or full resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.display_name": {
-          "source": "Estimate Supervised Fine Tuning Job Cost",
-          "message": "Estimate Supervised Fine Tuning Job Cost"
+          "source": "Estimate supervised fine tuning job cost",
+          "message": "Estimate supervised fine tuning job cost"
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.short_desc": {
           "source": "Estimate Supervised Fine Tuning Job Cost in Fireworks AI",
@@ -13988,8 +13988,8 @@
           "message": "Pilot"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.display_name": {
-          "source": "List Training Shapes",
-          "message": "List Training Shapes"
+          "source": "List training shapes",
+          "message": "List training shapes"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.short_desc": {
           "source": "List Training Shapes in Fireworks AI",
@@ -14072,8 +14072,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.display_name": {
-          "source": "Get Training Shape",
-          "message": "Get Training Shape"
+          "source": "Get training shape",
+          "message": "Get training shape"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.short_desc": {
           "source": "Get Training Shape in Fireworks AI",
@@ -14120,8 +14120,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.display_name": {
-          "source": "List Training Shape Versions",
-          "message": "List Training Shape Versions"
+          "source": "List training shape versions",
+          "message": "List training shape versions"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.short_desc": {
           "source": "List Training Shape Versions in Fireworks AI",
@@ -14216,8 +14216,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.display_name": {
-          "source": "Get Training Shape Version",
-          "message": "Get Training Shape Version"
+          "source": "Get training shape version",
+          "message": "Get training shape version"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.short_desc": {
           "source": "Get Training Shape Version in Fireworks AI",
@@ -14276,8 +14276,8 @@
           "message": "The fields to be returned in the response. If empty or \"*\", all fields will be returned."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Get Account Usage Limits",
-          "message": "Get Account Usage Limits"
+          "source": "Get account usage limits",
+          "message": "Get account usage limits"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
           "source": "Get Account Usage Limits in Fireworks AI",
@@ -14300,8 +14300,8 @@
           "message": "Select an account or enter its ID or full `accounts/<id>` resource name.\n\nThis value is Accept a resource ID or full resource name and send the final ID segment.."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Update Account Usage Limits",
-          "message": "Update Account Usage Limits"
+          "source": "Update account usage limits",
+          "message": "Update account usage limits"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
           "source": "Update Account Usage Limits in Fireworks AI",
@@ -14400,8 +14400,8 @@
           "message": "Block"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.display_name": {
-          "source": "List User Usage Limits",
-          "message": "List User Usage Limits"
+          "source": "List user usage limits",
+          "message": "List user usage limits"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.short_desc": {
           "source": "List User Usage Limits in Fireworks AI",
@@ -14448,8 +14448,8 @@
           "message": "Use `nextPageToken` from the previous result to fetch another page."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.display_name": {
-          "source": "Upload Dataset File",
-          "message": "Upload Dataset File"
+          "source": "Upload dataset file",
+          "message": "Upload dataset file"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.short_desc": {
           "source": "Upload Dataset File in Fireworks AI",
@@ -16784,8 +16784,8 @@
           "message": "Before"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
-          "message": "Get Response"
+          "source": "Get response",
+          "message": "Get response"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.short_desc": {
           "source": "Get Response in Fireworks AI",
@@ -16800,8 +16800,8 @@
           "message": "Response ID"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
-          "message": "Delete Response"
+          "source": "Delete response",
+          "message": "Delete response"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
           "source": "Delete Response in Fireworks AI",

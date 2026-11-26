@@ -524,8 +524,8 @@
           "message": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page."
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
-          "message": "Get Profile"
+          "source": "Get profile",
+          "message": "Get profile"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
           "source": "Retrieves a specific profile",
@@ -1136,8 +1136,8 @@
           "message": "IP Address"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
-          "message": "Update Profile"
+          "source": "Update profile",
+          "message": "Update profile"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
           "source": "Updates an existing profile",
@@ -1648,8 +1648,8 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
-          "message": "Get List"
+          "source": "Get list",
+          "message": "Get list"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
           "source": "Retrieves a specific list",
@@ -1684,8 +1684,8 @@
           "message": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
-          "message": "Update List"
+          "source": "Update list",
+          "message": "Update list"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
           "source": "Updates an existing list",
@@ -1740,8 +1740,8 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
-          "message": "Delete List"
+          "source": "Delete list",
+          "message": "Delete list"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
           "source": "Deletes a list",
@@ -1904,8 +1904,8 @@
           "message": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description."
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
-          "message": "Get Segment"
+          "source": "Get segment",
+          "message": "Get segment"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
           "source": "Retrieves a specific segment",
@@ -4788,8 +4788,8 @@
           "message": "Whether the segment is starred in the Klaviyo UI"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
-          "message": "Update Segment"
+          "source": "Update segment",
+          "message": "Update segment"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
           "source": "Updates an existing segment",
@@ -7660,8 +7660,8 @@
           "message": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
-          "message": "Delete Segment"
+          "source": "Delete segment",
+          "message": "Delete segment"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
           "source": "Deletes a segment",
@@ -7800,8 +7800,8 @@
           "message": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description."
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
-          "message": "Get Tag"
+          "source": "Get tag",
+          "message": "Get tag"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
           "source": "Retrieves a specific tag",
@@ -7880,8 +7880,8 @@
           "message": "tag-group"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
-          "message": "Update Tag"
+          "source": "Update tag",
+          "message": "Update tag"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
           "source": "Renames an existing tag",
@@ -7916,8 +7916,8 @@
           "message": "The Tag name"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
-          "message": "Delete Tag"
+          "source": "Delete tag",
+          "message": "Delete tag"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
           "source": "Deletes a tag",
@@ -8088,8 +8088,8 @@
           "message": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page."
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
-          "message": "Get Campaign"
+          "source": "Get campaign",
+          "message": "Get campaign"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
           "source": "Retrieves a specific campaign",
@@ -9208,8 +9208,8 @@
           "message": "A list of custom tracking parameters. If an empty list is given and add_tracking_params is True, uses company defaults."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
-          "message": "Update Campaign"
+          "source": "Update campaign",
+          "message": "Update campaign"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
           "source": "Updates an existing campaign",
@@ -9736,8 +9736,8 @@
           "message": "A list of custom tracking parameters. If an empty list is given and add_tracking_params is True, uses company defaults."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
-          "message": "Delete Campaign"
+          "source": "Delete campaign",
+          "message": "Delete campaign"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
           "source": "Deletes a campaign",
@@ -9892,8 +9892,8 @@
           "message": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or one profile, and `datetime` and `timestamp` take the four range comparisons - for example `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predicates are joined by commas and mean **and**; Klaviyo has no `or` here."
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
-          "message": "Get Event"
+          "source": "Get event",
+          "message": "Get event"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
           "source": "Retrieves a specific event",
@@ -9940,8 +9940,8 @@
           "message": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page."
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
-          "message": "Get Metric"
+          "source": "Get metric",
+          "message": "Get metric"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
           "source": "Retrieves a specific metric",
@@ -10300,8 +10300,8 @@
           "message": "The segment to remove the tag from"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
-          "message": "Create Event"
+          "source": "Create event",
+          "message": "Create event"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
           "source": "Creates a new event",
@@ -10396,8 +10396,8 @@
           "message": "Your own properties to record with the event, as name/value pairs"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
-          "message": "Subscribe Profile"
+          "source": "Subscribe profile",
+          "message": "Subscribe profile"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
           "source": "Subscribes a profile to marketing channels",
@@ -10480,8 +10480,8 @@
           "message": "Subscribe the profile **through this list**, which adds it to the list and applies the list's double opt-in process if it has one.\n\nWithout it the consent is recorded against the profile directly and no confirmation is sent."
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
-          "message": "Unsubscribe Profile"
+          "source": "Unsubscribe profile",
+          "message": "Unsubscribe profile"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
           "source": "Unsubscribes a profile from marketing channels",
@@ -10528,8 +10528,8 @@
           "message": "Which kinds of SMS message to withdraw consent for.\n\nOnly meaningful together with `phoneNumber`; the default is marketing."
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
-          "message": "New Profile"
+          "source": "New profile",
+          "message": "New profile"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
           "source": "Triggers when a new profile is created",
@@ -10540,8 +10540,8 @@
           "message": "Fires for each profile created in the account.\n\nThe event carries the profile with its attributes beside its identity, which is the same shape **Get Profile** and **List Profiles** return.\n\nA profile that is edited later does **not** fire this again: the feed is positioned by `created`."
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
-          "message": "New Event"
+          "source": "New event",
+          "message": "New event"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
           "source": "Triggers when a new event occurs",
@@ -10552,8 +10552,8 @@
           "message": "Fires for each event recorded against the chosen metric.\n\n`metric` is required and names the metric by **ID** - a feed of every event in the account would be unusably large, and a workflow reacting to \"Placed Order\" does not want \"Viewed Product\".\n\nThe event carries the event record with its attributes beside its identity. The feed is positioned by `datetime`, which is when the event happened rather than when Klaviyo received it."
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
-          "message": "Profile Added to List"
+          "source": "Profile added to list",
+          "message": "Profile added to list"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
           "source": "Triggers when a profile is added to a list",
@@ -10564,8 +10564,8 @@
           "message": "Fires for each profile added to the chosen list.\n\nThe feed is positioned by `joined_group_at`, so this fires when the profile **joins the list** rather than when the profile itself was created - a profile that has existed for a year fires this the moment it is added.\n\nThe event carries the profile with its attributes beside its identity."
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
-          "message": "Profile Added to Segment"
+          "source": "Profile added to segment",
+          "message": "Profile added to segment"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {
           "source": "Triggers when a profile is added to a segment",

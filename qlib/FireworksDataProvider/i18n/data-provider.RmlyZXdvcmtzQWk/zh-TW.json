@@ -412,7 +412,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "取得帳戶"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -448,7 +448,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.display_name": {
-          "source": "Get Account Usage Filter Options",
+          "source": "Get account usage filter options",
           "message": "取得帳戶使用過濾選項"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.short_desc": {
@@ -524,7 +524,7 @@
           "message": "訓練"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "列出稽核日誌"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -644,7 +644,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.display_name": {
-          "source": "List Batch Inference Jobs",
+          "source": "List batch inference jobs",
           "message": "列出批次推論工作"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.short_desc": {
@@ -728,7 +728,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Create Batch Inference Job",
+          "source": "Create batch inference job",
           "message": "建立批次推論工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "批次推論工作的 ID。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Get Batch Inference Job",
+          "source": "Get batch inference job",
           "message": "取得批次推論工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Delete Batch Inference Job",
+          "source": "Delete batch inference job",
           "message": "刪除批次推論工作"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.display_name": {
-          "source": "Get Billing Summary",
+          "source": "Get billing summary",
           "message": "取得計費摘要"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.short_desc": {
@@ -1328,7 +1328,7 @@
           "message": "每日"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.display_name": {
-          "source": "Query Usage Costs",
+          "source": "Query usage costs",
           "message": "查詢使用成本"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "先前回應的不透明 token。設定此項以在保持其他請求欄位不變的情況下取得下一頁"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.display_name": {
-          "source": "Get Billing Settings",
+          "source": "Get billing settings",
           "message": "取得計費設定"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.display_name": {
-          "source": "Get Account Usage",
+          "source": "Get account usage",
           "message": "取得帳戶使用情況"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "使用 [Fireworks filter syntax](https://docs.fireworks.ai/api-reference/list-models) 过滤结果。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "列出資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "建立資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "濾鏡"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "取得資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "更新資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "建立此資料集的作業資源名稱（例如批次推論作業）。\n用於血統追蹤以了解資料集來源。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "刪除資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Dataset Download Endpoint",
+          "source": "Get dataset download endpoint",
           "message": "取得資料集下載端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "若為 true，下載整個血緣鏈（所有相關資料集）。\n檔名會加上資料集 ID 前綴以避免衝突。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Dataset Upload Endpoint",
+          "source": "Get dataset upload endpoint",
           "message": "取得資料集上傳端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.short_desc": {
@@ -2184,7 +2184,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.display_name": {
-          "source": "Split Dataset",
+          "source": "Split dataset",
           "message": "分割資料集"
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "請求者的父帳戶 ID。"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.display_name": {
-          "source": "Validate Dataset Upload",
+          "source": "Validate dataset upload",
           "message": "驗證資料集上傳"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.display_name": {
-          "source": "List Deployed Models",
+          "source": "List deployed models",
           "message": "列出已部署模型"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.short_desc": {
@@ -2356,7 +2356,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Create Deployed Model",
+          "source": "Create deployed model",
           "message": "建立已部署模型"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "將新附加元件合併至基礎模型，同時取消合併/刪除部署中任何現有的附加元件。熱重載部署必須指定此項"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Get Deployed Model",
+          "source": "Get deployed model",
           "message": "取得已部署模型"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Update Deployed Model",
+          "source": "Update deployed model",
           "message": "更新已部署模型"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "若為 true，部署的模型將可公開存取。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Delete Deployed Model",
+          "source": "Delete deployed model",
           "message": "刪除已部署模型"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.display_name": {
-          "source": "List Deployment Shapes",
+          "source": "List deployment shapes",
           "message": "列出部署形狀"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "返回的部署形狀應相容的目標模型。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.display_name": {
-          "source": "Get Deployment Shape",
+          "source": "Get deployment shape",
           "message": "取得部署形態"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "若為 true，回傳最新版本，不論驗證狀態。\n預設情況下，僅回傳最新已驗證的版本。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.display_name": {
-          "source": "List Deployment Shape Versions",
+          "source": "List deployment shape versions",
           "message": "列出部署形狀版本"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.display_name": {
-          "source": "Get Deployment Shape Version",
+          "source": "Get deployment shape version",
           "message": "取得部署形態版本"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "列出部署"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Create Deployment",
+          "source": "Create deployment",
           "message": "建立部署"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "若為 true，跳過阻止特定映像標籤的映像標籤政策驗證。\n這允許建立原本會被阻止的映像標籤的部署。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Deployment",
+          "source": "Get deployment",
           "message": "取得部署"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "更新部署"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4768,7 +4768,7 @@
           "message": "預設情況下，更新部署形狀會確保新提供的部署形狀已驗證。\n若為 true，則不要求驗證部署形狀。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "刪除部署"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4828,7 +4828,7 @@
           "message": "若為 true，將忽略檢查並強制刪除目前已部署且正在使用的部署。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.display_name": {
-          "source": "Get Ledger",
+          "source": "Get ledger",
           "message": "取得帳本"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.short_desc": {
@@ -4864,7 +4864,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.display_name": {
-          "source": "Reset Ledger",
+          "source": "Reset ledger",
           "message": "重設帳本"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.short_desc": {
@@ -4900,7 +4900,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.display_name": {
-          "source": "List Deployment Shards",
+          "source": "List deployment shards",
           "message": "列出部署分片"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.short_desc": {
@@ -4996,7 +4996,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.display_name": {
-          "source": "Get Termination Message",
+          "source": "Get termination message",
           "message": "取得終止訊息"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.short_desc": {
@@ -5032,7 +5032,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.display_name": {
-          "source": "Get Deployment Metrics",
+          "source": "Get deployment metrics",
           "message": "取得部署指標"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.display_name": {
-          "source": "Scale Deployment",
+          "source": "Scale deployment",
           "message": "擴展部署"
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "期望的副本數量。"
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.display_name": {
-          "source": "Undelete Deployment",
+          "source": "Undelete deployment",
           "message": "還原部署"
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.short_desc": {
@@ -5176,7 +5176,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.display_name": {
-          "source": "List DPO Jobs",
+          "source": "List DPO jobs",
           "message": "列出 DPO 工作"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.short_desc": {
@@ -5272,7 +5272,7 @@
           "message": "若為 true，回應中包含已封存（刪除後保留）的作業。\n封存的作業不會消耗資源、也不再計費，但其檢查點仍可在保留期間內提升。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.display_name": {
-          "source": "Create DPO Job",
+          "source": "Create DPO job",
           "message": "建立 DPO 工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "DPO 工作的 ID，若未指定將產生隨機 ID。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.display_name": {
-          "source": "Get DPO Job",
+          "source": "Get DPO job",
           "message": "取得 DPO 工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.short_desc": {
@@ -6016,7 +6016,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.display_name": {
-          "source": "Delete DPO Job",
+          "source": "Delete DPO job",
           "message": "刪除 DPO 工作"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.short_desc": {
@@ -6052,7 +6052,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.display_name": {
-          "source": "Cancel DPO Job",
+          "source": "Cancel DPO job",
           "message": "取消 DPO 作業"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.short_desc": {
@@ -6088,7 +6088,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.display_name": {
-          "source": "Get DPO Job Metrics File Endpoint",
+          "source": "Get DPO job metrics file endpoint",
           "message": "取得 DPO 工作指標檔案端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.short_desc": {
@@ -6124,7 +6124,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.display_name": {
-          "source": "Resume DPO Job",
+          "source": "Resume DPO job",
           "message": "恢復 DPO 作業"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.display_name": {
-          "source": "List Evaluation Jobs",
+          "source": "List evaluation jobs",
           "message": "列出評估作業"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.short_desc": {
@@ -6236,7 +6236,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Create Evaluation Job",
+          "source": "Create evaluation job",
           "message": "建立評估工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6340,7 +6340,7 @@
           "message": "評估作業 ID"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "取得評估工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6388,7 +6388,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Delete Evaluation Job",
+          "source": "Delete evaluation job",
           "message": "刪除評估工作"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6424,7 +6424,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluation Job Execution Log Endpoint",
+          "source": "Get evaluation job execution log endpoint",
           "message": "取得評估工作執行日誌端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -6460,7 +6460,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
+          "source": "List evaluations",
           "message": "列出評估"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Create Evaluation",
+          "source": "Create evaluation",
           "message": "建立評估"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6680,7 +6680,7 @@
           "message": "評估 ID"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "取得評估"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -6728,7 +6728,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
+          "source": "Delete evaluation",
           "message": "刪除評估"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6764,7 +6764,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.display_name": {
-          "source": "Preview Evaluation",
+          "source": "Preview evaluation",
           "message": "預覽評估"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.short_desc": {
@@ -6808,7 +6808,7 @@
           "message": "最大樣本數"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.display_name": {
-          "source": "Validate Assertions",
+          "source": "Validate assertions",
           "message": "驗證斷言"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.short_desc": {
@@ -6932,7 +6932,7 @@
           "message": "指標名稱"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.display_name": {
-          "source": "List Evaluators",
+          "source": "List evaluators",
           "message": "列出評估器"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.short_desc": {
@@ -7008,7 +7008,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.display_name": {
-          "source": "Get Evaluator",
+          "source": "Get evaluator",
           "message": "取得評分器"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.short_desc": {
@@ -7056,7 +7056,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Update Evaluator",
+          "source": "Update evaluator",
           "message": "更新評估器"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7208,7 +7208,7 @@
           "message": "若為 true，透過將評估器切換至 BUILDING 狀態，準備新的程式碼上傳/建置嘗試。可在未提供 update_mask 時使用。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Delete Evaluator",
+          "source": "Delete evaluator",
           "message": "刪除評分器"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7244,7 +7244,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.display_name": {
-          "source": "List Evaluator Versions",
+          "source": "List evaluator versions",
           "message": "列出評估器版本"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.short_desc": {
@@ -7332,7 +7332,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Get Evaluator Version",
+          "source": "Get evaluator version",
           "message": "取得評分器版本"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7392,7 +7392,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Delete Evaluator Version",
+          "source": "Delete evaluator version",
           "message": "刪除評分器版本"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.display_name": {
-          "source": "Alias Evaluator Version",
+          "source": "Alias evaluator version",
           "message": "別名評估器版本"
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.short_desc": {
@@ -7500,7 +7500,7 @@
           "message": "別名 ID（例如 \"current\"、語意版本標籤等）。"
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.display_name": {
-          "source": "Rollback Evaluator",
+          "source": "Rollback evaluator",
           "message": "回滾評估器"
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.short_desc": {
@@ -7548,7 +7548,7 @@
           "message": "版本 ID\n\n此值接受資源 ID 或完整資源名稱，並傳送最終的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Build Log Endpoint",
+          "source": "Get evaluator build log endpoint",
           "message": "取得評分器建置日誌端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -7596,7 +7596,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.display_name": {
-          "source": "Get Evaluator Source Code Endpoint",
+          "source": "Get evaluator source code endpoint",
           "message": "取得評分器原始碼端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.short_desc": {
@@ -7644,7 +7644,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Upload Endpoint",
+          "source": "Get evaluator upload endpoint",
           "message": "取得評分器上傳端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -7688,7 +7688,7 @@
           "message": "讀取遮罩"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.display_name": {
-          "source": "Validate Evaluator Upload",
+          "source": "Validate evaluator upload",
           "message": "驗證評估器上傳"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.short_desc": {
@@ -7724,7 +7724,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.display_name": {
-          "source": "Preview Evaluator",
+          "source": "Preview evaluator",
           "message": "預覽評估器"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.short_desc": {
@@ -7864,7 +7864,7 @@
           "message": "最大樣本數"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Create Evaluator",
+          "source": "Create evaluator",
           "message": "建立評分器"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "評估者 ID"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "列出模型"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -8084,7 +8084,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "建立模型"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -8612,7 +8612,7 @@
           "message": "此模型所屬 BYOC 叢集的資源名稱。\n例如 accounts/my-account/clusters/my-cluster。若屬於 Fireworks 叢集則為空。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "取得模型"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.short_desc": {
@@ -8660,7 +8660,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "更新模型"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "若為 true，則此基礎模型的 SFT 作業使用服務模式（StatefulSet +\n協調 sidecar）取代傳統批次 Job 方式。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "刪除模型"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Create Model Version",
+          "source": "Create model version",
           "message": "建立模型版本"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9248,7 +9248,7 @@
           "message": "版本 ID"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Deploy Model Version",
+          "source": "Deploy model version",
           "message": "部署模型版本"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9324,7 +9324,7 @@
           "message": "熱重新載入"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.display_name": {
-          "source": "Get Model Version Count",
+          "source": "Get model version count",
           "message": "取得模型版本計數"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.short_desc": {
@@ -9360,7 +9360,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Model Download Endpoint",
+          "source": "Get model download endpoint",
           "message": "取得模型下載端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.short_desc": {
@@ -9408,7 +9408,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.display_name": {
-          "source": "Get Model Upload Endpoint",
+          "source": "Get model upload endpoint",
           "message": "取得模型上傳端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.short_desc": {
@@ -9480,7 +9480,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.display_name": {
-          "source": "Import Model",
+          "source": "Import model",
           "message": "匯入模型"
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.short_desc": {
@@ -9632,7 +9632,7 @@
           "message": "Azure AD 租戶 ID，用於驗證。\n若設定，則必須同時設定 client_id。"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.display_name": {
-          "source": "Prepare Model",
+          "source": "Prepare model",
           "message": "準備模型"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.short_desc": {
@@ -9760,7 +9760,7 @@
           "message": "若為 true，則中止正在執行的準備作業並清除追蹤狀態。\n此請求不會啟動新的準備作業。"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Validate Model Upload",
+          "source": "Validate model upload",
           "message": "驗證模型上傳"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -9832,7 +9832,7 @@
           "message": "若為 true，跳過 tokenizer 與參數名稱驗證。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.display_name": {
-          "source": "List Pricing Plans",
+          "source": "List pricing plans",
           "message": "列出定價方案"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.display_name": {
-          "source": "Get Pricing Plan",
+          "source": "Get pricing plan",
           "message": "取得價格方案"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.display_name": {
-          "source": "List Quotas",
+          "source": "List quotas",
           "message": "列出配額"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.display_name": {
-          "source": "Get Quota",
+          "source": "Get quota",
           "message": "取得配額"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.short_desc": {
@@ -10096,7 +10096,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Reinforcement Fine Tuning Jobs",
+          "source": "List reinforcement fine tuning jobs",
           "message": "列出強化微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Reinforcement Fine Tuning Job",
+          "source": "Create reinforcement fine tuning job",
           "message": "建立強化微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11032,7 +11032,7 @@
           "message": "強化微調工作的 ID，若未指定將產生隨機 UUID。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job",
+          "source": "Get reinforcement fine tuning job",
           "message": "取得強化微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11080,7 +11080,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Update Reinforcement Fine Tuning Job",
+          "source": "Update reinforcement fine tuning job",
           "message": "更新強化微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11920,7 +11920,7 @@
           "message": "試點"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Reinforcement Fine Tuning Job",
+          "source": "Delete reinforcement fine tuning job",
           "message": "刪除強化微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11956,7 +11956,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Reinforcement Fine Tuning Job",
+          "source": "Cancel reinforcement fine tuning job",
           "message": "取消強化微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11992,7 +11992,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job Metrics File Endpoint",
+          "source": "Get reinforcement fine tuning job metrics file endpoint",
           "message": "取得強化微調工作指標檔案端點"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.short_desc": {
@@ -12028,7 +12028,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Reinforcement Fine Tuning Job",
+          "source": "Resume reinforcement fine tuning job",
           "message": "恢復強化微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.display_name": {
-          "source": "List Routers",
+          "source": "List routers",
           "message": "列出路由器"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.short_desc": {
@@ -12148,7 +12148,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.display_name": {
-          "source": "Create Router",
+          "source": "Create router",
           "message": "建立路由器"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.short_desc": {
@@ -12248,7 +12248,7 @@
           "message": "路由器 ID。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.display_name": {
-          "source": "Get Router",
+          "source": "Get router",
           "message": "取得路由器"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.short_desc": {
@@ -12296,7 +12296,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.display_name": {
-          "source": "Update Router",
+          "source": "Update router",
           "message": "更新路由器"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "若路由器為公開（任何帳號皆可查詢底層工作負載）則為 true；若路由器為私有（僅擁有路由器的帳號可查詢底層工作負載）則為 false。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.display_name": {
-          "source": "Delete Router",
+          "source": "Delete router",
           "message": "刪除路由器"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.short_desc": {
@@ -12432,7 +12432,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.display_name": {
-          "source": "List Serverless Models",
+          "source": "List serverless models",
           "message": "列出無伺服器模型"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.short_desc": {
@@ -12516,7 +12516,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.display_name": {
-          "source": "List Account Serverless Rate Limits",
+          "source": "List account serverless rate limits",
           "message": "列出帳戶無伺服器速率限制"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.short_desc": {
@@ -12588,7 +12588,7 @@
           "message": "時間序列的步長：每個點為該窗口內觀測到的峰值有效限制。預設為 4 小時。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.display_name": {
-          "source": "Get Account Serverless Token Usage",
+          "source": "Get account serverless token usage",
           "message": "取得帳戶無伺服器代幣使用情況"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.short_desc": {
@@ -12664,7 +12664,7 @@
           "message": "包含基礎模型的每分鐘平均代幣數"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Supervised Fine Tuning Jobs",
+          "source": "List supervised fine tuning jobs",
           "message": "列出監督式微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -12748,7 +12748,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Supervised Fine Tuning Job",
+          "source": "Create supervised fine tuning job",
           "message": "建立監督式微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13296,7 +13296,7 @@
           "message": "監督式微調作業的 ID，若未指定將產生隨機 UUID。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Supervised Fine Tuning Job",
+          "source": "Get supervised fine tuning job",
           "message": "取得監督式微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13344,7 +13344,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Supervised Fine Tuning Job",
+          "source": "Delete supervised fine tuning job",
           "message": "刪除監督式微調工作"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13380,7 +13380,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Supervised Fine Tuning Job",
+          "source": "Cancel supervised fine tuning job",
           "message": "取消監督式微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13416,7 +13416,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Supervised Fine Tuning Job",
+          "source": "Resume supervised fine tuning job",
           "message": "恢復監督式微調作業"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13452,7 +13452,7 @@
           "message": "選取資源或輸入其 ID 或完整資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.display_name": {
-          "source": "Estimate Supervised Fine Tuning Job Cost",
+          "source": "Estimate supervised fine tuning job cost",
           "message": "估算受監督微調作業成本"
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.short_desc": {
@@ -13988,7 +13988,7 @@
           "message": "試點"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.display_name": {
-          "source": "List Training Shapes",
+          "source": "List training shapes",
           "message": "列出訓練形狀"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.short_desc": {
@@ -14072,7 +14072,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.display_name": {
-          "source": "Get Training Shape",
+          "source": "Get training shape",
           "message": "取得訓練形狀"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.short_desc": {
@@ -14120,7 +14120,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.display_name": {
-          "source": "List Training Shape Versions",
+          "source": "List training shape versions",
           "message": "列出訓練形狀版本"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.short_desc": {
@@ -14216,7 +14216,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.display_name": {
-          "source": "Get Training Shape Version",
+          "source": "Get training shape version",
           "message": "取得訓練形狀版本"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.short_desc": {
@@ -14276,7 +14276,7 @@
           "message": "回應中要返回的欄位。若為空或 \"*\"，將返回所有欄位。"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Get Account Usage Limits",
+          "source": "Get account usage limits",
           "message": "取得帳戶使用限制"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "選取帳戶或輸入其 ID 或完整 `accounts/<id>` 資源名稱。\n\n此值為接受資源 ID 或完整資源名稱，並傳送最後的 ID 段落。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Update Account Usage Limits",
+          "source": "Update account usage limits",
           "message": "更新帳戶使用限制"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14400,7 +14400,7 @@
           "message": "區塊"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.display_name": {
-          "source": "List User Usage Limits",
+          "source": "List user usage limits",
           "message": "列出使用者使用限制"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.short_desc": {
@@ -14448,7 +14448,7 @@
           "message": "使用先前結果中的 `nextPageToken` 取得另一頁。"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.display_name": {
-          "source": "Upload Dataset File",
+          "source": "Upload dataset file",
           "message": "上傳資料集檔案"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.short_desc": {
@@ -16760,7 +16760,7 @@
           "message": "之前"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "取得回覆"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -16776,7 +16776,7 @@
           "message": "回覆 ID"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "刪除回應"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {

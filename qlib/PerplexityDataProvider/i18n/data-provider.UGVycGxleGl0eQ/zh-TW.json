@@ -2476,7 +2476,7 @@
           "message": "指定回應偏好語言的 ISO 639-1 語言代碼"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "網路搜尋"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

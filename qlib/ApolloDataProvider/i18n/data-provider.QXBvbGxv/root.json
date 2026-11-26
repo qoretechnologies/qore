@@ -964,8 +964,8 @@
           "message": "The deal ID"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
-          "source": "Enrich Person",
-          "message": "Enrich Person"
+          "source": "Enrich person",
+          "message": "Enrich person"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
           "source": "Enrich a person's data",
@@ -1028,8 +1028,8 @@
           "message": "Person LinkedIn URL"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
-          "source": "Bulk Enrich People",
-          "message": "Bulk Enrich People"
+          "source": "Bulk enrich people",
+          "message": "Bulk enrich people"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
           "source": "Bulk enrich people data",
@@ -1052,8 +1052,8 @@
           "message": "List of person detail objects, each containing fields like `email`, `first_name`, `last_name`, `organization_name`, `domain`"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Enrich Organization",
-          "message": "Enrich Organization"
+          "source": "Enrich organization",
+          "message": "Enrich organization"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
           "source": "Enrich an organization's data",
@@ -1076,8 +1076,8 @@
           "message": "The organization domain to enrich"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
-          "source": "Bulk Enrich Organizations",
-          "message": "Bulk Enrich Organizations"
+          "source": "Bulk enrich organizations",
+          "message": "Bulk enrich organizations"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
           "source": "Bulk enrich organizations",
@@ -1100,8 +1100,8 @@
           "message": "List of organization domains to enrich"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
-          "source": "Search People",
-          "message": "Search People"
+          "source": "Search people",
+          "message": "Search people"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
           "source": "Search Apollo's people database",

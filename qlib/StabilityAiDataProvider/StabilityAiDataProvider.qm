@@ -124,7 +124,7 @@ module StabilityAiDataProvider {
                 "path": "/generate-image",
                 "action": "generate-image",
                 "billing": <DataProviderBillingInfo>{"unit": "credit"},
-                "display_name": "Generate Image",
+                "display_name": "Generate image",
                 "short_desc": "Generate an image from a text prompt",
                 "desc": "Generates an image from a text prompt via Stability AI's "
                     "v2beta `/stable-image/generate/*` endpoints.  The `model` "

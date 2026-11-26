@@ -8244,7 +8244,7 @@
           "message": "인보이스 수량으로 인해 사용 가능한 수량이 음수가 될 수 있는 추적 인벤토리가 하나 이상의 품목에 포함되어 있더라도 인보이스를 생성할 수 있도록 허용합니다"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "송장 기록 찾기"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "인보이스의 고유 식별자"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "인보이스에 메모 추가"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "0의 값을 가짐"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "인보이스 이메일 전송"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "이 시간 이후에 생성되거나 변경된 레코드만 반환합니다.\n\n이를 통해 증분 조회가 가능하며, 이 매개변수가 없으면 모든 호출에서 전체 컬렉션을 읽습니다."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "크레딧 노트 할당"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "한 페이지에 반환할 레코드 수입니다. Xero의 기본값은 100이며 최대값은 1000입니다."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "작업 찾기"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "한 페이지에 반환할 레코드 수입니다. Xero의 기본값은 100이며 최대값은 1000입니다."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "작업 생성"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "작업할 테이블: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` 또는 `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "직원 찾기"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "조직의 급여 명부에 있는 직원을 나열합니다.\n\n**어떤 급여 API가 사용되는지는 연결의 `payroll_region`에서 결정됩니다.** Xero에는 단일 급여 API가 없기 때문입니다. 호주는 `payroll.xro/1.0`에서 제공되며 뉴질랜드와 영국은 `payroll.xro/2.0`에서 제공됩니다. 리전이 설정되지 않은 연결은 리전을 추측하는 대신 이를 보고합니다.\n\n각 리전은 결과를 다르게 래핑하지만(호주는 `{Employees: [...]}`, 나머지 둘은 `{employees: [...], pagination}`), 이 액션은 어느 쪽이든 직원을 일반 목록으로 반환합니다.\n\n이 모듈이 대체하는 애플리케이션은 직원이 존재하지 않는 회계 API를 통해 직원을 읽었기 때문에 아무것도 반환하지 않았습니다."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "직원 생성"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "조직의 급여 명부에 직원을 생성합니다.\n\n`Employees`은 직원 한 명인 경우에도 목록입니다. 호주 급여 API는 목록을 직접 수락하며, 뉴질랜드 및 영국은 호출당 직원 한 명씩 처리하므로 여러 명의 목록은 한 번에 하나씩 전송되고 결과를 수집합니다.\n\n**사용할 급여 API는 연결의 `payroll_region`에서 가져옵니다.** 직원에게 필요한 필드는 지역마다 다릅니다(영국 직원은 National Insurance 번호가 있고 뉴질랜드 직원은 IRD 번호가 있음). 따라서 모든 직원에 대해 한 지역의 형식을 선언하지 않고 입력된 대로 직원을 전달합니다."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "새 연락처"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "조직에서 연락처가 생성되거나 변경될 때마다 트리거됩니다.\n\nXero는 연락처를 `UpdatedDateUTC` 기준으로 배치하며 \"이후 생성됨\" 필터를 제공하지 않으므로 나중에 수정된 연락처도 이를 다시 트리거합니다. 이벤트에는 Xero가 반환하는 연락처 레코드가 포함됩니다."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "새 청구서"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "청구서가 생성되거나 변경될 때마다 트리거됩니다.\n\n청구서는 `ACCPAY` 유형의 인보이스이며, 이는 이 이벤트가 적용하는 필터입니다. 매출 인보이스(`ACCREC`)는 이를 트리거하지 않습니다. 이벤트에는 Xero가 반환하는 인보이스 레코드가 포함됩니다."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "새 크레딧 노트"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "크레딧 노트가 생성되거나 변경될 때마다 트리거됩니다.\n\n이벤트에는 Xero가 반환하는 크레딧 노트 레코드가 포함됩니다. 이 모듈이 대체하는 애플리케이션은 크레딧 노트를 나열하거나 읽는 방법을 내보내지 않고 폴링했습니다. 이 이벤트에 대응할 수 있도록 **크레딧 노트 찾기**가 존재합니다."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "새 은행 거래"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "은행 거래가 생성되거나 변경될 때마다(은행 계좌에 대해 지출되거나 수취된 금액) 트리거됩니다.\n\n이벤트에는 Xero가 반환하는 은행 거래 레코드가 포함됩니다."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "새 결제"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "인보이스 또는 크레딧 노트에 대해 지급이 생성되거나 변경될 때마다 트리거됩니다.\n\n이벤트에는 Xero가 반환하는 지급 레코드가 포함됩니다."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "새 구매 주문"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "구매 주문이 생성되거나 변경될 때마다 트리거됩니다.\n\n이벤트에는 Xero가 반환하는 구매 주문 레코드가 포함됩니다."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "새 직원"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

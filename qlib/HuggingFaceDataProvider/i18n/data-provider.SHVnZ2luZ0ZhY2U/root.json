@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List Hugging Face models",
@@ -500,8 +500,8 @@
           "message": "Whether to include model card metadata such as carbon emissions, metrics, and dataset tags"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Get details for a specific model",
@@ -676,8 +676,8 @@
           "message": "The model repository ID in `namespace/name` format to delete"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
-          "message": "List Datasets"
+          "source": "List datasets",
+          "message": "List datasets"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
           "source": "List Hugging Face datasets",
@@ -800,8 +800,8 @@
           "message": "Whether to fetch all metadata including last modified time, SHA, files, and tags"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
-          "message": "Get Dataset"
+          "source": "Get dataset",
+          "message": "Get dataset"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
           "source": "Get details for a specific dataset",
@@ -976,8 +976,8 @@
           "message": "The dataset repository ID in `namespace/name` format to delete"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
-          "message": "List Spaces"
+          "source": "List spaces",
+          "message": "List spaces"
         },
         "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
           "source": "List Hugging Face Spaces",
@@ -1096,8 +1096,8 @@
           "message": "Whether to fetch all metadata including last modified time, SHA, files, and tags"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get Space",
-          "message": "Get Space"
+          "source": "Get space",
+          "message": "Get space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
           "source": "Get details for a specific Space",
@@ -1408,8 +1408,8 @@
           "message": "The Space repository ID in `namespace/name` format to delete"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
-          "source": "Chat Completions",
-          "message": "Chat Completions"
+          "source": "Chat completions",
+          "message": "Chat completions"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {
           "source": "Send a chat completion request via the Inference API",

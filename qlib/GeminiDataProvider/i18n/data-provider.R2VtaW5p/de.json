@@ -808,7 +808,7 @@
           "message": "Der Name eines Dateisuchspeichers, der für Retrieval-Augmented Generation (RAG) verwendet werden soll. Das Modell durchsucht die Dokumente des Speichers, um seine Antwort mit relevantem Inhalt zu fundieren"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Einfacher Chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Der Name eines Dateisuchspeichers, der für Retrieval-Augmented Generation (RAG) verwendet werden soll. Das Modell durchsucht die Dokumente des Speichers, um seine Antwort mit relevantem Inhalt zu fundieren"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Inhalt einbetten"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Inhalt vom Modell"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Batch Embed"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

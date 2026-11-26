@@ -724,8 +724,8 @@
           "message": "The page will be created at the root level of the space (outside the space homepage tree). If true, then a \nvalue may not be supplied for the `parentId` body parameter."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
-          "message": "Get Page"
+          "source": "Get page",
+          "message": "Get page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
           "source": "Retrieve one page",
@@ -944,8 +944,8 @@
           "message": "Includes direct children of the page, as defined in the `ChildrenResponse` object."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
-          "message": "Update Page"
+          "source": "Update page",
+          "message": "Update page"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
           "source": "Update a page's title, body, parent or status",
@@ -1168,8 +1168,8 @@
           "message": "Account ID of the page owner.\n\nThis allows page ownership to be transferred to another user."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
-          "message": "Rename Page"
+          "source": "Rename page",
+          "message": "Rename page"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
           "source": "Change only a page's title",
@@ -1224,8 +1224,8 @@
           "message": "draft"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
-          "message": "Delete Page"
+          "source": "Delete page",
+          "message": "Delete page"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
           "source": "Move a page to the trash, or purge it",
@@ -1272,8 +1272,8 @@
           "message": "If attempting to delete a page that is a draft."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
-          "message": "List Pages in Space"
+          "source": "List pages in space",
+          "message": "List pages in space"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
           "source": "List the pages in one space",
@@ -1428,8 +1428,8 @@
           "message": "root"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
-          "message": "List Pages for Label"
+          "source": "List pages for label",
+          "message": "List pages for label"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
           "source": "List the pages carrying one label",
@@ -1868,8 +1868,8 @@
           "message": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
-          "message": "Get Blog Post"
+          "source": "Get blog post",
+          "message": "Get blog post"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
           "source": "Retrieve one blog post",
@@ -2076,8 +2076,8 @@
           "message": "Includes collaborators on the blog post."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
-          "message": "Update Blog Post"
+          "source": "Update blog post",
+          "message": "Update blog post"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
           "source": "Update a blog post's title, body or status",
@@ -2288,8 +2288,8 @@
           "message": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
-          "message": "Delete Blog Post"
+          "source": "Delete blog post",
+          "message": "Delete blog post"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
           "source": "Move a blog post to the trash, or purge it",
@@ -2336,8 +2336,8 @@
           "message": "If attempting to delete a blog post that is a draft."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
-          "message": "List Blog Posts in Space"
+          "source": "List blog posts in space",
+          "message": "List blog posts in space"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
           "source": "List the blog posts in one space",
@@ -2464,8 +2464,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
-          "message": "List Blog Posts for Label"
+          "source": "List blog posts for label",
+          "message": "List blog posts for label"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
           "source": "List the blog posts carrying one label",
@@ -2804,8 +2804,8 @@
           "message": "If the icon for the space should be fetched or not."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
-          "message": "Get Space"
+          "source": "Get space",
+          "message": "Get space"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
           "source": "Retrieve one space",
@@ -3164,8 +3164,8 @@
           "message": "Filters on end of date-time range of task based on completion date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
-          "message": "Get Task"
+          "source": "Get task",
+          "message": "Get task"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
           "source": "Retrieve one task",
@@ -3208,8 +3208,8 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
-          "message": "Update Task"
+          "source": "Update task",
+          "message": "Update task"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
           "source": "Complete or reopen a task",
@@ -3696,8 +3696,8 @@
           "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
-          "message": "New Page"
+          "source": "New page",
+          "message": "New page"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
           "source": "Fires when a page is created",
@@ -3708,8 +3708,8 @@
           "message": "Fires for each new page, across the site or in one space.\n\nThe event carries the page record Confluence returns: its ID, title, space, author and status. A page that is edited later does not fire this event again; it reports creation only."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
-          "message": "New Blog Post"
+          "source": "New blog post",
+          "message": "New blog post"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
           "source": "Fires when a blog post is created",
@@ -3720,8 +3720,8 @@
           "message": "Fires for each new blog post, across the site or in one space.\n\nThe event carries the blog post record Confluence returns: its ID, title, space, author and status."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
-          "message": "New Attachment"
+          "source": "New attachment",
+          "message": "New attachment"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {
           "source": "Fires when a file is attached to a page or blog post",

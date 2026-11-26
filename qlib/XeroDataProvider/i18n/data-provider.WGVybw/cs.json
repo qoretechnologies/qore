@@ -8244,7 +8244,7 @@
           "message": "Umožňuje vytvoření faktury i v případě, že jedna nebo více položek řádku obsahuje sledované zásoby, u nichž by fakturované množství způsobilo záporný stav dostupného množství"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Vyhledat historii faktury"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Jedinečný identifikátor faktury"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Přidat poznámku k faktuře"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "má hodnotu 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Odeslat fakturu e-mailem"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Vrátit pouze záznamy vytvořené nebo změněné od tohoto času.\n\nTo umožňuje inkrementální procházení: bez tohoto parametru každé volání čte celou kolekci."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Alokovat dobropis"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Kolik záznamů vrátit na jedné stránce. Výchozí hodnota Xero je 100 a maximum je 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Najít úkoly"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Kolik záznamů vrátit na jedné stránce. Výchozí hodnota Xero je 100 a maximum je 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Vytvořit úkol"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "Tabulka, se kterou se má pracovat: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` nebo `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Vyhledat zaměstnance"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Vypíše zaměstnance ve mzdové agendě organizace.\n\n**Které API mezd se použije, závisí na `payroll_region` daného připojení**, protože Xero nemá jediné API pro mzdy: Austrálie je obsluhována na `payroll.xro/1.0` a Nový Zéland a Spojené království na `payroll.xro/2.0`. Připojení bez nastaveného regionu to nahlásí, místo aby region odhadovalo.\n\nRegiony výsledek balí odlišně – `{Employees: [...]}` v Austrálii a `{employees: [...], pagination}` v ostatních dvou – a tato akce v obou případech vrátí zaměstnance jako prostý seznam.\n\nAplikace, kterou tento modul nahrazuje, četla zaměstnance prostřednictvím účetního API, kde neexistují, takže to nikdy nic nevrátilo."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Vytvořit zaměstnance"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Vytvoří zaměstnance ve mzdách organizace.\n\n`Employees` je seznam i pro jednoho zaměstnance. Mzdové rozhraní API pro Austrálii přijímá seznam přímo; rozhraní pro Nový Zéland a Spojené království přijímají jednoho zaměstnance na volání, takže seznam více zaměstnanců se odesílá po jednom a výsledky se shromažďují.\n\n**To, které mzdové rozhraní API se použije, vychází z `payroll_region` připojení.** Pole, která zaměstnanec potřebuje, se v jednotlivých regionech liší – zaměstnanec ve Spojeném království má číslo National Insurance, zatímco na Novém Zélandu má číslo IRD – proto tato akce předává zaměstnance tak, jak byl zadán, místo aby definovala formát jednoho regionu pro všechny."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nový kontakt"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Spustí se pro každý kontakt vytvořený nebo změněný v organizaci.\n\nXero řadí kontakty podle `UpdatedDateUTC` a nenabízí žádný filtr typu „vytvořeno od“, takže kontakt upravený později tuto událost spustí znovu. Událost nese záznam kontaktu vrácený službou Xero."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Nová přijatá faktura"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Spustí se pro každou vytvořenou nebo změněnou přijatou fakturu.\n\nPřijatá faktura je faktura typu `ACCPAY`, což je filtr, který tato událost aplikuje; vydaná faktura (`ACCREC`) ji nespustí. Událost nese záznam faktury vrácený službou Xero."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Nový dobropis"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Spustí se pro každý vytvořený nebo změněný dobropis.\n\nUdálost nese záznam dobropisu vrácený službou Xero. Aplikace, kterou tento modul nahrazuje, dotazovala dobropisy, aniž by nabízela jakýkoli způsob, jak je vypsat nebo načíst; akce **Najít dobropisy** existuje proto, aby k této události existoval protějšek."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Nová bankovní transakce"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Spustí se pro každou vytvořenou nebo změněnou bankovní transakci – peníze vydané nebo přijaté na bankovním účtu.\n\nUdálost nese záznam bankovní transakce vrácený službou Xero."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nová platba"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Spustí se pro každou platbu vytvořenou nebo změněnou vůči faktuře nebo dobropisu.\n\nUdálost nese záznam platby vrácený službou Xero."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nová objednávka"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Spustí se pro každou vytvořenou nebo změněnou objednávku.\n\nUdálost nese záznam objednávky vrácený službou Xero."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Nový zaměstnanec"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

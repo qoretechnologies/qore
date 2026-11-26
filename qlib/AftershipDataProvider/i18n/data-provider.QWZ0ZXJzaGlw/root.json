@@ -748,8 +748,8 @@
           "message": "Identifier for the courier connection to use for this tracking"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
-          "message": "Get Tracking"
+          "source": "Get tracking",
+          "message": "Get tracking"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
           "source": "Get a tracking by ID",
@@ -1468,8 +1468,8 @@
           "message": "Timestamp of when the completion event occurred. If not provided, the current time is used"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
-          "message": "Get Last Checkpoint"
+          "source": "Get last checkpoint",
+          "message": "Get last checkpoint"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
           "source": "Get the last checkpoint of a tracking",
@@ -1492,8 +1492,8 @@
           "message": "The Aftership tracking ID to get the last checkpoint for"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
-          "message": "List Couriers"
+          "source": "List couriers",
+          "message": "List couriers"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
           "source": "List all supported couriers",
@@ -2012,8 +2012,8 @@
           "message": "Sub-reason if the reason supports it"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
-          "message": "Get Return"
+          "source": "Get return",
+          "message": "Get return"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
           "source": "Get a return by ID",

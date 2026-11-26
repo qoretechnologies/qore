@@ -1716,7 +1716,7 @@
           "message": "Se fornito, filtra l'elenco dei modelli solo in base al modello predefinito per l'endpoint. Questo parametro è valido solo quando viene fornito `endpoint`."
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Recupera modello"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Ottieni dataset"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Elimina dataset"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.display_name": {
-          "source": "Get Embedding Job",
+          "source": "Get embedding job",
           "message": "Ottieni lavoro di incorporamento"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.display_name": {
-          "source": "Cancel Embedding Job",
+          "source": "Cancel embedding job",
           "message": "Annulla il processo di incorporamento"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Ottieni batch"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.short_desc": {
@@ -3228,7 +3228,7 @@
           "message": "Il nome del progetto che sta effettuando la richiesta."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Annulla batch"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.short_desc": {

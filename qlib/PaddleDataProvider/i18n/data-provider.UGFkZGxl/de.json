@@ -556,7 +556,7 @@
           "message": "Name der Plattform oder des Anbieters, von dem diese Entität importiert wurde."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Kunde abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Paddle-ID der Kundenentität, mit der gearbeitet werden soll: Eindeutige Paddle-ID für diese Kundenentität mit dem Präfix `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Kunde aktualisieren"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Name der Plattform oder des Anbieters, von dem diese Entität importiert wurde."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Kunden-Authentifizierungs-Token abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Paddle-ID der Kundenentität, mit der gearbeitet werden soll: Eindeutige Paddle-ID für diese Kundenentität mit dem Präfix `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Kundenguthaben auflisten"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Name der Plattform oder des Anbieters, von dem diese Entität importiert wurde."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Produkt abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Zugehörige Entitäten in die Antwort einschließen. Verwenden Sie eine durch Kommas getrennte Liste, um mehrere Entitäten anzugeben."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Produkt aktualisieren"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "website-hosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Produkt archivieren"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Name der Plattform oder des Anbieters, von dem diese Entität importiert wurde."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Preis abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Zugehörige Entitäten in die Antwort einschließen."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Preis aktualisieren"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Auf `true` setzen, um die Anzahl-Abfrage zu überspringen, die Paddle für eine Auflistung ausführt.\n\n`meta.pagination.estimated_total` gibt dann `-1` anstelle einer Anzahl zurück. Nützlich beim Paginieren durch eine große Sammlung, bei der das Zählen auf jeder Seite Zeit kostet und nicht benötigt wird."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Abonnement abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "Checkout-URL für den Zahlungslink dieser Transaktion. Übergeben Sie die URL einer genehmigten Domain oder `null`, um Ihre Standard-Zahlungs-URL festzulegen.\n\nPaddle liefert einen eindeutigen Zahlungslink, der aus der übergebenen URL oder Ihrer Standard-Zahlungs-URL + `?_ptxn=` und der Paddle-ID für diese Transaktion besteht."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Transaktion abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "kassen"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Bericht abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "Paddle-ID der Berichtsentität."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Berichtsdatei abrufen"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "Die zu bearbeitende Tabelle: `customers`, `products`, `prices`, `transactions` oder `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Kunde erstellt"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Wird ausgelöst, wenn ein Kunde erstellt wird, unabhängig davon, wie dies geschah – über die API, einen Checkout oder das Paddle-Dashboard.\n\nDies ersetzt das Polling der Kundenliste: Ein nach Erstellungszeit sortiertes Polling kann einen Kunden nicht erkennen, der zwischen zwei Durchläufen erstellt und entfernt wurde, und kostet eine Anfrage pro Intervall, unabhängig davon, ob etwas passiert ist."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Kunde aktualisiert"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Wird ausgelöst, wenn sich ein Kunde ändert, einschließlich wenn einer archiviert wird – `status` wird zu `archived`, anstatt dass der Kunde gelöscht wird.\n\nPaddle sendet den gesamten Kunden, kein Diff; vergleichen Sie dies also mit Ihren vorhandenen Daten, wenn Sie wissen müssen, welches Feld sich geändert hat."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Produkt erstellt"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Wird ausgelöst, wenn ein Produkt zum Katalog hinzugefügt wird.\n\nEin Produkt enthält selbst keinen Preis, daher kann ein neu erstelltes Produkt erst verkauft werden, wenn ein Preis dafür existiert; überwachen Sie dafür `price.created`.\n\nDies ersetzt das Abfragen der Produktliste."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Produkt aktualisiert"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Wird ausgelöst, wenn sich ein Produkt ändert, einschließlich der Archivierung eines Produkts – `status` wird zu `archived`, wodurch es aus dem Verkauf genommen wird, ohne bestehende Abonnements zu beeinträchtigen.\n\n**Das Archivieren eines Produkts archiviert nicht dessen Preise**, sodass ein Preis eines archivierten Produkts weiterhin abgerechnet werden kann, sofern er nicht ebenfalls archiviert wird."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Preis erstellt"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Wird ausgelöst, wenn ein Preis für ein Produkt erstellt wird.\n\n`unit_price.amount` ist eine Zeichenkette in der **kleinsten Einheit der Währung**, daher entspricht `1000` 10,00 $ in USD, aber 1000 Yen in JPY. Ein `billing_cycle` macht ihn zu einem Abonnementpreis; ohne diesen handelt es sich um eine einmalige Gebühr."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Preis aktualisiert"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Wird ausgelöst, wenn sich ein Preis ändert, einschließlich der Archivierung eines Preises.\n\n**Eine Änderung an `unit_price` wirkt sich nur auf neue Käufe aus**; Abonnements, die bereits zu diesem Preis abrechnen, behalten den Betrag, mit dem sie erstellt wurden, bis sie explizit aktualisiert werden. Eine Preisänderung ist daher kein Signal dafür, dass sich die Rechnung eines Kunden geändert hat."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Abonnement erstellt"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Wird ausgelöst, wenn ein Abonnement erstellt wird.\n\n**Erstellt ist nicht dasselbe wie bezahlt.** Ein neues Abonnement ist oft `trialing`, und eines, das für eine noch nicht eingezogene Transaktion erstellt wurde, erzielt noch keine Einnahmen; überprüfen Sie `status` vor der Bereitstellung. `subscription.activated` ist das Signal, dass die Abrechnung tatsächlich begonnen hat.\n\nDies ersetzt das Abfragen der Abonnementliste."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Abonnement aktiviert"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Wird ausgelöst, wenn ein Abonnement zum ersten Mal `active` wird – ein Testzeitraum endete und wurde bezahlt oder ein geplanter Startzeitpunkt wurde erreicht.\n\nDies ist das Signal zur Bereitstellung eines kostenpflichtigen Plans: Es bedeutet, dass Paddle abgerechnet hat, während `subscription.created` nur bedeutet, dass der Datensatz existiert."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Abonnement aktualisiert"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Wird bei jeder Änderung an einem Abonnement ausgelöst: eine Tarifänderung, eine Mengenänderung, eine Verlängerung, die `next_billed_at` verschiebt, oder das **Planen** einer Pausierung oder Kündigung.\n\n`scheduled_change` ist das Feld, das diese letzten Fälle unterscheidet – ein Abonnement kann `active` sein und trotzdem für das Ende vorgemerkt sein. Paddle sendet das gesamte Abonnement und kein Diff."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Abonnement gekündigt"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Wird ausgelöst, wenn ein Abonnement tatsächlich endet und `status` zu `canceled` wird.\n\n**Dies ist das Signal zur Deprovisionierung, nicht die Kündigungsanfrage.** Eine für das Ende des Abrechnungszeitraums gebuchte Kündigung erscheint zuerst als `scheduled_change` auf `subscription.updated`, und der Kunde hat bis zu diesem Datum bezahlt; dieses Ereignis tritt ein, wenn das Datum erreicht ist."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Abonnement überfällig"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Wird ausgelöst, wenn eine Verlängerung nicht eingezogen werden konnte und das Abonnement zu `past_due` wird.\n\nPaddle unternimmt erneute Versuche gemäß Mahnplan, dies ist also noch nicht das Ende: Das Abonnement kehrt zu `active` zurück, wenn ein erneuter Versuch erfolgreich ist, oder wird gekündigt, wenn die Versuche aufgebraucht sind. Betrachten Sie dies als Warnung, um den Kunden zu kontaktieren, nicht als Grund, den Zugriff zu sperren."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Transaktion erstellt"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Wird ausgelöst, wenn eine Transaktion erstellt wird, einschließlich des Entwurfs, den Paddle für eine bevorstehende Verlängerung erstellt.\n\n**Eine erstellte Transaktion wurde noch nicht bezahlt**; die meisten sind zu diesem Zeitpunkt `draft` oder `ready`. Verwenden Sie `transaction.completed` für tatsächlich eingezogenes Geld.\n\nDies ersetzt das Abfragen der Transaktionsliste."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Transaktion abgeschlossen"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Wird ausgelöst, wenn eine Transaktion `completed` ist: Das Geld wurde eingezogen und die Rechnung beglichen.\n\nDies ist das Ereignis, bei dem eine Bestellung ausgeführt werden sollte. `details.totals` schlüsselt den Betrag in Zwischensumme, Steuer und Gesamtsumme auf, jeweils als Zeichenketten in der kleinsten Einheit von `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Transaktionszahlung fehlgeschlagen"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Wird ausgelöst, wenn der Versuch fehlschlägt, eine Transaktion einzuziehen.\n\n`payments` enthält den Versuch und den Grund für das Fehlschlagen. Paddle wiederholt dies automatisch bei einer Abonnementverlängerung, daher ist ein einzelner Fehlschlag nicht endgültig; der Wechsel des Abonnements zu `past_due` ist der Zeitpunkt, an dem der Kunde handeln muss."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Bericht erstellt"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Wird ausgelöst, wenn ein Bericht angefordert wird. Er trifft als `pending` ein: Paddle generiert die Datei im Hintergrund, daher gibt es noch nichts herunterzuladen.\n\nWarten Sie auf `report.updated` mit `status` von `ready`, bevor Sie die Datei anfordern.\n\nDies ersetzt das Abfragen der Berichtsliste."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Bericht aktualisiert"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

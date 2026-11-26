@@ -33,7 +33,7 @@ public class GitHubNewIssueDataProvider inherits GitHubBaseEventDataProvider {
         const EventName = "new_repository_issue";
 
         #! The event display name
-        const DisplayName = "New Issue";
+        const DisplayName = "New issue";
 
         #! The event short description
         const ShortDesc = "Fires when an issue is opened in a repository";
@@ -87,7 +87,7 @@ public class GitHubNewPullRequestDataProvider inherits GitHubBaseEventDataProvid
         const EventName = "new_pull_request";
 
         #! The event display name
-        const DisplayName = "New Pull Request";
+        const DisplayName = "New pull request";
 
         #! The event short description
         const ShortDesc = "Fires when a pull request is opened";
@@ -148,7 +148,7 @@ public class GitHubNewReviewDataProvider inherits GitHubBaseEventDataProvider {
         const EventName = "new_review_request";
 
         #! The event display name
-        const DisplayName = "New Pull Request Review";
+        const DisplayName = "New pull request review";
 
         #! The event short description
         const ShortDesc = "Fires when a review is submitted on a pull request";
@@ -206,7 +206,7 @@ public class GitHubNewCommitDataProvider inherits GitHubBaseEventDataProvider {
         const EventName = "new_commit";
 
         #! The event display name
-        const DisplayName = "New Commit";
+        const DisplayName = "New commit";
 
         #! The event short description
         const ShortDesc = "Fires when commits are pushed to a repository";
@@ -277,7 +277,7 @@ public class GitHubNewBranchDataProvider inherits GitHubBaseEventDataProvider {
         const EventName = "new_repository_branch";
 
         #! The event display name
-        const DisplayName = "New Branch";
+        const DisplayName = "New branch";
 
         #! The event short description
         const ShortDesc = "Fires when a branch is created in a repository";
@@ -347,7 +347,7 @@ public class GitHubNewReleaseDataProvider inherits GitHubBaseEventDataProvider {
         const EventName = "new_release";
 
         #! The event display name
-        const DisplayName = "New Release";
+        const DisplayName = "New release";
 
         #! The event short description
         const ShortDesc = "Fires when a release is published";
@@ -400,7 +400,7 @@ public class GitHubNewCommitCommentDataProvider inherits GitHubBaseEventDataProv
         const EventName = "new_commit_comment";
 
         #! The event display name
-        const DisplayName = "New Commit Comment";
+        const DisplayName = "New commit comment";
 
         #! The event short description
         const ShortDesc = "Fires when a comment is made on a commit";

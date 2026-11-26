@@ -1408,8 +1408,8 @@
           "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
-          "message": "Create Presigned URL"
+          "source": "Create presigned URL",
+          "message": "Create presigned URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
           "source": "Create a temporary URL granting access without AWS credentials",

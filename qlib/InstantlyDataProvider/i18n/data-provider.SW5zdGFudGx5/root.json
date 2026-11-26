@@ -3532,8 +3532,8 @@
           "message": "The maximum number of results to return per page"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
-          "message": "Create Email Verification"
+          "source": "Create email verification",
+          "message": "Create email verification"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {
           "source": "Create an email verification request",

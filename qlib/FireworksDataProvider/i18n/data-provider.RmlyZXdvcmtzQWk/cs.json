@@ -412,7 +412,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Získat účet"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.display_name": {
-          "source": "Get Account Usage Filter Options",
+          "source": "Get account usage filter options",
           "message": "Získat možnosti filtrování využití účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Trénink"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "Vypsat protokoly auditu"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.display_name": {
-          "source": "List Batch Inference Jobs",
+          "source": "List batch inference jobs",
           "message": "Seznam úloh dávkové inference"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Create Batch Inference Job",
+          "source": "Create batch inference job",
           "message": "Vytvořit úlohu dávkového inference"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "ID úlohy dávkové inference."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Get Batch Inference Job",
+          "source": "Get batch inference job",
           "message": "Získat úlohu dávkového inference"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Delete Batch Inference Job",
+          "source": "Delete batch inference job",
           "message": "Smazat úlohu dávkové inference"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.display_name": {
-          "source": "Get Billing Summary",
+          "source": "Get billing summary",
           "message": "Získat souhrn fakturace"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.short_desc": {
@@ -1328,7 +1328,7 @@
           "message": "Denně"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.display_name": {
-          "source": "Query Usage Costs",
+          "source": "Query usage costs",
           "message": "Náklady na využití dotazu"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Opaque token z předchozí odpovědi. Nastavte tento token pro získání další stránky při zachování všech ostatních polí požadavku beze změny."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.display_name": {
-          "source": "Get Billing Settings",
+          "source": "Get billing settings",
           "message": "Získat nastavení fakturace"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.display_name": {
-          "source": "Get Account Usage",
+          "source": "Get account usage",
           "message": "Získat využití účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Filtrujte výsledky pomocí [syntaxe filtru Fireworks](https://docs.fireworks.ai/api-reference/list-models)."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Seznam datových sad"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Vytvořit dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Filtr"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Získat datovou sadu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Aktualizovat dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Název zdroje úlohy, která vytvořila tento dataset (např. batch inference úloha).\nPoužívá se pro sledování linie k pochopení původu datasetu."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Smazat datovou sadu"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Dataset Download Endpoint",
+          "source": "Get dataset download endpoint",
           "message": "Získat koncový bod pro stažení datasetu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Pokud je true, stáhne celý řetězec linie (všechny související datasety).\nNázvy souborů budou předponovány ID datasetu, aby se předešlo kolizím."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Dataset Upload Endpoint",
+          "source": "Get dataset upload endpoint",
           "message": "Získat koncový bod pro nahrání datasetu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.short_desc": {
@@ -2184,7 +2184,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.display_name": {
-          "source": "Split Dataset",
+          "source": "Split dataset",
           "message": "Rozdělit dataset"
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "ID nadřazeného účtu žadatele."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.display_name": {
-          "source": "Validate Dataset Upload",
+          "source": "Validate dataset upload",
           "message": "Ověřit nahrání datasetu"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.display_name": {
-          "source": "List Deployed Models",
+          "source": "List deployed models",
           "message": "Seznam nasazených modelů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.short_desc": {
@@ -2356,7 +2356,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Create Deployed Model",
+          "source": "Create deployed model",
           "message": "Vytvořit nasazený model"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Sloučí nový doplněk s základním modelem a odsloučí/odstraní jakýkoli existující doplněk v nasazení. Musí být specifikováno pro nasazení s horkým načtením."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Get Deployed Model",
+          "source": "Get deployed model",
           "message": "Získat nasazený model"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Update Deployed Model",
+          "source": "Update deployed model",
           "message": "Aktualizovat nasazený model"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Pokud je true, nasazený model bude veřejně přístupný."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Delete Deployed Model",
+          "source": "Delete deployed model",
           "message": "Smazat nasazený model"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.display_name": {
-          "source": "List Deployment Shapes",
+          "source": "List deployment shapes",
           "message": "Seznam tvarů nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Cílový model, se kterým by měly být kompatibilní vrácené tvary nasazení."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.display_name": {
-          "source": "Get Deployment Shape",
+          "source": "Get deployment shape",
           "message": "Získat tvar nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Pokud je true, vrátí nejnovější verzi bez ohledu na stav validace.\nVe výchozím nastavení vrací nejnovější validovanou verzi."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.display_name": {
-          "source": "List Deployment Shape Versions",
+          "source": "List deployment shape versions",
           "message": "Seznam verzí tvarů nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.display_name": {
-          "source": "Get Deployment Shape Version",
+          "source": "Get deployment shape version",
           "message": "Získat verzi tvaru nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Vypsat nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Create Deployment",
+          "source": "Create deployment",
           "message": "Vytvořit nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "Pokud je true, přeskočí validaci politiky tagů obrazu, která blokuje určité tagy.\nTo umožní vytvořit nasazení s tagy obrazu, které by jinak byly blokovány."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Deployment",
+          "source": "Get deployment",
           "message": "Získat nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "Aktualizovat nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4768,7 +4768,7 @@
           "message": "Ve výchozím nastavení aktualizace tvaru nasazení zajistí, že nový poskytnutý tvar nasazení bude ověřen.\nPokud je true, nebudeme vyžadovat ověření tvaru nasazení."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "Smazat nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4828,7 +4828,7 @@
           "message": "Pokud je true, budou ignorovány kontroly a vynuceno smazání nasazení, které je aktuálně nasazeno a používáno."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.display_name": {
-          "source": "Get Ledger",
+          "source": "Get ledger",
           "message": "Získat účetní knihu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.short_desc": {
@@ -4864,7 +4864,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.display_name": {
-          "source": "Reset Ledger",
+          "source": "Reset ledger",
           "message": "Resetovat účet"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.short_desc": {
@@ -4900,7 +4900,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.display_name": {
-          "source": "List Deployment Shards",
+          "source": "List deployment shards",
           "message": "Seznam shardů nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.short_desc": {
@@ -4996,7 +4996,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.display_name": {
-          "source": "Get Termination Message",
+          "source": "Get termination message",
           "message": "Získat zprávu o ukončení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.short_desc": {
@@ -5032,7 +5032,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.display_name": {
-          "source": "Get Deployment Metrics",
+          "source": "Get deployment metrics",
           "message": "Získat metriky nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.display_name": {
-          "source": "Scale Deployment",
+          "source": "Scale deployment",
           "message": "Škálování nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "Požadovaný počet replik."
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.display_name": {
-          "source": "Undelete Deployment",
+          "source": "Undelete deployment",
           "message": "Obnovit nasazení"
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.short_desc": {
@@ -5176,7 +5176,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.display_name": {
-          "source": "List DPO Jobs",
+          "source": "List DPO jobs",
           "message": "Seznam DPO úloh"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.short_desc": {
@@ -5272,7 +5272,7 @@
           "message": "Pokud je true, zahrne archivované (po smazání zachované) úlohy do odpovědi.\nArchivované úlohy jsou nečinné (nejsou spuštěny žádné zdroje, žádné další účtování),\nale jejich kontrolní body zůstávají propagovatelné až do vypršení retenčního období."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.display_name": {
-          "source": "Create DPO Job",
+          "source": "Create DPO job",
           "message": "Vytvořit DPO úlohu"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "ID úlohy DPO, pokud není zadáno, bude vygenerováno náhodně."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.display_name": {
-          "source": "Get DPO Job",
+          "source": "Get DPO job",
           "message": "Získat DPO úlohu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.short_desc": {
@@ -6016,7 +6016,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.display_name": {
-          "source": "Delete DPO Job",
+          "source": "Delete DPO job",
           "message": "Smazat úlohu DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.short_desc": {
@@ -6052,7 +6052,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.display_name": {
-          "source": "Cancel DPO Job",
+          "source": "Cancel DPO job",
           "message": "Zrušit úlohu DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.short_desc": {
@@ -6088,7 +6088,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.display_name": {
-          "source": "Get DPO Job Metrics File Endpoint",
+          "source": "Get DPO job metrics file endpoint",
           "message": "Získat koncový bod souboru metrik DPO úlohy"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.short_desc": {
@@ -6124,7 +6124,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.display_name": {
-          "source": "Resume DPO Job",
+          "source": "Resume DPO job",
           "message": "Obnovit DPO úlohu"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.display_name": {
-          "source": "List Evaluation Jobs",
+          "source": "List evaluation jobs",
           "message": "Seznam evaluačních úloh"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.short_desc": {
@@ -6236,7 +6236,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Create Evaluation Job",
+          "source": "Create evaluation job",
           "message": "Vytvořit úlohu hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6340,7 +6340,7 @@
           "message": "ID úlohy hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "Získat úlohu hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6388,7 +6388,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Delete Evaluation Job",
+          "source": "Delete evaluation job",
           "message": "Smazat úlohu hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6424,7 +6424,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluation Job Execution Log Endpoint",
+          "source": "Get evaluation job execution log endpoint",
           "message": "Získat koncový bod protokolu provedení úlohy hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -6460,7 +6460,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
+          "source": "List evaluations",
           "message": "Seznam evaluací"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Create Evaluation",
+          "source": "Create evaluation",
           "message": "Vytvořit hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6680,7 +6680,7 @@
           "message": "ID hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Získat hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -6728,7 +6728,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
+          "source": "Delete evaluation",
           "message": "Smazat hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6764,7 +6764,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.display_name": {
-          "source": "Preview Evaluation",
+          "source": "Preview evaluation",
           "message": "Náhled hodnocení"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.short_desc": {
@@ -6808,7 +6808,7 @@
           "message": "Maximální počet vzorků"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.display_name": {
-          "source": "Validate Assertions",
+          "source": "Validate assertions",
           "message": "Ověřit tvrzení"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.short_desc": {
@@ -6932,7 +6932,7 @@
           "message": "Název metriky"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.display_name": {
-          "source": "List Evaluators",
+          "source": "List evaluators",
           "message": "Seznam evaluátorů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.short_desc": {
@@ -7008,7 +7008,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.display_name": {
-          "source": "Get Evaluator",
+          "source": "Get evaluator",
           "message": "Získat evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.short_desc": {
@@ -7056,7 +7056,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Update Evaluator",
+          "source": "Update evaluator",
           "message": "Aktualizovat evaluátor"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7208,7 +7208,7 @@
           "message": "Pokud je true, připraví nový pokus o nahrání/kódování přechodem evaluátoru do stavu BUILDING. Lze použít bez update_mask."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Delete Evaluator",
+          "source": "Delete evaluator",
           "message": "Smazat evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7244,7 +7244,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.display_name": {
-          "source": "List Evaluator Versions",
+          "source": "List evaluator versions",
           "message": "Seznam verzí evaluátorů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.short_desc": {
@@ -7332,7 +7332,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Get Evaluator Version",
+          "source": "Get evaluator version",
           "message": "Získat verzi evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7392,7 +7392,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Delete Evaluator Version",
+          "source": "Delete evaluator version",
           "message": "Smazat verzi evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.display_name": {
-          "source": "Alias Evaluator Version",
+          "source": "Alias evaluator version",
           "message": "Verze hodnotitele aliasu"
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.short_desc": {
@@ -7500,7 +7500,7 @@
           "message": "Alias ID (např. \"current\", semver tag, atd.)."
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.display_name": {
-          "source": "Rollback Evaluator",
+          "source": "Rollback evaluator",
           "message": "Vyhodnocovač vrácení"
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.short_desc": {
@@ -7548,7 +7548,7 @@
           "message": "ID verze\n\nTato hodnota přijímá ID zdroje nebo úplný název zdroje a odesílá poslední segment ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Build Log Endpoint",
+          "source": "Get evaluator build log endpoint",
           "message": "Získat koncový bod protokolu sestavení evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -7596,7 +7596,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.display_name": {
-          "source": "Get Evaluator Source Code Endpoint",
+          "source": "Get evaluator source code endpoint",
           "message": "Získat koncový bod zdrojového kódu evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.short_desc": {
@@ -7644,7 +7644,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Upload Endpoint",
+          "source": "Get evaluator upload endpoint",
           "message": "Získat koncový bod nahrání evaluátora"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -7688,7 +7688,7 @@
           "message": "Maska čtení"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.display_name": {
-          "source": "Validate Evaluator Upload",
+          "source": "Validate evaluator upload",
           "message": "Ověřit nahrání evaluátoru"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.short_desc": {
@@ -7724,7 +7724,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.display_name": {
-          "source": "Preview Evaluator",
+          "source": "Preview evaluator",
           "message": "Náhled evaluátoru"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.short_desc": {
@@ -7864,7 +7864,7 @@
           "message": "Maximální počet vzorků"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Create Evaluator",
+          "source": "Create evaluator",
           "message": "Vytvořit hodnotitele"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "ID hodnotitele"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Seznam modelů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -8084,7 +8084,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "Vytvořit model"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -8612,7 +8612,7 @@
           "message": "Název zdroje BYOC clusteru, ke kterému tento model patří.\ne.g. accounts/my-account/clusters/my-cluster. Prázdné, pokud patří do\nFireworks clusteru."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získat model"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.short_desc": {
@@ -8660,7 +8660,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "Aktualizovat model"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Pokud je true, úlohy SFT pro tento základní model používají režim služby (StatefulSet +\norchestration sidecar) místo starší cesty batch Job."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Smazat model"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Create Model Version",
+          "source": "Create model version",
           "message": "Vytvořit verzi modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9248,7 +9248,7 @@
           "message": "ID verze"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Deploy Model Version",
+          "source": "Deploy model version",
           "message": "Nasadit verzi modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9324,7 +9324,7 @@
           "message": "Hot reload"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.display_name": {
-          "source": "Get Model Version Count",
+          "source": "Get model version count",
           "message": "Získat počet verzí modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.short_desc": {
@@ -9360,7 +9360,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Model Download Endpoint",
+          "source": "Get model download endpoint",
           "message": "Získat koncový bod pro stažení modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.short_desc": {
@@ -9408,7 +9408,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.display_name": {
-          "source": "Get Model Upload Endpoint",
+          "source": "Get model upload endpoint",
           "message": "Získat koncový bod pro nahrání modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.short_desc": {
@@ -9480,7 +9480,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.display_name": {
-          "source": "Import Model",
+          "source": "Import model",
           "message": "Importovat model"
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.short_desc": {
@@ -9632,7 +9632,7 @@
           "message": "Azure AD tenant ID pro autentizaci.\nPokud je nastaveno, musí být také nastaven client_id."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.display_name": {
-          "source": "Prepare Model",
+          "source": "Prepare model",
           "message": "Připravit model"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.short_desc": {
@@ -9760,7 +9760,7 @@
           "message": "Pokud je true, přeruší aktivní úlohu přípravy a vymaže stav sledování přípravy.\nV tomto požadavku není spuštěna nová úloha přípravy."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Validate Model Upload",
+          "source": "Validate model upload",
           "message": "Ověřit nahrání modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -9832,7 +9832,7 @@
           "message": "Pokud je true, přeskočí validaci tokenizéru a názvů parametrů."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.display_name": {
-          "source": "List Pricing Plans",
+          "source": "List pricing plans",
           "message": "Seznam cenových plánů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.display_name": {
-          "source": "Get Pricing Plan",
+          "source": "Get pricing plan",
           "message": "Získat cenový plán"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.display_name": {
-          "source": "List Quotas",
+          "source": "List quotas",
           "message": "Seznam kvót"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.display_name": {
-          "source": "Get Quota",
+          "source": "Get quota",
           "message": "Získat kvótu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.short_desc": {
@@ -10096,7 +10096,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Reinforcement Fine Tuning Jobs",
+          "source": "List reinforcement fine tuning jobs",
           "message": "Seznam úloh posilovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Reinforcement Fine Tuning Job",
+          "source": "Create reinforcement fine tuning job",
           "message": "Vytvořit úlohu posilovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11032,7 +11032,7 @@
           "message": "ID úlohy posilovacího jemného ladění, pokud není zadáno, bude vygenerováno náhodné UUID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job",
+          "source": "Get reinforcement fine tuning job",
           "message": "Získat úlohu Reinforcement Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11080,7 +11080,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Update Reinforcement Fine Tuning Job",
+          "source": "Update reinforcement fine tuning job",
           "message": "Aktualizovat úlohu posilovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11920,7 +11920,7 @@
           "message": "Pilot"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Reinforcement Fine Tuning Job",
+          "source": "Delete reinforcement fine tuning job",
           "message": "Smazat úlohu Reinforcement Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11956,7 +11956,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Reinforcement Fine Tuning Job",
+          "source": "Cancel reinforcement fine tuning job",
           "message": "Zrušit úlohu Reinforcement Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11992,7 +11992,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job Metrics File Endpoint",
+          "source": "Get reinforcement fine tuning job metrics file endpoint",
           "message": "Získat koncový bod souboru metrik úlohy Reinforcement Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.short_desc": {
@@ -12028,7 +12028,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Reinforcement Fine Tuning Job",
+          "source": "Resume reinforcement fine tuning job",
           "message": "Obnovit úlohu reinforcement fine-tuningu"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.display_name": {
-          "source": "List Routers",
+          "source": "List routers",
           "message": "Seznam routerů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.short_desc": {
@@ -12148,7 +12148,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.display_name": {
-          "source": "Create Router",
+          "source": "Create router",
           "message": "Vytvořit router"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.short_desc": {
@@ -12248,7 +12248,7 @@
           "message": "ID routeru."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.display_name": {
-          "source": "Get Router",
+          "source": "Get router",
           "message": "Získat router"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.short_desc": {
@@ -12296,7 +12296,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.display_name": {
-          "source": "Update Router",
+          "source": "Update router",
           "message": "Aktualizovat router"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "True pokud je router veřejný (každý účet může dotazovat podkladovou zátěž), false pokud je router soukromý (pouze účet vlastnící router může dotazovat podkladovou zátěž)."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.display_name": {
-          "source": "Delete Router",
+          "source": "Delete router",
           "message": "Smazat router"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.short_desc": {
@@ -12432,7 +12432,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.display_name": {
-          "source": "List Serverless Models",
+          "source": "List serverless models",
           "message": "Seznam serverless modelů"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.short_desc": {
@@ -12516,7 +12516,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.display_name": {
-          "source": "List Account Serverless Rate Limits",
+          "source": "List account serverless rate limits",
           "message": "Seznam limitů rychlosti serverless účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.short_desc": {
@@ -12588,7 +12588,7 @@
           "message": "Velikost kroku pro časovou řadu: každý bod představuje špičkový efektivní limit pozorovaný v tomto okně. Výchozí je 4 hodiny."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.display_name": {
-          "source": "Get Account Serverless Token Usage",
+          "source": "Get account serverless token usage",
           "message": "Získat využití tokenu serverless účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.short_desc": {
@@ -12664,7 +12664,7 @@
           "message": "Zahrnout průměrný počet tokenů za minutu podle základního modelu"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Supervised Fine Tuning Jobs",
+          "source": "List supervised fine tuning jobs",
           "message": "Seznam úloh dozorovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -12748,7 +12748,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Supervised Fine Tuning Job",
+          "source": "Create supervised fine tuning job",
           "message": "Vytvořit úlohu dozorovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13296,7 +13296,7 @@
           "message": "ID úlohy řízeného jemného ladění, pokud není zadáno, bude vygenerováno náhodné UUID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Supervised Fine Tuning Job",
+          "source": "Get supervised fine tuning job",
           "message": "Získat úlohu Supervised Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13344,7 +13344,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Supervised Fine Tuning Job",
+          "source": "Delete supervised fine tuning job",
           "message": "Smazat úlohu Supervised Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13380,7 +13380,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Supervised Fine Tuning Job",
+          "source": "Cancel supervised fine tuning job",
           "message": "Zrušit úlohu Supervised Fine Tuning"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13416,7 +13416,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Supervised Fine Tuning Job",
+          "source": "Resume supervised fine tuning job",
           "message": "Obnovit úlohu supervised fine-tuningu"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13452,7 +13452,7 @@
           "message": "Vyberte zdroj nebo zadejte jeho ID či úplný název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.display_name": {
-          "source": "Estimate Supervised Fine Tuning Job Cost",
+          "source": "Estimate supervised fine tuning job cost",
           "message": "Odhad nákladů na úlohu supervizovaného doladění"
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.short_desc": {
@@ -13988,7 +13988,7 @@
           "message": "Pilot"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.display_name": {
-          "source": "List Training Shapes",
+          "source": "List training shapes",
           "message": "Seznam tvarů trénování"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.short_desc": {
@@ -14072,7 +14072,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.display_name": {
-          "source": "Get Training Shape",
+          "source": "Get training shape",
           "message": "Získat tréninkový tvar"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.short_desc": {
@@ -14120,7 +14120,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.display_name": {
-          "source": "List Training Shape Versions",
+          "source": "List training shape versions",
           "message": "Seznam verzí tvarů tréninku"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.short_desc": {
@@ -14216,7 +14216,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.display_name": {
-          "source": "Get Training Shape Version",
+          "source": "Get training shape version",
           "message": "Získat verzi tréninkového tvaru"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.short_desc": {
@@ -14276,7 +14276,7 @@
           "message": "Pole, která mají být vrácena v odpovědi. Pokud je prázdné nebo \"*\", budou vrácena všechna pole."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Get Account Usage Limits",
+          "source": "Get account usage limits",
           "message": "Získat limity využití účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "Vyberte účet nebo zadejte jeho ID či úplný `accounts/<id>` název zdroje.\n\nTato hodnota je Přijmout ID zdroje nebo úplný název zdroje a odeslat poslední segment ID.."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Update Account Usage Limits",
+          "source": "Update account usage limits",
           "message": "Aktualizovat limity využití účtu"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14400,7 +14400,7 @@
           "message": "Blok"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.display_name": {
-          "source": "List User Usage Limits",
+          "source": "List user usage limits",
           "message": "Seznam limitů uživatelského využití"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.short_desc": {
@@ -14448,7 +14448,7 @@
           "message": "Použijte `nextPageToken` z předchozího výsledku pro načtení další stránky."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.display_name": {
-          "source": "Upload Dataset File",
+          "source": "Upload dataset file",
           "message": "Nahrát soubor datasetu"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.short_desc": {
@@ -16760,7 +16760,7 @@
           "message": "Před"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Získat odpověď"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -16776,7 +16776,7 @@
           "message": "ID odpovědi"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Smazat odpověď"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {

@@ -396,7 +396,7 @@ module GmailDataProvider {
                 "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
                     "selector_value": "text/html", "fallback": "plain-body", "plain_alternative": True},
             }},
-            "display_name": "Send a Message",
+            "display_name": "Send a message",
             "short_desc": "Create and transmit a new outgoing email through Gmail",
             "desc": "Creates a new outgoing email from the supplied recipient addresses, subject, body, "
                 "and attachments, and transmits that new email through Gmail. Set `thread_id` and "

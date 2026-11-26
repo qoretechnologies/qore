@@ -1408,7 +1408,7 @@
           "message": "Datos de archivo a largo plazo recuperados en horas; la clase de almacenamiento de menor coste"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Crear URL prefirmada"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

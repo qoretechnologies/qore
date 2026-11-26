@@ -61,7 +61,7 @@ public namespace GitHubDataProvider {
     @section githubevent_actions Which Deliveries Are Raised
 
     One GitHub event covers a whole family of changes: the \c issues event fires for \c opened, \c edited,
-    \c closed, \c labeled and a dozen more.  An event called "New Issue" that fired on all of them would be
+    \c closed, \c labeled and a dozen more.  An event called "New issue" that fired on all of them would be
     reporting something other than what it says, so a subclass naming an action in
     @ref getEventAction() raises only that one.  Set \c all_actions to receive every delivery of the
     underlying GitHub event instead, which is what the superseded application did.

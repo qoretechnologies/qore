@@ -1048,8 +1048,8 @@
           "message": "Whether to ignore missing customer IDs"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
-          "source": "Send Transactional Email",
-          "message": "Send Transactional Email"
+          "source": "Send transactional email",
+          "message": "Send transactional email"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {
           "source": "Send a transactional email",

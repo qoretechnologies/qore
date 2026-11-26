@@ -524,7 +524,7 @@
           "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "取得個人檔案"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "IP 位址"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "更新個人資料"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "取得清單"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "要包含在每個個人檔案中的計算區塊（由於產生運算成本高，Klaviyo 預設會省略）：\n\n- `subscriptions`：個人檔案各管道的同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "更新名單"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "刪除清單"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "取得區隔"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "此受眾區隔是否已在 Klaviyo 介面中加星號"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "更新受眾區隔"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "設為 false 可停用受眾區隔。停用時，此屬性必須是請求主體中唯一的屬性。停用操作無法與其他更新合併進行。將受眾區隔標記為停用會影響參照此區隔的行銷活動、流程、廣告同步、表單、服務台路由及其他功能。設為 true 可重新啟用已停用的受眾區隔。"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "刪除受眾區隔"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "取得標籤"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "標籤群組"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "更新標籤"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "標籤名稱"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "刪除標籤"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "取得行銷活動"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "自訂追蹤參數清單。若提供空清單且 add_tracking_params 為 True，則使用公司預設值。"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "更新行銷活動"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "自訂追蹤參數清單。若提供空清單且 add_tracking_params 為 True，則使用公司預設值。"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "刪除行銷活動"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "使用 Klaviyo 的篩選語法將清單縮小至相符的事件。\n\n`equals(metric_id,\"…\")` 和 `equals(profile_id,\"…\")` 可選取單一指標或單一個人檔案，而 `datetime` 與 `timestamp` 接受四種範圍比較（例如 `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`）。述詞以逗號連接，表示 **and**；Klaviyo 在此處不提供 `or`。"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "取得活動"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "取得指標"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "要從中移除標籤的受眾區隔"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "建立事件"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "要隨事件記錄的自訂屬性（以名稱/值組合表示）"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "訂閱個人檔案"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "**透過此名單**訂閱個人檔案，這會將其新增至該名單，並在該名單設有雙重確認訂閱流程時予以套用。\n\n若未指定，同意將直接記錄至個人檔案且不會傳送確認信。"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "退訂個人資料"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "要撤回同意的 SMS 訊息類型。\n\n僅在與 `phoneNumber` 一起使用時才有意義；預設為行銷。"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "新個人檔案"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "針對帳戶中建立的每個個人檔案觸發。\n\n事件會攜帶包含其屬性與身分識別的個人檔案，其格式與 **Get Profile** 和 **List Profiles** 所傳回的相同。\n\n日後編輯個人檔案時**不會**再次觸發此動作：摘要依 `created` 定位。"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "新事件"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "針對所選指標記錄的每個事件觸發。\n\n`metric` 為必填，並透過 **ID** 指定指標——若傳送帳戶中每個事件的摘要將會過於龐大，且回應「Placed Order」的工作流程不需要「Viewed Product」。\n\n該事件會攜帶包含其屬性與身分識別的事件記錄。摘要依 `datetime` 定位，該時間為事件發生時間而非 Klaviyo 接收時間。"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "個人檔案已新增至名單"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "針對新增至所選名單的每個個人檔案觸發。\n\n摘要依 `joined_group_at` 定位，因此會在個人檔案**加入名單**時觸發，而非個人檔案本身建立之時——已存在一年的個人檔案在加入名單的瞬間就會觸發此動作。\n\n事件會攜帶包含其屬性與身分識別的個人檔案。"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "個人檔案已新增至區隔"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

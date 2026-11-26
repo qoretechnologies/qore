@@ -740,7 +740,7 @@
           "message": "Externe Referenz"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
+          "source": "Create paid order",
           "message": "Bezahlte Bestellung erstellen"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Die aktuelle Version der Bestellung (für optimistische Nebenläufigkeit)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
+          "source": "Create a payment",
           "message": "Zahlung erstellen"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Wenn `True` (Standard), wird die Zahlung sofort abgeschlossen. Wenn `False`, muss sie später mit complete-payment abgeschlossen werden."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
+          "source": "Complete payment",
           "message": "Zahlung abschließen"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {

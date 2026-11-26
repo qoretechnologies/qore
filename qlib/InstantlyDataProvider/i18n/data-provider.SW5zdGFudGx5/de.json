@@ -3532,7 +3532,7 @@
           "message": "Die maximale Anzahl der pro Seite zurückzugebenden Ergebnisse"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "E-Mail-Verifizierung erstellen"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {

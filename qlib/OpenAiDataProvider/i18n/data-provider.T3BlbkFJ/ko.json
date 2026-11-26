@@ -860,7 +860,7 @@
           "message": "최종 사용자를 나타내는 고유 식별자로, OpenAI가 오남용을 모니터링하고 감지하는 데 도움이 될 수 있습니다"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Simple Chat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "객체에 연결할 수 있는 16개의 키-값 쌍 세트입니다. 구조화된 형식으로 객체에 대한 추가 정보를 저장하고 API 또는 대시보드를 통해 객체를 쿼리하는 데 유용할 수 있습니다. 키는 최대 64자의 문자열이고, 값은 최대 512자의 문자열입니다."
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "대화 가져오기"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "대화 ID"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "대화 항목 목록 조회"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "응답에 포함할 추가 필드입니다.\n\n지원되는 값은 [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) 설명서를 참조하세요."
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "대화 항목 가져오기"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "가져올 응답의 ID"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "응답 입력 항목 목록 조회"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

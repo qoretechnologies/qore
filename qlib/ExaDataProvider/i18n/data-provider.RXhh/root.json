@@ -2532,8 +2532,8 @@
           "message": "The `nextCursor` of the previous response.  Every collection in this API pages the same way: read `hasMore`, and pass `nextCursor` here to get the following page."
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.display_name": {
-          "source": "Get a Research Run",
-          "message": "Get a Research Run"
+          "source": "Get a research run",
+          "message": "Get a research run"
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.short_desc": {
           "source": "Get a research run and its answer",
@@ -2556,8 +2556,8 @@
           "message": "Agent run ID. New run IDs are returned with the `agent_run_` prefix."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.display_name": {
-          "source": "List Research Run Events",
-          "message": "List Research Run Events"
+          "source": "List research run events",
+          "message": "List research run events"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.short_desc": {
           "source": "See what the agent did during a run",
@@ -2636,8 +2636,8 @@
           "message": "For SSE replay, return only events after this event ID."
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.display_name": {
-          "source": "Cancel a Research Run",
-          "message": "Cancel a Research Run"
+          "source": "Cancel a research run",
+          "message": "Cancel a research run"
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.short_desc": {
           "source": "Stop a research run and discard its results",
@@ -2660,8 +2660,8 @@
           "message": "Agent run ID. New run IDs are returned with the `agent_run_` prefix."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.display_name": {
-          "source": "Stop a Research Run",
-          "message": "Stop a Research Run"
+          "source": "Stop a research run",
+          "message": "Stop a research run"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.short_desc": {
           "source": "End a research run early but keep its results",
@@ -2696,8 +2696,8 @@
           "message": "Comma-separated beta feature tokens for opting into experimental features."
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Delete a Research Run",
-          "message": "Delete a Research Run"
+          "source": "Delete a research run",
+          "message": "Delete a research run"
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.short_desc": {
           "source": "Delete a stored research run",
@@ -2900,8 +2900,8 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get a Batch",
-          "message": "Get a Batch"
+          "source": "Get a batch",
+          "message": "Get a batch"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Get a batch and where to download its results",
@@ -2940,8 +2940,8 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel a Batch",
-          "message": "Cancel a Batch"
+          "source": "Cancel a batch",
+          "message": "Cancel a batch"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Stop a batch scheduling further requests",
@@ -2980,8 +2980,8 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete a Batch",
-          "message": "Delete a Batch"
+          "source": "Delete a batch",
+          "message": "Delete a batch"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.short_desc": {
           "source": "Delete a finished batch",
@@ -3720,8 +3720,8 @@
           "message": "Filter monitors by metadata key-value pairs (exact match, AND semantics). Use bracket notation: `metadata[key]=value`."
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.display_name": {
-          "source": "Get a Search Monitor",
-          "message": "Get a Search Monitor"
+          "source": "Get a search monitor",
+          "message": "Get a search monitor"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.short_desc": {
           "source": "Get one search monitor",
@@ -3744,8 +3744,8 @@
           "message": "The monitor ID"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.display_name": {
-          "source": "Update a Search Monitor",
-          "message": "Update a Search Monitor"
+          "source": "Update a search monitor",
+          "message": "Update a search monitor"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.short_desc": {
           "source": "Change a monitor's search, schedule or status",
@@ -4392,8 +4392,8 @@
           "message": "The HTTPS URL to receive webhook events. Must not point to localhost or private IP ranges."
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.display_name": {
-          "source": "Delete a Search Monitor",
-          "message": "Delete a Search Monitor"
+          "source": "Delete a search monitor",
+          "message": "Delete a search monitor"
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.short_desc": {
           "source": "Delete a search monitor",
@@ -4536,8 +4536,8 @@
           "message": "Maximum number of monitors to process in a single request. Defaults to 50, maximum 500."
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.display_name": {
-          "source": "Run a Search Monitor Now",
-          "message": "Run a Search Monitor Now"
+          "source": "Run a search monitor now",
+          "message": "Run a search monitor now"
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.short_desc": {
           "source": "Run a monitor immediately, whatever its schedule says",
@@ -4560,8 +4560,8 @@
           "message": "The monitor ID"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.display_name": {
-          "source": "List Search Monitor Runs",
-          "message": "List Search Monitor Runs"
+          "source": "List search monitor runs",
+          "message": "List search monitor runs"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.short_desc": {
           "source": "List the cycles a search monitor has run",
@@ -4608,8 +4608,8 @@
           "message": "Number of results per page"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.display_name": {
-          "source": "Get a Search Monitor Run",
-          "message": "Get a Search Monitor Run"
+          "source": "Get a search monitor run",
+          "message": "Get a search monitor run"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.short_desc": {
           "source": "Get one cycle of a search monitor",

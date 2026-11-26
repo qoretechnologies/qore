@@ -860,8 +860,8 @@
           "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
-          "message": "Simple Chat"
+          "source": "Simple chat",
+          "message": "Simple chat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -7548,8 +7548,8 @@
           "message": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard. Keys are strings with a maximum length of 64 characters; values are strings with a maximum length of 512 characters"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
-          "message": "Get a Conversation"
+          "source": "Get a conversation",
+          "message": "Get a conversation"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Retrieve a conversation",
@@ -7632,8 +7632,8 @@
           "message": "The ID of the conversation"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
-          "message": "List Conversation Items"
+          "source": "List conversation items",
+          "message": "List conversation items"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
           "source": "List the items in a conversation",
@@ -8108,8 +8108,8 @@
           "message": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
-          "message": "Get a Conversation Item"
+          "source": "Get a conversation item",
+          "message": "Get a conversation item"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
           "source": "Retrieve a single item from a conversation",
@@ -8216,8 +8216,8 @@
           "message": "The ID of the response to get"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
-          "message": "List Response Input Items"
+          "source": "List response input items",
+          "message": "List response input items"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
           "source": "List the input items used to generate a response",

@@ -1408,7 +1408,7 @@
           "message": "数時間で取得される長期アーカイブデータ。最も低コストなストレージクラス"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "事前署名付き URL の作成"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

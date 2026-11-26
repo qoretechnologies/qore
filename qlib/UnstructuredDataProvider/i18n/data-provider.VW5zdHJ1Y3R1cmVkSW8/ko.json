@@ -1316,7 +1316,7 @@
           "message": "삭제된 워크플로만 반환합니다"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "워크플로 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "다른 환경으로 내보내도 유지되는 안정적인 식별자입니다. 생성된 ID는 유지되지 않습니다.\n\n설정하지 않으면 `name`에서 파생되며, 한 번 설정하면 변경할 수 없습니다. 최대 63자이며 소문자, 숫자, 하이픈을 쓸 수 있고 하이픈으로 시작하거나 끝나거나 연속될 수 없습니다."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "워크플로 수정"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "비활성"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.display_name": {
-          "source": "Delete Workflow",
+          "source": "Delete workflow",
           "message": "워크플로 삭제"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "삭제할 워크플로"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.display_name": {
-          "source": "Run Workflow",
+          "source": "Run workflow",
           "message": "워크플로 실행"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "거부됨"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.display_name": {
-          "source": "Get Job",
+          "source": "Get job",
           "message": "작업 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "반환할 작업"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.display_name": {
-          "source": "Get Job Details",
+          "source": "Get job details",
           "message": "작업 상세 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "설명할 작업"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.display_name": {
-          "source": "Get Job Failed Files",
+          "source": "Get job failed files",
           "message": "작업 실패 파일 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "보고할 작업"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.display_name": {
-          "source": "Download Job Output",
+          "source": "Download job output",
           "message": "작업 출력 다운로드"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "파일을 생성한 처리 노드입니다. 기본값은 워크플로의 마지막 노드, 즉 출력을 기록하는 노드입니다."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.display_name": {
-          "source": "Cancel Job",
+          "source": "Cancel job",
           "message": "작업 취소"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source Connector",
+          "source": "Get source connector",
           "message": "소스 커넥터 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "다른 환경으로 내보내도 유지되는 안정적인 식별자입니다. 생성된 ID는 유지되지 않습니다.\n\n설정하지 않으면 `name`에서 파생되며, 한 번 설정하면 변경할 수 없습니다. 최대 63자이며 소문자, 숫자, 하이픈을 쓸 수 있고 하이픈으로 시작하거나 끝나거나 연속될 수 없습니다."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source Connector",
+          "source": "Update source connector",
           "message": "소스 커넥터 수정"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Sas 토큰"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source Connector",
+          "source": "Delete source connector",
           "message": "소스 커넥터 삭제"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "삭제할 커넥터"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.display_name": {
-          "source": "Check Source Connector",
+          "source": "Check source connector",
           "message": "소스 커넥터 점검"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "점검할 커넥터"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.display_name": {
-          "source": "Get Source Connector Check",
+          "source": "Get source connector check",
           "message": "소스 커넥터 점검 결과 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination Connector",
+          "source": "Get destination connector",
           "message": "대상 커넥터 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "다른 환경으로 내보내도 유지되는 안정적인 식별자입니다. 생성된 ID는 유지되지 않습니다.\n\n설정하지 않으면 `name`에서 파생되며, 한 번 설정하면 변경할 수 없습니다. 최대 63자이며 소문자, 숫자, 하이픈을 쓸 수 있고 하이픈으로 시작하거나 끝나거나 연속될 수 없습니다."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination Connector",
+          "source": "Update destination connector",
           "message": "대상 커넥터 수정"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Sas 토큰"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination Connector",
+          "source": "Delete destination connector",
           "message": "대상 커넥터 삭제"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5328,7 +5328,7 @@
           "message": "삭제할 커넥터"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.display_name": {
-          "source": "Check Destination Connector",
+          "source": "Check destination connector",
           "message": "대상 커넥터 점검"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.short_desc": {
@@ -5348,7 +5348,7 @@
           "message": "점검할 커넥터"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.display_name": {
-          "source": "Get Destination Connector Check",
+          "source": "Get destination connector check",
           "message": "대상 커넥터 점검 결과 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.short_desc": {
@@ -5404,7 +5404,7 @@
           "message": "사용"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Get Notification Channel",
+          "source": "Get notification channel",
           "message": "알림 채널 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5608,7 +5608,7 @@
           "message": "구독할 이벤트 유형"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Update Notification Channel",
+          "source": "Update notification channel",
           "message": "알림 채널 수정"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5780,7 +5780,7 @@
           "message": "답장 이메일 주소"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Delete Notification Channel",
+          "source": "Delete notification channel",
           "message": "알림 채널 삭제"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5800,7 +5800,7 @@
           "message": "삭제할 채널"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Verify Notification Channel",
+          "source": "Verify notification channel",
           "message": "알림 채널 확인"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "워크플로 템플릿을 나열합니다. Unstructured가 미리 만들어 둔 처리 체인으로, 노드를 직접 기술하는 대신 이를 기반으로 워크플로를 만들 수 있습니다."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.display_name": {
-          "source": "Get Workflow Template",
+          "source": "Get workflow template",
           "message": "워크플로 템플릿 조회"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.short_desc": {

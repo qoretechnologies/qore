@@ -8244,7 +8244,7 @@
           "message": "Consente di creare una fattura anche quando una o più voci contengono inventario tracciato in cui la quantità in fattura comporterebbe una quantità disponibile negativa"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Trova cronologia fattura"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Identificatore univoco per una fattura"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Aggiungi nota alla fattura"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "ha un valore pari a 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Invia fattura tramite email"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Restituisce solo i record creati o modificati a partire da questa data/ora.\n\nQuesto è ciò che rende possibile una scansione incrementale: senza di esso ogni chiamata legge l'intera raccolta."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Alloca nota di credito"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Quanti record restituire in una pagina. Il valore predefinito di Xero è 100 e il massimo è 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Trova attività"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Quanti record restituire in una pagina. Il valore predefinito di Xero è 100 e il massimo è 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Crea attività"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "La tabella con cui operare: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` o `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Trova dipendenti"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Elenca i dipendenti nel payroll dell'organizzazione.\n\n**L'API payroll utilizzata dipende da `payroll_region` della connessione**, poiché Xero non ha un'unica API per il payroll: l'Australia è servita all'indirizzo `payroll.xro/1.0`, mentre la Nuova Zelanda e il Regno Unito all'indirizzo `payroll.xro/2.0`. Una connessione senza regione impostata segnala questo errore anziché provare a indovinarla.\n\nLe regioni incapsulano il risultato in modo diverso - `{Employees: [...]}` in Australia e `{employees: [...], pagination}` nelle altre due - e questa azione restituisce i dipendenti come un semplice elenco in entrambi i casi.\n\nL'applicazione sostituita da questo modulo leggeva i dipendenti tramite l'API contabile, dove non esistono, quindi non restituiva mai nulla."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Crea dipendenti"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Crea dipendenti nel libro paga dell'organizzazione.\n\n`Employees` è un elenco anche per un solo dipendente. L'API per le buste paga dell'Australia accetta direttamente un elenco; quelle di Nuova Zelanda e Regno Unito accettano un dipendente per chiamata, pertanto un elenco di più elementi viene inviato singolarmente e i risultati vengono raccolti.\n\n**L'API per le buste paga utilizzata dipende da `payroll_region` della connessione.** I campi necessari per un dipendente variano in base alla regione (un dipendente del Regno Unito ha un codice National Insurance, mentre uno della Nuova Zelanda ha un numero IRD), pertanto il dipendente viene trasmesso così come fornito anziché definire una struttura regionale unica per tutti."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nuovo contatto"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Si attiva per ogni contatto creato o modificato nell'organizzazione.\n\nXero posiziona un contatto tramite `UpdatedDateUTC` e non offre un filtro \"creato a partire da\", quindi un contatto modificato successivamente attiva nuovamente questo evento. L'evento include il record del contatto restituito da Xero."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Nuova fattura fornitore"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Si attiva per ogni fattura fornitore creata o modificata.\n\nUna fattura fornitore è una fattura di tipo `ACCPAY`, che rappresenta il filtro applicato da questo evento; una fattura di vendita (`ACCREC`) non lo attiva. L'evento include il record della fattura restituito da Xero."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Nuova nota di credito"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Si attiva per ogni nota di credito creata o modificata.\n\nL'evento include il record della nota di credito restituito da Xero. L'applicazione sostituita da questo modulo eseguiva il polling delle note di credito senza esportare alcun modo per elencarne o leggerne una; **Trova note di credito** esiste per fornire una controparte a questo evento."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Nuova transazione bancaria"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Si attiva per ogni transazione bancaria creata o modificata - denaro speso o ricevuto su un conto bancario.\n\nL'evento include il record della transazione bancaria restituito da Xero."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nuovo pagamento"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Si attiva per ogni pagamento creato o modificato a fronte di una fattura o di una nota di credito.\n\nL'evento include il record del pagamento restituito da Xero."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nuovo ordine di acquisto"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Si attiva per ogni ordine di acquisto creato o modificato.\n\nL'evento include il record dell'ordine di acquisto restituito da Xero."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Nuovo dipendente"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

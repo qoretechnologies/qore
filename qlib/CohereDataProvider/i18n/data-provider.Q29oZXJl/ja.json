@@ -1716,7 +1716,7 @@
           "message": "指定すると、モデルのリストがフィルタリングされ、エンドポイントのデフォルト モデルのみが表示されます。このパラメータは、`endpoint` が指定された場合にのみ有効です。"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "モデルの取得"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "データセットを取得"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "データセットを削除"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.display_name": {
-          "source": "Get Embedding Job",
+          "source": "Get embedding job",
           "message": "埋め込みジョブの取得"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.display_name": {
-          "source": "Cancel Embedding Job",
+          "source": "Cancel embedding job",
           "message": "埋め込みジョブのキャンセル"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "バッチを取得"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.short_desc": {
@@ -3228,7 +3228,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "バッチをキャンセル"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.short_desc": {

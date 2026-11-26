@@ -708,7 +708,7 @@
           "message": "OData výraz popisujúci poradie triedenia."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Získať dávku"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.short_desc": {
@@ -752,7 +752,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Zrušiť dávku"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.display_name": {
-          "source": "Get Container",
+          "source": "Get container",
           "message": "Získať kontajner"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.display_name": {
-          "source": "Delete Container",
+          "source": "Delete container",
           "message": "Vymazať kontajner"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.display_name": {
-          "source": "List Container Files",
+          "source": "List container files",
           "message": "Zoznam súborov kontajnera"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Kurzor na použitie pri stránkovaní. `before` je ID objektu, ktoré definuje vaše miesto v zozname.\nNapríklad, ak vykonáte požiadavku na zoznam a dostanete 100 objektov, končiacich na obj_foo, vaša\nnásledná požiadavka môže obsahovať before=obj_foo, aby sa načítala predchádzajúca stránka zoznamu."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Create Container File",
+          "source": "Create container file",
           "message": "Vytvoriť súbor kontajnera"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3084,7 +3084,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Get Container File",
+          "source": "Get container file",
           "message": "Získať súbor kontajnera"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Delete Container File",
+          "source": "Delete container file",
           "message": "Vymazať súbor kontajnera"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Container File Content",
+          "source": "Get container file content",
           "message": "Získať obsah súboru kontajnera"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "odpoveď_na_schválenie_nástroja"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Získať konverzáciu"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "ID konverzácie na získanie."
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update Conversation",
+          "source": "Update conversation",
           "message": "Aktualizovať konverzáciu"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "Súbor 16 párov kľúč-hodnota, ktoré môžu byť pripojené k objektu. Môže byť užitočné na ukladanie dodatočných informácií o objekte v štruktúrovanom formáte a na vyhľadávanie objektov cez API alebo dashboard. Kľúče sú reťazce s maximálnou dĺžkou 64 znakov. Hodnoty sú reťazce s maximálnou dĺžkou 512 znakov."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
+          "source": "Delete conversation",
           "message": "Zmazať konverzáciu"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "ID konverzácie na vymazanie."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Vypísať položky konverzácie"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -8832,7 +8832,7 @@
           "message": "Špecifikujte ďalšie výstupné údaje, ktoré sa majú zahrnúť do odpovede modelu."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Create Conversation Items",
+          "source": "Create conversation items",
           "message": "Vytvoriť položky konverzácie"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -14260,7 +14260,7 @@
           "message": "Ďalšie polia na zahrnutie do odpovede."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get Conversation Item",
+          "source": "Get conversation item",
           "message": "Získať položku konverzácie"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -14308,7 +14308,7 @@
           "message": "Ďalšie polia na zahrnutie do odpovede."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete Conversation Item",
+          "source": "Delete conversation item",
           "message": "Vymazať položku konverzácie"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -15408,7 +15408,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Získať hodnotenie"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -15444,7 +15444,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Update Evaluation",
+          "source": "Update evaluation",
           "message": "Aktualizovať hodnotenie"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.short_desc": {
@@ -15496,7 +15496,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
+          "source": "Delete evaluation",
           "message": "Odstrániť hodnotenie"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
@@ -15532,7 +15532,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.display_name": {
-          "source": "List Evaluation Runs",
+          "source": "List evaluation runs",
           "message": "Zoznam hodnotiacich bežcov"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.short_desc": {
@@ -15612,7 +15612,7 @@
           "message": "failed"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Create Evaluation Run",
+          "source": "Create evaluation run",
           "message": "Vytvoriť hodnotiaci beh"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18392,7 +18392,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
+          "source": "Get evaluation run",
           "message": "Získať beh hodnotenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18432,7 +18432,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Cancel Evaluation Run",
+          "source": "Cancel evaluation run",
           "message": "Zrušiť spustenie hodnotenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18472,7 +18472,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Delete Evaluation Run",
+          "source": "Delete evaluation run",
           "message": "Vymazať hodnotiaci beh"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18512,7 +18512,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.display_name": {
-          "source": "List Evaluation Output Items",
+          "source": "List evaluation output items",
           "message": "Zoznam výstupných položiek hodnotenia"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.short_desc": {
@@ -18584,7 +18584,7 @@
           "message": "desc"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.display_name": {
-          "source": "Get Evaluation Run Output Item",
+          "source": "Get evaluation run output item",
           "message": "Získať položku výstupu behu hodnotenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.short_desc": {
@@ -18892,7 +18892,7 @@
           "message": "Po"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získať súbor"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.short_desc": {
@@ -18936,7 +18936,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Odstrániť súbor"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -18980,7 +18980,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -21024,7 +21024,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.display_name": {
-          "source": "List Fine-Tuning Checkpoint Permissions",
+          "source": "List fine-tuning checkpoint permissions",
           "message": "Zoznam povolení checkpointov doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.short_desc": {
@@ -21124,7 +21124,7 @@
           "message": "klesajúce"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Create Fine-Tuning Checkpoint Permission",
+          "source": "Create fine-tuning checkpoint permission",
           "message": "Vytvoriť povolenie pre doladenie kontrolného bodu"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
@@ -21180,7 +21180,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Delete Fine-Tuning Checkpoint Permission",
+          "source": "Delete fine-tuning checkpoint permission",
           "message": "Vymazať povolenie kontrolného bodu pre doladenie"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
@@ -22324,7 +22324,7 @@
           "message": "Počet úloh doladenia na získanie."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Get Fine-Tuning Job",
+          "source": "Get fine-tuning job",
           "message": "Získať úlohu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -22368,7 +22368,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Cancel Fine-Tuning Job",
+          "source": "Cancel fine-tuning job",
           "message": "Zrušiť úlohu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -22412,7 +22412,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tuning Job Checkpoints",
+          "source": "List fine-tuning job checkpoints",
           "message": "Zoznam checkpointov úloh doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.short_desc": {
@@ -22480,7 +22480,7 @@
           "message": "Počet kontrolných bodov na získanie."
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Copy Fine-Tuning Checkpoint",
+          "source": "Copy fine-tuning checkpoint",
           "message": "Kópia kontrolného bodu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.short_desc": {
@@ -22560,7 +22560,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.display_name": {
-          "source": "Get Fine-Tuning Checkpoint Copy",
+          "source": "Get fine-tuning checkpoint copy",
           "message": "Získať kópiu kontrolného bodu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.short_desc": {
@@ -22616,7 +22616,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.display_name": {
-          "source": "List Fine-Tuning Events",
+          "source": "List fine-tuning events",
           "message": "Zoznam udalostí doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.short_desc": {
@@ -22684,7 +22684,7 @@
           "message": "Počet udalostí na získanie."
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Pause Fine-Tuning Job",
+          "source": "Pause fine-tuning job",
           "message": "Pozastaviť úlohu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.short_desc": {
@@ -22728,7 +22728,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Resume Fine-Tuning Job",
+          "source": "Resume fine-tuning job",
           "message": "Obnoviť úlohu doladenia"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -23620,7 +23620,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.short_desc": {
@@ -23664,7 +23664,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Odstrániť model"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -24556,7 +24556,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Accept Realtime Call",
+          "source": "Accept realtime call",
           "message": "Prijať Realtime Hovor"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -25400,7 +25400,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Hangup Realtime Call",
+          "source": "Hangup realtime call",
           "message": "Ukončiť hovor v reálnom čase"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -25444,7 +25444,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.display_name": {
-          "source": "Refer Realtime Call",
+          "source": "Refer realtime call",
           "message": "Odkaz na Realtime volanie"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.short_desc": {
@@ -25500,7 +25500,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Reject Realtime Call",
+          "source": "Reject realtime call",
           "message": "Zamietnuť Realtime volanie"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -33080,7 +33080,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Získať odpoveď"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -33164,7 +33164,7 @@
           "message": "Ak je nastavené na pravdu, bude povolené obfuskovanie streamu. Obfuskácia streamu pridáva náhodné znaky do poľa `obfuscation` v udalostiach streaming delta, aby sa normalizovala veľkosť dátových balíkov ako opatrenie proti určitým vedľajším kanálovým útokom. Tieto polia obfuskácie sú zahrnuté predvolene, ale pridávajú malý režijný náklad do dátového toku. Môžete nastaviť `include_obfuscation` na false, aby ste optimalizovali šírku pásma, ak dôverujete sieťovým spojeniam medzi vašou aplikáciou a OpenAI API."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Odstrániť odpoveď"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -33200,7 +33200,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel Response",
+          "source": "Cancel response",
           "message": "Zrušiť odpoveď"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -33236,7 +33236,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Vypísať vstupné položky odpovede"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
@@ -33548,7 +33548,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Get Vector Store",
+          "source": "Get vector store",
           "message": "Získať vektorový obchod"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33592,7 +33592,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Update Vector Store",
+          "source": "Update vector store",
           "message": "Aktualizovať vektorový obchod"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33700,7 +33700,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Delete Vector Store",
+          "source": "Delete vector store",
           "message": "Vymazať vektorové úložisko"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33744,7 +33744,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Create Vector Store File Batch",
+          "source": "Create vector store file batch",
           "message": "Vytvoriť dávku súborov úložiska vektorov"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -33968,7 +33968,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Get Vector Store File Batch",
+          "source": "Get vector store file batch",
           "message": "Získať dávku súborov vektorového obchodu"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -34024,7 +34024,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Cancel Vector Store File Batch",
+          "source": "Cancel vector store file batch",
           "message": "Zrušiť dávku súborov vektorového úložiska"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -34080,7 +34080,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.display_name": {
-          "source": "List Files In Vector Store Batch",
+          "source": "List files in vector store batch",
           "message": "Zoznam súborov vo vektorovom úložisku v dávke"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.short_desc": {
@@ -34220,7 +34220,7 @@
           "message": "cancelled"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.display_name": {
-          "source": "List Vector Store Files",
+          "source": "List vector store files",
           "message": "Zoznam súborov vektorového úložiska"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.short_desc": {
@@ -34348,7 +34348,7 @@
           "message": "cancelled"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Create Vector Store File",
+          "source": "Create vector store file",
           "message": "Vytvoriť súbor úložiska vektorov"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34488,7 +34488,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Get Vector Store File",
+          "source": "Get vector store file",
           "message": "Získať súbor vektorového obchodu"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34544,7 +34544,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.display_name": {
-          "source": "Update Vector Store File Attributes",
+          "source": "Update vector store file attributes",
           "message": "Aktualizovať atribúty súboru vektorového obchodu"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.short_desc": {
@@ -34596,7 +34596,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Delete Vector Store File",
+          "source": "Delete vector store file",
           "message": "Vymazať súbor vektorového úložiska"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34652,7 +34652,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Vector Store File Content",
+          "source": "Get vector store file content",
           "message": "Získať obsah súboru vektorového obchodu"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.short_desc": {
@@ -34708,7 +34708,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Search Vector Store",
+          "source": "Search vector store",
           "message": "Vyhľadávanie vo vektorovom úložisku"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -35264,7 +35264,7 @@
           "message": "desc"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
+          "source": "Get video",
           "message": "Získať video"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.short_desc": {
@@ -35308,7 +35308,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.display_name": {
-          "source": "Delete Video",
+          "source": "Delete video",
           "message": "Vymazať video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.short_desc": {
@@ -35352,7 +35352,7 @@
           "message": "náhľad"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.display_name": {
-          "source": "Download Video",
+          "source": "Download video",
           "message": "Stiahnuť video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.short_desc": {
@@ -35408,7 +35408,7 @@
           "message": "Vyberateľné varianty aktív pre stiahnutý obsah."
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.display_name": {
-          "source": "Remix Video",
+          "source": "Remix video",
           "message": "Remix videa"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.short_desc": {
@@ -35436,7 +35436,7 @@
           "message": "Príkaz"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.display_name": {
-          "source": "Create Transcription",
+          "source": "Create transcription",
           "message": "Vytvoriť prepis"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.short_desc": {
@@ -35684,7 +35684,7 @@
           "message": "Verzia Azure audio API založeného na nasadení. Predvolená verzia podporuje nasadenia Whisper a GPT transkripcie."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.display_name": {
-          "source": "Create Translation",
+          "source": "Create translation",
           "message": "Vytvoriť preklad"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.short_desc": {

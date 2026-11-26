@@ -8244,7 +8244,7 @@
           "message": "請求数量によって利用可能数量がマイナスになる追跡対象在庫が1つ以上の明細項目に含まれている場合でも、請求書の作成を許可します"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "請求書履歴の検索"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "請求書の一意の識別子"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "請求書にメモを追加"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "値が0である"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "請求書をメール送信"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "この時刻以降に作成または変更されたレコードのみを返します。\n\nこれにより増分スイープが可能になります。これがない場合、呼び出しごとにコレクション全体が読み込まれます。"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "クレジットノートを割り当て"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "1ページで返すレコード数。Xeroのデフォルトは100、最大値は1000です。"
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "タスクの検索"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "1ページで返すレコード数。Xeroのデフォルトは100、最大値は1000です。"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "タスクを作成"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "操作対象のテーブル: `invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects`、または `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "従業員の検索"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "組織の給与計算に含まれる従業員を一覧表示します。\n\n**どの給与計算 API を使用するかは接続の `payroll_region` から取得されます**。Xero には単一の給与計算 API が存在しないためです（オーストラリアは `payroll.xro/1.0`、ニュージーランドおよび英国は `payroll.xro/2.0` で提供されます）。地域が設定されていない接続は、推測するのではなくその旨を報告します。\n\n地域によって結果のラップ方法が異なり（オーストラリアでは `{Employees: [...]}`、他の2地域では `{employees: [...], pagination}`）、このアクションはどちらの場合でも従業員をプレーンなリストとして返します。\n\nこのモジュールが置き換えるアプリケーションは会計 API 経由で従業員を読み取っていましたが、そこに従業員は存在しないため、何も返されませんでした。"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "従業員を作成"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "組織の給与計算に従業員を作成します。\n\n`Employees`は1人の従業員の場合でもリストです。オーストラリアの給与APIはリストを直接受け取ります。ニュージーランドおよび英国の給与APIは1回の呼び出しにつき1人の従業員を受け取るため、複数人のリストは1件ずつ送信されて結果が収集されます。\n\n**どの給与APIを使用するかは接続の`payroll_region`に基づきます。** 従業員に必要なフィールドは地域によって異なります（英国の従業員には国民保険番号があり、ニュージーランドの従業員にはIRD番号があるなど）。そのため、すべての地域に対して単一の形式を宣言するのではなく、指定されたとおりに従業員データを渡します。"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "新規連絡先"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "組織内で作成または変更された各連絡先に対してトリガーされます。\n\nXeroは`UpdatedDateUTC`によって連絡先を特定し、「指定日時以降に作成」フィルターを提供しないため、後から編集された連絡先でも再度トリガーされます。イベントにはXeroが返す連絡先レコードが含まれます。"
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "新規仕入請求書"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "作成または変更された各仕入請求書に対してトリガーされます。\n\n仕入請求書はタイプ`ACCPAY`の請求書であり、このイベントが適用するフィルターです。売上請求書（`ACCREC`）ではトリガーされません。イベントにはXeroが返す請求書レコードが含まれます。"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "新規クレジットノート"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "作成または変更された各クレジットノートに対してトリガーされます。\n\nイベントにはXeroが返すクレジットノートレコードが含まれます。このモジュールが置き換えるアプリケーションは、クレジットノートの一覧取得や読み取り方法をエクスポートせずにポーリングしていました。このイベントに対応するものとして**クレジットノートの検索**が存在します。"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "新規銀行取引"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "銀行口座に対して作成または変更された各銀行取引（支出または受取）に対してトリガーされます。\n\nイベントにはXeroが返す銀行取引レコードが含まれます。"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新規支払い"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "請求書またはクレジットノートに対して作成または変更された各支払いに対してトリガーされます。\n\nイベントにはXeroが返す支払いレコードが含まれます。"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "新規発注書"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "作成または変更された各発注書に対してトリガーされます。\n\nイベントにはXeroが返す発注書レコードが含まれます。"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "新規従業員"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

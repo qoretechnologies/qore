@@ -1408,7 +1408,7 @@
           "message": "Dlouhodobá archivní data načítaná v řádu hodin; cenově nejvýhodnější třída úložiště"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Vytvořit předem podepsanou adresu URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

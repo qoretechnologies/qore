@@ -2476,8 +2476,8 @@
           "message": "An ISO 639-1 language code specifying the preferred language for the response"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
-          "message": "Web Search"
+          "source": "Web search",
+          "message": "Web search"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
           "source": "Search the web using Perplexity's dedicated search API",

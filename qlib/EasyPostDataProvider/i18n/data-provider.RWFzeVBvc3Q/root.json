@@ -592,8 +592,8 @@
           "message": "ZIP+4 verification (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
-          "message": "Get Address"
+          "source": "Get address",
+          "message": "Get address"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
           "source": "Retrieve an address by ID",
@@ -880,8 +880,8 @@
           "message": "ZIP+4 verification (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
-          "message": "Get Parcel"
+          "source": "Get parcel",
+          "message": "Get parcel"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
           "source": "Retrieve a parcel by ID",
@@ -3700,8 +3700,8 @@
           "message": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
-          "message": "Get Shipment"
+          "source": "Get shipment",
+          "message": "Get shipment"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
           "source": "Retrieve a shipment by ID",
@@ -3832,8 +3832,8 @@
           "message": "ID of a previously purchased shipment to refund"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
-          "message": "Get Shipment Label"
+          "source": "Get shipment label",
+          "message": "Get shipment label"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
           "source": "Retrieve a shipment label",
@@ -4016,8 +4016,8 @@
           "message": "Carrier name (e.g. `USPS`, `FedEx`); EasyPost auto-detects when omitted"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
-          "message": "Get Tracker"
+          "source": "Get tracker",
+          "message": "Get tracker"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
           "source": "Retrieve a tracker by ID",
@@ -8692,8 +8692,8 @@
           "message": "Webhook to delete"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
-          "message": "List Events"
+          "source": "List events",
+          "message": "List events"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
           "source": "List webhook events",

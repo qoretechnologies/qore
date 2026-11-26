@@ -524,7 +524,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Get Balance Transaction",
+          "source": "Get balance transaction",
           "message": "Pobierz transakcję salda"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Get Connected Account",
+          "source": "Get connected account",
           "message": "Pobierz połączone konto"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Update Connected Account",
+          "source": "Update connected account",
           "message": "Zaktualizuj konto połączone"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2416,7 +2416,7 @@
           "message": "User Agent"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Delete Connected Account",
+          "source": "Delete connected account",
           "message": "Usuń połączone konto"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.display_name": {
-          "source": "Create Login Link",
+          "source": "Create login link",
           "message": "Utwórz link logowania"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.display_name": {
-          "source": "List External Accounts",
+          "source": "List external accounts",
           "message": "Wyświetl listę kont zewnętrznych"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.display_name": {
-          "source": "Create External Account",
+          "source": "Create external account",
           "message": "Utwórz konto zewnętrzne"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.display_name": {
-          "source": "List Account People",
+          "source": "List account people",
           "message": "Wyświetl listę osób na koncie"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.display_name": {
-          "source": "Create Account Person",
+          "source": "Create account person",
           "message": "Utwórz osobę powiązaną z kontem"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Zwracaj tylko opłaty dla tej grupy transferów, maksymalnie 100."
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.display_name": {
-          "source": "Get Charge",
+          "source": "Get charge",
           "message": "Pobierz płatność"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.short_desc": {
@@ -4068,7 +4068,7 @@
           "message": "Ciąg znaków identyfikujący tę transakcję jako część grupy. Szczegółowe informacje zawiera sekcja [Grouping transactions](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.display_name": {
-          "source": "Update Charge",
+          "source": "Update charge",
           "message": "Zaktualizuj obciążenie"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.short_desc": {
@@ -4348,7 +4348,7 @@
           "message": "Zwraca listę klientów powiązanych z określonym zegarem testowym. Odpowiedź nie będzie zawierać klientów z zegarami testowymi, jeśli ten parametr nie jest ustawiony."
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Pobierz klienta"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -5260,7 +5260,7 @@
           "message": "Identyfikator zegara testowego do dołączenia do klienta."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Zaktualizuj klienta"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "reverse"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Usuń klienta"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -5848,7 +5848,7 @@
           "message": "Klient"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.display_name": {
-          "source": "List Customer Balance Transactions",
+          "source": "List customer balance transactions",
           "message": "Wyświetl listę transakcji salda klienta"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Create Customer Balance Transaction",
+          "source": "Create customer balance transaction",
           "message": "Utwórz transakcję salda klienta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -6028,7 +6028,7 @@
           "message": "Zestaw [par klucz-wartość](https://docs.stripe.com/api/metadata), które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie. Poszczególne klucze można wyczyścić, przypisując im pustą wartość. Wszystkie klucze można wyczyścić, przypisując pustą wartość do `metadata`."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.display_name": {
-          "source": "List Customer Sources",
+          "source": "List customer sources",
           "message": "Wyświetl listę źródeł klienta"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.display_name": {
-          "source": "Create Customer Source",
+          "source": "Create customer source",
           "message": "Utwórz źródło klienta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Customer Subscriptions",
+          "source": "List customer subscriptions",
           "message": "Wyświetl listę subskrypcji klienta"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.short_desc": {
@@ -6368,7 +6368,7 @@
           "message": "Kursor używany do stronicowania. `starting_after` to identyfikator obiektu, który definiuje Twoje miejsce na liście. Na przykład, jeśli wykonasz żądanie pobrania listy i otrzymasz 100 obiektów, kończąc na `obj_foo`, kolejne wywołanie może zawierać `starting_after=obj_foo` w celu pobrania następnej strony listy."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Customer Subscription",
+          "source": "Create customer subscription",
           "message": "Utwórz subskrypcję klienta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -7716,7 +7716,7 @@
           "message": "Zwracaj tylko faktury dla subskrypcji określonej przez ten identyfikator subskrypcji."
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Pobierz fakturę"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -8768,7 +8768,7 @@
           "message": "Miejsce docelowe"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Zaktualizuj fakturę"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "Miejsce docelowe"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Usuń fakturę"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.short_desc": {

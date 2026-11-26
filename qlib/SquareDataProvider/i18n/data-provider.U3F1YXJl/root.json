@@ -740,8 +740,8 @@
           "message": "External reference"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
-          "message": "Create Paid Order"
+          "source": "Create paid order",
+          "message": "Create paid order"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
           "source": "Create and pay an order",
@@ -980,8 +980,8 @@
           "message": "The current version of the order (for optimistic concurrency)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
-          "message": "Create a Payment"
+          "source": "Create a payment",
+          "message": "Create a payment"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
           "source": "Create a new payment",
@@ -1080,8 +1080,8 @@
           "message": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
-          "message": "Complete Payment"
+          "source": "Complete payment",
+          "message": "Complete payment"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
           "source": "Complete a payment",

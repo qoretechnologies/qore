@@ -808,7 +808,7 @@
           "message": "Назва сховища пошуку файлів для використання в генерації, доповненій пошуком (RAG). Модель шукатиме документи в сховищі, щоб обґрунтувати свою відповідь релевантним вмістом"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Простий чат"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Назва сховища пошуку файлів для використання в генерації, доповненій пошуком (RAG). Модель шукатиме документи в сховищі, щоб обґрунтувати свою відповідь релевантним вмістом"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Створити ембеддінг вмісту"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Вміст від моделі"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Пакетне створення ембеддінгів"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

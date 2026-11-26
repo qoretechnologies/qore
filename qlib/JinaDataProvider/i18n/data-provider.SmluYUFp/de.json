@@ -1596,7 +1596,7 @@
           "message": "Gespeicherte Klassifikatoren zur Wiederverwendung oder Löschung finden. **Dienstverfügbarkeit:** Jina meldete HTTP 500 für diesen Endpunkt während der Überprüfung am 7. September 2026; Klassifikator-IDs können weiterhin direkt angegeben werden."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Klassifikator löschen"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Der gespeicherte Klassifikator zum Entfernen."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Vergleichen Sie die Modellfähigkeiten, bevor Sie ein Embedding- oder Reranking-Modell auswählen. Der Katalog ist öffentlich; verwenden Sie den Verbindungsping, um Ihren API-Schlüssel zu überprüfen."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Modell abrufen"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Falls `true` (Standard), werden Embeddings L2-normalisiert auf Einheitslänge."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "Batch-Status abrufen"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Der Einbettungs-Batch zur Überprüfung oder zum Abbrechen."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Stapel abbrechen"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Maximale Anzahl der zurückzugebenden aktuellen Batches."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Webseite oder Dokument lesen"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Verknüpfung"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Das Web durchsuchen"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {

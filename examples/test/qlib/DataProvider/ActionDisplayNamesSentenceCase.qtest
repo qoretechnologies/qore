@@ -17,15 +17,18 @@
     display names written in the action hashes of the modules' sources: only its first word starts with a capital
     letter, apart from words in capitals (API, PDF), words with a capital after their first letter (WebSocket,
     OAuth2), single capital letters, and proper names: an app's display name (ex: "Google Drive", "Klaviyo") and the
-    product names in @ref ProperNames and @ref ProperPhrases.
+    product names in @ref ProperNames and @ref ProperPhrases.  The parts of a word that a slash or a hyphen joins are
+    words of their own ("Fine-tuning", not "Fine-Tuning").
 
     An app's display name is a proper name as a whole: the words of "Constant Contact" or "Server Sent Events" are
     ordinary words elsewhere ("Create a contact", "List calendar events").  A one-word app name is a proper name
     only in its own module, as it is an ordinary word in the others (the "Segment" app, a Klaviyo segment).
 
-    The scan finds an action's display name in the source of its action hash when no nested hash comes before it;
-    actions whose display name follows a nested hash (such as their billing information) or that are declared in
-    REST manifests by their operation ID are not covered.
+    The scan reads the sources as tokens (strings, comments, brackets), so it finds an action's display name in its
+    action hash wherever the key comes: after a nested hash (such as an action's billing information) or a string
+    with braces (such as the path of an action that a REST manifest declares by its operation ID).  It does not see the
+    action names that a module gives otherwise: in a constant of its action's class (\c DisplayName), in a table of
+    names or tuples, in a JSON manifest, or built from a resource name.
 */
 class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     public {
@@ -53,6 +56,7 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
 
     constructor() : Test("ActionDisplayNamesSentenceCaseTest", "1.0") {
         addTestCase("the action display names are found", \foundTest());
+        addTestCase("the source scan finds the display name in every action hash", \scanTest());
         addTestCase("app names are proper names only as a whole or in their own module", \appNameTest());
         addTestCase("every action display name is in sentence case", \sentenceCaseTest());
         set_return_value(main());
@@ -62,10 +66,13 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
         string root = normalize_dir(get_script_dir() + "/../../../../qlib");
         foreach string file in (findSources(root)) {
             string src = ReadOnlyFile::readTextFile(file);
+            string mod = ActionDisplayNamesSentenceCaseTest::getModule(root, file);
+            foreach string label in (ActionDisplayNamesSentenceCaseTest::findActionLabels(src)) {
+                labels{label}{mod} += (basename(file),);
+            }
             # comments may quote old or example names
             src =~ s/\/\*.*?\*\///sg;
             src =~ s/^[ \t]*#[^\n]*//mg;
-            string mod = ActionDisplayNamesSentenceCaseTest::getModule(root, file);
             foreach string app in (src =~ x/<DataProviderAppInfo>\s*\{.{0,1500}?"display_name"\s*:\s*"([^"]+)"/sg ?? ()) {
                 if (app =~ / /) {
                     multi_word_apps{app} = True;
@@ -73,19 +80,40 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
                     one_word_apps{mod}{app} = True;
                 }
             }
-            foreach string label in (src =~ x/"action"\s*:\s*[^,{}\n]+,[^{}]{0,600}?"display_name"\s*:\s*"([^"\n]+)"/g
-                    ?? ()) {
-                labels{label}{mod} += (basename(file),);
-            }
         }
     }
 
     foundTest() {
-        assertTrue(labels.size() > 1500, sprintf("action display names found: %d", labels.size()));
+        assertTrue(labels.size() > 3000, sprintf("action display names found: %d", labels.size()));
         assertTrue(multi_word_apps.size() + one_word_apps.size() > 100,
             sprintf("app names found: %d", multi_word_apps.size() + one_word_apps.size()));
         assertTrue(multi_word_apps."Google Drive", "a multi-word app name is found");
         assertTrue(one_word_apps.KlaviyoDataProvider.Klaviyo, "a one-word app name is found in its module");
+    }
+
+    scanTest() {
+        # the display name after a nested hash, after a path with braces, and before the action key
+        string src = "const A = (\n"
+            "    <DataProviderActionInfo>{\n"
+            "        \"app\": \"X\",\n"
+            "        \"action\": \"a\",\n"
+            "        \"billing\": {\"x\": 1},\n"
+            "        \"display_name\": \"Get One\",\n"
+            "    },\n"
+            "    <RestSchemaActionInfo>{\n"
+            "        \"action\": \"b\", \"path\": \"/b/{id}\", \"operation_id\": \"getB\",\n"
+            "        \"display_name\": \"Get \" + \"Two\",\n"
+            "    },\n"
+            "    {\"display_name\": \"Get Three\", \"action\": AName},\n"
+            "    # a comment {\"action\": \"c\", \"display_name\": \"Get Comment\"}\n"
+            "    /* {\"action\": \"d\", \"display_name\": \"Get Block\"} */\n"
+            "    {\"accept\": \"*/*\", \"action\": \"e\", \"display_name\": \"Get Four\"},\n"
+            "    # the display name of a field in an action hash is not the action's\n"
+            "    {\"action\": {\"display_name\": \"Field\"}},\n"
+            "    {\"action\": \"f\", \"fields\": {\"x\": {\"display_name\": \"Field X\"}}, "
+                "\"display_name\": \"Get \\\"Five\\\"\"},\n"
+            ");\n";
+        assertEq(("Get One", "Get Two", "Get Three", "Get Four", "Get \"Five\""), findActionLabels(src));
     }
 
     appNameTest() {
@@ -104,6 +132,9 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
         assertEq((), titleCaseWords("Get PDF from OneDrive in Slack (v2) X", "X", multi, apps));
         # a word in parentheses and after a slash
         assertEq(("(Admin)", "Inactive"), titleCaseWords("List users (Admin) active/Inactive", "X", multi, apps));
+        # the parts of a hyphenated word after the first
+        assertEq(("Fine", "Tuning", "Tune"), titleCaseWords("Get Fine-Tuning job fine-Tune", "X", multi, apps));
+        assertEq((), titleCaseWords("Fine-tune a model with fine-tuning", "X", multi, apps));
         # a product name of more than one word
         assertEq((), titleCaseWords("Get Vibe Work usage by user (admin)", "X", multi, apps));
         assertEq(("Work",), titleCaseWords("Get vibe Work usage", "X", multi, apps));
@@ -140,9 +171,14 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
         }
         list<string> rv = ();
         list<string> words = text.split(" ");
-        # the first word of the label starts with a capital, unless it is (the start of) an app name
-        for (int i = (words[0] == "\x01" ? 0 : 1); i < words.size(); ++i) {
-            foreach string piece in (words[i].split("/")) {
+        for (int i = 0; i < words.size(); ++i) {
+            # the parts of a word that a slash or a hyphen join ("Active/Inactive", "Fine-Tuning")
+            list<string> pieces = (words[i] =~ x/([^\/-]+)/g) ?? ();
+            # the first word of the label starts with a capital, unless it is (the start of) an app name
+            if (!i && words[0] != "\x01") {
+                shift pieces;
+            }
+            foreach string piece in (pieces) {
                 string core = piece;
                 core =~ s/[^A-Za-z0-9]//g;
                 if (core.length() < 2 || core !~ /^[A-Z]/) {
@@ -158,6 +194,57 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
                 rv += piece;
             }
         }
+        return rv;
+    }
+
+    #! The display names of the action hashes in a source: the hashes with an \c "action" key whose value is not a hash
+    private static list<string> findActionLabels(string src) {
+        # strings, comments and the tokens of hash and list structure, in source order
+        list<string> tokens = (src =~ x/("(?:[^"\\]|\\.)*"|\/\*.*?\*\/|#[^\n]*|[{}():,+])/gs) ?? ();
+        tokens = select tokens, $1 !~ /^(#|\/\*)/;
+        # one frame per open bracket: whether it has an action key and its display name
+        list<hash<auto>> stack = ();
+        list<string> rv = ();
+        int size = tokens.size();
+        for (int i = 0; i < size; ++i) {
+            string tok = tokens[i];
+            if (tok == "{" || tok == "(") {
+                push stack, {};
+                continue;
+            }
+            if (tok == "}" || tok == ")") {
+                *hash<auto> frame = pop stack;
+                if (frame.action && exists frame.label) {
+                    rv += frame.label;
+                }
+                continue;
+            }
+            if (!stack || tok[0] != "\"" || tokens[i + 1] != ":") {
+                continue;
+            }
+            string next = tokens[i + 2] ?? "";
+            if (tok == "\"action\"") {
+                if (next != "{" && next != "(") {
+                    stack[stack.size() - 1].action = True;
+                }
+            } else if (tok == "\"display_name\"" && next[0] == "\"") {
+                # the label, with the strings it is concatenated from
+                string label = ActionDisplayNamesSentenceCaseTest::unquote(next);
+                int j = i + 3;
+                while (tokens[j] == "+" && tokens[j + 1][0] == "\"") {
+                    label += ActionDisplayNamesSentenceCaseTest::unquote(tokens[j + 1]);
+                    j += 2;
+                }
+                stack[stack.size() - 1].label = label;
+            }
+        }
+        return rv;
+    }
+
+    #! The text of a double-quoted string token
+    private static string unquote(string tok) {
+        string rv = tok.substr(1, -1);
+        rv =~ s/\\(.)/$1/g;
         return rv;
     }
 

@@ -81,7 +81,7 @@ module DeepgramDataProvider {
             "path": "/transcribe-file",
             "action": "transcribe-file",
             "billing": <DataProviderBillingInfo>{"unit": "second"},
-            "display_name": "Transcribe File",
+            "display_name": "Transcribe file",
             "short_desc": "Transcribe an audio file by URL or upload via Deepgram ASR",
             "desc": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the "
                 "JSON transcript.  The audio is given either as a public `url` that "
@@ -114,7 +114,7 @@ module DeepgramDataProvider {
             "path": "/synthesize-speech",
             "action": "synthesize-speech",
             "billing": <DataProviderBillingInfo>{"unit": "character"},
-            "display_name": "Synthesize Speech",
+            "display_name": "Synthesize speech",
             "short_desc": "Synthesize speech from text via Deepgram TTS (Aura models)",
             "desc": "Posts text to Deepgram's `/v1/speak` endpoint and returns the "
                 "audio bytes in the requested encoding.  Uses the Aura voice model "

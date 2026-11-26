@@ -2476,7 +2476,7 @@
           "message": "回答の優先言語を指定するISO 639-1言語コード"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Web検索"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

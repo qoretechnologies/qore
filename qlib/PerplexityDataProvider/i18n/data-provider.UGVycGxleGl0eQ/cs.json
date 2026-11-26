@@ -2476,7 +2476,7 @@
           "message": "Kód jazyka podle ISO 639-1 určující preferovaný jazyk pro odpověď"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Vyhledávání na webu"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

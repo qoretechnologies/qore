@@ -2476,7 +2476,7 @@
           "message": "Un code de langue ISO 639-1 spécifiant la langue préférée pour la réponse"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "Recherche web"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

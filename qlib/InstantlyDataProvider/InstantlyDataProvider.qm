@@ -1634,7 +1634,7 @@ module InstantlyDataProvider {
             "action": "create-email-verification",
             "billing": <DataProviderBillingInfo>{"model": "metered", "unit": "credit"},
             "groups": "Email Verification",
-            "display_name": "Create Email Verification",
+            "display_name": "Create email verification",
             "short_desc": "Create an email verification request",
             "desc": "Submit an email address for verification to check its validity and deliverability.",
             "action_code": DPAT_API,

@@ -1596,7 +1596,7 @@
           "message": "Znajdź zapisane klasyfikatory do ponownego użycia lub usunięcia. **Dostępność usługi:** Jina zwróciła HTTP 500 dla tego punktu końcowego podczas weryfikacji 7 września 2026 r.; identyfikatory klasyfikatorów nadal mogą być dostarczane bezpośrednio."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Usuń klasyfikator"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Zapisany klasyfikator do usunięcia."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lista modeli"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Porównaj możliwości modeli przed wyborem modelu osadzania lub ponownego rankingu. Katalog jest publiczny; użyj pingu połączenia, aby zweryfikować swój klucz API."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Pobierz model"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Jeśli `true` (domyślnie), osadzenia są znormalizowane L2 do jednostkowej długości."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "Pobierz status partii"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Partia osadzania do sprawdzenia lub anulowania."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Anuluj partię"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Maksymalna liczba ostatnich partii do zwrócenia."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Czytaj stronę internetową lub dokument"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Skrót"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Szukaj w sieci"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {

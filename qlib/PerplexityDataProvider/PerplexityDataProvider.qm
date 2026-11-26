@@ -166,7 +166,7 @@ module PerplexityDataProvider {
             "path": "/search",
             "action": "search",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "Web Search",
+            "display_name": "Web search",
             "short_desc": "Search the web using Perplexity's dedicated search API",
             "desc": "Search the web using Perplexity's dedicated search API returning structured results with "
                 "titles, URLs, and snippets",

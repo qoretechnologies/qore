@@ -740,7 +740,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/indexes/{index_name}",
                 "operation_id": "describe_index",
-                "display_name": "Describe Index",
+                "display_name": "Describe index",
                 "short_desc": "Get one index, including its data-plane host",
                 "desc": "Returns one index: its schema, its deployment, its state, and the **host** its "
                     "data plane is served from.\n\n"
@@ -929,7 +929,7 @@ public class PineconeManifest {
                 "method": "PATCH",
                 "path": "/indexes/{index_name}",
                 "operation_id": "configure_index",
-                "display_name": "Configure Index",
+                "display_name": "Configure index",
                 "short_desc": "Change an existing index's settings",
                 "desc": "Changes an existing index: its deployment, its read capacity, its tags, its "
                     "deletion protection, or fields added to its schema.\n\n"
@@ -959,7 +959,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/indexes/{index_name}",
                 "operation_id": "delete_index",
-                "display_name": "Delete Index",
+                "display_name": "Delete index",
                 "short_desc": "Delete an index and everything in it",
                 "desc": "Deletes an index and every record in it.  **This cannot be undone**; take a "
                     "backup first if the data matters.\n\n"
@@ -987,7 +987,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/indexes/{index_name}/backups",
                 "operation_id": "list_index_backups",
-                "display_name": "List Index Backups",
+                "display_name": "List index backups",
                 "short_desc": "List the backups taken from one index",
                 "desc": "Lists the backups taken from one index.\n\n"
                     "By default the index must still exist: a name that resolves to no active index "
@@ -1013,7 +1013,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/indexes/{index_name}/backups",
                 "operation_id": "create_backup",
-                "display_name": "Create Backup",
+                "display_name": "Create backup",
                 "short_desc": "Back an index up now",
                 "desc": "Takes a backup of an index now.  The backup records the index's schema, and an "
                     "index created from it with **Create Index from Backup** inherits that schema.",
@@ -1037,7 +1037,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/backups/{backup_id}",
                 "operation_id": "describe_backup",
-                "display_name": "Describe Backup",
+                "display_name": "Describe backup",
                 "short_desc": "Get one backup",
                 "desc": "Returns one backup: its state, its size, the index it was taken from and the "
                     "schema it will restore.",
@@ -1057,7 +1057,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/backups/{backup_id}",
                 "operation_id": "delete_backup",
-                "display_name": "Delete Backup",
+                "display_name": "Delete backup",
                 "short_desc": "Delete a backup permanently",
                 "desc": "Deletes a backup permanently.  The index it was taken from is not affected.",
                 "groups": (GroupBackups,),
@@ -1076,7 +1076,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/backups/{backup_id}/create-index",
                 "operation_id": "create_index_from_backup_operation",
-                "display_name": "Create Index from Backup",
+                "display_name": "Create index from backup",
                 "short_desc": "Restore a backup into a new index",
                 "desc": "Creates a new index from a backup.  The new index **inherits the schema** of "
                     "the index the backup was taken from, including its full-text fields and its "
@@ -1108,7 +1108,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/indexes/{index_name}/backup-schedules",
                 "operation_id": "list_backup_schedules",
-                "display_name": "List Backup Schedules",
+                "display_name": "List backup schedules",
                 "short_desc": "List the backup schedules of an index",
                 "desc": "Lists the backup schedules attached to an index.",
                 "groups": (GroupBackups,),
@@ -1122,7 +1122,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/indexes/{index_name}/backup-schedules",
                 "operation_id": "create_backup_schedule",
-                "display_name": "Create Backup Schedule",
+                "display_name": "Create backup schedule",
                 "short_desc": "Back an index up automatically on a schedule",
                 "desc": "Attaches a time-based backup schedule to an index, so it is backed up without "
                     "anyone asking.\n\n"
@@ -1173,7 +1173,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/backup-schedules/{schedule_id}",
                 "operation_id": "describe_backup_schedule",
-                "display_name": "Describe Backup Schedule",
+                "display_name": "Describe backup schedule",
                 "short_desc": "Get one backup schedule",
                 "desc": "Returns one backup schedule: its frequency, its retention, whether it is "
                     "enabled and when it next runs.",
@@ -1187,7 +1187,7 @@ public class PineconeManifest {
                 "method": "PATCH",
                 "path": "/backup-schedules/{schedule_id}",
                 "operation_id": "update_backup_schedule",
-                "display_name": "Update Backup Schedule",
+                "display_name": "Update backup schedule",
                 "short_desc": "Change a backup schedule's frequency, retention or state",
                 "desc": "Changes a backup schedule's frequency, its retention, or whether it is "
                     "enabled.\n\n"
@@ -1223,7 +1223,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/backup-schedules/{schedule_id}",
                 "operation_id": "delete_backup_schedule",
-                "display_name": "Delete Backup Schedule",
+                "display_name": "Delete backup schedule",
                 "short_desc": "Remove a backup schedule",
                 "desc": "Removes a backup schedule permanently.  Backups it has already taken are kept.",
                 "groups": (GroupBackups,),
@@ -1236,7 +1236,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/backup-schedules/{schedule_id}/history",
                 "operation_id": "list_backup_schedule_history",
-                "display_name": "List Backup Schedule History",
+                "display_name": "List backup schedule history",
                 "short_desc": "List the backups a schedule has taken",
                 "desc": "Lists the backups a schedule has taken, with the state of each — which is how "
                     "you find out that an automatic backup has been failing.",
@@ -1262,7 +1262,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/restore-jobs/{job_id}",
                 "operation_id": "describe_restore_job",
-                "display_name": "Describe Restore Job",
+                "display_name": "Describe restore job",
                 "short_desc": "Get one restore job and its progress",
                 "desc": "Returns one restore job: its state, how far it has got, and the index it is "
                     "restoring into.  This is what a flow polls after **Create Index from Backup**.",
@@ -1325,7 +1325,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/collections/{collection_name}",
                 "operation_id": "describe_collection",
-                "display_name": "Describe Collection",
+                "display_name": "Describe collection",
                 "short_desc": "Get one collection (pod-based indexes only)",
                 "desc": "Returns one collection: its size, its state, its dimension and how many "
                     "vectors it holds.\n\n"
@@ -1340,7 +1340,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/collections/{collection_name}",
                 "operation_id": "delete_collection",
-                "display_name": "Delete Collection",
+                "display_name": "Delete collection",
                 "short_desc": "Delete a collection permanently",
                 "desc": "Deletes a collection permanently.  The index it was taken from is not "
                     "affected.\n\n"
@@ -1724,7 +1724,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/namespaces/{namespace}",
                 "operation_id": "describeNamespace",
-                "display_name": "Describe Namespace",
+                "display_name": "Describe namespace",
                 "short_desc": "Get one namespace and its record count",
                 "desc": "Returns one namespace: how many records it holds, its size and its metadata "
                     "schema.\n\n"
@@ -1741,7 +1741,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/namespaces/{namespace}",
                 "operation_id": "deleteNamespace",
-                "display_name": "Delete Namespace",
+                "display_name": "Delete namespace",
                 "short_desc": "Delete a namespace and everything in it",
                 "desc": "Deletes a namespace and every record in it.  **This cannot be undone.**\n\n"
                     "Serverless indexes only.",
@@ -1757,7 +1757,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/records/namespaces/{namespace}/upsert",
                 "operation_id": "upsertRecordsNamespace",
-                "display_name": "Upsert Text",
+                "display_name": "Upsert text",
                 "short_desc": "Write text records and let Pinecone embed them",
                 "desc": "Writes records as **text**, which Pinecone converts to vectors with the index's "
                     "own embedding model — so no embedding step is needed in the flow.\n\n"
@@ -1786,7 +1786,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/records/namespaces/{namespace}/search",
                 "operation_id": "searchRecordsNamespace",
-                "display_name": "Search with Text",
+                "display_name": "Search with text",
                 "short_desc": "Search with a query text and optionally rerank",
                 "desc": "Searches a namespace with **text**, a vector, or the ID of an existing record, "
                     "and returns the most similar records with their scores.\n\n"
@@ -1881,7 +1881,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/namespaces/{namespace}/documents/upsert",
                 "operation_id": "upsertDocuments",
-                "display_name": "Upsert Documents",
+                "display_name": "Upsert documents",
                 "short_desc": "Write documents into a namespace",
                 "desc": "Writes documents into a namespace.  A document whose `_id` already exists is "
                     "overwritten.\n\n"
@@ -1906,7 +1906,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/search",
                 "operation_id": "searchDocuments",
-                "display_name": "Search Documents",
+                "display_name": "Search documents",
                 "short_desc": "Search documents by vector, text or query string",
                 "desc": "Searches documents in a namespace and returns the best matches with their "
                     "scores.\n\n"
@@ -1965,7 +1965,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/fetch",
                 "operation_id": "fetchDocuments",
-                "display_name": "Fetch Documents",
+                "display_name": "Fetch documents",
                 "short_desc": "Read documents by ID or by metadata filter",
                 "desc": "Reads documents from a namespace, selected either by **ID** or by a "
                     "**metadata filter** — exactly one of the two.\n\n"
@@ -2016,7 +2016,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/namespaces/{namespace}/documents/update",
                 "operation_id": "updateDocuments",
-                "display_name": "Update Documents",
+                "display_name": "Update documents",
                 "short_desc": "Patch documents by ID, or set fields across a filter",
                 "desc": "Applies partial updates to documents, selected in one of two ways:\n\n"
                     "- **Documents** — one patch per document, each identified by its `_id`.  Fields "
@@ -2067,7 +2067,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/namespaces/{namespace}/documents/delete",
                 "operation_id": "deleteDocuments",
-                "display_name": "Delete Documents",
+                "display_name": "Delete documents",
                 "short_desc": "Delete documents by ID, by filter, or the whole namespace",
                 "desc": "Deletes documents from a namespace, selected in exactly one of three ways:\n\n"
                     "- **Document IDs** — delete those documents\n"
@@ -2114,7 +2114,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/list",
                 "operation_id": "listDocuments",
-                "display_name": "List Documents",
+                "display_name": "List documents",
                 "short_desc": "List the documents in a namespace",
                 "desc": "Lists the documents in a namespace, in sorted order.  **Prefix** narrows it to "
                     "documents whose ID starts with a given string.",
@@ -2202,7 +2202,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/bulk/imports/{id}",
                 "operation_id": "describeBulkImport",
-                "display_name": "Describe Import",
+                "display_name": "Describe import",
                 "short_desc": "Get one import and its progress",
                 "desc": "Returns one bulk import: its state, how far it has got, how many records it "
                     "has written, and why it failed if it did.",
@@ -2218,7 +2218,7 @@ public class PineconeManifest {
                 "method": "DELETE",
                 "path": "/bulk/imports/{id}",
                 "operation_id": "cancelBulkImport",
-                "display_name": "Cancel Import",
+                "display_name": "Cancel import",
                 "short_desc": "Stop an import that is still running",
                 "desc": "Stops a bulk import that has not finished.  It has no effect on one that "
                     "has.\n\n"
@@ -2394,7 +2394,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/models/{model_name}",
                 "operation_id": "get_model",
-                "display_name": "Describe Model",
+                "display_name": "Describe model",
                 "short_desc": "Get one hosted model and what it supports",
                 "desc": "Returns one hosted model: what it does, the vector type and dimensions it "
                     "produces, its maximum input length and batch size, and **which parameters it "

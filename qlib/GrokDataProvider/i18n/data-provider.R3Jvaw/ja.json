@@ -1108,7 +1108,7 @@
           "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "シンプルチャット"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "回答を取得"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

@@ -16,7 +16,7 @@
           "message": "이메일 전송을 위한 일반 SMTP 서버"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send an Email With SMTP",
+          "source": "Send an email with SMTP",
           "message": "SMTP로 이메일 보내기"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {

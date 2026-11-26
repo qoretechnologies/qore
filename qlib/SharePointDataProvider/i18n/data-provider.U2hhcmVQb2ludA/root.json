@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
-          "message": "List Sites"
+          "source": "List sites",
+          "message": "List sites"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
           "source": "List or search SharePoint sites",
@@ -364,8 +364,8 @@
           "message": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
-          "message": "Get Site"
+          "source": "Get site",
+          "message": "Get site"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
           "source": "Get site metadata",
@@ -388,8 +388,8 @@
           "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
-          "message": "List Document Libraries"
+          "source": "List document libraries",
+          "message": "List document libraries"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
           "source": "List the document libraries in a site",
@@ -412,8 +412,8 @@
           "message": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
-          "message": "Get Document Library Info"
+          "source": "Get document library info",
+          "message": "Get document library info"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
           "source": "Get document library metadata and quota",
@@ -448,8 +448,8 @@
           "message": "The document library to address. Use the `list-drives` action to list the libraries in a site"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
-          "message": "Search Documents"
+          "source": "Search documents",
+          "message": "Search documents"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
           "source": "List or search documents and folders",
@@ -532,8 +532,8 @@
           "message": "Sort order for results (e.g., `name asc`, `size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
-          "message": "Get Document"
+          "source": "Get document",
+          "message": "Get document"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
           "source": "Get document or folder metadata",
@@ -592,8 +592,8 @@
           "message": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
-          "message": "Create Folder"
+          "source": "Create folder",
+          "message": "Create folder"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
           "source": "Create a new folder",
@@ -700,8 +700,8 @@
           "message": "Fail the request with an error"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
-          "message": "Upload Document"
+          "source": "Upload document",
+          "message": "Upload document"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a document (up to 4 MB)",
@@ -880,8 +880,8 @@
           "message": "The ID of the parent folder. If omitted, the file is uploaded to the drive root"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
-          "message": "Create Upload Session"
+          "source": "Create upload session",
+          "message": "Create upload session"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
           "source": "Create a resumable upload session",
@@ -976,8 +976,8 @@
           "message": "Fail the request with an error"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
-          "message": "Download Document"
+          "source": "Download document",
+          "message": "Download document"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download a document",
@@ -1024,8 +1024,8 @@
           "message": "The unique identifier of the file to download"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
-          "message": "Delete Document"
+          "source": "Delete document",
+          "message": "Delete document"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
           "source": "Delete a document or folder",
@@ -1072,8 +1072,8 @@
           "message": "The unique identifier of the item to delete"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
-          "message": "Update Document"
+          "source": "Update document",
+          "message": "Update document"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
           "source": "Rename, move, or update a document or folder",
@@ -1156,8 +1156,8 @@
           "message": "The ID of the destination folder to move the item to. Set this to move an item to a different folder"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
-          "message": "Copy Document"
+          "source": "Copy document",
+          "message": "Copy document"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
           "source": "Copy a document or folder",
@@ -1276,8 +1276,8 @@
           "message": "Fail the request with an error"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
-          "message": "Create Sharing Link"
+          "source": "Create sharing link",
+          "message": "Create sharing link"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
           "source": "Create a sharing link for a document",
@@ -1412,8 +1412,8 @@
           "message": "The date and time when the sharing link expires"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
-          "message": "List Lists"
+          "source": "List lists",
+          "message": "List lists"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
           "source": "List the lists in a site",
@@ -1460,8 +1460,8 @@
           "message": "Include lists whose template is `documentLibrary`"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
-          "message": "Get List"
+          "source": "Get list",
+          "message": "Get list"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
           "source": "Get list metadata",
@@ -1496,8 +1496,8 @@
           "message": "The list to address. Use the `list-lists` action to list the lists in a site"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
-          "message": "Create List"
+          "source": "Create list",
+          "message": "Create list"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
           "source": "Create a new list",
@@ -1600,8 +1600,8 @@
           "message": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
-          "message": "Delete List"
+          "source": "Delete list",
+          "message": "Delete list"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
           "source": "Delete a list",
@@ -1636,8 +1636,8 @@
           "message": "The list to address. Use the `list-lists` action to list the lists in a site"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
-          "message": "List Columns"
+          "source": "List columns",
+          "message": "List columns"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
           "source": "List the columns of a list",
@@ -1684,8 +1684,8 @@
           "message": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
-          "message": "Search List Items"
+          "source": "Search list items",
+          "message": "Search list items"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
           "source": "List or search the items in a list",
@@ -1756,8 +1756,8 @@
           "message": "Stop after this many items in total, across all pages"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
-          "message": "Get List Item"
+          "source": "Get list item",
+          "message": "Get list item"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
           "source": "Get a list item and its column values",
@@ -1804,8 +1804,8 @@
           "message": "The list item to address"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
-          "message": "Create List Item"
+          "source": "Create list item",
+          "message": "Create list item"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
           "source": "Create an item in a list",
@@ -1852,8 +1852,8 @@
           "message": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
-          "message": "Update List Item"
+          "source": "Update list item",
+          "message": "Update list item"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
           "source": "Update an item's column values",
@@ -1912,8 +1912,8 @@
           "message": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
-          "message": "Delete List Item"
+          "source": "Delete list item",
+          "message": "Delete list item"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
           "source": "Delete an item from a list",

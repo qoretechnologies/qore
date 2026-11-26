@@ -1408,7 +1408,7 @@
           "message": "몇 시간 내에 검색되는 장기 아카이브 데이터로, 가장 저렴한 스토리지 클래스입니다"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "사전 서명된 URL 생성"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

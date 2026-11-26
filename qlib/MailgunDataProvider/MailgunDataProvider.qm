@@ -90,7 +90,7 @@ module MailgunDataProvider {
             }},
             "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
-            "display_name": "Send Email",
+            "display_name": "Send email",
             "short_desc": "Send an email via Mailgun",
             "desc": "Send a transactional email through Mailgun. Supports HTML content, text content, "
                 "tracking options, and custom headers.",
@@ -115,7 +115,7 @@ module MailgunDataProvider {
             "action": "validate-email",
             "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
-            "display_name": "Validate Email",
+            "display_name": "Validate email",
             "short_desc": "Validate an email address",
             "desc": "Validate an email address using Mailgun's email validation API. Returns information "
                 "about deliverability, risk assessment, and suggested corrections.",

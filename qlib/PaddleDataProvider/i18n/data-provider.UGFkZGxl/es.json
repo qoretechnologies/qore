@@ -556,7 +556,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtener cliente"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "ID de Paddle de la entidad de cliente con la que trabajar.: ID de Paddle único para esta entidad de cliente, con el prefijo `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Actualizar cliente"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Obtener token de autenticación de cliente"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "ID de Paddle de la entidad de cliente con la que trabajar.: ID de Paddle único para esta entidad de cliente, con el prefijo `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Listar saldos de crédito de clientes"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Obtener producto"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Incluye entidades relacionadas en la respuesta. Usa una lista separada por comas para especificar múltiples entidades."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Actualizar producto"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "website-hosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Archivar producto"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Nombre de la plataforma o proveedor desde donde se importó esta entidad."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Obtener precio"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Incluir entidades relacionadas en la respuesta."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Actualizar precio"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Establézcalo en `true` para omitir la consulta de recuento que Paddle ejecuta para un listado.\n\n`meta.pagination.estimated_total` devuelve entonces `-1` en lugar de un recuento. Vale la pena configurarlo al paginar a través de una colección grande, donde el recuento cuesta tiempo en cada página y no se utiliza."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Obtener suscripción"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "URL de finalización para usar en el enlace de pago para esta transacción. Pase la URL de un dominio aprobado, o `null` para establecerla en su URL de pago predeterminada.\n\nPaddle devuelve un enlace de pago único compuesto por la URL proporcionada o su URL de pago predeterminada + `?_ptxn=` y el ID de Paddle para esta transacción."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Obtener transacción"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "checkouts"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Obtener informe"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "ID de Paddle de la entidad de informe."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Obtener archivo de informe"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "La tabla con la que trabajar: `customers`, `products`, `prices`, `transactions` o `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Cliente creado"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Se activa cuando se crea un cliente, sin importar cómo haya sucedido: a través de la API, un checkout o el panel de Paddle.\n\nEsto reemplaza el sondeo del listado de clientes: un sondeo ordenado por fecha de creación no puede ver a un cliente creado y eliminado entre dos ejecuciones, y cuesta una solicitud por intervalo ocurra o no algo."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Cliente actualizado"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Se activa cuando un cliente cambia, incluso cuando se archiva: `status` pasa a ser `archived` en lugar de que el cliente sea eliminado.\n\nPaddle envía el cliente completo, no una diferencia (diff), así que compáralo con lo que tienes si necesitas saber qué campo cambió."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Producto creado"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Se activa cuando se añade un producto al catálogo.\n\nUn producto no incluye un precio propio, por lo que un producto recién creado no se puede vender hasta que exista un precio para él; observe `price.created` para ello.\n\nEsto reemplaza el sondeo de la lista de productos."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Producto actualizado"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Se activa cuando un producto cambia, incluso cuando se archiva uno: `status` pasa a ser `archived`, lo que lo retira de la venta sin afectar a las suscripciones existentes.\n\n**Archivar un producto no archiva sus precios**, por lo que un precio de un producto archivado todavía se puede facturar a menos que también se archive."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Precio creado"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Se activa cuando se crea un precio para un producto.\n\n`unit_price.amount` es una cadena en la **unidad más pequeña de su moneda**, por lo que `1000` es 10,00 $ en USD pero 1000 yenes en JPY. Un `billing_cycle` lo convierte en un precio de suscripción; sin él, es un cargo único."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Precio actualizado"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Se activa cuando cambia un precio, incluso cuando se archiva uno.\n\n**Un cambio en `unit_price` afecta solo a las nuevas compras**; las suscripciones que ya facturan este precio conservan el importe con el que se crearon hasta que se actualicen explícitamente. Por tanto, un cambio de precio no es una señal de que la factura de alguien haya cambiado."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Suscripción creada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Se activa cuando se crea una suscripción.\n\n**Creada no es lo mismo que pagada.** Una nueva suscripción a menudo es `trialing`, y una creada para una transacción que aún no se ha cobrado no está generando ingresos; verifique `status` antes de aprovisionar. `subscription.activated` es la señal de que la facturación ha comenzado realmente.\n\nEsto reemplaza el sondeo de la lista de suscripciones."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Suscripción activada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Se activa cuando una suscripción pasa a ser `active` por primera vez: un período de prueba finalizó y se pagó, o llegó un inicio programado.\n\nEsta es la señal para aprovisionar un plan de pago: significa que Paddle ha cobrado, mientras que `subscription.created` solo significa que el registro existe."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Suscripción actualizada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Se activa ante cualquier cambio en una suscripción: un cambio de plan, un cambio de cantidad, una renovación que pasa a `next_billed_at`, o una pausa o cancelación que queda **programada**.\n\n`scheduled_change` es el campo que distingue esos últimos casos; una suscripción puede ser `active` y aun así estar programada para finalizar. Paddle envía la suscripción completa en lugar de una diferencia."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Suscripción cancelada"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Se activa cuando una suscripción finaliza efectivamente y `status` pasa a ser `canceled`.\n\n**Esta es la señal de desaprovisionamiento, no la solicitud de cancelación.** Una cancelación programada para el final del período de facturación aparece primero como un `scheduled_change` en `subscription.updated`, y el cliente ha pagado hasta esa fecha; este evento se produce cuando llega esa fecha."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Suscripción vencida"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Se activa cuando no se pudo cobrar una renovación y la suscripción pasa a ser `past_due`.\n\nPaddle reintenta según su calendario de cobro reclamatorio, por lo que este aún no es el final: la suscripción se recupera a `active` si un reintento tiene éxito, o se cancela cuando se agotan los reintentos. Trátelo como una advertencia para avisar al cliente, no como un motivo para cortar el acceso."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Transacción creada"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Se activa cuando se crea una transacción, incluido el borrador que Paddle genera para una próxima renovación.\n\n**Una transacción creada no se ha pagado**; la mayoría son `draft` o `ready` en este punto. Utilice `transaction.completed` para el dinero efectivamente cobrado.\n\nEsto reemplaza el sondeo de la lista de transacciones."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Transacción completada"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Se activa cuando una transacción pasa a ser `completed`: el dinero se ha cobrado y la factura está liquidada.\n\nEste es el evento para tramitar un pedido. `details.totals` desglosa el importe en subtotal, impuestos y el total general, todos como cadenas en la unidad más pequeña de `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Fallo en el pago de la transacción"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Se activa cuando falla un intento de cobro de una transacción.\n\n`payments` contiene el intento y el motivo por el que falló. Paddle reintenta automáticamente la renovación de una suscripción, por lo que un solo fallo no es definitivo; el paso de la suscripción a `past_due` es el momento en el que el cliente debe intervenir."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Informe creado"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Se activa cuando se solicita un informe. Llega como `pending`: Paddle genera el archivo en segundo plano, por lo que todavía no hay nada que descargar.\n\nEspere a `report.updated` con un `status` de `ready` antes de solicitar el archivo.\n\nEsto reemplaza el sondeo de la lista de informes."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Informe actualizado"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

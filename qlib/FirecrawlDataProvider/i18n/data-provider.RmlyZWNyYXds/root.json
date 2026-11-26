@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
-          "message": "Scrape a Web Page"
+          "source": "Scrape a web page",
+          "message": "Scrape a web page"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
           "source": "Scrape a single web page and return its content",
@@ -1052,8 +1052,8 @@
           "message": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
-          "message": "Batch Scrape Web Pages"
+          "source": "Batch scrape web pages",
+          "message": "Batch scrape web pages"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
           "source": "Scrape multiple web pages in batch",
@@ -1888,8 +1888,8 @@
           "message": "The unique identifier of the batch scrape job to cancel"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
-          "message": "Get Batch Scrape Status"
+          "source": "Get batch scrape status",
+          "message": "Get batch scrape status"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
           "source": "Get the status and results of a batch scrape job",
@@ -1912,8 +1912,8 @@
           "message": "The unique identifier of the batch scrape job to check"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
-          "message": "Crawl a Website"
+          "source": "Crawl a website",
+          "message": "Crawl a website"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
           "source": "Crawl a website and return scraped data for all pages",
@@ -2600,8 +2600,8 @@
           "message": "If `True`, Firecrawl does not retain any crawl data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
-          "message": "Get Crawl Status"
+          "source": "Get crawl status",
+          "message": "Get crawl status"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
           "source": "Get the status and results of a crawl job",
@@ -2648,8 +2648,8 @@
           "message": "The unique identifier of the crawl job to cancel"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
-          "message": "Map a Website"
+          "source": "Map a website",
+          "message": "Map a website"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
           "source": "Discover all URLs on a website without scraping content",
@@ -2804,8 +2804,8 @@
           "message": "List of preferred languages/locales in priority order. Defaults to the language of the specified location"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
-          "message": "Search the Web"
+          "source": "Search the web",
+          "message": "Search the web"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
           "source": "Search the web and return scraped results",
@@ -3340,8 +3340,8 @@
           "message": "Anonymized Zero Data Retention"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
-          "message": "Extract Structured Data"
+          "source": "Extract structured data",
+          "message": "Extract structured data"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
           "source": "Extract structured data from web pages using AI",
@@ -3820,8 +3820,8 @@
           "message": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
-          "message": "Get Extraction Status"
+          "source": "Get extraction status",
+          "message": "Get extraction status"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
           "source": "Get the status and results of an extraction job",
@@ -3844,8 +3844,8 @@
           "message": "The unique identifier of the extraction job to check"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
-          "message": "Run AI Agent"
+          "source": "Run AI agent",
+          "message": "Run AI agent"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
           "source": "Use an AI agent to find and extract data from the web",
@@ -3960,8 +3960,8 @@
           "message": "The unique identifier of the agent job to cancel"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
-          "message": "Get Agent Status"
+          "source": "Get agent status",
+          "message": "Get agent status"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
           "source": "Get the status and results of an agent job",
@@ -3984,8 +3984,8 @@
           "message": "The unique identifier of the agent job to check"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
-          "message": "Parse a Document"
+          "source": "Parse a document",
+          "message": "Parse a document"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {
           "source": "Upload a document and convert it to LLM-ready data",
