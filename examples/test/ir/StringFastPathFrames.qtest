@@ -72,17 +72,20 @@ class StringFastPathFramesTest inherits QUnit::Test {
         assertFrame(out, "pipe", "INVALID-ENCODING", "<string>::lwr", 37);
         assertFrame(out, "lwr-lt", "INVALID-ENCODING", "<string>::lwr", 41);
         # negative: the concatenation is an operator, whose exception has no frame of its own
-        assertFrame(out, "cat-substr", "ENCODING-CONVERSION-ERROR", "f_cat_substr", 110, "user");
+        assertFrame(out, "cat-substr", "ENCODING-CONVERSION-ERROR", "f_cat_substr", 119, "user");
         # the functions that the lowering makes as calls of pseudo-methods have the frames of the functions
         assertFrame(out, "fsubstr", "INVALID-ENCODING", "substr", 43);
         assertFrame(out, "findex", "ENCODING-CONVERSION-ERROR", "index", 44);
         assertFrame(out, "frindex", "ENCODING-CONVERSION-ERROR", "rindex", 45);
         assertFrame(out, "findex-lwr", "INVALID-ENCODING", "tolower", 49);
+        # a case conversion consumer and a loop-invariant call of index() have the function's frame
+        assertFrame(out, "findex-dot-lwr-p", "ENCODING-CONVERSION-ERROR", "index", 58);
+        assertFrame(out, "findex-loop", "ENCODING-CONVERSION-ERROR", "index", 59);
         # an integer argument outside the inline range
         assertFrame(out, "substr-big", "INVALID-ENCODING", "<string>::substr", 51);
         # an exception of a fast path while another is pending is chained to it, with the builtin's frame
         assertRegex("(?m)^pending: \\{.*err: \"PENDING\".*(\n  [0-9]: .*)+\n  next: \\{.*err: \"INVALID-ENCODING\".*\n"
-            + "  0: \\{function: \"<string>::lwr\", line: 59,", out);
+            + "  0: \\{function: \"<string>::lwr\", line: 68,", out);
         # a builtin that does not raise for this text
         assertRegex("(?m)^strlen: 5$", out);
     }

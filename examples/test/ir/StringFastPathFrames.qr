@@ -53,6 +53,15 @@ int sub f_find_off(string s, string p, int o) { return s.find(p, o); }
 int sub f_rfind_off(string s, string p, int o) { return s.rfind(p, o); }
 int sub f_upr_rfind(string s, string p) { return s.upr().rfind(p); }
 bool sub f_ne_upr(string s, string p) { return p != s.upr(); }
+# a case conversion consumer that is a call of index(); a loop-invariant call; a callee that a summary could take; the
+# result of a call consumed by index()
+int sub f_findex_dot_lwr(string s, string p) { return index(s.lwr(), p); }
+int sub f_findex_loop(string s, string p) { int t = 0; for (int i = 0; i < 3; ++i) { t += index(s, p); } return t; }
+int sub f_findex_callee(string s, string p) { return index(s, p); }
+int sub f_findex_caller(string s, string p) { return f_findex_callee(s, p) + 1; }
+string sub f_ret(string s) { return s; }
+int sub f_findex_ret(string s, string p) { return index(f_ret(s), p); }
+string sub f_fsubstr_ret(string s) { return substr(f_ret(s), 1, 2); }
 # an exception pending when the fast path runs
 string sub f_pending(string s) {
     on_error {
@@ -136,4 +145,10 @@ show("find-off", auto sub () { return f_find_off(ascii, "日", 1); });
 show("rfind-off", auto sub () { return f_rfind_off(bad, "B", 3); });
 show("upr-rfind", auto sub () { return f_upr_rfind(ascii, "日"); });
 show("ne-upr", auto sub () { return f_ne_upr(bad, "x"); });
+show("findex-dot-lwr", auto sub () { return f_findex_dot_lwr(bad, "b"); });
+show("findex-dot-lwr-p", auto sub () { return f_findex_dot_lwr(ascii, "日"); });
+show("findex-loop", auto sub () { return f_findex_loop(ascii, "日"); });
+show("findex-caller", auto sub () { return f_findex_caller(ascii, "日"); });
+show("findex-ret", auto sub () { return f_findex_ret(ascii, "日"); });
+show("fsubstr-ret", auto sub () { return f_fsubstr_ret(bad); });
 show("pending", auto sub () { return f_pending(bad); });

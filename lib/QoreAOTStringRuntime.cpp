@@ -31,9 +31,10 @@
 
 // The calls of the canonical <string>::split(string) and trim(string) builtins that AOT code makes without an argument
 // list (issue #5578, see design/aot-string-split-trim.md), and the ordinary calls of the string builtins that the fast
-// paths make to raise their exceptions in the builtin's frame (qore#7711, QoreStringFastPathCalls.h).  Compiled in a unit of its own, outside the single
-// compilation unit: in that unit, the code below would change how the compiler inlines the call helpers that it shares
-// with the other calls (CodeContextHelper, the stack location updates), and so the code of those calls.
+// paths make to raise their exceptions in the builtin's frame (qore#7711, QoreStringFastPathCalls.h).  Compiled in a
+// unit of its own, outside the single compilation unit: in that unit, the code below would change how the compiler
+// inlines the call helpers that it shares with the other calls (CodeContextHelper, the stack location updates), and so
+// the code of those calls.
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/BuiltinFunction.h"

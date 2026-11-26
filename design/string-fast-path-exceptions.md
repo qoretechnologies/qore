@@ -40,10 +40,12 @@ The fast paths of the functions have runtime functions of their own (`qore_fast_
 `qore_rt_pseudo_string_length_xsink_noguard()`.
 
 The lowering makes `substr()`, `index()` and `rindex()` of strings as calls of the pseudo-methods `substr()`, `find()`
-and `rfind()` (with the function call as the instruction's expression).  Such an instruction has an intrinsic of its
-own (`StringFunctionSubstr`, `StringFunctionIndex`, `StringFunctionRIndex`), which no analysis takes for the
-pseudo-method's, so no fusion takes the call, and the code generator and the IR interpreter give it the fast path of
-the function.
+and `rfind()`, whose expression is the function call (`qore_ir_is_string_function_form()`).  The code generator and
+the IR interpreter give such a call the fast path of the function, and a case conversion consumer that is such a call
+tells its runtime function (`QORE_STRING_CASE_CONSUMER_FUNCTION`), so its exception has the function's frame; the
+summaries and the call result consumer fusions, whose runtime functions make the pseudo-methods' calls, do not take
+it.  An instruction read from serialized IR (the debug IR of AOT code) has no expression and is made as the
+pseudo-method (qore#7733).
 
 The fast paths of `<list>::join()` and `join()`, and the fused joins of folds, are not covered yet (qore#7731).
 

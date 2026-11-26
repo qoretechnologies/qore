@@ -18961,9 +18961,6 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
 
                             auto set_pseudo_substr_flags = [func_name, nargs](auto* inst) {
                                 inst->fallback_method_name = strdup(func_name);
-                                // the call is the function's, whose frame an exception has, not the pseudo-method's
-                                // (qore#7711)
-                                inst->intrinsic = QoreIRIntrinsic::StringFunctionSubstr;
                                 inst->pseudo_base_known_string = true;
                                 inst->pseudo_base_known_assigned_string = true;
                                 inst->pseudo_arg0_known_assigned_int = true;
@@ -19047,9 +19044,6 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
 
                             auto set_pseudo_find_flags = [string_find_method_name, nargs](auto* inst) {
                                 inst->fallback_method_name = strdup(string_find_method_name);
-                                // the call of index() or rindex(), not of the pseudo-method (see substr() above)
-                                inst->intrinsic = strcmp(string_find_method_name, "find")
-                                    ? QoreIRIntrinsic::StringFunctionRIndex : QoreIRIntrinsic::StringFunctionIndex;
                                 inst->pseudo_base_known_string = true;
                                 inst->pseudo_base_known_assigned_string = true;
                                 inst->pseudo_arg0_known_string = true;

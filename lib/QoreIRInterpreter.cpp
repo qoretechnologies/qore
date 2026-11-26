@@ -187,7 +187,7 @@ static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool bas
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_string,
         bool arg0_known_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
         QoreIRIntrinsic intrinsic, const QoreValue& base, uint64_t* nanboxed_args,
-        int nargs, QoreValue& res, ExceptionSink* xsink) {
+        int nargs, QoreValue& res, ExceptionSink* xsink, bool function_form) {
     // read the environment once per process, and only after the cheap guards: this runs on every
     // string pseudo-method call in the interpreter, and getenv() is a linear scan of the environment
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO");
@@ -204,33 +204,33 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
         return true;
     }
 
-    // the functions index(), rindex() and substr() have fast paths of their own, as their exceptions have their frames
-    // (qore#7711)
-    if ((intrinsic == QoreIRIntrinsic::StringFind || intrinsic == QoreIRIntrinsic::StringFunctionIndex)
-            && arg0_known_string && fromBits(nanboxed_args[0]).getType() == NT_STRING
+    // a call of the function index(), rindex() or substr() that the lowering made as a call of the pseudo-method
+    // (\a function_form) has the function's fast path, as its exception has the function's frame (qore#7711)
+    if (intrinsic == QoreIRIntrinsic::StringFind && arg0_known_string
+            && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
-        res = fromBits(intrinsic == QoreIRIntrinsic::StringFind
+        res = fromBits(!function_form
             ? qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink)
             : qore_fast_index_string(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 
-    if ((intrinsic == QoreIRIntrinsic::StringRFind || intrinsic == QoreIRIntrinsic::StringFunctionRIndex)
-            && arg0_known_string && fromBits(nanboxed_args[0]).getType() == NT_STRING
+    if (intrinsic == QoreIRIntrinsic::StringRFind && arg0_known_string
+            && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : -1;
-        res = fromBits(intrinsic == QoreIRIntrinsic::StringRFind
+        res = fromBits(!function_form
             ? qore_rt_pseudo_string_rfind_noguard(toBits(base), nanboxed_args[0], offset, xsink)
             : qore_fast_rindex_string(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 
-    if ((intrinsic == QoreIRIntrinsic::StringSubstr || intrinsic == QoreIRIntrinsic::StringFunctionSubstr)
-            && arg0_known_assigned_int && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
+    if (intrinsic == QoreIRIntrinsic::StringSubstr && arg0_known_assigned_int
+            && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t start = fromBits(nanboxed_args[0]).getAsBigInt();
         int64_t length = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
-        res = fromBits(intrinsic == QoreIRIntrinsic::StringSubstr
+        res = fromBits(!function_form
             ? qore_rt_pseudo_string_substr_noguard(toBits(base), start, length, nargs == 2 ? 1 : 0, xsink)
             : qore_fast_substr_string(toBits(base), start, length, nargs == 2 ? 1 : 0, xsink));
         return true;
@@ -10739,7 +10739,7 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                 direct_inst->pseudo_arg0_known_string,
                 direct_inst->pseudo_arg0_known_assigned_int,
                 direct_inst->pseudo_arg1_known_assigned_int, intrinsic,
-                base, nanboxed_args, nargs, res, xsink)) {
+                base, nanboxed_args, nargs, res, xsink, synthetic_global_call != nullptr)) {
             // Result produced by the inline string pseudo-method helper.
         } else if (synthetic_global_call
                 && synthetic_global_call->getFunction()) {
@@ -10875,7 +10875,7 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                 de_invoke_inst->pseudo_arg0_known_string,
                 de_invoke_inst->pseudo_arg0_known_assigned_int,
                 de_invoke_inst->pseudo_arg1_known_assigned_int, intrinsic,
-                base, nanboxed_args, nargs, res, xsink)) {
+                base, nanboxed_args, nargs, res, xsink, synthetic_global_call != nullptr)) {
             // Result produced by the inline string pseudo-method helper.
         } else if (synthetic_global_call
                 && synthetic_global_call->getFunction()) {

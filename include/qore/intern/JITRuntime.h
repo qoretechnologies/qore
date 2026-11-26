@@ -69,6 +69,11 @@ enum class QoreStringCaseConsumer : int32_t {
     RFind,
 };
 
+//! added to a QoreStringCaseConsumer given to qore_rt_pseudo_string_case_consume_native_noguard() for a consumer that
+//! is the call of index() or rindex() that the lowering made as the call of find() or rfind(): an exception has the
+//! function's frame (qore#7711)
+constexpr int32_t QORE_STRING_CASE_CONSUMER_FUNCTION = 0x10;
+
 //! The date kind check of a date<absolute>/date<relative> parameter (qore_rt_date_kind_matches()); 0: no check
 enum QoreDateKindGuardFlags : uint8_t {
     QORE_DATE_KIND_GUARD_ABSOLUTE = 1, //!< the value must be an absolute date

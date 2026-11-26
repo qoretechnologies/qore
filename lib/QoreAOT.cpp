@@ -8016,9 +8016,11 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
 
     const auto* method_op =
         static_cast<const QoreIRDotEvalMethodDirectInstruction*>(operation);
+    // a call of index(), rindex() or substr() is not summarized as the pseudo-method, whose runtime functions raise in
+    // the pseudo-method's frame (qore#7711)
     if (!method_op->pseudo || method_op->has_ref_args
             || !method_op->qc || strcmp(method_op->qc->getName(), "<string>")
-            || !method_op->pseudo_base_known_assigned_string) {
+            || !method_op->pseudo_base_known_assigned_string || qore_ir_is_string_function_form(*method_op)) {
         return false;
     }
     result.base_param = get_param(0);
@@ -8664,7 +8666,9 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             }
             case QoreIROpcode::DotEvalMethodDirect: {
                 const auto* direct = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                // a call of substr() is not summarized as the pseudo-method (qore#7711)
                 if (!direct->pseudo || direct->intrinsic != QoreIRIntrinsic::StringSubstr
+                        || qore_ir_is_string_function_form(*direct)
                         || !direct->pseudo_base_known_assigned_string
                         || !direct->pseudo_arg0_known_assigned_int
                         || (inst->operands.size() != 2 && inst->operands.size() != 3)
@@ -12659,10 +12663,11 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
                 auto base = boxed_values.find(inst->operands[0].id);
                 const auto* op = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                // a call of index() or rindex() is not summarized as the pseudo-method (qore#7711)
                 if (base == boxed_values.end()
                         || base->second.boxed_kind != BoxedSourceParamKind::String
                         || !op->pseudo || op->has_ref_args || !op->qc
-                        || strcmp(op->qc->getName(), "<string>")) {
+                        || strcmp(op->qc->getName(), "<string>") || qore_ir_is_string_function_form(*op)) {
                     return false;
                 }
                 QoreIRIntrinsic intrinsic = op->intrinsic;

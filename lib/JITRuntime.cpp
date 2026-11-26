@@ -27030,9 +27030,14 @@ extern "C" DLLEXPORT uint64_t qore_fast_toupper_string(uint64_t val_bits, Except
 //! Fast no-guard pseudo-method: <string>::length() for bases proven to be assigned strings, which raises
 //! INVALID-ENCODING for text that is not valid in its encoding, as the builtin does
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue value = fromBits(val_bits);
+    if (!value.isShortString() && (!value.hasNode() || value.getInternalNode()->getType() != NT_STRING)) {
+        // any other value, such as a string enum member, takes the ordinary call
+        return toBits(qore_string_call_length(value, false, xsink));
+    }
     return qore_rt_string_fast_path(xsink, [&]() {
-        QoreStringValueHelper str(fromBits(val_bits));
-        return toBits(QoreValue(static_cast<int64_t>(qore_string_private::characterCount(**str, xsink))));
+        // the work of length() of a string (the base is an assigned string)
+        return qore_fast_length_string(fromBits(val_bits), xsink);
     }, [&]() {
         return toBits(qore_string_call_length(fromBits(val_bits), false, xsink));
     });
@@ -27119,18 +27124,28 @@ static int64_t qore_rt_pseudo_string_case_consume_work(
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
         uint64_t val_bits, uint64_t arg_bits, int64_t offset, int32_t upper,
         QoreStringCaseConsumer consumer, ExceptionSink* xsink) {
+    // the consumer is a call of index() or rindex() (QORE_STRING_CASE_CONSUMER_FUNCTION)
+    const bool function = static_cast<int32_t>(consumer) & QORE_STRING_CASE_CONSUMER_FUNCTION;
+    consumer = static_cast<QoreStringCaseConsumer>(
+        static_cast<int32_t>(consumer) & ~QORE_STRING_CASE_CONSUMER_FUNCTION);
     return qore_rt_string_fast_path(xsink, [&]() {
         return qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
     }, [&]() -> int64_t {
         if (static_cast<int32_t>(consumer) < static_cast<int32_t>(QoreStringCaseConsumer::StartsWith)
-                || static_cast<int32_t>(consumer) > static_cast<int32_t>(QoreStringCaseConsumer::RFind)) {
+                || static_cast<int32_t>(consumer) > static_cast<int32_t>(QoreStringCaseConsumer::RFind)
+                || (function && consumer != QoreStringCaseConsumer::Find
+                    && consumer != QoreStringCaseConsumer::RFind)) {
             // the error of the work
             return qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
         }
-        // the calls that the fusion stands for: s.lwr().contains(p) and the like (or upr())
+        // the calls that the fusion stands for: s.lwr().contains(p), index(s.lwr(), p) and the like (or upr())
         ValueHolder transformed(qore_string_call_case(fromBits(val_bits), upper, false, xsink), xsink);
         if (*xsink) {
             return 0;
+        }
+        if (function) {
+            return qore_string_call_index(*transformed, fromBits(arg_bits), consumer == QoreStringCaseConsumer::RFind,
+                offset, xsink).getAsBigInt();
         }
         QoreValue result = qore_string_call_search(*transformed, fromBits(arg_bits),
             static_cast<QoreStringSearchCall>(consumer), offset, xsink);
