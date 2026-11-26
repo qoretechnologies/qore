@@ -31,3 +31,36 @@
    fun:_ZN4llvm10AsmPrinter28emitPatchableFunctionEntriesEv
    fun:_ZN4llvm10AsmPrinter16emitFunctionBodyEv
 }
+#
+# LLVM 21 (the same build), with valgrind 3.22.0: InstCombine reports "Conditional jump or move depends on uninitialised
+# value(s)" for a binary operator (add, sub, mul, and, or, xor) whose first operand is a select and whose second is
+# not.  The five innermost frames are functions of libLLVM that its dynamic symbol table does not name (identified in
+# the disassembly): InstCombinerImpl::SimplifySelectsFeedingBinaryOp() <- foldUsingDistributiveLaws() <- the
+# visitor of the operator (visitAnd() for Qore's code) <- InstCombinerImpl::run() <- combineInstructionsOverFunction(),
+# under InstCombinePass::run().  The source tests "LHSIsSelect && RHSIsSelect && A == D", and the arm64 code evaluates
+# A == D without a branch (cmp, csel, and), reading D, a local variable that only a select as the second operand
+# writes (valgrind --track-origins=yes: "created by a stack allocation" in that function); the csel gives 0 either
+# way, but memcheck makes its result undefined when its condition is.  The JIT on amd64 has no such report.  Qore's
+# JIT emits this shape when emitWeakSharedTest() (lib/QoreIRToLLVM.cpp) masks the pointer of a value that
+# emitHelperRef() selected (the weak share check of a store, qore#7342), ex: "int s; for (...) { s += i * 2; }"
+# (examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qr).  Reproduced with no Qore code, with the same frames,
+# by LLVM's own opt on the module below (f.ll), and by a program that makes only the calls of optimizeModule()
+# (lib/QoreJIT.cpp: a native TargetMachine, PassBuilder, buildPerModuleDefaultPipeline(O2), run()) on the same
+# function built with IRBuilder (CreateSelect(), CreateAnd(), CreateRet()):
+#     define i64 @f(i1 %c, i64 %x) {
+#       %s = select i1 %c, i64 64, i64 32
+#       %r = and i64 %s, %x
+#       ret i64 %r
+#     }
+#   valgrind --track-origins=yes opt-21 -passes='instcombine<no-verify-fixpoint>' -disable-output f.ll
+# The entry names the five frames of libLLVM under InstCombinePass::run() by their object, as they have no names.
+{
+   llvm21-instcombine-select-binop-arm64-csel
+   Memcheck:Cond
+   obj:*/libLLVM.so.21.1
+   obj:*/libLLVM.so.21.1
+   obj:*/libLLVM.so.21.1
+   obj:*/libLLVM.so.21.1
+   obj:*/libLLVM.so.21.1
+   fun:_ZN4llvm15InstCombinePass3runERNS_8FunctionERNS_15AnalysisManagerIS1_JEEE
+}
