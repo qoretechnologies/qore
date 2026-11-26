@@ -880,6 +880,43 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_lazy_shared_values Process-Wide Values Built on First Use
+
+    Library code that builds process-wide state lazily, the first time that a caller needs it (a registry filled on
+    demand, a schema loaded on first use, a cache), builds it on that caller's thread.  With the plain pattern
+    (\c "v ?? (v = build())"), what it builds takes that caller's sandbox and restrictions: if the caller is sandboxed
+    or acts for sandboxed code,
+    @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" is @ref False, so the
+    objects that every later caller gets are not marked as shared (see @ref sandbox_shared_objects), and if the caller
+    is restricted (with a \c PO_NO_* option), the code that the build creates for every caller records its
+    restrictions.  @ref Qore::Thread::LazySharedValue "LazySharedValue" and
+    @ref Qore::Thread::LazySharedMap "LazySharedMap" build such state once, as trusted code, whatever code needs it
+    first: their builder, which only trusted code can give, runs as a trusted build (see
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") unless the barrier
+    of the build would hide nothing of the caller (no sandbox, no sandboxed caller that it acts for, no restrictions
+    that what it creates would record, and no code of a %Program that lends the objects that it creates, see
+    @ref sandbox_provenance), and the value is published to every caller.  Other callers wait for a build in
+    progress; a build that fails publishes nothing (a key of a map whose build fails leaves no entry, so that callers
+    cannot make the map grow with keys that its builder does not know).
+
+    The mode of such an object is fixed when it is created: it is process-shared, as described above, only if the
+    code that creates it may create a trusted build of its builder (as for
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()").  An object that
+    sandboxed code creates, or a trusted deputy for it, or with a builder of sandboxed code (the static members of a
+    module that a sandboxed %Program loads by its path, for example) is private: its value is built once, but as a
+    plain call of its builder, which runs with the provenance and the restrictions of its own code, whoever calls
+    \c get(), also trusted code; nothing that it builds is marked as shared.  Library code that must have a
+    process-shared object creates it during its initialization, or checks \c isProcessShared(), or gives the
+    constructor's \c require_shared option, which refuses to create a private object.
+
+    The value is published as it is: the builder marks or freezes the objects that it shares, as for any shared
+    object; the check of the value before it is published refuses only objects and callable values that sandboxed or
+    restricted code created, in the value and in the lists and hashes that it holds, not in the members of objects.  A
+    thread that waits for a value that another thread builds keeps the locks that it holds, so a builder must not take
+    a lock that a caller can hold while it waits for the value.
+
+    @since %Qore 3.0
+
     @subsection sandbox_isolation_domains Isolation Domains (Tenants)
 
     A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with

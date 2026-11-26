@@ -1166,6 +1166,9 @@ public:
     /** The code that runs under it is trusted library code built by trusted code, whoever called the capability: no
         sandbox of the code below the barrier is seen, and none is recorded as the loader's (the capability was created
         by code that no sandbox governed, and runs a fixed callback)
+
+        @note anything that this barrier hides from the code below it must make qore_trusted_build_hides_nothing()
+        false, which LazySharedValue and LazySharedMap use to skip it (qore#7684); keep the two in step
     */
     DLLLOCAL explicit QoreModuleInitSandboxBarrierHelper(const struct QoreTrustedBuildTag&);
 
@@ -2383,6 +2386,17 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true if the barrier of a trusted build (SandboxManager::createTrustedBuildCall()) would hide nothing of the
+//! calling code: no sandboxed caller recorded by a parse or module load, no sandbox that governs the code or that it
+//! acts for, and no restrictions of the calling code that what the code creates would record (qore#7684)
+/** For LazySharedValue and LazySharedMap, which run their builder without the barrier only then, so that what it
+    creates never takes the sandbox or the restrictions of the caller that needs the value first
+
+    @note anything that the barrier of a trusted build (QoreModuleInitSandboxBarrierHelper with a QoreTrustedBuildTag,
+    entered by SandboxBoundCallReference::enterBuild()) hides must make this function false; keep the two in step
+*/
+DLLLOCAL bool qore_trusted_build_hides_nothing();
 
 //! Returns true and sets \a pgm_id if the code that raises an exception or sets an error now is sandboxed or acts for
 //! sandboxed code: the origin that a QoreExceptionOriginScope sets (work that the library does on the async I/O thread
