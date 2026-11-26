@@ -837,6 +837,27 @@ ds.setMutationObserver(\admission.event(), SQL_MUTATION_MASK_DEFAULT, tenant_id)
 
     Operations issued from inside an observer callback do not generate events, so an observer may
     query the same object without recursing.
+
+    @anchor sql_mutation_observer_capture
+    An observer that queries the object that it observes must not hold it with a strong reference: the object holds
+    its observer, so a closure that captures the object (or a call reference to a method of an object that holds it)
+    makes a cycle that keeps the object, its observer and its connections alive after the last outside reference to
+    it is gone.  Capture it with the @ref weak_assignment_operator "weak assignment operator (:=)" instead (which
+    needs @ref allow-weak-references "%allow-weak-references"): the callback runs while an operation of the object is
+    in progress, so the weak reference is valid there, and the object is destroyed, closing its connections, when the
+    last outside reference to it goes:
+    @code{.py}
+%allow-weak-references
+
+Datasource ds(connstr);
+Datasource wds := ds;
+ds.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEventInfo> ev) {
+    if (ev.event == SQL_MUTATION_EVENT_PRE_EXEC) {
+        # on the connection and in the transaction of the admitted statement
+        wds.selectRow("select 1 as x");
+    }
+});
+    @endcode
     @endparblock
 
     @note
