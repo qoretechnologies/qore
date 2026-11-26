@@ -548,7 +548,7 @@ public namespace YamlRpcHandler {
 
         #! Returns the method's hash that the log message callback gets: for the code of a restricted %Program, its
         #! function only as the name of an internal method, and its values that hold an object or code not at all
-    #! (qore#7726)
+        #! (qore#7726)
         private:internal hash<auto> getMethodInfoForCode(code c, hash<auto> found) {
             hash<auto> info = found - "name_re";
             if (!isRestrictedCode(c)) {
