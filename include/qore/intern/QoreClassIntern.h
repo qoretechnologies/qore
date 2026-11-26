@@ -3766,6 +3766,15 @@ public:
     */
     bool sandbox_private_members = false;
 
+    //! true if the class or a base class has a non-public member that a class protected from sandboxed serialization
+    //! declares (see sandboxSerializationProtected(), qore#7146); set in parseCommit(), copied with the class
+    bool sandbox_serial_state = false;
+
+    //! true if the class or a base class has a non-transient non-public member that a class protected from sandboxed
+    //! serialization declares: sandboxed code cannot deserialize the class (qore#7146); set in parseCommit(), copied
+    //! with the class
+    bool sandbox_deserial_refused = false;
+
     //! true while the wrapper that created the class (cls) holds the reference to the values in var_refs that it
     //! took with the class; see takeWrapperVarRef()
     bool cls_var_ref = true;
@@ -5435,6 +5444,40 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared(bool unknown) const;
 
+    //! Returns true if the class lists Qore::SandboxSerializable among its direct parent classes (qore#7146)
+    DLLLOCAL bool isSandboxSerializable() const;
+
+    //! Returns true if sandboxed code may not serialize or set by deserialization the non-public members and static
+    //! variables that the class declares (qore#7146)
+    /** True for a class that trusted code declared (see isSandboxDeclared()) and that does not opt in with
+        Qore::SandboxSerializable (see isSandboxSerializable()); a builtin class is protected
+    */
+    DLLLOCAL bool sandboxSerializationProtected() const {
+        // a class whose declaring code cannot be told is protected (fails closed)
+        return !isSandboxDeclared(false) && !isSandboxSerializable();
+    }
+
+    //! Returns true if the class or a base class has a non-public member that sandboxed code may not serialize
+    //! (qore#7146)
+    DLLLOCAL bool hasSandboxSerialState() const {
+        return sandbox_serial_state;
+    }
+
+    //! Returns true if sandboxed code may not deserialize an object of the class (qore#7146)
+    DLLLOCAL bool sandboxDeserializationRefused() const {
+        return sandbox_deserial_refused;
+    }
+
+    //! Returns the class that declares the member \a mname non-public, as the class or a base class sees it, if that
+    //! class is protected from sandboxed serialization (see sandboxSerializationProtected(), qore#7146), else nullptr
+    /** @param internal set to true if the member is a \c private:internal member of this class
+    */
+    DLLLOCAL const qore_class_private* sandboxSerialProtectedDecl(const char* mname, bool& internal) const;
+
+    //! Returns true if the class or a base class has a non-public static variable or a non-public member that the
+    //! class declares (qore#7146)
+    DLLLOCAL bool hasNonPublicState() const;
+
     //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
     /** A class that sandboxed code declared has no private access to the members, methods and static variables that
         a class that trusted code declared declares, on any object: for it they are as if they were
@@ -5464,6 +5507,9 @@ public:
     */
     DLLLOCAL static int parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
             const qore_class_private* class_ctx, bool base_call);
+
+    //! Sets sandbox_serial_state and sandbox_deserial_refused when the class is committed (qore#7146)
+    DLLLOCAL void initSandboxSerialization();
 
     //! Sets sandbox_ctx and sandbox_private_members when the class is committed (qore#6843)
     DLLLOCAL void initSandboxAccess();

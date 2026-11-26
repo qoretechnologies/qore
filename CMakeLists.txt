@@ -353,6 +353,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_StdoutOutputStream.qpp
     lib/QC_StderrOutputStream.qpp
     lib/QC_Serializable.qpp
+    lib/QC_SandboxSerializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
     lib/QC_SendRateMonitor.qpp
@@ -2499,6 +2500,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_StdoutOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StderrOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxSerializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"

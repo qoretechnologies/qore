@@ -75,6 +75,7 @@
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Serializable.h"
+#include "qore/intern/QC_SandboxSerializable.h"
 #include "qore/intern/QC_AbstractPollableIoObjectBase.h"
 #include "qore/intern/QC_SendRateMonitor.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
@@ -2233,6 +2234,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initScannerClass(qns));
     qns.addSystemClass(initTreeMapClass(qns));
     qns.addSystemClass(initSerializableClass(qns));
+    qns.addSystemClass(initSandboxSerializableClass(qns));
 
     // add ChannelIterator + Channel to Thread namespace now that AbstractIterator is available
     // preinit Channel first so QC_CHANNEL is available for ChannelIterator's constructor parameter

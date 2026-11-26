@@ -56,6 +56,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSerializable.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -4293,6 +4294,27 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     if (!h) {
         // object has been deleted
         return Nothing.getAsString(str, foff, xsink);
+    }
+    // the calling code is shown the members that serialization would give it: not the non-public members that a class
+    // declared by trusted code declares, unless the code is that of a class with private access to the declaring class
+    // or no sandboxed code is in the chain of its callers (qore#7146)
+    {
+        const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+        if (cls->hasSandboxSerialState() && h->size()) {
+            QoreSerializationCaller caller;
+            std::vector<std::string> hidden;
+            ConstHashIterator hi(*h);
+            while (hi.next()) {
+                bool internal = false;
+                const qore_class_private* decl = cls->sandboxSerialProtectedDecl(hi.getKey(), internal);
+                if (decl && caller.restricts(*decl, internal)) {
+                    hidden.push_back(hi.getKey());
+                }
+            }
+            for (const std::string& key : hidden) {
+                h->removeKey(key.c_str(), xsink);
+            }
+        }
     }
 
     if (foff == FMT_YAML_SHORT) {

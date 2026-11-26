@@ -349,7 +349,8 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
             "slice": "PRIVATE-MEMBER",
             "last-key": "pub",
             "format": "hidden",
-            "serialize": "hidden",
+            # a serialization that would give non-public members with values is refused
+            "serialize": "SERIALIZATION-ERROR",
             # the names and the number of the public members only
             "member-names": "pub",
             "size": "1",

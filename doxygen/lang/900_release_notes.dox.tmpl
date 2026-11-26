@@ -107,6 +107,13 @@
     do; code outside the class that relied on copying them gets the public members only
     (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>).
 
+    @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
+    Code with sandboxed callers cannot serialize (\c SERIALIZATION-ERROR), show with \c %%y or set by
+    deserialization the non-public state of classes declared by trusted code that it has no private access to, unless
+    a class inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted hosts use
+    @ref Qore::Program::serialize() "Program::serialize()" and @ref Qore::Program::deserialize() "Program::deserialize()",
+    and a class parsed before its %Program got a sandbox counts as trusted (see @ref sandbox_serialization).
+
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -2995,6 +3002,9 @@
     - the @ref plus_equals_operator "+= operator" merges only the members of an object that the merging code may read
       into another object, where it gave code outside the class the source object's private members
       (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>)
+    - @ref Qore::Serializable "Serializable" did not apply the member access of the classes declared by trusted code to
+      sandboxed code, which could read and set their non-public state through serialization (see
+      @ref sandbox_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7146">issue 7146</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)

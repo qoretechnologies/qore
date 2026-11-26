@@ -8,7 +8,9 @@
 # sandbox created the object (issue #7063): under tenant isolation, a tenant that formats an object that the host or
 # another tenant created (%y, %Y, %N, %n, vsprintf(), also an object in a list or a hash, which QUnit's assertion
 # messages use as well) sees its public members only, in every execution mode of the tenant's code and in a
-# qcc-compiled host; its own objects, code-safety sandboxes and trusted code are not affected.
+# qcc-compiled host; its own objects, code-safety sandboxes and trusted code are not affected.  The class of the
+# objects inherits SandboxSerializable: the non-public state of a class that trusted code declared without it is not
+# shown to sandboxed code at all (issue #7146).
 
 %modern
 %no-child-restrictions
@@ -22,8 +24,9 @@
 
 %exec-class SandboxObjectFormatTest
 
-#! the class whose private member the tenants format; declared by trusted code
-public class Target inherits Serializable {
+#! the class whose private member the tenants format; declared by trusted code, it inherits SandboxSerializable, so that
+#! its non-public state is given to the code that may read it (qore#7146): the owner rule decides for sandboxed code
+public class Target inherits SandboxSerializable {
     public {
         string pub = "visible";
     }
@@ -34,9 +37,18 @@ public class Target inherits Serializable {
 }
 
 #! a function of the host that formats and serializes an object for its caller: the host's code reads its objects as
-#! it did before the rule, also for a sandboxed caller
+#! it did before the rule, also for a sandboxed caller; a serialization that would give a sandboxed caller non-public
+#! members that it may not read is refused (\c "refused")
 string sub host_show(Target w) {
-    string str = sprintf("%y", w) + sprintf("%y", Serializable::serializeToData(w));
+    string str = sprintf("%y", w);
+    try {
+        str += sprintf("%y", Serializable::serializeToData(w));
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "SERIALIZATION-ERROR") {
+            rethrow;
+        }
+        return "refused";
+    }
     return str =~ /secret/ ? "private" : "public";
 }
 
@@ -96,7 +108,7 @@ Target sub make_target() {
 
 #! the host compiled with qcc: it runs a tenant, whose code it reads from the file given as its argument
 const AotHostSource = "%modern
-public class Target {
+public class Target inherits SandboxSerializable {
     public {
         string pub = \"visible\";
     }
@@ -213,7 +225,7 @@ class SandboxObjectFormatTest inherits QUnit::Test {
             mode + ": the host's class for A");
         # but not the objects of another tenant: the host's code reads them for its caller
         Target b_obj = b.callFunction("make_target");
-        assertEq("public", a.callFunction("call_host_show", b_obj), mode + ": the host's code for A on B's object");
+        assertEq("refused", a.callFunction("call_host_show", b_obj), mode + ": the host's code for A on B's object");
         assertEq("public", a.callFunction("call_host_class_show", b_obj),
             mode + ": the host's class for A on B's object");
         assertEq("private", b.callFunction("call_host_show", b_obj), mode + ": the host's code for B on its object");
