@@ -885,7 +885,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink);
 // Phase 5.3: Additional fast-path optimizations
-extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink);
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static size_t qore_short_string_utf8_length(QoreValue v);
@@ -13582,8 +13581,6 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
                 } else if ((!strcmp(fname, "toupper") || !strcmp(fname, "upr"))
                         && fromBits(args[0]).getType() == NT_STRING) {
                     return qore_rt_pseudo_string_upr_noguard(args[0], xsink);
-                } else if (!strcmp(fname, "trim")) {
-                    return qore_fast_trim(args[0], xsink);
                 } else if (!strcmp(fname, "abs")) {
                     return qore_fast_abs(args[0], xsink);
                 }
@@ -13798,23 +13795,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
 }
 
 // --- Phase 5.3: Additional fast-path optimizations ---
-
-//! The fast path of trim() with one argument: a string node or a short string
-extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink) {
-    QoreValue arg = fromBits(arg_bits);
-    if (arg.hasNode() && arg.getInternalNode()->getType() == NT_STRING) {
-        QoreStringNode* result = static_cast<const QoreStringNode*>(arg.getInternalNode())->copy();
-        result->trim();
-        return toBits(result);
-    }
-    if (arg.isShortString()) {
-        QoreStringValueHelper str(arg);
-        QoreStringNode* result = new QoreStringNode(**str);
-        result->trim();
-        return toBits(result);
-    }
-    return qore_fast_builtin_call("Qore::trim", arg, xsink);
-}
 
 //! The fast path of abs(): an int, a float or a number
 extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink) {

@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT code generation and linking of qcc executables and the AOT runtime's builtin call frames
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%exec-class AOTStringSplitTrimTest
+
+#! The AOT calls of <string>::split() and trim() without an argument list
+/** AOT code calls the canonical <string>::split(string) and trim(string) variants through
+    qore_rt_pseudo_string_split_guarded_aot() and qore_rt_string_trim_guarded_aot() (lib/QoreAOTStringRuntime.cpp):
+    the results, the exceptions and their call stacks, and every call that takes the ordinary path (another variant,
+    a value that is not a string, a reference, named arguments, a user function of the same name) are those of the
+    interpreter, in every execution mode and in AOT executables compiled with and without the specialization.
+*/
+class AOTStringSplitTrimTest inherits QUnit::Test {
+    private {
+        string qore = realpath(TestInterpreter::qore_interpreter());
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/AOTStringSplitTrim.qr";
+        *string expected;
+        # every child process is ended after this time, so a hang fails the test instead of outliving it
+        string timeout_prefix;
+    }
+
+    constructor() : Test("AOT string split and trim calls", "1.0", \ARGV) {
+        string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        timeout_prefix = timeout_cmd.val() ? quote(timeout_cmd) + " -k 10s 240s " : "";
+        addTestCase("interpreter results", \interpreter());
+        addTestCase("execution modes match the interpreter", \modes());
+        addTestCase("AOT calls use the runtime functions", \aotCalls());
+        addTestCase("AOT executables match the interpreter", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string runStatus(list<string> args, reference<int> status, string prefix = "") {
+        return backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 " + timeout_prefix
+            + (map AOTStringSplitTrimTest::quote($1), args).join(" ") + " 2>&1", \status);
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = runStatus(args, \status, prefix);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+    }
+
+    private assertLine(string out, string line) {
+        assertTrue(inlist(line, out.split("\n")), line);
+    }
+
+    interpreter() {
+        string out = getExpected();
+        # checked by hand: fields between separators, empty interior fields kept, a trailing empty field dropped
+        assertLine(out, "params 0: []");
+        assertLine(out, "params 2: [\"\", \"\"]");
+        assertLine(out, "params 5: [\"\", \"a\", \"b\"]");
+        assertLine(out, "params 6: [\"a\", \"\", \"b\"]");
+        assertLine(out, "params 9: [\"a<NUL>b\", \"c\"]");
+        assertLine(out, "keep-trailing 6: [\"a\", \"\", \"b\", \"\"]");
+        assertLine(out, "with-separator 6: [\"a,\", \",\", \"b,\"]");
+        assertLine(out, "multi-char: [\"left\", \"right\"]");
+        assertLine(out, "multi-char-overlap: [\"\", \"\", \"a\"]");
+        assertLine(out, "multi-byte-separator 8: [\"日,\", \"語,é\"]");
+        assertLine(out, "empty-separator 4: [\"a,b\"]");
+        assertLine(out, "temporary 4: [\"a\", \"b\"]");
+        assertLine(out, "text-index: [[\"item_1\", \"item_2\", \"item_3\"], [\"item_4\", \"\", \"item_5\"], []]");
+        assertLine(out, "big: [2000, \"f0\", \"f1999\"]");
+        assertLine(out, "UTF-16LE-result-encoding: [\"UTF-16LE\", \"UTF-16LE\", \"UTF-16LE\"]");
+        assertLine(out, "ISO-8859-1-multi-byte: [\"é,\", \"b,,\"]");
+        assertLine(out, "enum-long-separator: [\"x\", \"y\"]");
+        # trim: the default characters are " \n\r\t\v\0", and the characters are decoded
+        assertLine(out, "trim param 2: \"\"");
+        assertLine(out, "trim param 6: \"embedded<NUL>null\"");
+        assertLine(out, "trim param 7: \"日本語 é\"");
+        assertLine(out, "trim chars 4: \"\"");
+        assertLine(out, "trim multi-byte-chars 7: \"本語\"");
+        assertLine(out, "trim big: \"middle\"");
+        assertLine(out, "trim ISO-2022-JP: [\"日 本\", \"ISO-2022-JP\"]");
+        assertLine(out, "trim reference-after: \"referenced\"");
+        assertLine(out, "trim other 3: \"other:unchanged\"");
+        # negative: the errors of the builtins, raised in their frames
+        assertLine(out, "conversion-error: [\"ENCODING-CONVERSION-ERROR\", \"illegal character sequence at byte offset "
+            + "0 found in input type \\\"UTF-8\\\" (while converting to \\\"US-ASCII\\\")\", \"<string>::split\", "
+            + "\"builtin\"]");
+        # the split() function has the function's frame
+        assertRegex("(?m)^function-conversion-error: \\[\"ENCODING-CONVERSION-ERROR\", .*, \"split\", "
+            + "\"builtin\"\\]$", out);
+        assertRegex("(?m)^trim bad-middle-error: \\[\"INVALID-ENCODING\", .*, \"trim\", \"builtin\"\\]$", out);
+        assertRegex("(?m)^optional 0-error: \\[\"PSEUDO-METHOD-DOES-NOT-EXIST\", ", out);
+        assertRegex("(?m)^trim dynamic-int-error: \\[\"RUNTIME-OVERLOAD-ERROR\", \"no variant matching "
+            + "'trim\\(integer\\)'", out);
+        assertLine(out, "class-trim-error: [\"INVALID-ENCODING\", \"invalid UTF-8 encoding encountered in "
+            + "string\", \"trim\", \"builtin\"]");
+        assertLine(out, "context-after: \"class context\"");
+    }
+
+    modes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture)), mode);
+        }
+    }
+
+    #! the specialization is made, and the control without it is not: the object references the runtime functions
+    aotCalls() {
+        TmpDir dir("qore-aot-string-split-trim-");
+        foreach hash<auto> control in ({"name": "enabled", "env": "", "split": True, "trim": True},
+                {"name": "split-disabled", "env": "QORE_DISABLE_AOT_STRING_SPLIT=1 ", "split": False, "trim": True},
+                {"name": "trim-disabled", "env": "QORE_DISABLE_AOT_STRING_TRIM=1 ", "split": True, "trim": False}) {
+            string out_dir = dir.path + "/" + control.name;
+            mkdir(out_dir);
+            int status;
+            string out = runStatus((qcc, "-O3", "-c", "--output-dir=" + out_dir, fixture), \status, control.env);
+            assertEq(0, status, control.name + ": " + out);
+            string object = out_dir + "/AOTStringSplitTrim.qo";
+            assertTrue(is_file(object), control.name);
+            string undefined = run(("nm", "-u", object));
+            assertEq(control.split, undefined =~ /qore_rt_pseudo_string_split_guarded_aot/,
+                control.name + " split: " + undefined);
+            assertEq(control.trim, undefined =~ /qore_rt_string_trim_guarded_aot/,
+                control.name + " trim: " + undefined);
+            # the executable compiled the same way gives the interpreter's results
+            string executable = out_dir + "/fixture";
+            out = runStatus((qcc, "-O3", "-o", executable, fixture), \status, control.env);
+            assertEq(0, status, control.name + ": " + out);
+            assertEq(getExpected(), run((executable,)), control.name);
+        }
+    }
+
+    aot() {
+        string ast = getExpected();
+        TmpDir dir("qore-aot-string-split-trim-");
+        string executable = dir.path + "/fixture";
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                int status;
+                string out = runStatus((qcc, level, "-o", executable, fixture), \status, prefix);
+                assertEq(0, status, label + ": " + out);
+                # negative: the compile does not refuse any function
+                assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
+                assertEq(ast, run((executable,), prefix), label);
+                # the calls without the prelinked targets take the ordinary path
+                assertEq(ast, run((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
+                    label + " without prelinked calls");
+            }
+        }
+    }
+}

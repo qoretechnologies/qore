@@ -1,0 +1,456 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# the calls of <string>::split() and trim() that AOT code calls directly, and their neighbors that it does not, with
+# every kind of operand; the output is compared with the AST interpreter's (AOTStringSplitTrim.qtest)
+
+%modern
+
+enum Sep : string {
+    Comma = ",",
+    Long = "abcdefgh",
+}
+
+sub emit(string name, auto value) {
+    # NUL characters are shown, as printf() would end the line at the first one
+    print(replace(sprintf("%s: %y\n", name, value), "\0", "<NUL>"));
+}
+
+sub emitError(string name, hash<ExceptionInfo> ex) {
+    # the function and type of the frame that raised the exception, as the builtin call adds it to the call stack
+    emit(name + "-error", (ex.err, ex.desc, ex.callstack[0].function, ex.callstack[0].type));
+    # the location of the builtin's frame (the call site) and the frame of its caller
+    emit(name + "-frames", (ex.line, ex.callstack[0].line, ex.callstack[1].function, ex.callstack[1].line));
+}
+
+# split: a string parameter and a string separator parameter
+list<string> sub splitParams(string value, string separator) {
+    return value.split(separator);
+}
+
+# split in a try block (the call can raise, so it is an invoke)
+list<string> sub splitInvoke(string value, string separator) {
+    try {
+        return value.split(separator);
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("split-invoke", ex);
+        return ("caught",);
+    }
+}
+
+# split with a literal separator
+list<string> sub splitLiteral(string value) {
+    return value.split(",");
+}
+
+# split of a temporary string, as text_index does: trim(tolower(line)).split(" ")
+list<string> sub splitTemporary(string value, string separator) {
+    return trim(tolower(value)).split(separator);
+}
+
+list<string> sub splitTemporaryInvoke(string value) {
+    try {
+        return trim(tolower(value)).split(" ");
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("split-temporary-invoke", ex);
+        return ("caught",);
+    }
+}
+
+# a temporary separator
+list<string> sub splitTemporarySeparator(string value, string separator) {
+    return value.split(separator + "");
+}
+
+# named arguments
+list<string> sub splitNamed(string value, string separator) {
+    return value.split(separator: separator);
+}
+
+# the other variants of the method
+list<string> sub splitWithSeparator(string value, string separator) {
+    return value.split(separator, True);
+}
+
+list<string> sub splitKeepTrailing(string value, string separator) {
+    return value.split(separator, False, True);
+}
+
+list<string> sub splitQuote(string value, string separator, string quote) {
+    return value.split(separator, quote);
+}
+
+list<string> sub splitQuoteTrim(string value, string separator, string quote) {
+    return value.split(separator, quote, True);
+}
+
+# the split() function
+list<string> sub splitFunction(string value, string separator) {
+    return split(separator, value);
+}
+
+# a base that may be NOTHING
+auto sub splitOptional(*string value) {
+    return value.split(",");
+}
+
+# a local that is not assigned on every path
+auto sub splitMissing(bool assigned) {
+    string value;
+    if (assigned) {
+        value = "left,right";
+    }
+    return value.split(",");
+}
+
+# a separator that may be NOTHING
+auto sub splitMissingSeparator(string value, bool assigned) {
+    string separator;
+    if (assigned) {
+        separator = ",";
+    }
+    return value.split(separator);
+}
+
+# untyped operands
+auto sub splitDynamic(auto value, auto separator) {
+    return value.split(separator);
+}
+
+# enum values
+list<string> sub splitEnum(string value, Sep separator) {
+    return value.split(separator);
+}
+
+list<string> sub splitEnumParam(Sep value) {
+    return value.split("c");
+}
+
+sub clear(reference<string> value) {
+    remove value;
+}
+
+string sub clearAndReturn(reference<string> value) {
+    remove value;
+    return ",";
+}
+
+# trim: a string parameter
+string sub trimParam(string value) {
+    return trim(value);
+}
+
+string sub trimInvoke(string value) {
+    try {
+        return trim(value);
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("trim-invoke", ex);
+        return "caught";
+    }
+}
+
+# a temporary argument
+string sub trimTemporary(string value) {
+    return trim(tolower(value));
+}
+
+string sub trimNamed(string value) {
+    return trim(str: value);
+}
+
+string sub trimChars(string value, string chars) {
+    return trim(value, chars);
+}
+
+string sub trimNothingChars(string value) {
+    return trim(value, NOTHING);
+}
+
+auto sub trimOptional(*string value) {
+    return trim(value);
+}
+
+auto sub trimMissing(bool assigned) {
+    string value;
+    if (assigned) {
+        value = " contents ";
+    }
+    return trim(value);
+}
+
+auto sub trimDynamic(auto value) {
+    return trim(value);
+}
+
+auto sub trimReference(reference<string> value) {
+    return trim(\value);
+}
+
+string sub trimEnum(Sep value) {
+    return trim(value);
+}
+
+namespace Other {
+    public string sub trim(string value) {
+        return "other:" + value;
+    }
+
+    public list<string> sub splitOther(string value) {
+        return value.split(",");
+    }
+}
+
+# a class of the program: the builtin's frame is on top of the method's in an exception's call stack
+class Context {
+    private {
+        string value = "class context";
+    }
+
+    private string read() {
+        return value;
+    }
+
+    string check() {
+        emit("class-split", "a,b".split(","));
+        emit("class-trim", trim(" a "));
+        try {
+            emit("class-trim-bad", trim(binary_to_string(<ff>, "UTF-8")));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("class-trim", ex);
+        }
+        try {
+            convert_encoding("a,b", "ASCII").split("日");
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("class-split", ex);
+        }
+        return read();
+    }
+}
+
+# a split method of an object and a closure in a hash under the method's name
+class SplitOverride {
+    list<string> split(string separator) {
+        return ("override", separator);
+    }
+}
+
+sub splitCases() {
+    list<string> values = ("", ",", ",,", "a", "a,b", ",a,b,", "a,,b,", "longer,heap,string,",
+        "日,本語,é", "a\0b,c", "日本語");
+    foreach string value in (values) {
+        # the values have control characters: the output names them by their position
+        string tag = string($#);
+        emit("params " + tag, splitParams(value, ","));
+        emit("invoke " + tag, splitInvoke(value, ","));
+        emit("literal " + tag, splitLiteral(value));
+        emit("temporary " + tag, splitTemporary(" " + value + " ", ","));
+        emit("temporary-separator " + tag, splitTemporarySeparator(value, ","));
+        emit("named " + tag, splitNamed(value, ","));
+        # an empty separator does not end the split of a text with a NUL character in any execution mode (qore#7710)
+        if (value !~ /\0/) {
+            emit("empty-separator " + tag, splitParams(value, ""));
+        }
+        emit("multi-byte-separator " + tag, splitParams(value, "本"));
+        emit("with-separator " + tag, splitWithSeparator(value, ","));
+        emit("keep-trailing " + tag, splitKeepTrailing(value, ","));
+        emit("quote " + tag, splitQuote(value, ",", "\""));
+        emit("function " + tag, splitFunction(value, ","));
+        emit("other " + tag, Other::splitOther(value));
+    }
+    emit("multi-char", splitParams("leftabcdefghrightabcdefgh", "abcdefgh"));
+    emit("multi-char-prefix", splitParams("abcdefghleft", "abcdefgh"));
+    emit("multi-char-overlap", splitParams("aaaaa", "aa"));
+    emit("separator-longer", splitParams("ab", "abc"));
+    emit("separator-equal", splitParams("abc", "abc"));
+    emit("quoted", splitQuote("a,\"b,c\",d", ",", "\""));
+    emit("quoted-trim", splitQuoteTrim(" a , \"b,c\" , d ", ",", "\""));
+    emit("text-index", map splitTemporary($1, " "), " Item_1 ITEM_2 item_3 \n Item_4  ITEM_5 \n\n".split("\n"));
+    emit("temporary-invoke", splitTemporaryInvoke(" A B "));
+    # a long string, so that a native loop over the text would see many fields
+    string big = (map sprintf("f%d", $1), xrange(2000)).join(",");
+    list<string> big_fields = splitParams(big, ",");
+    emit("big", (big_fields.size(), big_fields[0], big_fields[1999]));
+
+    # encodings: the result is in the base's encoding, and a separator in another encoding is converted to it
+    foreach string encoding in (("UTF-8", "ISO-8859-1", "UTF-16LE", "UTF-16BE", "ISO-2022-JP")) {
+        string text = encoding == "ISO-8859-1" ? "é,àb,," : "日,本語,ア,";
+        string value = convert_encoding(text, encoding);
+        foreach string separator in ((",", convert_encoding(",", encoding))) {
+            list<string> result = splitParams(value, separator);
+            emit(encoding, map convert_encoding($1, "UTF-8"), result);
+            emit(encoding + "-result-encoding", map $1.encoding(), result);
+            result = splitInvoke(value, separator);
+            emit(encoding + "-invoke", map convert_encoding($1, "UTF-8"), result);
+        }
+        # a separator with a multi-byte character
+        string separator = encoding == "ISO-8859-1" ? "à" : "本";
+        emit(encoding + "-multi-byte", map convert_encoding($1, "UTF-8"), splitParams(value, separator));
+        # a UTF-16 text has NUL bytes (qore#7710)
+        if (encoding !~ /^UTF-16/) {
+            emit(encoding + "-empty", map convert_encoding($1, "UTF-8"), splitParams(value, ""));
+        }
+    }
+    # a NUL character in a two-byte encoding
+    string utf16 = convert_encoding("a\0b", "UTF-16LE");
+    emit("utf16-nul", map convert_encoding($1, "UTF-8"), splitParams(utf16, convert_encoding("\0", "UTF-16LE")));
+
+    # errors: the separator cannot be converted to the base's encoding, and a malformed stateful base
+    try {
+        emit("conversion", splitParams(convert_encoding("a,b", "ASCII"), "日"));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("conversion", ex);
+    }
+    emit("conversion-invoke", splitInvoke(convert_encoding("a,b", "ASCII"), "日"));
+    try {
+        emit("function-conversion", splitFunction(convert_encoding("a,b", "ASCII"), "日"));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("function-conversion", ex);
+    }
+    try {
+        emit("stateful", splitParams(binary_to_string(<1b2442467c4b>, "ISO-2022-JP"), ","));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("stateful", ex);
+    }
+    emit("stateful-invoke", splitInvoke(binary_to_string(<1b2442467c4b>, "ISO-2022-JP"), ","));
+    try {
+        emit("malformed-utf8", splitParams(binary_to_string(<61ff2c62>, "UTF-8"), ","));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("malformed-utf8", ex);
+    }
+    emit("after-error", splitParams("a,b", ","));
+
+    # values that may be NOTHING
+    foreach bool assigned in ((True, False)) {
+        try {
+            emit("optional " + assigned, splitOptional(assigned ? "a,b" : NOTHING));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("optional " + assigned, ex);
+        }
+        try {
+            emit("missing " + assigned, splitMissing(assigned));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("missing " + assigned, ex);
+        }
+        try {
+            emit("missing-separator " + assigned, splitMissingSeparator("a,b", assigned));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("missing-separator " + assigned, ex);
+        }
+    }
+    string removed = "a,b";
+    clear(\removed);
+    try {
+        emit("removed", removed.split(","));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("removed", ex);
+    }
+    # the separator's evaluation removes the base
+    string reentry = "a,b";
+    try {
+        emit("reentry", reentry.split(clearAndReturn(\reentry)));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("reentry", ex);
+    }
+    emit("reentry-after", reentry);
+
+    # untyped operands and other receivers
+    emit("dynamic", splitDynamic("a,b", ","));
+    emit("dynamic-binary", splitDynamic(<610062>, binary("\0")));
+    try {
+        emit("dynamic-int", splitDynamic(1, ","));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("dynamic-int", ex);
+    }
+    try {
+        emit("dynamic-separator", splitDynamic("a1b", 1));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("dynamic-separator", ex);
+    }
+    emit("override", splitDynamic(new SplitOverride(), ","));
+    emit("enum-separator", splitEnum("a,b", Sep::Comma));
+    emit("enum-long-separator", splitEnum("xabcdefghy", Sep::Long));
+    emit("enum-base", splitEnumParam(Sep::Long));
+}
+
+sub trimCases() {
+    list<string> values = ("", " ", " \n\r\t\v\0", "unchanged", " x ", "  longer heap string  ", " \0embedded\0null\0 ",
+        " 日本語 é ", " \f ", "\t\ttabs\t", " nbsp ", "x  ", "  x");
+    foreach string value in (values) {
+        string tag = string($#);
+        string original = value;
+        emit("trim " + "param " + tag, trimParam(value));
+        emit("trim " + "invoke " + tag, trimInvoke(value));
+        emit("trim " + "temporary " + tag, trimTemporary(value));
+        emit("trim " + "named " + tag, trimNamed(value));
+        emit("trim " + "chars " + tag, trimChars(value, " x"));
+        emit("trim " + "multi-byte-chars " + tag, trimChars(value, "日é "));
+        emit("trim " + "empty-chars " + tag, trimChars(value, ""));
+        emit("trim " + "nothing-chars " + tag, trimNothingChars(value));
+        emit("trim " + "other " + tag, Other::trim(value));
+        emit("trim " + "unchanged " + tag, value == original);
+    }
+    string big = strmul(" ", 5000) + "middle" + strmul("\t", 5000);
+    emit("trim " + "big", trimParam(big));
+    foreach string encoding in (("UTF-8", "ISO-8859-1", "UTF-16LE", "UTF-16BE", "ISO-2022-JP")) {
+        string text = encoding == "ISO-8859-1" ? "  é à  " : "  日 本  ";
+        string value = convert_encoding(text, encoding);
+        string result = trimParam(value);
+        emit("trim " + encoding, (convert_encoding(result, "UTF-8"), result.encoding()));
+        result = trimInvoke(value);
+        emit("trim " + encoding + "-invoke", (convert_encoding(result, "UTF-8"), result.encoding()));
+        result = trimChars(value, encoding == "ISO-8859-1" ? " é" : " 日");
+        emit("trim " + encoding + "-chars", (convert_encoding(result, "UTF-8"), result.encoding()));
+    }
+    # malformed text: the canonical trim decodes the characters and raises an exception
+    foreach hash<auto> bad in ({"name": "bad-leading", "bin": <ff61>}, {"name": "bad-middle", "bin": <20ff6220>},
+            {"name": "bad-trailing", "bin": <61ff>}, {"name": "bad-clean", "bin": <61ff62>}) {
+        string value = binary_to_string(bad.bin, "UTF-8");
+        try {
+            emit("trim " + bad.name, trimParam(value));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("trim " + bad.name, ex);
+        }
+        emit("trim " + bad.name + "-invoke", trimInvoke(value));
+    }
+    try {
+        emit("trim " + "bad-stateful", trimParam(binary_to_string(<201b2442467c4b20>, "ISO-2022-JP")));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("trim " + "bad-stateful", ex);
+    }
+    emit("trim " + "after-error", trimParam(" good "));
+
+    foreach bool assigned in ((True, False)) {
+        try {
+            emit("trim " + "optional " + assigned, trimOptional(assigned ? " yes " : NOTHING));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("trim " + "optional " + assigned, ex);
+        }
+        try {
+            emit("trim " + "missing " + assigned, trimMissing(assigned));
+        } catch (hash<ExceptionInfo> ex) {
+            emitError("trim " + "missing " + assigned, ex);
+        }
+    }
+    string referenced = " referenced ";
+    emit("trim " + "reference", trimReference(\referenced));
+    emit("trim " + "reference-after", referenced);
+    emit("trim " + "dynamic", trimDynamic(" dynamic "));
+    try {
+        emit("trim " + "dynamic-nothing", trimDynamic(NOTHING));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("trim " + "dynamic-nothing", ex);
+    }
+    try {
+        emit("trim " + "dynamic-int", trimDynamic(1));
+    } catch (hash<ExceptionInfo> ex) {
+        emitError("trim " + "dynamic-int", ex);
+    }
+    emit("trim " + "enum", trimEnum(Sep::Comma));
+}
+
+splitCases();
+trimCases();
+Context checker();
+emit("context-after", checker.check());

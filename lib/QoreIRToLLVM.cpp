@@ -15925,6 +15925,92 @@ static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_inst
     return call ? call->getExplicitTypeParamInstantiation() : nullptr;
 }
 
+//! true if a signature is that of a canonical string builtin: the given parameter types, with the given default
+//! values for the parameters that the call omits (\a defaults_bool: False, else NOTHING), and nothing to substitute
+static bool qore_ir_is_canonical_string_builtin_signature(const AbstractFunctionSignature* sig,
+        std::initializer_list<const QoreTypeInfo*> types, bool defaults_bool) {
+    if (!sig || sig->numParams() != types.size() || sig->hasVarargs() || sig->needsTypeParameterSubstitution()
+            || sig->declaresTypeParameters()) {
+        return false;
+    }
+    const type_vec_t& sig_types = sig->getTypeList();
+    const arg_vec_t& defaults = sig->getDefaultArgList();
+    if (sig_types.size() != types.size() || defaults.size() != types.size()) {
+        return false;
+    }
+    size_t i = 0;
+    for (const QoreTypeInfo* type : types) {
+        if (sig_types[i] != type) {
+            return false;
+        }
+        // the first parameter is given by every admitted call
+        if (i && (defaults_bool ? (!defaults[i].isBool() || defaults[i].getAsBool()) : !defaults[i].isNothing())) {
+            return false;
+        }
+        ++i;
+    }
+    return true;
+}
+
+//! true if a pseudo-method call of an AOT function is a call of the canonical <string>::split(string) variant with one
+//! string argument, which qore_rt_pseudo_string_split_guarded_aot() makes without an argument list
+/** The receiver and the argument must be declared as strings (or as *string: the runtime function checks them and
+    takes the ordinary call for any other value); a call with a reference argument, explicit type arguments or
+    arguments named at run time is made as before.  The variant is recognized by its signature and flags, so a change of
+    the builtin's declaration ends the specialization instead of changing what the call does.
+*/
+template <typename Instruction>
+static bool qore_ir_is_aot_string_split_call(const Instruction& inst, int nargs) {
+    if (!inst.pseudo || nargs != 1 || inst.has_ref_args || !inst.pseudo_base_known_string
+            || !inst.pseudo_arg0_known_string || !inst.method || !inst.variant || inst.variant->isUser()
+            || inst.qc != qore_pseudo_get_class(NT_STRING) || inst.method->getClass() != inst.qc
+            || strcmp(inst.method->getName(), "split")
+            || qore_ir_get_explicit_dot_eval_type_instantiation(inst.explicit_type_param_inst, inst.expr)) {
+        return false;
+    }
+    // only a method call: a call of a global function that the lowering made a pseudo-method call, whose expression is
+    // the function call (qore_ir_get_synthetic_global_pseudo_call()), has the frame of the function
+    const QoreDotEvalOperatorNode* dot = inst.expr.hasNode()
+        ? qore_get_dot_eval_operator_node(inst.expr.getInternalNode()) : nullptr;
+    if (!dot || (dot->getMethodCall() && dot->getMethodCall()->getRuntimeArgNames())) {
+        return false;
+    }
+    // the pseudo-class has no Program or namespace, so the call is made in the caller's Program
+    const qore_class_private* cls = qore_class_private::get(*inst.qc);
+    if (!cls || cls->ns || inst.variant->getFunctionality() != QDOM_DEFAULT
+            || inst.variant->getFlags() != (QCF_RET_VALUE_ONLY | QCF_NAMED_ARGS)
+            || !qore_ir_is_canonical_string_builtin_signature(inst.variant->getSignature(),
+                {stringTypeInfo, boolTypeInfo, boolTypeInfo}, true)) {
+        return false;
+    }
+    return !QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_SPLIT");
+}
+
+//! true if a function call of an AOT function is a call of the canonical trim(string, *string) variant with one
+//! argument, which qore_rt_string_trim_guarded_aot() makes without an argument list
+/** As qore_ir_is_aot_string_split_call(): only the Qore builtin, by its signature and flags; the runtime function
+    checks the argument and takes the ordinary call for any value that is not a string
+*/
+static bool qore_ir_is_aot_string_trim_call(const QoreValue& expr, const AbstractQoreFunctionVariant* variant,
+        int nargs, bool has_ref_args) {
+    if (nargs != 1 || has_ref_args || !variant || variant->isUser() || !expr.hasNode()) {
+        return false;
+    }
+    const FunctionCallNode* call = qore_get_function_call_node(expr.getInternalNode());
+    if (!call || call->hasExplicitTypeArgs() || call->getRuntimeArgNames() || call->getVariant() != variant
+            || !call->getName() || strcmp(call->getName(), "trim")
+            || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+        return false;
+    }
+    if (variant->getFunctionality() != QDOM_DEFAULT
+            || variant->getFlags() != (QCF_PURE | QCF_HOST_PORTABLE | QCF_NAMED_ARGS)
+            || !qore_ir_is_canonical_string_builtin_signature(variant->getSignature(),
+                {stringTypeInfo, stringOrNothingTypeInfo}, false)) {
+        return false;
+    }
+    return !QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_TRIM");
+}
+
 //! Returns the method of a static method call expression, or nullptr if it is not one or its method is not resolved
 static const QoreMethod* qore_ir_static_call_node_method(const QoreValue& expr) {
     const auto* static_call = expr.hasNode()
@@ -28380,6 +28466,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     direct_inst->expr, current_ir_func,
                     direct_inst->operands[arg_start], aot_mode)
                 : nullptr;
+            // the canonical trim(string) call, made without an argument list
+            bool string_trim_fast_path = aot_mode && !single_arg_fast_builtin_helper && !type_name_fast_path
+                && !explicit_inst && qore_ir_is_aot_string_trim_call(direct_inst->expr, direct_inst->variant, nargs,
+                    direct_inst->has_ref_args);
 
             // Collect raw args first so context-independent native fast entries
             // can avoid creating boxed temporaries that no call path observes.
@@ -28431,7 +28521,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     : fused_aggregate_projection
                         ? aggregate_projection_callee : nullptr;
                 bool selective_summary_boxing = selective_summary_callee
-                    && !type_name_fast_path && !single_arg_fast_builtin_helper
+                    && !type_name_fast_path && !single_arg_fast_builtin_helper && !string_trim_fast_path
                     && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_LAZY_FAST_ARGS");
                 for (int i = 0; i < nargs; ++i) {
                     if (i && !(i % 100)
@@ -28453,7 +28543,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && !fused_aggregate_projection
                         && !fused_collection_consumer
                         && !type_name_fast_path
-                        && !single_arg_fast_builtin_helper) {
+                        && !single_arg_fast_builtin_helper
+                        && !string_trim_fast_path) {
                     args_array = allocCallArray(llvm_func, nargs);
                     for (int i = 0; i < nargs; ++i) {
                         llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
@@ -28512,7 +28603,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
-            if (!args_array && !type_name_fast_path && !single_arg_fast_builtin_helper) {
+            if (!args_array && !type_name_fast_path && !single_arg_fast_builtin_helper && !string_trim_fast_path) {
                 args_array = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
@@ -28537,6 +28628,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(clear_helper, {arg_cleanups,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
+                call_may_modify_runtime_locals = false;
+            } else if (string_trim_fast_path) {
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_string_trim_guarded_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                        boxed_args[0], has_arg_cleanups ? arg_cleanups
+                            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+                        xsink_arg});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                // the call that the runtime function makes for a value that is not a string is the ordinary call of a
+                // builtin trim() variant that takes no reference (has_ref_args), which cannot change the caller's
+                // locals
                 call_may_modify_runtime_locals = false;
             } else if (single_arg_fast_builtin_helper) {
                 auto helper = module.getOrInsertFunction(single_arg_fast_builtin_helper,
@@ -31322,8 +31435,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && direct_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
                 && qore_ir_is_string_pseudo_substr(direct_inst->intrinsic);
+            // the canonical <string>::split(string) call, made without an argument list
+            bool string_split_fast_path = aot_mode && string_predicate_id < 0 && !string_find_fast_path
+                && !string_substr_fast_path && qore_ir_is_aot_string_split_call(*direct_inst, nargs);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
-                || string_substr_fast_path;
+                || string_substr_fast_path || string_split_fast_path;
             llvm::BasicBlock* guarded_string_fast_end = nullptr;
             llvm::BasicBlock* guarded_string_merge = nullptr;
             bool guarded_string_result_needs_cleanup = false;
@@ -31538,6 +31654,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = true;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (string_split_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_split_guarded_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type},
+                        false));
+                call_result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                     boxValue(arg_val, inst->operands[1].id), has_arg_cleanups ? arg_cleanups
+                        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+                     xsink_arg});
+                clear_fast_path_arg_cleanups();
+                // the call that the runtime function makes for an operand that is not a string is the ordinary call
+                // of a builtin of <string> or <nothing> (the operands are declared as strings), which cannot change
+                // the caller's locals, as for the guarded string pseudo-methods (emitGuardedStringPseudoFastPath())
+                call_may_modify_runtime_locals = false;
             } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
@@ -32263,8 +32399,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && invoke_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
                 && qore_ir_is_string_pseudo_substr(invoke_inst->intrinsic);
+            // the canonical <string>::split(string) call, made without an argument list
+            bool string_split_fast_path = aot_mode && string_predicate_id < 0 && !string_find_fast_path
+                && !string_substr_fast_path && qore_ir_is_aot_string_split_call(*invoke_inst, nargs);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
-                || string_substr_fast_path;
+                || string_substr_fast_path || string_split_fast_path;
             llvm::BasicBlock* guarded_string_fast_end = nullptr;
             llvm::BasicBlock* guarded_string_merge = nullptr;
             bool guarded_string_result_needs_cleanup = false;
@@ -32377,7 +32516,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
             };
-            if (string_predicate_id >= 0) {
+            if (string_split_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                QoreValue expr_val = invoke_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_split_guarded_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, i64_type, i64_type, ptr_type, ptr_type},
+                        false));
+                call_result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                     boxValue(arg_val, inst->operands[1].id), has_arg_cleanups ? arg_cleanups
+                        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+                     xsink_arg});
+                clear_fast_path_arg_cleanups();
+                // the call that the runtime function makes for an operand that is not a string is the ordinary call
+                // of a builtin of <string> or <nothing> (the operands are declared as strings), which cannot change
+                // the caller's locals, as for the guarded string pseudo-methods (emitGuardedStringPseudoFastPath())
+                call_may_modify_runtime_locals = false;
+            } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
                 llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
