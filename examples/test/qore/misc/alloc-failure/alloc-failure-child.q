@@ -326,8 +326,8 @@ class AllocFailureChild {
         foreach string name in (("push", "map", "index", "hash")) {
             try {
                 if (name == "hash") {
-                    # the member of the key is the first allocation that follows
-                    call_function("dbg_fail_allocation", 1, 1);
+                    # the next creation of a hash member fails
+                    call_function("dbg_fail_allocation", 1, -1);
                 } else {
                     fail_next_allocation();
                 }

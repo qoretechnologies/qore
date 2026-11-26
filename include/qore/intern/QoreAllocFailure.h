@@ -53,6 +53,13 @@ DLLLOCAL void qore_dbg_fail_allocation(int64 n, size_t min_size);
 
 //! true if the debug hook armed with qore_dbg_fail_allocation() makes this allocation of \a size bytes fail
 DLLLOCAL bool qore_dbg_allocation_fails(size_t size);
+
+//! Makes the \a n th creation of a hash member that follows in the current thread fail with std::bad_alloc (debug
+//! builds only; qore#7466); 0 disarms it
+DLLLOCAL void qore_dbg_fail_hash_member(int64 n);
+
+//! true if the debug hook armed with qore_dbg_fail_hash_member() makes this creation of a hash member fail
+DLLLOCAL bool qore_dbg_hash_member_fails();
 #endif
 
 //! Throws std::bad_alloc; out of line, so that the allocation functions below add only a test to the code that calls

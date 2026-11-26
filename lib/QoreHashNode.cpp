@@ -221,7 +221,7 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
 HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
 #ifdef DEBUG
     // the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466)
-    if (qore_dbg_allocation_fails(sizeof(HashMember))) {
+    if (qore_dbg_hash_member_fails()) {
         throw std::bad_alloc();
     }
 #endif
