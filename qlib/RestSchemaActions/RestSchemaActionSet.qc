@@ -487,7 +487,7 @@ DataProviderActionCatalog::getActions("Stripe");
         return rv;
     }
 
-    #! Returns the callback building an action's output type, creating it on first use
+    #! Returns the callback building an action's output type, which the set created when it was built
     private code getOutputTypeCallback(string action, RestSchemaActionOperation op) {
         # created when the set was built (qore#7714)
         AutoLock al(callback_lock);
