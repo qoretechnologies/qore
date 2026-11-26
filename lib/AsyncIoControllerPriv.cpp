@@ -11830,9 +11830,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         } else {
                             // Still pending — target socket-backed Qore ops for
                             // immediate re-poll only when there is work that the
-                            // OS readiness API may not deliver promptly: pending
-                            // writes/connect completion or application-level data
-                            // buffered in SSL/HTTP/2 layers (not the kernel buffer).
+                            // OS readiness API may not deliver: application-level
+                            // data buffered in SSL/HTTP/2 layers (not the kernel
+                            // buffer), and on macOS/BSD a wait for writability, as
+                            // for the I/O thread's own steps (see the re-queue of
+                            // POLLOUT results after Phase 2: kqueue reports a
+                            // non-blocking connect's completion only once).
+                            //
+                            // Elsewhere the event loop's level-triggered readiness
+                            // reports a writable descriptor whenever it is waited
+                            // for, so a wait for writability sleeps on the fd like
+                            // a read wait: re-polling it at once steps the op
+                            // continuously while its peer does not read (qore#7707).
                             //
                             // Plain read waits, including EventNotifier waits, must
                             // sleep on the fd. Re-queuing them here turns an event
@@ -11871,8 +11880,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                         pd_xsink.clear();
                                     }
                                 }
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+                                bool rewake_write_wait = (ev & SOCK_POLLOUT) != 0;
+#else
+                                bool rewake_write_wait = false;
+#endif
                                 if (!event_notifier && !sh.empty()
-                                        && ((ev & SOCK_POLLOUT) || has_pending_data)) {
+                                        && (rewake_write_wait || has_pending_data)) {
                                     t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {
@@ -13913,52 +13927,10 @@ bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args, Ex
         lgr->ref();
     }
 
-    // an exception that the logger raises is the caller's to report
-    {
-        ExceptionSink enabled_xsink;
-        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
-        if (enabled_xsink) {
-            if (logger_xsink) {
-                logger_xsink->assimilate(enabled_xsink);
-            } else {
-                enabled_xsink.clear();
-            }
-        }
-        if (!enabled) {
-            lgr->derefLogged(logger_xsink != nullptr);
-            return true;
-        }
-    }
-
-    // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
-    // re-copy the va_list and retry until it fits, mirroring the established
-    // pattern in support.cpp printe()/print_debug().  Without the loop, large
-    // owner / key strings (e.g. socket-sync owners) silently render as empty
-    // log messages.
-    QoreStringNode* msg = new QoreStringNode();
-    while (true) {
-        va_list iter_args;
-        va_copy(iter_args, args);
-        int rc = msg->vsprintf(fmt, iter_args);
-        va_end(iter_args);
-        if (!rc) {
-            break;
-        }
-    }
-
-    ExceptionSink xsink;
-    lgr->logArgs(level, msg, nullptr, &xsink);
-    msg->deref();
-    if (xsink) {
-        // the caller reports the logger's exception, or it is discarded
-        if (logger_xsink) {
-            logger_xsink->assimilate(xsink);
-        } else {
-            xsink.clear();
-        }
-    }
-    lgr->derefLogged(logger_xsink != nullptr);
-    return true;
+    // an exception that the logger raises is the caller's to report; a logger that cannot take the message leaves it
+    // to the caller, which reports it otherwise (qore#7698)
+    QoreLoggerBridgeLoggedHolder holder(lgr, logger_xsink != nullptr);
+    return lgr->logV(level, fmt, args, logger_xsink);
 }
 
 bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {

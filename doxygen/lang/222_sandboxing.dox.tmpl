@@ -366,6 +366,68 @@ authenticate();
     was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses
     code that it does not trust.
 
+    @subsection sandbox_serialization Serialization of the Objects of Trusted Classes
+
+    The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: the
+    non-public members (\c private, \c private:hierarchy and \c private:internal) and non-public static class
+    variables that a class declared by trusted code declares are its private state, which sandboxed code can neither
+    read nor set through serialization:
+    - when an object is serialized for sandboxed code, with @ref Qore::Serializable::serialize() "Serializable::serialize()",
+      @ref Qore::Serializable::serializeToData() "Serializable::serializeToData()" or the methods of the object, a
+      non-public member with a value that a class declared by trusted code declares raises a \c SERIALIZATION-ERROR
+      exception, also for the trusted base classes of a class that sandboxed code declared, as does such a non-public
+      static variable with @ref Qore::QSF_INCLUDE_STATIC_CLASS_VARS "QSF_INCLUDE_STATIC_CLASS_VARS", so that the
+      object is never serialized without its state; a non-public member without a value is left out, and the
+      \c serializeMembers() method of such a class is not called, as its output cannot be filtered
+    - sandboxed code cannot deserialize an object of a class whose hierarchy has a non-transient non-public member that
+      a class declared by trusted code declares, as the object would be created without its constructor with state of
+      the code's choosing, nor data that sets a non-public member of such a class (transient or not), nor an object of
+      such a class with a \c deserializeMembers() method; the deserialization raises a \c DESERIALIZATION-ERROR
+      exception, as does a change of a non-public static variable of such a class with
+      @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS"
+    - formatting an object with \c %%y, \c %%n or \c %%N leaves out the members that serialization would not give
+
+    The rule covers the members and static variables that %Qore code declares; the serialization of the builtin
+    classes, which their C++ code implements, is not changed.
+
+    A class that trusted code declares opts in by inheriting @ref Qore::SandboxSerializable "SandboxSerializable"
+    directly: its own non-public members and static variables are then serialized, set and shown as declared, and its
+    \c serializeMembers() and \c deserializeMembers() methods are called.  The opt-in is not inherited by a subclass,
+    which inherits the class directly too if its own non-public state may be serialized by sandboxed code.  The members
+    of a class that sandboxed code declared are serialized as declared.
+
+    The rule is decided for each class that declares a member or static variable, and in the same way for every form
+    of the call (a builtin function or method, a call reference or closure, any parameter type, a module loaded by name
+    or by path, interpreted or compiled code):
+    - the code of a class declared by trusted code gets the state that it has private access to, also when sandboxed
+      code called it: all the declarations of its own class, and the \c private declarations of its parent and child
+      classes, but not those of another class of an object's hierarchy, such as a sibling base class of a class that
+      sandboxed code declared; in a builtin function or method, such as \c sprintf() or
+      @ref Qore::Serializable::serialize() "Serializable::serialize()", the class of the code that called the builtin
+      decides
+    - for any other declaration, the state is withheld if sandboxed code is in the chain of the callers: trusted code
+      that serializes a value that a sandboxed caller gave it gets a \c SERIALIZATION-ERROR exception for a non-public
+      member or static variable with a value, and trusted code that formats such a value, for example in the
+      description of an exception, leaves those members out; trusted code that no sandboxed code calls gets all state
+
+    A trusted host that needs the state of the objects of a sandboxed %Program's calls, for example to deliver the
+    arguments of a call that the %Program makes through the host to another %Program, serializes them with
+    @ref Qore::Program::serialize() "Program::serialize()" or @ref Qore::Program::serializeToData()
+    "Program::serializeToData()" and deserializes data into a sandboxed %Program with
+    @ref Qore::Program::deserialize() "Program::deserialize()", which resolves the classes of the data in that %Program;
+    these methods give and set all state and can only be called by trusted code (the code of a class declared by
+    trusted code, or of a trusted %Program outside a class) that sandboxed code does not invoke through a call
+    reference.  Such a host must not give the output of these methods to sandboxed code, and the code of a closure that
+    it hands to sandboxed code decides for itself.  @ref Qore::Program::deserialize() "Program::deserialize()" refuses
+    a class name of the data, of an object or of static variables, that names a class declared by sandboxed code in the
+    target %Program and a class with non-public state declared by trusted code in the %Program of the calling code or
+    of its class (such as a library module's).  Code injected into a sandboxed %Program to deserialize data for the host, which runs as
+    the %Program's code, cannot deserialize the classes of library modules with non-public state, such as data
+    provider types or SqlUtil and connection objects; the host uses @ref Qore::Program::deserialize()
+    "Program::deserialize()" instead.  A class that a %Program parsed before it got its sandbox manager counts as
+    declared by trusted code; it inherits @ref Qore::SandboxSerializable "SandboxSerializable" if the %Program's code
+    serializes it once the %Program is sandboxed.
+
     @subsection sandbox_program_capability Program Objects Are Capabilities
 
     A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the
@@ -849,12 +911,81 @@ authenticate();
       registered type, which sandboxed code cannot change, as it cannot change the cache's other entries (qore#7674)
 
     An object held in a member of a shared object is a separate object: it is protected only if it is marked itself
-    (the schema objects of a shared schema are).  The mark is not copied with the object: a copy is marked only if its
-    class marks it again, as the schema classes do when trusted code makes the copy.  An object that
+    (the schema objects of a shared schema are).
+
+    A copy of a shared object is an ordinary object with copies of all of its members, also the private ones that the
+    object's classes guard while it is shared (with
+    @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), so code that is sandboxed or acts
+    for sandboxed code (as decided for a change of the object, see
+    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()", with no update
+    scope exemption) cannot copy a shared object: \c copy() raises \c SHARED-OBJECT-ERROR before anything is made, also
+    when called with Reflection or by the code of the object's class, unless the object's class, or one of its base
+    classes, declares a \c copy() method in %Qore code (a builtin copy method does not count); a copy with the copy
+    method of another class than the object's (a base class's, with Reflection) is refused, as it would not run the
+    \c copy() methods of the object's class.  Such a \c copy() method
+    takes responsibility for what the copy keeps: the members are copied before the copy methods run (those of the base
+    classes first), and the method resets the state that its class guards for a shared object, such as its caches and
+    the locks and records of its builds.  A base class's \c copy() method cannot know the members of a subclass, so a
+    class that guards members of its own with
+    @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()" declares its own \c copy() method
+    that resets them.  Trusted code copies shared objects as any other object.  The mark is not copied with the
+    object: a copy is marked only if its class marks it again, as the schema classes do when trusted code makes the
+    copy.  The copy rule follows the other shared-object checks: if they are narrowed to the code of sandboxes that do
+    not trust it, it is too.
+
+    Serializing a shared object gives its members, also the private ones, as data, from which
+    @ref Qore::Serializable::deserialize() "Serializable::deserialize()" makes an ordinary object, so code that is
+    sandboxed or acts for sandboxed code (as decided for a copy) cannot serialize a shared object, also not in a value
+    that holds it (a member of another object, a hash, a list, a weak reference or a static class variable), with
+    any of the serialization APIs: the
+    serialization raises \c SHARED-OBJECT-ERROR before anything is written, whatever the classes of the object
+    declare (\c serializeMembers() included).  Trusted code serializes shared objects as any other object.
+    Deserialization is not affected: an object that it makes is not shared unless its class marks it; deserialized
+    data that sandboxed code supplies is the subject of
+    <a href="https://github.com/qoretechnologies/qore/issues/7706">issue 7706</a>.
+
+    An object that
     \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
     it: trusted code that shares a deserialized object marks it with
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that
     serialized data provider types restore, which are not marked.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_lazy_shared_values Process-Wide Values Built on First Use
+
+    Library code that builds process-wide state lazily, the first time that a caller needs it (a registry filled on
+    demand, a schema loaded on first use, a cache), builds it on that caller's thread.  With the plain pattern
+    (\c "v ?? (v = build())"), what it builds takes that caller's sandbox and restrictions: if the caller is sandboxed
+    or acts for sandboxed code,
+    @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" is @ref False, so the
+    objects that every later caller gets are not marked as shared (see @ref sandbox_shared_objects), and if the caller
+    is restricted (with a \c PO_NO_* option), the code that the build creates for every caller records its
+    restrictions.  @ref Qore::Thread::LazySharedValue "LazySharedValue" and
+    @ref Qore::Thread::LazySharedMap "LazySharedMap" build such state once, as trusted code, whatever code needs it
+    first: their builder, which only trusted code can give, runs as a trusted build (see
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") unless the barrier
+    of the build would hide nothing of the caller (no sandbox, no sandboxed caller that it acts for, no restrictions
+    that what it creates would record, and no code of a %Program that lends the objects that it creates, see
+    @ref sandbox_provenance), and the value is published to every caller.  Other callers wait for a build in
+    progress; a build that fails publishes nothing (a key of a map whose build fails leaves no entry, so that callers
+    cannot make the map grow with keys that its builder does not know).
+
+    The mode of such an object is fixed when it is created: it is process-shared, as described above, only if the
+    code that creates it may create a trusted build of its builder (as for
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()").  An object that
+    sandboxed code creates, or a trusted deputy for it, or with a builder of sandboxed code (the static members of a
+    module that a sandboxed %Program loads by its path, for example) is private: its value is built once, but as a
+    plain call of its builder, which runs with the provenance and the restrictions of its own code, whoever calls
+    \c get(), also trusted code; nothing that it builds is marked as shared.  Library code that must have a
+    process-shared object creates it during its initialization, or checks \c isProcessShared(), or gives the
+    constructor's \c require_shared option, which refuses to create a private object.
+
+    The value is published as it is: the builder marks or freezes the objects that it shares, as for any shared
+    object; the check of the value before it is published refuses only objects and callable values that sandboxed or
+    restricted code created, in the value and in the lists and hashes that it holds, not in the members of objects.  A
+    thread that waits for a value that another thread builds keeps the locks that it holds, so a builder must not take
+    a lock that a caller can hold while it waits for the value.
 
     @since %Qore 3.0
 
