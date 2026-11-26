@@ -410,40 +410,42 @@ class HashKeyHardeningTest inherits QUnit::Test {
 
     #! runs the Qore source \a src in a child process and returns its output; with the secret key \a key if given
     #! runs \a src in a child interpreter, with QORE_DBG_HASH_KEY set to \a key if given, and returns its output
-    /** the child is ended if it does not finish within the time limit; its output goes to a file, which is complete
-        when the child has ended; the test is skipped without the process module, which bounds the run
+    /** the child is ended if it does not finish within the time limit; the test is skipped without the process
+        module, which bounds the run
     */
     private string runChild(string src, *string key) {
 %ifdef NoProcess
         testSkip("the process module is required to run bounded child processes");
         return "";
 %else
-        string base = tmp_location() + DirSep + sprintf("hash-key-hardening-%d-%d", getpid(), ++child_count);
-        string file = base + ".q";
-        string out_file = base + ".out";
+        string file = tmp_location() + DirSep + sprintf("hash-key-hardening-%d-%d.q", getpid(), ++child_count);
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(src);
         f.close();
-        on_exit {
-            unlink(file);
-            unlink(out_file);
-        }
+        on_exit unlink(file);
         hash<auto> env = ENV - "QORE_DBG_HASH_KEY";
         if (key) {
             env.QORE_DBG_HASH_KEY = key;
         }
-        # the shell is replaced by the interpreter (exec), so that ending the process ends the interpreter
-        Process p("/bin/sh", ("-c", "exec \"$0\" \"$1\" > \"$2\" 2>&1", TestInterpreter::qore_interpreter(), file,
-            out_file), {"env": env});
+        StringOutputStream out_stream();
+        StringOutputStream err_stream();
+        Process p(TestInterpreter::qore_interpreter(), (file,), {
+            "env": env,
+            "stdout": out_stream,
+            "stderr": err_stream,
+        });
         bool done = p.wait(ChildTimeout);
         if (!done) {
             p.terminate();
             p.wait();
         }
-        string out = ReadOnlyFile::readTextFile(out_file) ?? "";
+        # getData() empties the stream, so each is read once
+        string out = out_stream.getData();
+        string err = err_stream.getData();
         assertTrue(done, "the child process finished within the time limit");
-        assertEq(0, p.exitCode(), out);
+        assertEq(0, p.exitCode(), out + err);
+        assertEq("", err, "the child process wrote nothing to stderr");
         return out;
 %endif
     }
