@@ -39,6 +39,9 @@ public class Probe {
         #! the keys that the builder knows
         const Keys = ("tenant", "restricted", "trusted", "deputy", "hidden", "module-thread", "race", "fail-once",
             "self", "tenant-object", "cycA", "cycB");
+
+        #! the limit in ms of each wait of the test, after which it fails instead of hanging
+        const WaitTimeout = 120000;
     }
 
     private:internal {
@@ -71,11 +74,39 @@ public class Probe {
     #! module's on its stack: there the barrier of a trusted build would hide nothing
     static hash<auto> getInModuleThread(string key) {
         Queue q();
-        background q.push({
-            "hides_nothing": call_function("dbg_trusted_build_hides_nothing"),
-            "value": Probe::get(key),
-        });
-        return q.get();
+        background Probe::getForQueue(q, key);
+        # the thread always pushes its result or its exception: a timeout means that it could not run
+        hash<auto> r;
+        try {
+            r = q.get(WaitTimeout);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LAZY-SHARED-TEST-ERROR", sprintf("the module's thread gave no result for key %y in %d ms: %s: %s",
+                key, WaitTimeout, ex.err, ex.desc);
+        }
+        if (r.exception) {
+            throw "LAZY-SHARED-TEST-ERROR", sprintf("the module's thread failed for key %y: %s: %s (%s:%d)", key,
+                r.exception.err, r.exception.desc, r.exception.file, r.exception.line);
+        }
+        return r.result;
+    }
+
+    #! waits for a counter to reach zero, or raises an exception after WaitTimeout
+    static waitForZero(Counter c, string what) {
+        if (c.waitForZero(WaitTimeout)) {
+            throw "LAZY-SHARED-TEST-ERROR", sprintf("timed out after %d ms waiting for %s", WaitTimeout, what);
+        }
+    }
+
+    #! gets the value of a key in a thread of the module and pushes it, or the exception, to the queue
+    private:internal static getForQueue(Queue q, string key) {
+        try {
+            q.push({"result": {
+                "hides_nothing": call_function("dbg_trusted_build_hides_nothing"),
+                "value": Probe::get(key),
+            }});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"exception": ex});
+        }
     }
 
     #! the value of a key with the plain lazy pattern
@@ -127,7 +158,7 @@ public class Probe {
     }
 
     static waitRaceStarted() {
-        race_started.waitForZero();
+        Probe::waitForZero(race_started, "the start of the race build");
     }
 
     static releaseRace() {
@@ -135,7 +166,7 @@ public class Probe {
     }
 
     static waitCycAStarted() {
-        cyc_a_started.waitForZero();
+        Probe::waitForZero(cyc_a_started, "the start of the build of cycA");
     }
 
     static releaseCycA() {
@@ -158,7 +189,7 @@ public class Probe {
         switch (key) {
             case "race":
                 race_started.dec();
-                race_release.waitForZero();
+                Probe::waitForZero(race_release, "the release of the race build");
                 break;
             case "fail-once":
                 if (!failed_once) {
@@ -174,7 +205,7 @@ public class Probe {
                 if (cyc_a_started.getCount()) {
                     cyc_a_started.dec();
                 }
-                cyc_a_release.waitForZero();
+                Probe::waitForZero(cyc_a_release, "the release of the build of cycA");
                 return values.get("cycB");
             case "cycB":
                 return values.get("cycA");
