@@ -73,9 +73,14 @@ sub need_lazy_worker() {
     lazy_worker.get();
 }
 
-#! the debug hook of the barrier of a trusted build: true if the barrier would hide nothing of the caller
+#! the debug hook of the barrier of a trusted build: true if the barrier would hide nothing of the caller; called only
+#! in debug builds (Option::HAVE_LIBRARY_DEBUGGING), which have the hook
 bool sub hides_nothing() {
+%ifdef QoreDebug
     return call_function("dbg_trusted_build_hides_nothing");
+%else
+    throw "DEBUG-BUILTIN-ERROR", "dbg_trusted_build_hides_nothing() is only available in debug builds";
+%endif
 }
 
 #! the sandbox manager of the current case, for interrupt_me()

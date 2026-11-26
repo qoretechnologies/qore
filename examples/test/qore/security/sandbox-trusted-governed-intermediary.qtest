@@ -205,10 +205,14 @@ sub interrupt_me() {
 #! the governed code changes the shared object for its caller, with the sandbox resolution failing (debug builds)
 string sub fail_closed_ops() {
     list<string> r = ();
+%ifdef QoreDebug
     call_function("dbg_sandbox_fail_next_resolutions", 1);
     r += "change:" + governed.callFunction("g_change");
     call_function("dbg_sandbox_fail_next_resolutions", 1);
     r += "creates:" + governed.callFunction("g_creates");
+%else
+    throw "DEBUG-BUILTIN-ERROR", "dbg_sandbox_fail_next_resolutions() is only available in debug builds";
+%endif
     return r.join(",");
 }
 
