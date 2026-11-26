@@ -955,6 +955,10 @@ public hashdecl HttpServerOptionInfo {
         controller gets back the logger it had before, unless its logger has been replaced since.  The controller has
         one logger for the whole process: with more than one server running, it logs through the logger of the server
         created last of them.
+
+        Without a logger, the server logs through a logger that has no appender, which discards its messages, and the
+        controller's logger is left as it is, so that the controller's messages, such as the exception of a callback,
+        are not discarded: they go to the controller's logger otherwise, or else to the standard error output.
     */
     *LoggerInterface logger;
 
@@ -1684,24 +1688,25 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
             bool dbg = False,
             string name = HttpServer::HttpServerString,
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
-        logger = new Logger(name);
-        if (logfunc || errlogfunc) {
-            callback_appender = new HttpServerCallbackAppender(logfunc ?? errlogfunc);
-            logger.addAppender(callback_appender);
-            if (logfunc) {
-                logger.setLevel(LoggerLevel::INFO);
-            } else {
-                logger.setLevel(LoggerLevel::ERROR);
-            }
-        } else {
-            logger.setLevel(LoggerLevel::INFO);
-        }
-        init(<HttpServerOptionInfo>{
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "name": name,
             "debug": dbg,
             "hdr": hdr,
-            "logger": logger,
-        });
+        };
+        # without a log function, the server has no logger, as one created without the logger option: it is not set
+        # on the async I/O controller, whose messages would otherwise be discarded (qore#7698)
+        if (logfunc || errlogfunc) {
+            Logger cb_logger(name);
+            callback_appender = new HttpServerCallbackAppender(logfunc ?? errlogfunc);
+            cb_logger.addAppender(callback_appender);
+            if (logfunc) {
+                cb_logger.setLevel(LoggerLevel::INFO);
+            } else {
+                cb_logger.setLevel(LoggerLevel::ERROR);
+            }
+            opts.logger = cb_logger;
+        }
+        init(opts);
     }
 
     #! Creates the server with the given options
@@ -4084,8 +4089,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         http_fields_at_top_level = opts.http_fields_at_top_level ?? True;
         # Initialize async I/O
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        # the global controller logs through the server's logger while the server runs
-        setControllerLogger();
+        # the global controller logs through the server's logger while the server runs; a server created without a
+        # logger does not set its own, which has no appender, there: it would discard the controller's messages, such
+        # as the exception of a callback, which then go to the controller's logger otherwise or to stderr (qore#7698)
+        if (opts.logger) {
+            setControllerLogger();
+        }
+        # does nothing if the server did not set its logger on the controller
         on_error restoreControllerLogger();
         asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
         asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {

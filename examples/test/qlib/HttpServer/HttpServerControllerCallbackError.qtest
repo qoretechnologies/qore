@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child qore processes started without an execution mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class HttpServerControllerCallbackErrorTest
+
+#! The exception of a callback that the process-wide async I/O controller runs is not lost (qore#7698)
+/** A server created without a logger does not set its placeholder logger, which has no appender, on the controller:
+    the exception is reported on the standard error output.  A server created with a logger sets it there: the
+    exception is logged by it and does not also appear on the standard error output.  A controller logger whose
+    Program has been destroyed cannot take the message, which is then reported on the standard error output.
+
+    Each check runs a child process whose dispatcher has a single callback worker: the work item that raises the
+    exception schedules the work item that ends the script, which therefore runs only after the exception of the
+    first one has been reported.
+*/
+class HttpServerControllerCallbackErrorTest inherits QUnit::Test {
+    private {
+        #! The child script; its argument selects how the server and the controller's logger are created
+        const ChildScript = "%%new-style
+%%require-types
+%%strict-args
+%%prepend-module-path \"%s\"
+%%requires Logger
+%%requires HttpServerUtil
+%%requires HttpServerAsyncIo
+%%requires HttpServer
+
+Logger sub stdout_logger() {
+    Logger logger(\"cb\", LoggerLevel::getLevelInfo());
+    LoggerAppenderStdOut appender(\"out\", new LoggerLayoutPattern(\"LOG: %%m%%n\"));
+    appender.open();
+    logger.addAppender(appender);
+    return logger;
+}
+
+# a logger of a Program that is destroyed while the controller still has the logger
+LoggerInterfaceBase sub orphan_logger() {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    p.parse(\"class OrphanLogger inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        print(\\\"LOG: \\\" + vsprintf(message, format_args) + \\\"\\\\n\\\");
+    }
+    bool isEnabledFor(int level) {
+        return True;
+    }
+}
+LoggerInterfaceBase sub get() {
+    return new OrphanLogger();
+}\", \"orphan\");
+    LoggerInterfaceBase rv = p.callFunction(\"get\");
+    delete p;
+    return rv;
+}
+
+sub main() {
+    string mode = ARGV[0];
+    AsyncIoController::setMaxCallbackWorkers(1);
+    *HttpServer server;
+    *LoggerInterfaceBase logger;
+    switch (mode) {
+        case \"default\":
+            server = new HttpServer();
+            break;
+        case \"options\":
+            server = new HttpServer(<HttpServerOptionInfo>{\"name\": \"test-server\"});
+            break;
+        case \"deprecated\":
+            server = new HttpServer(NOTHING, NOTHING);
+            break;
+        case \"deprecated-logfunc\":
+            server = new HttpServer(sub (string msg) { print(\"LOG: \" + msg + \"\\n\"); }, NOTHING);
+            break;
+        case \"logger\":
+            logger = stdout_logger();
+            server = new HttpServer(<HttpServerOptionInfo>{\"logger\": logger});
+            break;
+        case \"orphan-logger\":
+            AsyncIoController::setLogger(orphan_logger());
+            break;
+        default:
+            throw \"MODE-ERROR\", mode;
+    }
+    # the server is listening on an ephemeral port while the callback raises its exception
+    if (server) {
+        server.addListener(<HttpListenerOptionInfo>{\"service\": 0, \"node\": \"127.0.0.1\"});
+    }
+    # tells the parent which logger the controller has
+    *LoggerInterfaceBase ctrl_logger = AsyncIoController::getLogger();
+    printf(\"controller logger: %%s\\n\", !ctrl_logger ? \"none\" : (ctrl_logger == logger ? \"server\" : \"other\"));
+    Queue q();
+    AsyncIoController::addTimerDelay(0s, sub () {
+        AsyncIoController::addTimerDelay(0s, sub () { q.push(1); });
+        throw \"CB-ERR\", \"from the timer\";
+    });
+    # a timeout fails a child whose callbacks never end instead of leaving it waiting
+    q.get(60s);
+    if (server) {
+        server.stop();
+    }
+    print(\"done\\n\");
+}
+
+main();
+";
+    }
+
+    public {
+        TmpDir tmp;
+        string script;
+        string qore_bin;
+    }
+
+    constructor() : Test("HttpServerControllerCallbackErrorTest", "1.0") {
+        tmp = new TmpDir("http-server-cb-err-");
+        script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ChildScript, realpath(get_script_dir() + "/../../../../qlib")));
+        f.close();
+        qore_bin = TestInterpreter::qore_interpreter();
+
+        addTestCase("a server created without options: the exception goes to stderr", \testDefault());
+        addTestCase("a server created with options but no logger: the exception goes to stderr", \testOptions());
+        addTestCase("a server created with the deprecated constructor and no log function: the exception goes to "
+            "stderr", \testDeprecated());
+        addTestCase("a server created with the deprecated constructor and a log function: the exception is logged, "
+            "not on stderr", \testDeprecatedLogFunc());
+        addTestCase("a server created with a logger: the exception is logged, not on stderr", \testLogger());
+        addTestCase("a controller logger whose Program was destroyed: the exception goes to stderr",
+            \testOrphanLogger());
+        set_return_value(main());
+    }
+
+    #! Runs the child script in the given mode; returns its standard output and error output
+    private hash<auto> run(string mode) {
+        string err_file = sprintf("%s/%s.err", tmp.path, mode);
+        string out = backquote(sprintf("%s %s %s 2>%s", qore_bin, script, mode, err_file));
+        return {
+            "out": out,
+            "err": ReadOnlyFile::readTextFile(err_file),
+        };
+    }
+
+    #! Checks that the exception of the child appears once on stderr and is not logged
+    private checkStderr(string mode, string ctrl_logger) {
+        hash<auto> rv = run(mode);
+        assertEq(sprintf("controller logger: %s\ndone\n", ctrl_logger), rv.out, mode + ": the script ended and the "
+            "exception was not logged");
+        assertTrue(rv.err.find("unhandled exception in an AsyncIoController callback (type=callback class=null "
+            "owner=- key=- stream_key=-):") >= 0, sprintf("%s: a line names the work item on stderr: %y", mode,
+            rv.err));
+        assertEq(1, (rv.err =~ x/(CB-ERR)/g).size(), sprintf("%s: the exception's code is on stderr once: %y", mode,
+            rv.err));
+        assertTrue(rv.err.find("from the timer") >= 0, sprintf("%s: the exception's description is on stderr: %y",
+            mode, rv.err));
+        assertEq(-1, rv.err.find("which the logger could not log"), sprintf("%s: no logger raised an exception: %y",
+            mode, rv.err));
+    }
+
+    #! Checks that the exception of the child is logged once and does not appear on stderr
+    private checkLogged(string mode, string ctrl_logger) {
+        hash<auto> rv = run(mode);
+        assertTrue(rv.out.find(sprintf("controller logger: %s\n", ctrl_logger)) >= 0, sprintf("%s: the controller's "
+            "logger: %y", mode, rv.out));
+        assertEq(1, (rv.out =~ x/(QoreCallDispatcher::workerLoop\(\) callback exception: CB-ERR: from the timer)/g)
+            .size(), sprintf("%s: the exception is logged once: %y", mode, rv.out));
+        assertTrue(rv.out =~ /done\n$/, sprintf("%s: the script ended: %y", mode, rv.out));
+        assertEq("", rv.err, sprintf("%s: nothing is on stderr: %y", mode, rv.err));
+    }
+
+    testDefault() {
+        checkStderr("default", "none");
+    }
+
+    testOptions() {
+        checkStderr("options", "none");
+    }
+
+    testDeprecated() {
+        checkStderr("deprecated", "none");
+    }
+
+    testDeprecatedLogFunc() {
+        checkLogged("deprecated-logfunc", "other");
+    }
+
+    testLogger() {
+        checkLogged("logger", "server");
+    }
+
+    testOrphanLogger() {
+        checkStderr("orphan-logger", "other");
+    }
+}
