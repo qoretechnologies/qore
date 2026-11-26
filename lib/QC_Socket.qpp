@@ -9352,22 +9352,25 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
 }
 
-//! Sets the bounds of the HTTP/2 response bodies that the I/O thread sends from InputStreams on this connection
-/** A body sent with @ref submitHttp2StreamingResponseWithStream() holds no thread, but a client that takes its data
-    very slowly would hold its stream and buffer for as long as it likes.  With these bounds, the bodies that wait for
-    a client that takes less than \a min_rate bytes per second on all its streams together, or that takes nothing of a
-    body for \a stall_timeout, are ended with \c RST_STREAM, and the event is logged.
+//! Sets the bounds of the HTTP/2 response bodies that the I/O thread sends on this connection
+/** A body sent with @ref submitHttp2StreamingResponseWithStream() or @ref submitHttp2Response() holds no thread, but a
+    client that takes its data very slowly would hold its stream and buffer for as long as it likes.  With these
+    bounds, a body is charged to its client until its \c END_STREAM frame has been written to the socket: the bodies
+    that wait for a client that takes less than \a min_rate bytes per second on all its streams together, or that
+    takes nothing of a body for \a stall_timeout, are ended with \c RST_STREAM, and the event is logged.  The rest of a
+    body whose \c END_STREAM frame has been sent is in the connection's send buffer, which a reset does not free: the
+    connection is then ended instead, with an \c HTTP2-SEND-BOUND-ERROR exception in its operation.
 
-    The stall time of a connection is set once, by its first body; its minimum rate is set once, by its first body
-    or by its first check of a send that a handler thread makes (see @ref checkHttp2StreamSendRate() and
-    @ref checkQuicStreamSendRate()), whichever comes first; later values are ignored.
+    The bounds of a connection are set once, with its first body; later calls are ignored.  Set on a socket that has
+    no HTTP/2 session yet, they apply to the session that it gets; the bodies submitted before the bounds are set are
+    not bounded.  Without bounds, the minimum rate of a connection is set by the first check of a send that a handler
+    thread makes (see @ref checkHttp2StreamSendRate()); its stall time only by the bounds.
 
     @param min_rate the minimum rate in bytes per second; 0 disables the check
     @param window the window of the minimum rate
     @param stall_timeout the time without progress after which a body is ended; a value that is not positive keeps
     the default of 30 minutes
 
-    @throw HTTP2-ERROR no HTTP/2 session is active
     @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
 
     @since %Qore 3.0
@@ -10107,15 +10110,19 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     return rc;
 }
 
-//! Sets the bounds of the HTTP/3 response bodies that the I/O thread sends from InputStreams on a QUIC connection
-/** A body sent with @ref submitQuicStreamingResponseWithStream() holds no thread, but a client that takes its data
-    very slowly would hold its stream and buffer for as long as it likes.  With these bounds, the bodies that wait for
+//! Sets the bounds of the HTTP/3 response bodies that the I/O thread sends on a QUIC connection
+/** A body sent with @ref submitQuicStreamingResponseWithStream() or @ref submitQuicResponse() holds no thread, but a
+    client that takes its data very slowly would hold its stream and buffer for as long as it likes.  With these
+    bounds, a body is charged to its client until the client has acknowledged all its data: the bodies that wait for
     a client that takes less than \a min_rate bytes per second on all its streams together, or that acknowledges
     nothing of a body for \a stall_timeout, are ended with \c RESET_STREAM, and the event is logged.
 
-    The stall time of a connection is set once, by its first body; its minimum rate is set once, by its first body
-    or by its first check of a send that a handler thread makes (see @ref checkHttp2StreamSendRate() and
-    @ref checkQuicStreamSendRate()), whichever comes first; later values are ignored.
+    The bounds of a connection are set once, with its first body; later calls are ignored.  They replace the default
+    of the listener that the connection was accepted on
+    (@ref Qore::Http3ServerPollOperation::setStreamSendBound() "Http3ServerPollOperation::setStreamSendBound()"); the
+    bodies submitted before the bounds are set are not bounded.  Without bounds, the minimum rate of a connection is
+    set by the first check of a send that a handler thread makes (see @ref checkQuicStreamSendRate()); its stall time
+    only by the bounds.
 
     @param session_id the QUIC session ID of the connection
     @param min_rate the minimum rate in bytes per second; 0 disables the check

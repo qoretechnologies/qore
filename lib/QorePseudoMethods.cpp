@@ -104,6 +104,21 @@ void pseudo_classes_init() {
     qore_class_private::setNotModuleDecl(*pseudo_buffer);
     qore_class_private::setNotModuleDecl(*pseudo_char);
     qore_class_private::setNotModuleDecl(*QC_PSEUDOVALUE);
+
+    // the pseudo-classes are not registered in a namespace, which would mark their base classes as all added: their
+    // ancestries are final now, the root class first (qore#7614)
+    qore_class_private::closeAncestry(*QC_PSEUDOVALUE);
+    for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i) {
+        qore_class_private::closeAncestry(*po_list[i]);
+    }
+    qore_class_private::closeAncestry(*pseudo_buffer);
+    qore_class_private::closeAncestry(*pseudo_char);
+
+#ifdef DEBUG
+    // called after the static system namespace is set up (qore_init()): every builtin class of it has all its base
+    // classes, so no class waits for the ancestry of a parent class to be final (qore#7614)
+    qore_class_private::assertNoAncestryLinks();
+#endif
 }
 
 void pseudo_classes_del() {

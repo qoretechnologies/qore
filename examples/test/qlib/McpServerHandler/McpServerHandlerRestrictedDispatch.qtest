@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires McpClient
+%requires JsonRpcHandler
+%requires McpServerHandler
+
+%exec-class McpServerHandlerRestrictedDispatchTest
+
+#! The methods of an MCP handler that sandboxed code constructs get the request without its credentials, with the
+#! handler's protocol state (qore#7724)
+/** A modern request (\c mcp_modern) to a method that only the modern protocol has is served as by a handler of trusted
+    code; without the handler's keys, the method took the handshake-based branch and answered method-not-found
+*/
+class McpServerHandlerRestrictedDispatchTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        const Version = McpClient::McpVersion::V2026_07_28;
+
+        const BaseMeta = {
+            McpClient::MCP_MetaProtocolVersion: Version,
+            McpClient::MCP_MetaClientInfo: {"name": "RestrictedDispatchClient", "version": "1.0"},
+            McpClient::MCP_MetaClientCapabilities: {},
+        };
+    }
+
+    constructor() : Test("McpServerHandlerRestrictedDispatchTest", "1.0", \ARGV) {
+        addTestCase("a handler of sandboxed code gets the protocol state of the request", \dispatchKeysTest());
+        set_return_value(main());
+    }
+
+    dispatchKeysTest() {
+        hash<auto> trusted = updateTask(new McpServerHandler(new Logger("trusted", LoggerLevel::getLevelInfo()),
+            new PermissiveAuthenticator()));
+        # an unknown task: the modern method is served, and the task is not found
+        assertNeq(JsonRpcHandler::JRE_MethodNotFound, trusted.error.code, "trusted code: the modern method is served");
+        foreach hash<auto> mode in (Modes.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            # the default sandbox does not trust its code
+            p.setSandboxManager(new SandboxManager());
+            p.setExecMode(mode.value);
+            p.parse("%modern\n%requires Logger\n%requires HttpServer\n%requires McpServerHandler\n"
+                "auto sub make() { return new McpServerHandler::McpServerHandler("
+                "new Logger::Logger(\"sandboxed\", Logger::LoggerLevel::getLevelInfo()), "
+                "new HttpServer::PermissiveAuthenticator()); }", "sandboxed");
+            assertEq(trusted, updateTask(p.callFunction("make")), mode.key + ": sandboxed code");
+        }
+    }
+
+    #! sends a modern tasks/update request for an unknown task; returns the JSON-RPC response without its id
+    private hash<auto> updateTask(McpServerHandler handler) {
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("http", LoggerLevel::getLevelInfo())});
+        on_exit http.stop();
+        http.setDefaultHandler("mcp", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        HTTPClient hc({"url": sprintf("http://localhost:%d", port)});
+        on_exit hc.disconnect();
+        string method = "tasks/update";
+        hash<auto> req = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": {
+                "taskId": "no-such-task",
+                "inputResponses": {},
+                "_meta": BaseMeta,
+            },
+        };
+        hash<auto> hdr = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            McpClient::McpProtocolVersionHeader: Version,
+            McpClient::McpMethodHeader: method,
+        };
+        auto resp;
+        try {
+            resp = hc.send(make_json(req), "POST", "/", hdr, False);
+        } catch (hash<ExceptionInfo> ex) {
+            resp = ex.arg;
+        }
+        auto body = resp.typeCode() == NT_HASH ? resp.body : resp;
+        hash<auto> rv = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body);
+        return rv - "id";
+    }
+}

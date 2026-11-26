@@ -1322,11 +1322,15 @@ public hashdecl HttpListenerOptionInfo {
         hold a handler thread or a stream by taking very little data; 0 disables the check.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
         body that the HTTP/1 controller sends.  On HTTP/2 and HTTP/3 it applies to the connection: to all its streams
-        together while one of them waits for the client, the bodies that handler threads send and those that the I/O
-        thread sends from an @ref Qore::InputStream "InputStream" alike, so that many streams that share a fast
-        connection are not ended because each takes only a share of it; when the connection takes less, all the
-        streams that wait for it are ended.  A stream that the client takes nothing of is also ended after
-        @ref HttpServer::StreamStallTimeout "StreamStallTimeout".
+        together while one of them waits for the client, the bodies that handler threads send, the buffered ones and
+        those that the I/O thread sends from an @ref Qore::InputStream "InputStream" alike, so that many streams that
+        share a fast connection are not ended because each takes only a share of it; when the connection takes less,
+        all the streams that wait for it are ended.  A buffered or pumped body is charged until the client has taken
+        it (on HTTP/2, until its \c END_STREAM frame has been written to the socket; on HTTP/3, until the client has
+        acknowledged all its data), and a stream that the client takes nothing of is also ended after
+        @ref HttpServer::StreamStallTimeout "StreamStallTimeout".  The rest of an HTTP/2 body whose \c END_STREAM
+        frame has been sent is in the connection's send buffer, which a reset does not free: a client that does not
+        take it has its connection closed.
 
         @since HttpServerUtil 1.6
     */

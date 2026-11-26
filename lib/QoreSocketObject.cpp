@@ -6630,6 +6630,16 @@ QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t sessi
     return h2->dbgGetStreamRecordCounts();
 }
 
+int qore_socket_object_private::dbgHoldH2Writes(bool hold, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    if (!h2) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no HTTP/2 session");
+        return -1;
+    }
+    h2->dbgHoldWrites(hold);
+    return 0;
+}
+
 int qore_socket_object_private::dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd,
         ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -7290,12 +7300,24 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
 
 int qore_socket_object_h2_set_input_stream_send_bound(QoreSocketObject* s, int64_t min_rate, int64_t window_ms,
         int64_t stall_ms, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
+    Http2SessionPtr h2;
+    {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        h2 = sp->h2_session;
+        // the session that the socket gets later takes the bounds (qore#7653); the first bounds set apply, as with a
+        // session
+        if (!h2 && !sp->h2_send_bound_set.load(std::memory_order_relaxed)) {
+            sp->h2_send_bound_min_rate.store(min_rate, std::memory_order_relaxed);
+            sp->h2_send_bound_window_ms.store(window_ms, std::memory_order_relaxed);
+            sp->h2_send_bound_stall_ms.store(stall_ms, std::memory_order_relaxed);
+            sp->h2_send_bound_set.store(true, std::memory_order_release);
+        }
     }
-    h2->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+    if (h2) {
+        h2->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+    }
     return 0;
 }
 

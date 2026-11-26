@@ -2766,6 +2766,15 @@ public:
     */
     std::atomic<int64> max_http2_body_size{0};
 
+    //! The bounds of the HTTP/2 response bodies set before the socket's HTTP/2 session was created (qore#7653)
+    /** A server session takes them when it is created; see Http2Session::setInputStreamSendBound().  The values are
+        written before h2_send_bound_set is set (released), and read after it is read (acquired)
+    */
+    std::atomic<bool> h2_send_bound_set{false};
+    std::atomic<int64> h2_send_bound_min_rate{0};
+    std::atomic<int64> h2_send_bound_window_ms{0};
+    std::atomic<int64> h2_send_bound_stall_ms{0};
+
     //! Maximum size in bytes of an HTTP/2 or HTTP/3 response body received into memory by a client (0 = unlimited)
     /** Set by the HTTP client connection that owns the socket; client sessions read it when response data arrives,
         so that it can change after the session was created.  A response body delivered incrementally to a

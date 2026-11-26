@@ -850,6 +850,12 @@ Two rules keep the writing pass from being starved:
   holds before waiting on its notifier) and never takes an `RSet` write lock, so it cannot be waiting for
   anything the waiting scan holds. A conflict with a writer or with another exclusive holder still rolls back
   and waits on the notifier, because those can hold locks that the scan would have to wait for.
+  The release that frees the r-section (the last shared holder leaving, or an exclusive holder) wakes **every**
+  waiter (`qore_rsection_priv::wakeRSectionWaitersIntern()`), not one: a woken waiter can find the write lock or
+  the r-section taken by another thread before it checks again, and then rolls back and returns, so a single
+  wakeup would end with it and leave the other waiters asleep on a free r-section, with `rsection_waiting` keeping
+  every later scan out (qore#7717). Each woken waiter checks its condition again and waits again if it still
+  cannot proceed; the wakeup is made only when `rsection_waiting` is set, so an uncontended release is unchanged.
 - While any thread waits for the r-section (`rsection_waiting`), `tryRSectionLockSharedNotifyWaitRead()` admits
   no new scan. Without this, a stream of read-only scans could keep both a writing scan and
   `qore_object_private::customDeref()` out of the r-section indefinitely, and collection would stop.

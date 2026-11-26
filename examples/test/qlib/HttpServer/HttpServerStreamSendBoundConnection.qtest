@@ -193,6 +193,10 @@ class HttpServerStreamSendBoundConnectionTest inherits QUnit::Test {
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
             "enable_h3": True,
+            # the bounds of the connection are its listener's, set when it is accepted: the rate that the handler
+            # checks with
+            "stream_send_min_rate": 1048576,
+            "stream_send_min_rate_window": 1s,
         }).port;
         hs.waitForAsyncIo();
         if (http3) {

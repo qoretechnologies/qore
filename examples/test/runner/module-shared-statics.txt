@@ -5,7 +5,6 @@ class qlib/AnthropicDataProvider/AnthropicDataProviderFactory.qc AnthropicDataPr
 class qlib/ApolloDataProvider/ApolloDataProviderFactory.qc ApolloDataProviderFactory::cls
 class qlib/AssemblyAiDataProvider/AssemblyAiDataProviderFactory.qc AssemblyAiDataProviderFactory::cls
 module-data qlib/AssemblyAiDataProvider/AssemblyAiDataTypes.qc AssemblyAiTranscribeResponseDataType::Fields
-module-data qlib/AssemblyAiDataProvider/AssemblyAiSchema.qc AssemblyAiSchema::action_sets
 module-data qlib/AssemblyAiDataProvider/AssemblyAiTranscribeDataProvider.qc AssemblyAiTranscribeDataProvider::request_type
 module-data qlib/AssemblyAiDataProvider/AssemblyAiTranscribeDataProvider.qc AssemblyAiTranscribeDataProvider::response_type
 module-data qlib/AssemblyAiDataProvider/AssemblyAiTranscribeDataProvider.qc AssemblyAiTranscribeDataProvider::types_id
@@ -19,12 +18,8 @@ class qlib/AzureDocumentIntelligenceDataProvider/AzureDocumentIntelligenceDataPr
 module-data qlib/AzureDocumentIntelligenceDataProvider/AzureDocumentIntelligenceSchema.qc AzureDocumentIntelligenceSchema::sets
 scalar qlib/AzureDocumentIntelligenceDataProvider/AzureDocumentIntelligenceSchema.qc AzureDocumentIntelligenceSchema::action_sets_value_id
 class qlib/AzureOpenAiDataProvider/AzureOpenAiDataProviderFactory.qc AzureOpenAiDataProviderFactory::cls
-module-data qlib/AzureOpenAiDataProvider/AzureOpenAiSchema.qc AzureOpenAiSchema::action_sets
-module-data qlib/AzureOpenAiDataProvider/AzureOpenAiSchema.qc AzureOpenAiSchema::schemas
 class qlib/BaseLinkerDataProvider/BaseLinkerDataProviderFactory.qc BaseLinkerDataProviderFactory::cls
 class qlib/BedrockDataProvider/BedrockDataProviderFactory.qc BedrockDataProviderFactory::cls
-module-data qlib/BedrockDataProvider/BedrockSchema.qc BedrockSchema::action_sets
-module-data qlib/BedrockDataProvider/BedrockSchema.qc BedrockSchema::schemas
 class qlib/BflDataProvider/BflDataProvider.qc BflDataProviderFactory::cls
 module-data qlib/BflDataProvider/BflGenerateImageDataProvider.qc BflGenerateImageDataProvider::request_type
 module-data qlib/BflDataProvider/BflGenerateImageDataProvider.qc BflGenerateImageDataProvider::types_id
@@ -162,8 +157,6 @@ class qlib/FileDataProvider/FileDataProviderFactory.qc FileDataProviderFactory::
 class qlib/FilePoller.qm FilePollerDataProviderFactory::cls
 class qlib/FirecrawlDataProvider/FirecrawlDataProviderFactory.qc FirecrawlDataProviderFactory::cls
 class qlib/FireworksDataProvider/FireworksDataProviderFactory.qc FireworksDataProviderFactory::cls
-module-data qlib/FireworksDataProvider/FireworksSchema.qc FireworksSchema::schemas
-module-data qlib/FireworksDataProvider/FireworksSchema.qc FireworksSchema::sets
 class qlib/FixedLengthUtil/FixedLengthReadDataProviderFactory.qc FixedLengthReadDataProviderFactory::cls
 class qlib/FixedLengthUtil/FixedLengthWriteDataProviderFactory.qc FixedLengthWriteDataProviderFactory::cls
 class qlib/FreshBooksDataProvider/FreshBooksDataProviderFactory.qc FreshBooksDataProviderFactory::cls
@@ -438,8 +431,6 @@ class qlib/TableauDataProvider/TableauDataProviderFactory.qc TableauDataProvider
 class qlib/TallyDataProvider/TallyDataProviderFactory.qc TallyDataProviderFactory::cls
 class qlib/TavilyDataProvider/TavilyDataProvider.qc TavilyDataProviderFactory::cls
 class qlib/TogetherDataProvider/TogetherDataProviderFactory.qc TogetherDataProviderFactory::cls
-module-data qlib/TogetherDataProvider/TogetherSchema.qc TogetherSchema::action_sets
-module-data qlib/TogetherDataProvider/TogetherSchema.qc TogetherSchema::schemas
 class qlib/UnbounceDataProvider/UnbounceDataProviderFactory.qc UnbounceDataProviderFactory::cls
 class qlib/UnleashedDataProvider/UnleashedDataProviderFactory.qc UnleashedDataProviderFactory::cls
 class qlib/UnstructuredDataProvider/UnstructuredDataProvider.qc UnstructuredDataProviderFactory::cls

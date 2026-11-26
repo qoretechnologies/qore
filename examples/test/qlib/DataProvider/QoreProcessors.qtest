@@ -129,6 +129,7 @@ class QoreProcessorsTest inherits QUnit::Test {
 
         addTestCase("prepareExpression - field path caching", \prepareExpressionFieldPath());
         addTestCase("filter - bulk mode support", \filterBulkMode());
+        addTestCase("filter - exists keeps the same records in blocks and one at a time", \filterExistsBlockEqualsRows());
         addTestCase("filter - bulk edge cases", \filterBulkEdgeCases());
         addTestCase("filter - bulk in pipeline", \filterBulkPipeline());
         addTestCase("filter - DPQL option takes no expressions", \filterDpqlOptionMetadata());
@@ -975,6 +976,42 @@ class QoreProcessorsTest inherits QUnit::Test {
             "individual non-matching record");
     }
 
+    #! exists keeps the same records whether they are read in blocks or one at a time (qore#7718)
+    /** A block built from records with different fields (DefaultBulkRecordInterface) has every field in every row,
+        with no value where a record lacks the field; exists is False for a field with no value, so a record that
+        lacks a field is dropped by an exists filter in a block as it is on its own
+    */
+    filterExistsBlockEqualsRows() {
+        list<hash<auto>> lines = (
+            {"line_no": 1, "description": "bolts", "amount": 10},
+            {"line_no": 2, "description": "nuts"},
+            {"line_no": 3},
+            {"line_no": 4, "description": "washers", "amount": NULL},
+            {"line_no": 5, "description": "pins", "amount": 7},
+        );
+        hash<DataProviderExpression> cond = DataProvider::parseDpqlExpression(
+            "exists @line_no && exists @description && exists @amount");
+
+        # one at a time
+        list<auto> by_rows = ();
+        QoreFilterRecordsProcessor row_proc({"where_cond": cond});
+        foreach hash<auto> line in (lines) {
+            *hash<auto> r = row_proc.processRecord(line);
+            if (r) {
+                push by_rows, r.line_no;
+            }
+        }
+        # an SQL NULL is a value: line 4 is kept
+        assertEq((1, 4, 5), by_rows, "the records kept one at a time");
+
+        # in a block, as a bulk source gives them
+        DefaultBulkRecordInterface bulk(10, new DefaultRecordIterator(lines.iterator()));
+        hash<auto> block = bulk.getValue();
+        QoreFilterRecordsProcessor block_proc({"where_cond": cond});
+        *hash<auto> kept = block_proc.processRecord(block);
+        assertEq(by_rows, kept.line_no, "the records kept in a block are those kept one at a time");
+    }
+
     filterBulkEdgeCases() {
         QoreFilterRecordsProcessor fp_none({"where_cond": {"exp": "==", "args": ({"field": "v"}, 99)}});
 
@@ -1038,7 +1075,9 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(NOTHING, proc.processRecord({"id": 1}));
         proc = new QoreFilterRecordsProcessor({"dpql_where": "!exists @type"});
         assertEq({"id": 1}, proc.processRecord({"id": 1}));
-        assertEq(NOTHING, proc.processRecord({"type": NOTHING}));
+        # a type with no value counts as missing (qore#7718)
+        assertEq({"type": NOTHING}, proc.processRecord({"type": NOTHING}));
+        assertEq(NOTHING, proc.processRecord({"type": NULL}));
     }
 
     filterBulkPipeline() {

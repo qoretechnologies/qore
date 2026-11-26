@@ -55,6 +55,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSerializable.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -1068,6 +1069,49 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
         "object of class '%s': the object is shared by every Program of the process", what, theclass->getName());
+    return -1;
+}
+
+int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // the copy methods of the object's own class must run: a copy with the copy method of a base class (with
+    // Reflection) would skip the copy() methods of the subclasses, which reset what they guard
+    bool own_class = &copy_cls == qore_class_private::get(*theclass);
+    if (own_class && copy_cls.hasUserCopyMethod()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: copy of class '%s'\n", theclass->getName());
+    }
+    if (!own_class) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s' with the copy method of class '%s': the object is shared by every Program of "
+            "the process", theclass->getName(), copy_cls.name.c_str());
+    } else {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is "
+            "shared by every Program of the process", copy_cls.name.c_str());
+    }
+    return -1;
+}
+
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: serialize an object of class '%s'\n",
+            theclass->getName());
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "serialize an object of class '%s': the object is shared by every Program of the process",
+        theclass->getName());
     return -1;
 }
 
@@ -2634,7 +2678,8 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     if (!sml)
         return;
 
-    for (class_list_t::const_iterator i = sml->begin(), e = sml->end(); i != e; ++i) {
+    BCSMList::View v = sml->view();
+    for (BCSMList::const_iterator i = v.begin(), e = v.end(); i != e; ++i) {
         //printd(5, "qore_object_private::addVirtualPrivateData() this: %p i: %p '%s' key: %d virt: %s\n", this,
         //  i->first, i->first->getName(), i->first->getID(), i->second ? "true" : "false");
         if (i->second)
@@ -2933,7 +2978,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         in_destructor = true;
         // mark status as in destructor
-        status = q_gettid();
+        status = getDestroyingStatus();
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -3039,7 +3084,7 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
         (void)pd;
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
 
     // run the destructor
@@ -3396,14 +3441,14 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
         if (priv->status == OS_DELETED)
             return;
 
-        if (priv->in_destructor || priv->status > 0) {
+        if (priv->in_destructor || priv->status != OS_OK) {
             xsink->raiseException("DOUBLE-DELETE-EXCEPTION", "destructor called from within destructor for class %s",
                 getClassName());
             return;
         }
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
     priv->doDeleteIntern(xsink);
 }
@@ -3867,6 +3912,27 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     if (!h) {
         // object has been deleted
         return Nothing.getAsString(str, foff, xsink);
+    }
+    // the calling code is shown the members that serialization would give it: not the non-public members that a class
+    // declared by trusted code declares, unless the code is that of a class with private access to the declaring class
+    // or no sandboxed code is in the chain of its callers (qore#7146)
+    {
+        const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+        if (cls->hasSandboxSerialState() && h->size()) {
+            QoreSerializationCaller caller;
+            std::vector<std::string> hidden;
+            ConstHashIterator hi(*h);
+            while (hi.next()) {
+                bool internal = false;
+                const qore_class_private* decl = cls->sandboxSerialProtectedDecl(hi.getKey(), internal);
+                if (decl && caller.restricts(*decl, internal)) {
+                    hidden.push_back(hi.getKey());
+                }
+            }
+            for (const std::string& key : hidden) {
+                h->removeKey(key.c_str(), xsink);
+            }
+        }
     }
 
     if (foff == FMT_YAML_SHORT) {
