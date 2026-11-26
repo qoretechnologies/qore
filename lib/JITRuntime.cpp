@@ -135,15 +135,6 @@
 #include <qore/intern/BackquoteNode.h>
 #include <qore/intern/QoreStringFastPathCalls.h>
 
-//! the ordinary call of a string fast path whose work raised an exception (see qore_rt_string_fast_path())
-template <typename Call>
-static __attribute__((noinline, cold)) auto qore_rt_string_fast_path_call(ExceptionSink* xsink, Call call)
-        -> decltype(call()) {
-    // the exception of the work, which the call raises again in the builtin's frame
-    xsink->clear();
-    return call();
-}
-
 //! runs the work of a string fast path; an exception is raised by the ordinary call instead (qore#7711)
 /** The work of the fast path runs without the builtin's call and its frame.  If it raises an exception, it sets
     \a failed in the branch in which it detects the exception (a status that it computes or its own test of the sink),
@@ -165,8 +156,11 @@ static inline __attribute__((always_inline)) auto qore_rt_string_fast_path(Excep
     bool failed = false;
     auto result = work(failed);
     if (failed) [[unlikely]] {
+        // the exception of the work, which the call raises again in the builtin's frame; the call is inlined here, as
+        // passing it to a function of its own would build its closure on the stack before the work
         assert(xsink);
-        return qore_rt_string_fast_path_call(xsink, call);
+        xsink->clear();
+        return call();
     }
     return result;
 }
@@ -27053,9 +27047,9 @@ static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionS
         QoreValue v = fromBits(val_bits);
         QoreStringValueHelper str(v);
         SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
-        int rc = upper ? do_toupper(*(*rv), *str, xsink) : do_tolower(*(*rv), *str, xsink);
-        if (rc || (xsink && *xsink)) {
-            failed = xsink && *xsink;
+        // the conversion returns -1 if and only if it raised an exception (apply_case_map())
+        if (upper ? do_toupper(*(*rv), *str, xsink) : do_tolower(*(*rv), *str, xsink)) [[unlikely]] {
+            failed = true;
             return toBits(QoreValue());
         }
         return toBits(rv.release());
@@ -27109,11 +27103,11 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
         QoreValue v = fromBits(val_bits);
         QoreStringValueHelper str(v);
         int64_t result = 0;
-        int rc = upper
-            ? do_toupper_measure(*str, characters, result, xsink)
-            : do_tolower_measure(*str, characters, result, xsink);
-        if (rc || (xsink && *xsink)) {
-            failed = xsink && *xsink;
+        // the measurement returns -1 if and only if it raised an exception (apply_case_map_measure())
+        if (upper
+                ? do_toupper_measure(*str, characters, result, xsink)
+                : do_tolower_measure(*str, characters, result, xsink)) [[unlikely]] {
+            failed = true;
             return 0;
         }
         return result;
