@@ -1165,6 +1165,14 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
+//! Returns true if a debugger can be attached to the Program (it has no PO_NO_DEBUGGING; qore#7676)
+/** Native code of a Program that cannot be debugged does not check whether a debugger is attached before it calls a
+    fast entry of its own module (see QoreIRToLLVM::setAOTDebuggerCanAttach()).
+*/
+static bool aotDebuggerCanAttach(QoreProgram* pgm) {
+    return !pgm || qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+}
+
 // A different Program can attach after native code has entered the caller.
 static bool aotPreserveDebugCalls(int opt_level, QoreProgram* pgm) {
     return opt_level == 0 && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
@@ -6025,7 +6033,7 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
 }
 
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
-        llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
+        bool debugger_can_attach, llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     for (auto& h : helpers) {
@@ -6037,6 +6045,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, b
         }
         QoreIRToLLVM lowerer(ctx);
         lowerer.setAOTMode(&slots, !preserve_debug_calls);
+        lowerer.setAOTDebuggerCanAttach(debugger_can_attach);
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
@@ -6301,6 +6310,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots, false);
+    lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -20092,6 +20102,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                    fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(false);
@@ -20178,6 +20189,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         } else {
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, !preserve_debug_calls);
+            lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             lowerer.setDeferredExceptionChecking(false);
@@ -22465,6 +22477,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                    lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // Deferring exception checks is not semantics-preserving for
@@ -22518,7 +22531,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     // helper failure fall back to un-outlined lowering.
                     if (fn_outliner.active()) {
                         std::string helper_error;
-                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
+                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
+                                aotDebuggerCanAttach(pgm), ctx,
                                 module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
                         }
@@ -22538,6 +22552,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        retry_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         retry_lowerer.setDeferredExceptionChecking(false);
@@ -22596,6 +22611,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                         QoreIRToLLVM fast_lowerer(ctx);
                         fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
@@ -23014,6 +23030,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         // Lower to LLVM with AOT mode
                         QoreIRToLLVM lowerer(ctx);
                         lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                        lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
@@ -23047,7 +23064,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         // lowering of the restored original method.
                         if (fn_outliner.active()) {
                             std::string helper_error;
-                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
+                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
+                                    aotDebuggerCanAttach(pgm), ctx,
                                     module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
                             }
@@ -23065,6 +23083,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                            retry_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             retry_lowerer.setDeferredExceptionChecking(false);
@@ -23114,6 +23133,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                             QoreIRToLLVM fast_lowerer(ctx);
                             fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                            fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                             fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             fast_lowerer.setDeferredExceptionChecking(false);
@@ -23339,6 +23359,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             }
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, false);
+            lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -25901,6 +25922,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots, !preserve_debug_calls);
+                llvm_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
                 if (!executable_batch_callees.empty()) {
                     llvm_lowerer.setBatchCallees(&executable_batch_callees);
                 }
