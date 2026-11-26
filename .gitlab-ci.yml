@@ -161,12 +161,8 @@ check-module-release-notes:
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
-    - python3 examples/test/cmake/test_module_release_notes.py
-    - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-release-notes.py
-    - python3 examples/test/cmake/test_release_notes.py
-    - python3 -I doxygen/check-release-notes.py
-    - python3 examples/test/cmake/test_module_mainpage_layout.py
-    - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'qlib/**/*.qc' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-mainpage.py --sources
+    # every check runs, also when an earlier one fails, and the job ends with the summary of the failing ones
+    - test/docker_test/check-docs.sh
 
 # The interpreter-free core of the HTTP server fast routes (lib/HttpFastRoutes.cpp), built with its standalone test under
 # AddressSanitizer + UndefinedBehaviorSanitizer and under ThreadSanitizer (it needs no Qore build)

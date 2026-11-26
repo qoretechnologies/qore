@@ -126,10 +126,12 @@ echo "-- targets: ${PERF_TARGETS} --"
 qore_ci_build_logged build.log make -j${MAKE_JOBS} ${PERF_TARGETS}
 # the frames of the per-call path of interpreted code against their budgets: each byte more is a byte more at each
 # level of a recursion (issue #5852); this is the release build with the compiler the budgets are calibrated for
-echo && echo "-- checking the stack frames of the call path (tools/stack-usage-budgets.txt) --"
-python3 -I ${QORE_SRC_DIR}/tools/check-stack-usage.py ${QORE_SRC_DIR}/build
-echo && echo "-- checking the explicitly inlined calls of the hot paths (tools/hot-inlining.txt) --"
-python3 -I ${QORE_SRC_DIR}/tools/check-hot-inlining.py ${QORE_SRC_DIR}/build
+# both checks run, also when the first fails, and the job ends with the summary of the failing ones (see ci-suites.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-suites.sh"
+qore_ci_suite "stack frames of the call path (tools/stack-usage-budgets.txt)" \
+    python3 -I ${QORE_SRC_DIR}/tools/check-stack-usage.py ${QORE_SRC_DIR}/build
+qore_ci_suite "explicitly inlined calls of the hot paths (tools/hot-inlining.txt)" \
+    python3 -I ${QORE_SRC_DIR}/tools/check-hot-inlining.py ${QORE_SRC_DIR}/build
 # the guard checks the qmods this build made, which are only those of the targets above
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 
@@ -159,3 +161,6 @@ find . -name "*.o" -delete 2>/dev/null || true
             "${QORE_SRC_DIR}/build/qore" -V 2>&1 || true
     fi
 } > "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info"
+
+# the job fails if a check failed (above)
+qore_ci_suites_summary
