@@ -2329,9 +2329,10 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     %Qore applies the same rule to the relation of classes by injection
     (@ref Qore::Program::importClass() "Program::importClass()" with \c inject set): only the %Program that declares
     both classes, or code that is not restricted, may relate them.  Restricted code is code that a sandbox that refuses
-    uncontrolled APIs governs, also as the caller of trusted code further down the call stack, code whose parse
-    options restrict a functional domain, and library code that restricted code loaded while it is initialized; the
-    test fails closed.  Code that only a sandbox that allows
+    uncontrolled APIs governs, also as the caller of trusted code further down the call stack, any code that runs in a
+    thread started for such code (also in a %Program that a sandbox that allows uncontrolled APIs governs), code whose
+    parse options restrict a functional domain, and library code that restricted code loaded while it is initialized;
+    the test fails closed.  Code that only a sandbox that allows
     uncontrolled APIs governs relates classes by injection and re-exports imported classes as trusted code does.  A
     policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
     @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a

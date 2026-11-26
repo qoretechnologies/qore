@@ -2497,7 +2497,10 @@ DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
 /** The classification of the rules that restrict what code may do (the relation of classes by injection; qore#7730):
     the code that qore_caller_is_sandboxed() looks at, where only a restricting sandbox counts, one that refuses
     uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); a composition is restricting if any member is),
-    and a Program sandboxed without a manager (qore_program_is_restricted(), which fails closed).  Code that a trusted
+    and a Program sandboxed without a manager (qore_program_is_restricted(), which fails closed).  A restricting
+    sandbox that the thread carries (inherited from the code that started it, or of the operation that it continues)
+    counts also where the Program that the code runs in has a trusting manager of its own, which otherwise ends the
+    walk (qore#7730).  Code that a trusted
     (governed) sandbox governs, one that allows uncontrolled APIs (SandboxManager::setUncontrolledApiPolicy()), is
     sandboxed but not restricted: its interrupts, limits, budgets, I/O policies and isolation domain still apply
     (qore_caller_is_sandboxed()), as do the rules for process-wide registrations.

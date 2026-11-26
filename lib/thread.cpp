@@ -8256,6 +8256,24 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool rest
             nullptr);
         // a composition trusts its code only if every member does (QoreSandboxManager::trustsUncontrolledApis())
         if (!sm || (restricted_only && sm->trustsUncontrolledApis())) {
+            // the walk above ends at the first Program whose own manager governs alone, so a trusting one hides the
+            // sandbox that the thread carries for the code that started it or whose operation it continues: a
+            // restricting one makes the code restricted, whatever trusted Program it runs in (qore#7730).  Not the
+            // contexts that the thread had when a module initialization barrier (or a trusted build) was set
+            if (restricted_only) {
+                for (const QoreSandboxContext* ctx : {td->sandbox_context, td->inherited_sandbox_context}) {
+                    if (!ctx || !ctx->manager || (mib && (ctx == mib->sandbox_context
+                            || ctx == mib->inherited_sandbox_context))) {
+                        continue;
+                    }
+                    if (!ctx->manager->trustsUncontrolledApis()) {
+                        if (pgm_id) {
+                            *pgm_id = ctx->pgm_id;
+                        }
+                        return 1;
+                    }
+                }
+            }
             return 0;
         }
         if (pgm_id) {
