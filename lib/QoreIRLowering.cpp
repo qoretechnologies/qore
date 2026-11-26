@@ -7063,6 +7063,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_func->static_call_context = parent_func->static_call_context;
         handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+        handler_func->lower_call_forms_for_debug_ir = parent_func->lower_call_forms_for_debug_ir;
         handler_func->handler_body = true;
 
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
@@ -7163,6 +7164,8 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_func->computeSlotIdsAndEmbed();
 
         // Attach compiled handler IR to instruction
+        // the debug IR of the function holds the handler's (qore#7733)
+        parent_func->has_debug_ir_call_forms |= handler_func->has_debug_ir_call_forms;
         handler.obe_inst->handler_ir = std::move(handler_func);
         qore_ir_merge_handler_unwind_locations(*parent_func, *handler.obe_inst->handler_ir);
         compiled_count++;
@@ -7227,6 +7230,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler_func->static_call_context = parent_func->static_call_context;
         handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+        handler_func->lower_call_forms_for_debug_ir = parent_func->lower_call_forms_for_debug_ir;
         handler_func->handler_body = true;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -7327,6 +7331,8 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler_func->computeSlotIdsAndEmbed();
 
         // Attach compiled handler IR to instruction
+        // the debug IR of the function holds the handler's (qore#7733)
+        parent_func->has_debug_ir_call_forms |= handler_func->has_debug_ir_call_forms;
         handler.obe_inst->handler_ir = std::move(handler_func);
         qore_ir_merge_handler_unwind_locations(*parent_func, *handler.obe_inst->handler_ir);
         compiled_count++;
@@ -19044,7 +19050,11 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    if (func_name && qore_builtin_call && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
+    // the debug IR of AOT code keeps the call: the serialized pseudo-method instruction loses the function call that
+    // gives its exceptions their frame (qore#7733)
+    const bool keep_call_forms = builder.getFunction()->lower_call_forms_for_debug_ir;
+    if (func_name && qore_builtin_call && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()
+            && !keep_call_forms) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
@@ -19079,6 +19089,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                         QoreClass* qc = nullptr;
                         const QoreMethod* method = pseudo_classes_find_method(NT_STRING, func_name, qc);
                         if (method && qc) {
+                            builder.getFunction()->has_debug_ir_call_forms = true;
                             QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
                             QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
                             if (!exception_stack.empty()) {
@@ -19127,7 +19138,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             string_find_method_name = "rfind";
         }
     }
-    if (string_find_method_name) {
+    if (string_find_method_name && !keep_call_forms) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
         size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
@@ -19162,6 +19173,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                         QoreClass* qc = nullptr;
                         const QoreMethod* method = pseudo_classes_find_method(NT_STRING, string_find_method_name, qc);
                         if (method && qc) {
+                            builder.getFunction()->has_debug_ir_call_forms = true;
                             QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
                             QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
                             if (!exception_stack.empty()) {
