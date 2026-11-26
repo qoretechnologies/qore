@@ -3198,7 +3198,10 @@ bool QoreObject::isCurrent() const {
     }
     // a deletion that marks the object and abandons undoes its marking with the object's lock held exclusively
     // (qore_object_private::customDeref(), qore#7509): the status is read again with the lock, unless this thread holds
-    // it for writing
+    // it for writing.
+    // Lock order: AsyncIoControllerPriv::registerQoreOp() calls this with its stripe's lock held, so that lock comes
+    // before the object's lock (rml): code that holds rml must never take a stripe's lock of the async I/O
+    // controller (registerQoreOp()/unregisterQoreOp()), or the two can deadlock
     QoreSafeVarRWReadLocker sl(priv->rml, qore_var_rwlock_priv::get(priv->rml)->write_tid != q_gettid());
     return priv->status.load(std::memory_order_relaxed) == OS_OK;
 }
