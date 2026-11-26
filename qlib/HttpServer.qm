@@ -8030,7 +8030,7 @@ class HttpHandlerThreadContexts {
 /** The connection, its transport and the request's stream (\c "header-info"), and the server's connection state;
     see HttpServer::handleRequest() (qore#6953)
 */
-const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "sock_key", "socket",
+const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "logger", "sock_key", "socket",
     "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class

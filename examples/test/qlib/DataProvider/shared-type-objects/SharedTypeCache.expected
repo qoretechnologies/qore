@@ -1,0 +1,26 @@
+qore/ftp/event:
+  type shared: True
+  field shared: True
+  info: done
+  copy: "shared: False, fields: 9"
+  delete field: SHARED-OBJECT-ERROR
+  delete type: SHARED-OBJECT-ERROR
+  afterwards: FtpPollerFileEventInfoDataType, field "name" of type "string"
+test/qore-7728/runtime:
+  type shared: True
+  field shared: True
+  info: {count: 1}
+  copy: "shared: False, fields: 3"
+  delete field: SHARED-OBJECT-ERROR
+  delete type: SHARED-OBJECT-ERROR
+  afterwards: HashDataType, field "value" of type "*string"
+trusted change: fields ["value", "count", "trusted", "held"]
+  added field shared: True
+  added default other field type shared: True
+  delete added field: SHARED-OBJECT-ERROR
+  delete added default other field type: SHARED-OBJECT-ERROR
+trusted set fields and union alternatives
+  set field shared: True
+  set union alternative shared: True
+  delete set field: SHARED-OBJECT-ERROR
+  delete set union alternative: SHARED-OBJECT-ERROR

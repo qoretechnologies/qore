@@ -640,6 +640,19 @@ private:
     */
     std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
 
+    //! The streams whose listeners are notified when the connection fails (under sq_lock; issue #7695)
+    /** A stream is added when its queue is registered (registerStreamQueue()), as every listener of a stream
+        (WebSocket over HTTP/2) registers its queue, and removed when its registration ends with the end of the
+        stream (drainStreamQueuesLocked()) or when the failure of the connection notifies it
+        (notifyPendingStreams()).  It is kept when clearStreamQueues() takes the registrations away, as a close of
+        the connection does before it fails the connection's streams.  Only these streams are given to the
+        controller for an onStreamData() notification when the connection fails: a stream without a listener (an SSE
+        or other streaming response that its reader reads from the stream's channel) has none to notify, and the
+        operation of a connection whose streams have no listeners (an HTTPClient connection) has no onStreamData()
+        method.
+    */
+    std::vector<int32_t> notify_streams;
+
     //! Guards stream_queues
     /** The I/O thread changes stream_queues, but other threads read it: the collector's scanner (scanMembers())
         from any thread that scans this object, and clearStreamQueues() from abort() and cleanup().  The I/O thread
