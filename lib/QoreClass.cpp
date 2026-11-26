@@ -50,6 +50,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <algorithm>
 #include <atomic>
@@ -2130,6 +2131,11 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         sandbox_private_members(old.sandbox_private_members),
         from_module(old.from_module),
         lang(old.lang) {
+    // the import copy of a builtin class is owned by the importing Program's namespace and freed with it: it is mortal
+    // (qore#7540)
+    if (old.sys) {
+        program_local.store(true, std::memory_order_relaxed);
+    }
     // the bare references option of the declaration (issue #3286)
     parse_abr = old.parse_abr;
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
@@ -8719,6 +8725,9 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
 
     const QoreMethod* w;
     ClassAccess access;
+    // the access error is raised after the lookup, in the context of the caller's Program, whose classes decide how
+    // the error names the class (see memberDiagnosticName(); qore#7626), and without the lookup's namespace lock
+    bool inaccessible = false;
 
     //printd(5, "qore_class_private::getMethodForEval() %s::%s() class_ctx: %p %s\n", name.c_str(), nme, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
@@ -8772,7 +8781,7 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                 // a method that the caller cannot call: no method of the name can be called from outside the class
                 // hierarchy
                 if (access > Public) {
-                    return raiseInaccessibleMethodError(nme, w, xsink);
+                    inaccessible = true;
                 }
             } else {
                 // a private method of the class context itself or of the object's class does not raise the access
@@ -8783,7 +8792,7 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                 // trusted code declared, as from outside the class hierarchy (qore#6843)
                 if (class_ctx->sandbox_ctx && w->getAccess() == Private
                         && sandboxDeniesPrivateAccess(get(*w->getClass()), class_ctx)) {
-                    return raiseInaccessibleMethodError(nme, w, xsink);
+                    inaccessible = true;
                 }
             }
         } else {
@@ -8791,6 +8800,10 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
             // (qore#6798)
             w = runtimeCheckPublicContextOverride(nme, w, access, class_ctx);
         }
+    }
+
+    if (inaccessible) {
+        return raiseInaccessibleMethodError(nme, w, xsink);
     }
 
     //printd(5, "QoreClass::getMethodForEval() %s::%s() found method %p class %s\n", name.c_str(), nme, w, w->getClassName());
@@ -8811,11 +8824,12 @@ const QoreMethod* qore_class_private::raiseInaccessibleMethodError(const char* n
     if (w == constructor || w == destructor) {
         xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed", nme);
     } else if (w->isPrivate()) {
+        // the class is named as in the member diagnostics: by its path when another class has its name (qore#7626)
         xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
-            name.c_str(), nme);
+            memberDiagnosticName(), nme);
     } else {
         xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme,
-            name.c_str());
+            memberDiagnosticName());
     }
     return nullptr;
 }
@@ -9671,11 +9685,66 @@ bool qore_class_private::isSandboxedCode() const {
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
 
-bool qore_class_private::isSandboxDeclared() const {
+bool qore_class_private::isRestrictedCode() const {
+    // builtin classes are trusted, also when a module created them while a sandboxed Program was current
     if (sys) {
         return false;
     }
-    return committed ? sandbox_ctx : isSandboxedCode();
+    QoreProgram* p = spgm.load();
+    if (!p) {
+        // the state of a released Program is not known: the sandbox state is true whenever it would be
+        return released_sandboxed.load();
+    }
+    // the current Program cannot be deleted while the thread runs in it
+    if (p == getProgram()) {
+        return qore_program_is_restricted(p);
+    }
+    // the sandboxes of another Program are read with a reference to it, outside dataLock(), whose sections take no
+    // other lock
+    class ProgramRefHolder {
+    public:
+        ProgramRefHolder(QoreProgram* p) : p(p) {
+        }
+        ~ProgramRefHolder() {
+            if (p) {
+                p->deref();
+            }
+        }
+        QoreProgram* p;
+    } ref(getReferencedSourceProgram());
+    if (!ref.p) {
+        // a Program that is being deleted (no reference can be taken while spgm is still set) fails closed; a
+        // released one has its recorded state
+        std::lock_guard<std::mutex> al(dataLock());
+        return spgm.load() ? true : released_sandboxed.load();
+    }
+    return qore_program_is_restricted(ref.p);
+}
+
+bool qore_class_private::isSandboxDeclared(bool unknown) const {
+    if (sys) {
+        return false;
+    }
+    // a class declared by code that its sandbox trusts (a host's Program whose sandbox makes its I/O interruptible
+    // and allows uncontrolled APIs) keeps the private access of trusted code (qore#7635)
+    if (committed) {
+        return sandbox_ctx;
+    }
+    if (isRestrictedCode()) {
+        return true;
+    }
+    // a class being parsed: the sandbox of the code that parses it is attached to the Program only when the code is
+    // committed, so it is counted here as the commit will count it; it can be read only in the parsing thread, for
+    // the class of the Program that it parses: otherwise the state cannot be told
+    QoreProgram* p = spgm.load();
+    if (!p || p != getProgram()) {
+        return unknown;
+    }
+    const qore_program_private* pp = qore_program_private::get(*p);
+    if (!pp->parsingLocked()) {
+        return unknown;
+    }
+    return pp->pendingCreatorSandboxIsRestricted();
 }
 
 bool qore_class_private::sandboxDeniesPrivateAccess(const qore_class_private* decl,
@@ -9683,7 +9752,9 @@ bool qore_class_private::sandboxDeniesPrivateAccess(const qore_class_private* de
     if (!decl || !class_ctx || class_ctx->sys || decl->isClassContext(class_ctx)) {
         return false;
     }
-    return class_ctx->isSandboxDeclared() && !decl->isSandboxDeclared();
+    // a state that cannot be told counts as sandboxed for the code's class and as trusted for the declaring class:
+    // both refuse the access
+    return class_ctx->isSandboxDeclared(true) && !decl->isSandboxDeclared(false);
 }
 
 int qore_class_private::parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
@@ -9710,13 +9781,17 @@ int qore_class_private::parseCheckSandboxMethodAccess(const QoreProgramLocation*
 }
 
 void qore_class_private::initSandboxAccess() {
-    sandbox_ctx = !sys && isSandboxedCode();
+    // the sandbox of the code that the commit commits is attached to the Program (isRestrictedCode()), but code
+    // parsed for restricted code by code that a trusting sandbox governs is restricted too (qore#7635)
+    QoreProgram* p = spgm.load();
+    sandbox_ctx = !sys && (isRestrictedCode() || (p && p == getProgram()
+        && qore_program_private::get(*p)->commitParsedByRestrictedCaller()));
     if (!sandbox_ctx) {
         return;
     }
     for (const auto& i : members.getList()) {
         const QoreMemberInfo* mi = i.second;
-        if (!mi->local() && mi->declaredNonPublic() && mi->getClass() && !mi->getClass()->isSandboxDeclared()) {
+        if (!mi->local() && mi->declaredNonPublic() && mi->getClass() && !mi->getClass()->isSandboxDeclared(false)) {
             sandbox_private_members = true;
             return;
         }
@@ -9859,7 +9934,7 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
     // check for illegal private calls
     if (copyMethod && copyMethod->isPrivate() && cls != getStackClass()) {
         xsink->raiseException("METHOD-IS-PRIVATE", "%s::copy() is private and cannot be accessed externally",
-            name.c_str());
+            memberDiagnosticName());
         return nullptr;
     }
 

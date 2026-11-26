@@ -124,3 +124,5 @@ dtor method
 override returned to invoker
 dtor final method
 final returned
+dtor sa
+sa returned 1 with 2 caller arguments

@@ -109,6 +109,7 @@
 #include <qore/intern/QoreUnshiftOperatorNode.h>
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
+#include <qore/intern/QoreReadReferenceOperatorNode.h>
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
@@ -341,6 +342,11 @@ static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
     return qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR);
 }
 
+static bool qore_expr_is_call(const AbstractQoreNode* node) {
+    return dynamic_cast<const AbstractFunctionCallNode*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+        || dynamic_cast<const CallReferenceCallNode*>(node);
+}
+
 //! Returns true if the expression gives a new value that the frame owns as a temporary
 /** a call (a function, method or static method call, a call through a call reference, \c new), a list or hash
     literal, a slice, and the value of a functional operator; not the value of a variable, of an implicit argument
@@ -349,9 +355,7 @@ static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
 */
 static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    return node && (dynamic_cast<const AbstractFunctionCallNode*>(node)
-        || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
-        || dynamic_cast<const CallReferenceCallNode*>(node)
+    return node && (qore_expr_is_call(node)
         || dynamic_cast<const QoreParseListNode*>(node)
         || dynamic_cast<const QoreParseHashNode*>(node)
         || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
@@ -395,6 +399,11 @@ static bool qore_ir_expr_is_conditional_temporary(const QoreValue& expr, unsigne
         return operand_ok(vc->getLeft()) && operand_ok(vc->getRight());
     }
     return false;
+}
+
+bool qore_call_returns_argument_temp(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    return node && (qore_expr_is_call(node) || qore_ir_expr_is_conditional_temporary(expr));
 }
 
 //! returns true for a type whose values hold no object: a scalar, or a list or hash of such values (recursively)
@@ -11462,9 +11471,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // - Binary: binary + string = string (not binary), needs in-place append
     // Using AddAssignLValue goes through QorePlusEqualsOperatorNode which does
     // proper in-place modification via lvalue semantics.
-    if (left_var && left_var->getTypeInfo()) {
+    if (left_var) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
-        if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
+        // An untyped variable can also hold a list or hash. An extra reference to compute the sum
+        // would force a copy even when the variable owns the container (#7421).
+        if (!QoreTypeInfo::hasType(ti) || QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
                 || QoreTypeInfo::isListType(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_BINARY
@@ -13285,6 +13296,36 @@ QoreIRValue QoreIRLowering::lowerUnaryMinus(const QoreValue& expr, std::string& 
     return lowerUnaryOpOrInvoke(op, expr, value, minus->loc, error);
 }
 
+QoreIRValue QoreIRLowering::lowerReadReference(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* read = dynamic_cast<const QoreReadReferenceOperatorNode*>(node);
+    if (!read) {
+        return QoreIRValue();
+    }
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue value = lowerExpression(read->getExp(), error);
+    if (!value.isValid()) {
+        return QoreIRValue();
+    }
+    // the referenced lvalue can be gone (a member of a deleted object): the exception goes to the enclosing handler
+    // (qore#6662)
+    return withExceptionTarget(builder.createUnaryOp(QoreIROpcode::ReadReferenceThrough, value, read->loc))->result;
+}
+
+QoreIRValue QoreIRLowering::readSelectorSequenceThrough(const QoreValue& seq_expr, QoreIRValue seq,
+        const QoreProgramLocation* loc) {
+    // a variable is read as the value of a reference of its type; only a value of a type that can be a reference can
+    // be a reference element
+    if (dynamic_cast<const VarRefNode*>(seq_expr.getInternalNode())
+            || QoreTypeInfo::parseReturns(getExprTypeInfo(seq_expr), NT_REFERENCE) == QTI_NOT_EQUAL) {
+        return seq;
+    }
+    return withExceptionTarget(builder.createUnaryOp(QoreIROpcode::ReadReferenceThrough, seq, loc))->result;
+}
+
 QoreIRValue QoreIRLowering::lowerBinaryNot(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* binary_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
@@ -13944,7 +13985,9 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         // selectors are evaluated before one instruction applies them all only if the order cannot be observed
         for (const QoreValue& selector : range_selectors) {
             if (!qore_ir_selector_eval_is_inert(selector)) {
-                return lowerListSelectorSteps(op, lhs, range_selectors, error);
+                // the sequence that is a reference element is the referenced value, read once (qore#6662)
+                return lowerListSelectorSteps(op, readSelectorSequenceThrough(op->getLeft(), lhs, op->loc),
+                    range_selectors, error);
             }
         }
         std::vector<QoreIRValue> operands{lhs};
@@ -14805,8 +14848,13 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
     return next_inst;
 }
 
-static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
-    const QoreTypeInfo* reference_target = QoreTypeInfo::getReferenceTarget(type_info);
+//! Returns true if the base of a member access is a hash of an explicit type
+/** @param reads_through true if the base is read as the value of a reference of its type, as a variable is; a
+    reference element read from a container is the reference itself, whose member access reads through it at run time
+    (qore#6662)
+*/
+static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info, bool reads_through) {
+    const QoreTypeInfo* reference_target = reads_through ? QoreTypeInfo::getReferenceTarget(type_info) : nullptr;
     if (reference_target) {
         type_info = reference_target;
     }
@@ -14867,8 +14915,11 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         std::vector<QoreIRValue> operands{base_val};
         QoreIRValue result;
         const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
+        // a variable of a reference type is read as the referenced value; any other base of a reference type is a
+        // reference element, which the access reads through at run time, so no typed access applies (qore#6662)
+        const bool base_reads_through = dynamic_cast<const VarRefNode*>(op->getLeft().getInternalNode()) != nullptr;
         const QoreTypeInfo* base_value_type =
-            QoreTypeInfo::getReferenceTarget(base_type);
+            base_reads_through ? QoreTypeInfo::getReferenceTarget(base_type) : nullptr;
         if (!base_value_type) {
             base_value_type = base_type;
         }
@@ -14931,7 +14982,7 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
                         }
                     }
                 }
-                bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type);
+                bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type, base_reads_through);
                 auto* hka_inst = typed_hash
                     && !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_HASH_KEY_ACCESS")
                     ? builder.createHashKeyAccessHash(key_str, !assigned_hash, op->loc)
@@ -17252,9 +17303,46 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
     if (!parse_args && !args) {
         return true;  // zero-argument call — valid, no args to lower
     }
+    // A later argument may write the local, or reach the same container through a weak
+    // reference. Capture earlier plain reads before evaluating that argument, in source order.
+    const size_t count = parse_args ? parse_args->size() : args->size();
+    size_t last_effectful_arg = count ? count - 1 : 0;
+    while (last_effectful_arg && qore_ir_selector_eval_is_inert(parse_args ? parse_args->get(last_effectful_arg)
+            : args->retrieveEntry(last_effectful_arg))) {
+        --last_effectful_arg;
+    }
+    auto lowerArgument = [&](const QoreValue& expr, size_t index) {
+        QoreIRValue value = lowerExpression(expr, error);
+        if (!value.isValid() || !expr.needsEval()) {
+            return value;
+        }
+        const QoreTypeInfo* type = getExprTypeInfo(expr);
+        if (QoreTypeInfo::parseReturns(type, NT_HASH) == QTI_NOT_EQUAL
+                && QoreTypeInfo::parseReturns(type, NT_LIST) == QTI_NOT_EQUAL) {
+            return value;
+        }
+        const bool call = qore_call_returns_argument_temp(expr);
+        const auto* node = expr.getInternalNode();
+        const auto* var = dynamic_cast<const VarRefNode*>(node);
+        const bool capture_read = index < last_effectful_arg && var && var->getType() == VT_LOCAL;
+        if (!call && !capture_read && !dynamic_cast<const QoreAssignmentOperatorNode*>(node)
+                && !dynamic_cast<const QorePlusEqualsOperatorNode*>(node)) {
+            return value;
+        }
+        // The AST argument list takes each argument before evaluating the next. Only the
+        // original of a copied call temporary stays in the caller's statement scope.
+        const auto* loc = static_cast<const ParseNode*>(node)->loc;
+        QoreIRValue arg = builder.createUnaryOp(QoreIROpcode::CopyCallArg, value, loc)->result;
+        auto* release = builder.createReleaseOwnedTemp(value, loc);
+        release->opcode = QoreIROpcode::ReleaseCallArgSource;
+        if (call) {
+            release->operands.push_back(arg);
+        }
+        return arg;
+    };
     if (parse_args) {
         for (size_t i = 0; i < parse_args->size(); ++i) {
-            QoreIRValue arg = lowerExpression(parse_args->get(i), error);
+            QoreIRValue arg = lowerArgument(parse_args->get(i), i);
             if (!arg.isValid()) {
                 return false;
             }
@@ -17273,7 +17361,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
                 error = "IR named call argument lowering cancelled or interrupted";
                 return false;
             }
-            QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
+            QoreIRValue arg = lowerArgument(args->retrieveEntry(i), i);
             if (!arg.isValid()) {
                 return false;
             }
@@ -17290,7 +17378,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
         return true;
     }
     for (size_t i = 0; i < args->size(); ++i) {
-        QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
+        QoreIRValue arg = lowerArgument(args->retrieveEntry(i), i);
         if (!arg.isValid()) {
             return false;
         }
@@ -25121,6 +25209,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         : lowerExpression(base_source, error);
     if (!source.isValid()) {
         return QoreIRValue();
+    }
+    // the sequence of a list of selectors that is a reference element is the referenced value, read once, as the AST
+    // interpreter reads it (qore#6662)
+    if (selector_source) {
+        source = readSelectorSequenceThrough(selector_source.op->getLeft(), source, loc);
     }
 
     QoreIRValue owned_source = source;

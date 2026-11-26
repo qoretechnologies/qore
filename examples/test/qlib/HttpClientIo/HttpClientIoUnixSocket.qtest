@@ -111,6 +111,10 @@ class SilentUnixListener {
         }
         release.push(True);
         done.waitForZero();
+        # the close removes the socket file in this thread: the listener thread can hold the last reference of this
+        # object after it has ended, and a close at the release of that reference would race with the removal of the
+        # socket directory
+        listener.close();
     }
 
     private:internal run() {
@@ -285,6 +289,8 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
         on_exit manager.closeAll();
         assertThrows("HTTPCLIENT-TIMEOUT", \manager.request(), ("http://socket=" + encode_url(path, True), "GET",
             "/", NOTHING, NOTHING, 500ms));
+        listener.stop();
+        assertFalse(is_socket(path), "the socket file is removed when the listener stops");
     }
 
     testCancel() {

@@ -1452,10 +1452,10 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        cold_flags(o.cold_flags), before(o.before), weak_lock_count(o.weak_lock_count),
-        removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
-        vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
-        assignment_only(o.assignment_only), read_access(o.read_access),
+        cold_flags(o.cold_flags), before(o.before), rdt(o.rdt), weak_lock_count(o.weak_lock_count),
+        assignment_only(o.assignment_only), removal_objects(std::move(o.removal_objects)),
+        removed_objects(std::move(o.removed_objects)), vivified(std::move(o.vivified)),
+        member_lvalue(std::move(o.member_lvalue)), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
         read_only_resolution(o.read_only_resolution), read_value_only(o.read_value_only),
@@ -7251,6 +7251,19 @@ QoreValue reference_read_result(QoreValue rv, bool& needs_deref, ExceptionSink* 
 }
 
 // documented in LocalVar.h
+QoreValue qore_read_access_base(const QoreValue& ref, ExceptionSink* xsink) {
+    assert(ref.getType() == NT_REFERENCE);
+    ReferenceNode* r = const_cast<ReferenceNode*>(ref.get<const ReferenceNode>());
+    r->ref();
+    ReferenceHolder<ReferenceNode> holder(r, xsink);
+    bool needs_deref = true;
+    QoreValue rv = qore_local_reference_eval(*r, needs_deref, xsink);
+    if (!needs_deref && rv.needsRef()) {
+        rv = rv.refSelf();
+    }
+    return rv;
+}
+
 QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
     lvalue_ref* lr = lvalue_ref::get(&ref);
     // a reference to a closure-bound variable itself has the variable as its lvalue (ClosureVarValue::getReference()),
@@ -7289,6 +7302,12 @@ QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref,
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
+    // a pre-instantiated local that the compiled tiers cleared at the end of its block (del()) stays on the stack
+    // marked as cleared, which reflection leaves out; the variable is assigned or changed again only when its block
+    // runs again, so it is active again, as the AST interpreter's instantiation of the variable makes it (qore#7640)
+    if (block_cleared) {
+        const_cast<LocalVarValue*>(this)->block_cleared = false;
+    }
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,
     //    val.getTypeName(), val.getType(), val.assigned, QoreTypeInfo::getName(typeInfo),
     //    QoreTypeInfo::getName(refTypeInfo), refTypeInfo);

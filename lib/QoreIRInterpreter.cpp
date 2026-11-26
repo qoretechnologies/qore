@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 443,
+static_assert(QORE_IR_MAX_OPCODE == 446,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -749,11 +749,41 @@ static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
     evaluateOwnedWeakReferenceResult(value, xsink);
 }
 
+// Returns true if the square-brackets operator on a value of type \a t reads a list element, which can be a weak
+// reference that evaluateOwnedListElement() reads as its target: an element of a list, or one of the list that a
+// reference element names, as the operator reads through it (qore#6662)
+static QORE_INTERN_ALWAYS_INLINE bool qore_ir_index_reads_list_element(qore_type_t t) {
+    return t == NT_LIST || t == NT_REFERENCE;
+}
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // As evaluateOwnedListElement() for a list element borrowed from its list; the target is returned borrowed as well:
 // the weak reference held by the list keeps it allocated
 static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
     return getWeakReferenceTarget(l->retrieveEntry(i));
+}
+
+//! Applies the container access \a op to the value that the reference \a left names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_binary_through_reference(QoreIROpcode op,
+        const QoreValue& left, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(left, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    return QoreIRInterpreter::evalBinary(op, *value, right, xsink);
+}
+
+//! Returns the member \a key of the value that the reference \a ref names, as the native helpers read it (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_hash_key_access_through_reference(const QoreValue& ref,
+        const char* key, bool preserve_weak_result, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    uint64_t bits = toBits(*value);
+    return fromBits(preserve_weak_result
+        ? qore_rt_hash_key_access_for_call(bits, key, xsink)
+        : qore_rt_hash_key_access(bits, key, xsink));
 }
 
 QoreValue QoreIRInterpreter::evalPluginComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
@@ -1051,6 +1081,17 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 // dispatch otherwise.
 static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
 static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
+
+//! records the instruction that execute() dispatches, for silent-failure tracing
+/** Out of line, as qore_ir_restore_innermost_tls(): an inline store in execute()'s dispatch loop lets GCC keep the
+    address of the thread-local variables of this file live across execute(), in a slot of its frame, when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2, issue #7006); only called with tracing enabled
+*/
+static QORE_INTERN_NOINLINE void qore_ir_record_silent_fail(const QoreIRInstruction* inst) {
+    assert(inst);
+    tls_last_silent_fail_opcode = inst->opcode;
+    tls_last_silent_fail_loc = inst->loc;
+}
 
 void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
     const QoreProgramLocation* loc = tls_last_silent_fail_loc;
@@ -2328,6 +2369,18 @@ int64 q_get_ir_innermost_instantiated_local_entries() {
     return tls_innermost_ir_instantiated_locals
         ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
 }
+
+//! restores the innermost cleanup vector and instantiated locals of the caller of execute() on every exit of it
+/** Out of line: with the store at execute()'s exit inline, GCC keeps the address of the thread-local variables of
+    this file, which the stores at its entry computed, live across execute() in a slot of its frame when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2), which each level of a recursion of interpreted code pays
+    (issue #7006); a call here computes the address itself, as the stores at the entry do
+*/
+static QORE_INTERN_NOINLINE void qore_ir_restore_innermost_tls(const IRCleanupSlots* prev,
+        const std::vector<const LocalVar*>* prev_instantiated_locals) noexcept {
+    tls_innermost_ir_cleanup = prev;
+    tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+}
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
@@ -2646,6 +2699,23 @@ static inline void setValueSlot(IRValueSlots& values,
     values[id] = new_val;
 }
 
+//! Executes ReadReferenceThrough: the referenced value of a reference element, or the value itself (qore#6662)
+/** @return true if an exception was raised
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_ir_exec_read_reference_through(IRValueSlots& values,
+        IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    QoreValue res = fromBits(qore_rt_read_access_base(toBits(getIRValue(values, inst->operands[0])), xsink));
+    if (xsink && *xsink) {
+        res.discard(xsink);
+        return true;
+    }
+    setValueSlot(values, inst->result.id, res, xsink);
+    if (res.needsRef()) {
+        cleanup.push_back(inst->result.id);
+    }
+    return false;
+}
+
 static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& cleanup,
         uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
     setValueSlot(values, id, new_val, xsink);
@@ -2822,6 +2892,14 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
+        } else if (locally_uninst) {
+            // a pre-instantiated local that UninstantiateLocal cleared at the end of its block stays on the stack,
+            // marked as cleared (LocalVarValue::del()); the block runs again, so the entry is active again, as an
+            // instantiation would make it, and reflection gives it (qore#7640); the interpreter's stores do not all
+            // take the variable's lvalue (see LocalVarValue::getLValue() for the compiled tiers)
+            if (LocalVarValue* lvar = thread_try_find_lvar(var)) {
+                lvar->block_cleared = false;
+            }
         }
         // Clear the "locally uninstantiated" flag if present
         if (locally_uninstantiated) {
@@ -3951,6 +4029,14 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 continue;
             }
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                // The comparison just after CopyCallArg observes its snapshot before the call. It
+                // does not take a reference or require the argument after the call has consumed it.
+                if (inst->opcode == QoreIROpcode::ReleaseCallArgSource && inst_pos
+                        && inst->operands.size() == 2 && operand.id == inst->operands[1].id
+                        && block->instructions[inst_pos - 1]->opcode == QoreIROpcode::CopyCallArg
+                        && block->instructions[inst_pos - 1]->result.id == operand.id) {
+                    return;
+                }
                 countIRValueUse(counts, operand);
             });
             if ((inst->opcode == QoreIROpcode::GuardNotNothing || inst->opcode == QoreIROpcode::GuardType)
@@ -3997,7 +4083,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 // a RefSelf gives the value a reference of the frame's own: the value of a fold or of a functional
                 // operator over a single value, whose source has been released (see lowerWithSourceRelease()), which
                 // a call takes over as a call's value (f(foldl $1 + $2, l); issue #6262)
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst)
+                def_by_call[inst->result.id] = arg_start >= 0 || inst->opcode == QoreIROpcode::CopyCallArg
+                    || qore_ir_is_sequence_temp(inst)
                     || inst->opcode == QoreIROpcode::RefSelf;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
@@ -4259,6 +4346,13 @@ static bool interpreterEffectSummaryStatsEnabled() {
     return enabled;
 }
 
+// Both nonzero values protect a cross-block slot during block-local cleanup. A store in the
+// sole normal continuation of an invoke can still move its result.
+enum : uint8_t {
+    CrossBlockSlot = 1,
+    MovableInvokeSlot = 2,
+};
+
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
@@ -4269,6 +4363,8 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // the result is cached for every thread that runs the function: a cancellation pending in the thread that runs
     // it first must not change it
     std::vector<uint8_t> reused_call_args;
+    std::unordered_set<uint32_t> invoke_store_moves;
+    qore_ir_find_invoke_store_moves(func, invoke_store_moves, nullptr);
     bool reuse_complete = qore_ir_find_reused_call_args(func, reused_call_args, nullptr);
     assert(reuse_complete);
     (void)reuse_complete;
@@ -4378,7 +4474,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         }
         if (slot_multi_use_block[id] || slot_multi_def_block[id]
                 || slot_def_block[id] == no_block || slot_def_block[id] != slot_use_block[id]) {
-            cross_block_slots[id] = 1;
+            cross_block_slots[id] = invoke_store_moves.count(id) ? MovableInvokeSlot : CrossBlockSlot;
         }
     }
     int max_param_idx = -1;
@@ -8779,7 +8875,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                     QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(
                         lhs_val, rhs_val, true, true, true, xsink);
-                    if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                    if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                         evaluateOwnedListElement(out, xsink);
                     }
                     return out;
@@ -8806,6 +8902,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         }
                         QoreStringNodeValueHelper key(rhs_val);
                         return o->evalMember(*key, xsink);
+                    }
+                    // a member of a reference element is a member of the referenced value (qore#6662)
+                    if (lt == NT_REFERENCE) {
+                        return qore_hash_object_deref_through_reference(lhs_val, rhs_val, xsink);
                     }
                     return QoreValue();
                 }
@@ -11603,8 +11703,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const IRCleanupSlots* prev;
         const std::vector<const LocalVar*>* prev_instantiated_locals;
         ~CleanupTlsGuard() {
-            tls_innermost_ir_cleanup = prev;
-            tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+            qore_ir_restore_innermost_tls(prev, prev_instantiated_locals);
         }
     } cleanup_tls_guard{tls_innermost_ir_cleanup, tls_innermost_ir_instantiated_locals};
     tls_innermost_ir_cleanup = &cleanup;
@@ -13274,14 +13373,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
 
     // Takes over the reference of the value of an operand that an lvalue operation stores (an assignment, += or a
-    // push) when its slot owns it (it has a cleanup entry), this is its only use, in the block defining it, and it is
+    // push) when its slot owns it and this is its only use, in its defining block or in the single-entry normal
+    // continuation of the invoke that defined it (MovableInvokeSlot), and it is
     // not a borrowed weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the
     // slot no longer holds the value afterwards.  Handing the value over keeps a dereference with no real reference
     // from happening once the value is linked into the graph, which would make a scan that its constructor deferred.
     auto consumeLValueOperand = [&](QoreIRValue operand, const QoreValue& val) -> bool {
         uint32_t id = operand.id;
         if (!val.hasNode() || id >= value_use_counts.size() || value_use_counts[id] != 1
-                || (id < cross_block_slots.size() && cross_block_slots[id])
+                || (id < cross_block_slots.size() && cross_block_slots[id] == CrossBlockSlot)
                 || (id < return_protected_slots.size() && return_protected_slots[id])
                 || weak_load_temp_slots.find(id) != weak_load_temp_slots.end()
                 || !removeAllCleanupEntries(cleanup, id)) {
@@ -13448,8 +13548,7 @@ next_instruction:
         // the caller (StatementBlock::execImpl / evalTiered fallback) can
         // read it post-return without plumbing it through the return value.
         if (trace_silent_fail) {
-            tls_last_silent_fail_opcode = inst->opcode;
-            tls_last_silent_fail_loc = inst->loc;
+            qore_ir_record_silent_fail(inst);
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
@@ -14402,6 +14501,15 @@ dispatch_folded_step_host:
                 QoreValue val = getIRValue(values, id);
                 val.ref();
                 cleanup.push_back(id.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CopyCallArg: {
+                QoreValue arg = getIRValue(values, inst->operands.front()).refSelf();
+                if (qore_weak_shared(arg)) {
+                    arg = qore_weak_share_copy(arg, xsink);
+                }
+                setOwnedValueSlot(values, cleanup, inst->result.id, arg, xsink);
                 ++ip;
                 break;
             }
@@ -15562,6 +15670,16 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
+                } else if (base.getType() == NT_REFERENCE) {
+                    // a member of a reference element is a member of the referenced value, read as the native
+                    // helper reads it, which also evaluates a weak reference result (qore#6662)
+                    out = qore_ir_hash_key_access_through_reference(base, hka_inst->key_name.c_str(),
+                        preserve_weak_result, xsink);
+                    if (xsink && *xsink) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
                 }
                 // a weak reference to an object is read as its object also as the base of a call: the receiver
                 // of a call read from a container is a temporary of the statement, which keeps the object until
@@ -16238,8 +16356,10 @@ load_local_done:
                     }
                     target_val = tv.getAsBigInt();
                     // the slot is set to the result below; until then it may only hold what the variable holds
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->target_slot_id, tv);
+                        locals_slot_cache.set(fused_inst->target_slot_id, tv.needsRef() ? tv.refSelf() : tv);
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -16505,8 +16625,10 @@ load_local_done:
                     lhs_val = lv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv);
+                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv.needsRef() ? lv.refSelf() : lv);
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -16535,8 +16657,9 @@ load_local_done:
                     rhs_val = rv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own, as for the left operand (qore#7637)
                     if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv);
+                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv.needsRef() ? rv.refSelf() : rv);
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);
@@ -17762,8 +17885,44 @@ load_local_done:
                             && local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
-                    LValueHelper helper(xsink);
-                    if (local_inst->local->getLValue(helper, false, true)) {
+                    // the helper releases the value that the store replaces when it is destroyed, which can run
+                    // a destructor that raises an exception: it is destroyed before the exception is checked, so
+                    // that the exception reaches the store's handler (qore#7629); the result is taken and evaluated
+                    // while the value is locked
+                    QoreValue res;
+                    bool lvalue_error = false;
+                    {
+                        LValueHelper helper(xsink);
+                        if (local_inst->local->getLValue(helper, false, true)) {
+                            lvalue_error = true;
+                        } else {
+                            // a store whose check records reference elements is made again out of line after
+                            // they have been bound with no lvalue lock held, in this helper (qore#7391)
+                            helper.enableBindRetry();
+                            // the store's own mode, not Weak: this branch is taken for every
+                            // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                            // the ownership that separates it from ':=', destroying a target whose only
+                            // reference was the opaque one; an element store assigns its weak reference as
+                            // a Normal store would assign it
+                            if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
+                                    && helper.isBindPending()) [[unlikely]] {
+                                qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc,
+                                    store_mode);
+                            }
+                            if (local_inst->result.isValid() && !*xsink) {
+                                // the result of a weak or opaque assignment is the value assigned, converted to the
+                                // variable's type, as the AST interpreter gives it to its consumers (qore#7084); an
+                                // element store gives the value the variable holds
+                                res = helper.getReferencedValue();
+                                // the target of a weak or opaque result is read while the helper still holds the
+                                // temporaries of the store, which can be its only references
+                                if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
+                                    evaluateOwnedWeakReferenceResult(res, xsink);
+                                }
+                            }
+                        }
+                    }
+                    if (lvalue_error) {
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
@@ -17771,23 +17930,12 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
-                    // a store whose check records reference elements is made again out of line after they have been
-                    // bound with no lvalue lock held, in this helper (qore#7391)
-                    helper.enableBindRetry();
-                    // the store's own mode, not Weak: this branch is taken for every
-                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
-                    // the ownership that separates it from ':=', destroying a target whose only
-                    // reference was the opaque one; an element store assigns its weak reference as
-                    // a Normal store would assign it
-                    if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
-                            && helper.isBindPending()) [[unlikely]] {
-                        qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc, store_mode);
-                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         if (inst->exception_target) {
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                             prev_block = block;
@@ -17800,13 +17948,6 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                     if (local_inst->result.isValid()) {
-                        // the result of a weak or opaque assignment is the value assigned, converted to the variable's
-                        // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives
-                        // the value the variable holds
-                        QoreValue res = helper.getReferencedValue();
-                        if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
-                            evaluateOwnedWeakReferenceResult(res, xsink);
-                        }
                         setValueSlot(values, local_inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
@@ -18951,6 +19092,21 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ReadReferenceThrough: {
+                // a member or an element that holds a reference gives the referenced value, with a reference of its
+                // own, read before the assignment locks its target; any other value is given as it is (qore#6662)
+                // out of line, as the instruction is rare and the loop is hot
+                if (qore_ir_exec_read_reference_through(values, cleanup, inst, xsink)) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::IteratorCreate:
             case QoreIROpcode::IteratorCreateIterate:
             case QoreIROpcode::IteratorCreateSelectors:
@@ -19650,16 +19806,20 @@ load_local_done:
                 }
                 [[fallthrough]];
             }
+            case QoreIROpcode::ReleaseCallArgSource:
             case QoreIROpcode::ReleaseOwnedTemp: {
                 uint32_t id = inst->operands.front().id;
-                if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                // A pipeline keeps a matching value. A call keeps a distinct original temporary when
+                // the argument copied it. A single-operand release has no value to compare.
+                bool release = inst->operands.size() < 2;
+                if (!release && id < values.size()) {
+                    bool same = toBits(values[id]) == toBits(getIRValue(values, inst->operands[1]));
+                    release = inst->opcode == QoreIROpcode::ReleaseCallArgSource ? same : !same;
+                }
+                if (release && id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
                         && (!inst->element_type || qore_return_release_observable(values[id]))
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
-                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
-                        // a value that is the kept value (a second operand, see
-                        // QoreIRBuilder::createReleaseStageInput()) stays in its slot
-                        && (inst->operands.size() < 2
-                            || toBits(values[id]) != toBits(getIRValue(values, inst->operands[1])))) {
+                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
                     // a value that is not a node has no reference to release: its entry stays for the slot's next
                     // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
                     // each element, see QoreIRLowering::lowerLazyPipelineFused())
@@ -20502,9 +20662,14 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                if (inst->opcode == QoreIROpcode::AddAssignAny && addAssignGaveOperand(res, right)) [[unlikely]] {
-                    releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
-                        weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                // the result's tag first, which is in a register: the result of most operations holds no node; the
+                // operand is read again from its slot, which the operation does not change, so that it need not be
+                // kept across the call
+                if (res.isPlainPointer() && inst->opcode == QoreIROpcode::AddAssignAny) [[unlikely]] {
+                    if (addAssignGaveOperand(res, getIRValue(values, inst->operands[1]))) {
+                        releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                            weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                    }
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {
@@ -20660,7 +20825,7 @@ load_local_done:
                     ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
                         string_index_char != 0, qore_compiled_code_negative_offsets(), xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
-                if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic && qore_ir_index_reads_list_element(left_val.getType())
                         && !(xsink && *xsink)) {
                     evaluateOwnedListElement(res, xsink);
                 }
@@ -22516,7 +22681,7 @@ load_local_done:
                         assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
                             lhs_val, rhs_val, true, true, true, xsink);
-                        if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                        if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                             evaluateOwnedListElement(res, xsink);
                         }
                         used_operands = true;
@@ -25442,12 +25607,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 evaluateOwnedWeakReferenceResult(out, xsink);
                 return out;
             }
+            // a member of a reference element is a member of the referenced value (qore#6662)
+            if (bt == NT_REFERENCE) {
+                return qore_ir_eval_binary_through_reference(op, left, right, xsink);
+            }
             return QoreValue();
         }
         case QoreIROpcode::ListIndexDynamic: {
             QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
                 qore_compiled_code_negative_offsets(), xsink);
-            if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+            if (qore_ir_index_reads_list_element(left.getType()) && !(xsink && *xsink)) {
                 evaluateOwnedListElement(out, xsink);
             }
             return out;

@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedSchemasTest
+
+#! Regression test for issue #7683: the schemas of the process-wide HL7 v2 schema registry are shared objects
+/** A schema that trusted code registers in Hl7v2SchemaRegistry, which getRegisteredSchema() returns to every caller,
+    and one that the registry caches for trusted code are marked as shared: sandboxed code that gets them cannot
+    change their members or delete them (SHARED-OBJECT-ERROR).  Trusted code still changes them, and a schema that a
+    tenant creates itself is its own.
+
+    SharedSchemas.q makes the checks; its output must be the one in SharedSchemas.expected in every
+    execution mode.
+*/
+class SharedSchemasTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedSchemas.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedSchemas.expected");
+    }
+
+    constructor() : QUnit::Test("shared HL7 v2 schemas", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, which choose their own execution
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        # the modules of the environment, which report on stderr, are not loaded
+        return sprintf("env -u QORE_DATA_PROVIDERS -u QORE_FILE_LOCATION_HANDLERS %s --exec-mode=%s %s",
+            shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

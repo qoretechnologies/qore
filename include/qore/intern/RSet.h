@@ -1413,6 +1413,11 @@ private:
     bool acct = false;
     //! the graph nodes this scan entered, when accounted
     uint64_t acct_nodes = 0;
+    //! the nodes of the graph of this scan's commit that are not in a sealed component, when accounted
+    /** The root's component and every component that cannot be part of a closed region: a later scan enters them
+        again whatever regions are current.  Set by assignRegions(); see QoreScanAccountingRecord::unsealed.
+    */
+    uint64_t acct_unsealed = 0;
     //! the name of the object whose rsection the last abandoned pass could not take
     /** Copied when the pass abandons, while the edge that reached the object still keeps it alive: the object can
         be freed while this scan waits for its rsection.
@@ -1630,6 +1635,14 @@ struct QoreScanAccountingRecord {
     uint64_t exclusive = 0;
     //! graph nodes entered
     uint64_t nodes = 0;
+    //! nodes of the committed graphs outside the closed regions recorded by their commits
+    /** The nodes of the root's strongly connected component and of every component that cannot be recorded in a
+        closed region (see RRegion), counted once per scan that commits.  Unlike \c nodes, it does not depend on
+        which regions were current when a scan ran (a current region is not entered), nor on passes abandoned or
+        restarted: for a given graph it is fixed, which makes it the measure of how a scan's work grows with a
+        part of the graph that is not in a closed region.
+    */
+    uint64_t unsealed = 0;
     //! time spent in the scans, in nanoseconds
     uint64_t total_ns = 0;
     //! time spent waiting for other threads' rsections, in nanoseconds

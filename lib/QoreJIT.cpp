@@ -3420,6 +3420,12 @@ void QoreJIT::bgCompileThreadLoop() {
     // regression instead of as a SIGSEGV in LLVM frames with no qore frame beneath them.
     assert(QorePThreadAttr::getCurrentThreadStackSize() >= QORE_LLVM_COMPILE_STACK_SIZE / 2);
 #endif
+#ifdef QORE_HAVE_THREAD_NAME
+    // a name of its own, so that the thread can be told apart from the threads that run Qore code (a test that
+    // measures the CPU time that a server uses leaves out the compiles of the JIT, which tiered execution runs at
+    // any time: see examples/test/TestCpuTime.qm)
+    q_set_thread_name("qore-jit-bg");
+#endif
     // Background worker thread loop — compiles functions while main thread executes IR
     while (bg_thread_running.load(std::memory_order_acquire)) {
         BgCompileWork work;

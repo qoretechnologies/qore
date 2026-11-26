@@ -24,7 +24,7 @@ public:
     */
     ByteLevelDecoder(const QoreHashNode* config, ExceptionSink* xsink);
 
-    std::string decode(const std::vector<std::string>& tokens) const override;
+    std::vector<std::string> decodeChain(std::vector<std::string> tokens) const override;
 };
 
 } // namespace QoreTokenizer

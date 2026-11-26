@@ -3831,6 +3831,18 @@
           "source": "Extract overall sentiment, score, per-aspect breakdown",
           "message": "擷取整體情感、分數、各面向明細"
         },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.display_name": {
+          "source": "Custom Schema",
+          "message": "自訂綱要"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.short_desc": {
+          "source": "Custom extraction schema as a hash",
+          "message": "以雜湊表示的自訂擷取綱要"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.desc": {
+          "source": "Omit `schema_template` and set `name`, `description`, and a nonempty list of `fields`. Each field has a unique `name`, a `description`, and a JSON type (`string`, `number`, `integer`, `boolean`, `array`, or `object`). `required` defaults to true. Array fields can specify `items`, object fields can specify `properties`, and `enum_values` lists the permitted values.",
+          "message": "省略 `schema_template`，並設定 `name`、`description` 以及非空的 `fields` 清單。每個欄位都有唯一的 `name`、`description` 和 JSON 類型（`string`、`number`、`integer`、`boolean`、`array` 或 `object`）。`required` 預設為 true。array 欄位可以指定 `items`，object 欄位可以指定 `properties`，而 `enum_values` 列出允許的值。"
+        },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.bGxtX3VybA.display_name": {
           "source": "LLM URL",
           "message": "LLM URL"

@@ -38,27 +38,19 @@ WordPieceDecoder::WordPieceDecoder(const QoreHashNode* config, ExceptionSink* xs
     }
 }
 
-std::string WordPieceDecoder::decode(const std::vector<std::string>& tokens) const {
-    std::string result;
-
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        const std::string& tok = tokens[i];
-
-        // Check if token starts with the continuation prefix
-        if (!prefix.empty() && tok.size() > prefix.size()
-                && tok.compare(0, prefix.size(), prefix) == 0) {
-            // Strip the prefix and append without space
-            result += tok.substr(prefix.size());
-        } else {
-            // First token or non-continuation: add space separator (except for first token)
-            if (i > 0) {
-                result += ' ';
+std::vector<std::string> WordPieceDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (size_t index = 0; index < tokens.size(); ++index) {
+        auto& result = tokens[index];
+        if (index) {
+            if (result.compare(0, prefix.size(), prefix) == 0) {
+                result.erase(0, prefix.size());
+            } else {
+                result.insert(0, 1, ' ');
             }
-            result += tok;
         }
-    }
-
-    if (cleanup) {
+        if (!cleanup) {
+            continue;
+        }
         // Remove spaces before punctuation characters (Unicode-aware)
         std::string cleaned;
         cleaned.reserve(result.size());
@@ -93,10 +85,9 @@ std::string WordPieceDecoder::decode(const std::vector<std::string>& tokens) con
             }
             cleaned += result[i];
         }
-        return cleaned;
+        result = std::move(cleaned);
     }
-
-    return result;
+    return tokens;
 }
 
 } // namespace QoreTokenizer

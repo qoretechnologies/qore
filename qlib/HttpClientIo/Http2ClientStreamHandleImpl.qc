@@ -508,7 +508,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             }
             sid = stream_id;
         }
-        return h2conn.getSocket().waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+        return HttpClientIoSocketAccess::socketOf(h2conn.getPollOperation()).waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
     }
 
     #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
@@ -733,6 +733,18 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     /** @see HttpClientStreamHandle::installSseState() for full documentation
     */
     installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        installQueueStateIntern(queue, notifier, initial_body, False);
+    }
+
+    #! Installs a decoder of the AWS binary event stream on an existing streaming request
+    /** @see HttpClientStreamHandle::installEventStreamState() for full documentation
+    */
+    installEventStreamState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        installQueueStateIntern(queue, notifier, initial_body, True);
+    }
+
+    #! Installs the SSE parser or the decoder of the AWS binary event stream (qore#7247)
+    private installQueueStateIntern(Queue queue, *EventNotifier notifier, *data initial_body, bool event_stream) {
         int sid;
         *data install_body = initial_body;
         bool restore_pending_body = False;
@@ -760,7 +772,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         try {
-            h2conn.installSseState(sid, queue, notifier, install_body);
+            if (event_stream) {
+                h2conn.installEventStreamState(sid, queue, notifier, install_body);
+            } else {
+                h2conn.installSseState(sid, queue, notifier, install_body);
+            }
         } catch (hash<ExceptionInfo> ex) {
             AutoLock al(lock);
             if (restore_pending_body && !exists pending_body) {

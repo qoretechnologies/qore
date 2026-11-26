@@ -1434,6 +1434,7 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
         that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
@@ -1485,6 +1486,16 @@ public:
     QoreSandboxManager* pending_creator_sandbox = nullptr;
     //! the policy manager of \c pending_creator_sandbox (referenced), or nullptr
     QoreSandboxManager* pending_creator_policy = nullptr;
+    //! true if restricted code was on the call stack of the code that parsed the pending code (qore#7635); with the
+    //! parse lock held
+    /** The parsing code acts for the restricted code, also when a manager that trusts its code governs it, which is
+        attached to the Program for it: the private access of its classes is decided with this flag (see
+        qore_caller_has_restricted_code() and pendingCreatorSandboxIsRestricted())
+    */
+    bool pending_restricted_caller = false;
+    //! pending_restricted_caller of the code being committed, for the classes that the commit commits; with the parse
+    //! lock held
+    bool commit_restricted_caller = false;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -2357,6 +2368,11 @@ struct QoreParseCreatorSandbox {
     QoreSandboxManager* sm = nullptr;
     //! the manager for policy checks (referenced), or nullptr
     QoreSandboxManager* policy = nullptr;
+    //! true if the parsing code is sandboxed, also when no manager of its sandbox was found (qore#7635)
+    bool sandboxed = false;
+    //! true if restricted code is on the parsing code's call stack, also when a manager of a Program that trusts its
+    //! code governs the parsing code (see qore_caller_has_restricted_code()) (qore#7635)
+    bool restricted = false;
 
     DLLLOCAL QoreParseCreatorSandbox() = default;
     DLLLOCAL ~QoreParseCreatorSandbox();
@@ -3613,6 +3629,26 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! Returns true if the sandbox of the code that parses the pending code does not trust its code (qore#7635)
+    /** As qore_program_is_restricted() for the sandbox that internParseCommit() attaches to the Program when it
+        commits the code (pending_creator_sandbox); also true if code that restricted code calls parses it
+        (pending_restricted_caller), or committed it (commit_restricted_caller); false if trusted code parses it.  To
+        be called only if the calling thread holds the parse lock (parsingLocked()), as the pending sandbox can be read
+        only with it
+    */
+    DLLLOCAL bool pendingCreatorSandboxIsRestricted() const;
+
+    //! Returns true if the code that the calling thread commits was parsed by code that restricted code called
+    //! (qore#7635); false if the calling thread does not hold the parse lock
+    DLLLOCAL bool commitParsedByRestrictedCaller() const {
+        return parsingLocked() && commit_restricted_caller;
+    }
+
+    //! Clears commit_restricted_caller when the commit ends; called with plock held
+    DLLLOCAL void clearCommitRestrictedCaller() {
+        commit_restricted_caller = false;
     }
 
     //! Waits for the parse lock that another thread holds; called by lockParsing() with plock held
@@ -8477,6 +8513,9 @@ DLLEXPORT void qore_set_default_exec_mode(qore_exec_mode_t mode);
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
+
+//! Writes and consumes the exceptions or warnings of a top-level parse as compiler diagnostics on stderr.
+DLLEXPORT void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings);
 
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
