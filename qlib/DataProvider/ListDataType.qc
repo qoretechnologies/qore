@@ -204,6 +204,10 @@ public class ListDataType inherits QoreDataType {
         bool generated_name = qore_type_name
             || (self.element_type && name == getListTypeName(self.element_type));
         bool generated_display_name = (display_name == AbstractDataField::getDisplayName(name));
+        # a type that a frozen type holds is shared as well (qore#7728)
+        if (frozen) {
+            element_type.freeze();
+        }
         self.element_type = element_type;
         if (element_type.getTags().dynamic) {
             setDynamicTag();

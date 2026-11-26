@@ -270,6 +270,10 @@ public class QoreDataField inherits AbstractDataField {
             choice.value = type.acceptsValue(choice.value);
             converted[$#] = choice;
         }
+        # the type of a field that is a shared object is shared as well (qore#7728)
+        if (SandboxManager::isSharedObject(self)) {
+            type.freeze();
+        }
         self.type = type;
         if (converted) {
             setAllowedValues(converted, allowed_values_creatable);

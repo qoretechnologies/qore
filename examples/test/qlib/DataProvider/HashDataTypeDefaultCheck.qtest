@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%exec-class HashDataTypeDefaultCheckTest
+
+#! a string type whose check reads a file, which a sandbox denies to the code that it runs for
+class FileReadingType inherits QoreStringDataType {
+    auto acceptsValue(auto value) {
+        ReadOnlyFile f(get_script_path());
+        return QoreStringDataType::acceptsValue(value);
+    }
+}
+
+#! a string type whose check fails with an error of the checking thread, as when the thread is cancelled
+class ContextErrorType inherits QoreStringDataType {
+    public {
+        *string err;
+    }
+
+    auto acceptsValue(auto value) {
+        if (err) {
+            throw err, "the check failed in the context of its caller";
+        }
+        return QoreStringDataType::acceptsValue(value);
+    }
+}
+
+#! a string type whose check fails, for a sandboxed caller only, with an error that is not a refusal of the value
+class SandboxedErrorType inherits QoreStringDataType {
+    auto acceptsValue(auto value) {
+        if (!SandboxManager::createsSharedObjects()) {
+            throw "RUNTIME-TYPE-ERROR", "the check failed for a sandboxed caller";
+        }
+        return QoreStringDataType::acceptsValue(value);
+    }
+}
+
+#! Regression test for qore#7734: the default value of a hash type is removed only when the type refuses it
+/** HashDataType::getDefaultValue() checks the default value of the type once and records the result for every
+    caller: a check that fails in the context of its caller (a sandbox that denies something to the code of a type, a
+    cancelled thread, an exhausted stack) does not remove the default value for the other callers, and a value that
+    the type refuses is still removed.  A failed check by a sandboxed caller gives it no default value, whatever the
+    error, and is not kept.  A union does not try its next alternative when the check of one is cancelled.
+*/
+class HashDataTypeDefaultCheckTest inherits QUnit::Test {
+    private {
+        Program tenant;
+    }
+
+    constructor() : QUnit::Test("HashDataType default value check", "1.0") {
+        tenant = new Program(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+        tenant.setSandboxManager(new SandboxManager());
+        tenant.parse("%modern
+# the default value of the type, or the error that reading it raises
+auto sub read_default(object t) {
+    try {
+        return t.getDefaultValue();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "tenant");
+
+        addTestCase("a sandbox denial does not remove the default value", \sandboxDenial());
+        addTestCase("an error of the checking thread does not remove the default value", \contextError());
+        addTestCase("a refused default value is removed", \refused());
+        addTestCase("a refused default value read first by a sandboxed caller", \refusedSandboxedFirst());
+        addTestCase("any failed check of a sandboxed caller is not kept", \sandboxedError());
+        addTestCase("a cancelled check of a union alternative", \unionCancelled());
+        set_return_value(main());
+    }
+
+    sandboxDenial() {
+        HashDataType t("denied");
+        t.addField(new QoreDataField("a", "a", new FileReadingType(), "x"));
+        # the tenant's check fails: it does not get the default value
+        assertEq(NOTHING, tenant.callFunction("read_default", t));
+        # the other callers still do
+        assertEq({"a": "x"}, t.getDefaultValue());
+        assertEq({"a": "x"}, t.getInfo().default_value);
+        # and so does the tenant once the value has been checked
+        assertEq({"a": "x"}, tenant.callFunction("read_default", t));
+    }
+
+    contextError() {
+        foreach string err in (("THREAD-CANCELLED", "STACK-LIMIT-EXCEEDED")) {
+            ContextErrorType ct();
+            HashDataType t("context");
+            t.addField(new QoreDataField("a", "a", ct, "x"));
+            # the field checks its default value when it is created; the type's check fails from now on
+            ct.err = err;
+            # the caller's call fails with the error of its context
+            assertThrows(err, \t.getDefaultValue());
+            assertEq(err, tenant.callFunction("read_default", t));
+            # and the default value is kept
+            remove ct.err;
+            assertEq({"a": "x"}, t.getDefaultValue(), err);
+        }
+    }
+
+    refused() {
+        HashDataType t("refused");
+        t.addField(new QoreDataField("a", "a", IntType, 1));
+        t.addField(new QoreDataField("b", "b", IntType));
+        # the type requires field b, which the default value does not have
+        assertEq(NOTHING, t.getDefaultValue());
+        assertEq(NOTHING, tenant.callFunction("read_default", t));
+    }
+
+    refusedSandboxedFirst() {
+        HashDataType t("refused");
+        t.addField(new QoreDataField("a", "a", IntType, 1));
+        t.addField(new QoreDataField("b", "b", IntType));
+        assertEq(NOTHING, tenant.callFunction("read_default", t));
+        assertEq(NOTHING, t.getDefaultValue());
+    }
+
+    sandboxedError() {
+        HashDataType t("sandboxed");
+        t.addField(new QoreDataField("a", "a", new SandboxedErrorType(), "x"));
+        # the tenant's check fails with an error that is not a refusal: it gets no default value, and no exception
+        assertEq(NOTHING, tenant.callFunction("read_default", t));
+        # the failed check is not kept: the other callers still get the default value
+        assertEq({"a": "x"}, t.getDefaultValue());
+    }
+
+    unionCancelled() {
+        ContextErrorType ct();
+        ct.err = "THREAD-CANCELLED";
+        QoreUnionDataType u((ct, AbstractDataProviderType::get(StringType)));
+        # the check of the first alternative was cancelled: the union does not try the next one
+        assertThrows("THREAD-CANCELLED", \u.acceptsValue(), ("x",));
+        HashDataType t("union");
+        t.addField(new QoreDataField("u", "u", u));
+        # nor does the check of a field
+        assertThrows("THREAD-CANCELLED", \t.acceptsValue(), ({"u": "x"},));
+    }
+}

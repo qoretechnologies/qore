@@ -1482,6 +1482,18 @@ back on the way out. Leaving it advanced marked every member of the group as
 belonging to a previous bootstrap, which turned one syntax error into a
 whole-group rebuild on the next build.
 
+A token that did not exist before the parse is put back dated at the epoch, not
+removed. The token is the bootstrap recipe's output and a prerequisite of the
+coordinator's plan, and a parse that fails in a group with no multi-source
+component falls back to per-source compiles and exits 0, so a removed token
+stopped a fresh build tree at the plan with "No rule to make target
+.qcc-batch-bootstrap.stamp" (qore#7723). No member stamp is older than an epoch
+token, so it marks no component stale and leaves each to its generation record;
+the next build runs the recipe again, as the token is older than its inputs, and
+that run adopts or hands on what the per-source compiles published. The fallback
+message repeats the parse's first error (or its last lines), which the failed
+build's log otherwise buries above the per-source output.
+
 ## One order target per group, not one per source
 
 The scheduler used to hand the build tool the condensation DAG: one custom target
@@ -1660,13 +1672,13 @@ build, and the failure surfaced as a component that was compiled but never
 published, with nothing in the log but a `rm` diagnostic — only ever on musl
 hosts, because the same code is silent under coreutils.
 
-Every such removal therefore goes through `remove_raced_path`, which succeeds
-when the path is gone, whoever removed it, and still reports a removal that
+Every such removal therefore went through `remove_raced_path`, which succeeded
+when the path was gone, whoever removed it, and still reported a removal that
 failed for any other reason.
 
 The lock paths that motivated it are gone with the reclaim itself — nothing unlinks a lock any
-more. What is left is the ordering token, which a run that published nothing must put back, and
-which two builders can still race to restore.
+more — and so is the helper: the ordering token, the last path it removed, is put back dated at the
+epoch rather than removed when a run that published nothing found none (qore#7723).
 
 ## Invariants
 
