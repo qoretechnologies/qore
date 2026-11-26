@@ -2888,12 +2888,22 @@ DLLLOCAL QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_
 
     @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
     @param value_type the type of the value assigned, read before its conversion
-    @param no_value true if the value assigned is NOTHING or NULL
+    @param no_value true if the new list is empty: no value (NOTHING or NULL) was converted to it
     @param target_ti the type of the lvalue
     @param xsink the exception sink
 */
 DLLLOCAL void qore_weak_store_wrap_raise(bool weak, const QoreTypeInfo* value_type, bool no_value,
         const QoreTypeInfo* target_ti, ExceptionSink* xsink);
+
+//! Returns the description of the error of a weak (:=) or opaque (@=) assignment of an iterator that the lvalue's
+//! list type would materialize to a new list (qore#7619)
+/** The reference would designate the new list, a temporary, instead of the value assigned
+
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param value_type the type of the iterator
+    @param target_type the type of the lvalue
+*/
+DLLLOCAL QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type);
 
 //! Returns true if a list that the conversion of a value of the given type gives is a new list that wraps it, or that
 //! it made of no value (qore#7619)

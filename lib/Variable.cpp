@@ -4726,6 +4726,14 @@ void qore_weak_store_wrap_raise(bool weak, const QoreTypeInfo* value_type, bool 
     xsink->appendLastDescription(" (while converting types for type '%s')", QoreTypeInfo::getName(target_ti));
 }
 
+QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type) {
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type builds a new list from the iterator, so the %s reference would "
+        "designate that list, a temporary, instead of the value assigned; assign a list instead, or declare the lvalue "
+        "with type 'auto' to keep the iterator", weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type,
+        weak ? "weak" : "opaque");
+}
+
 bool qore_weak_value_may_wrap(qore_type_t value_type) {
     switch (value_type) {
         case NT_LIST:

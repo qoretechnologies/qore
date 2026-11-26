@@ -5995,6 +5995,11 @@ struct DefaultTypeFilterPolicy : DefaultTypeMatchPolicy {
     void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
         accept.map(n, xsink);
     }
+
+    //! returns true if the iterator \a n is not materialized to a new list, with an exception raised
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        return false;
+    }
 };
 
 struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
@@ -6037,14 +6042,20 @@ struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
             accept.map(n, xsink);
         }
     }
+
+    //! returns true if the iterator \a n is not materialized to a new list, with an exception raised
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        return false;
+    }
 };
 
 //! The filter policy of the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
-/** As \a Base, except that a conversion of a value that is not a list that gives a list is refused: a softlist type
-    wraps the value in a new list, or converts no value (NOTHING or NULL) to a new empty list, which the reference
-    would designate instead of the value assigned.  Only the conversion of the lvalue's own type is checked: the
-    conversions of the elements of a container use \a Base (see input()), as a container converted to a copy is refused
-    by qore_weak_assignment_conversion().  A value that needs no conversion takes the same path as with \a Base.
+/** As \a Base, except that a conversion that gives a new list that the reference would designate instead of the
+    value assigned is refused: a softlist type that wraps a value that is not a list in a new list, or converts no
+    value (NOTHING or NULL) to a new empty list, and a list type that materializes an iterator to a new list (see
+    refuseIteratorList()).  Only the conversion of the lvalue's own type is checked: the conversions of the elements of
+    a container use \a Base (see input()), as a container converted to a copy is refused by
+    qore_weak_assignment_conversion().  A value that needs no conversion takes the same path as with \a Base.
 */
 template <typename Base>
 struct WeakStoreFilterPolicy : Base {
@@ -6066,14 +6077,24 @@ struct WeakStoreFilterPolicy : Base {
         // type converts a string to the element of its list)
         const QoreTypeInfo* vti = n.getTypeInfo();
         Base::map(accept, n, xsink);
-        if (n.getType() == NT_LIST && !(xsink && *xsink)) {
+        if (n.getType() == NT_LIST && QoreTypeInfo::isSoftListType(target) && !(xsink && *xsink)) {
             assert(xsink);
-            // the caller adds the context of the conversion to the error (QoreTypeSpec::acceptInputImpl())
+            // the caller adds the context of the conversion to the error (QoreTypeSpec::acceptInputImpl()); the list
+            // is empty if no value was converted to it, and holds the value otherwise, also NULL for a softlist<T>
+            // whose element type takes it
             xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_wrap_desc(weak, QoreTypeInfo::getName(vti),
-                QoreTypeInfo::getName(target), t == NT_NOTHING || t == NT_NULL
+                QoreTypeInfo::getName(target), n.get<const QoreListNode>()->empty()
                     ? QoreWeakWrapKind::NoValue
                     : QoreWeakWrapKind::Value));
         }
+    }
+
+    //! an iterator that a list type would materialize to a new list is refused before it is iterated
+    bool refuseIteratorList(const QoreValue& n, ExceptionSink* xsink) const {
+        assert(xsink);
+        xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_iterator_desc(weak,
+            QoreTypeInfo::getName(n.getTypeInfo()), QoreTypeInfo::getName(target)));
+        return true;
     }
 };
 }
@@ -6266,6 +6287,11 @@ static bool qore_type_materialize_iterator_to_list(ExceptionSink* xsink, QoreVal
     }
     if (!iterator) {
         return false;
+    }
+    // a weak or opaque assignment would store a reference to the new list (qore#7619)
+    if (policy.refuseIteratorList(n, xsink)) {
+        err = true;
+        return true;
     }
 
     ReferenceHolder<QoreListNode> list(new QoreListNode(value_type), xsink);

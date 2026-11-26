@@ -442,3 +442,145 @@ sub wrap_store_all(string src, any v) {
     }
     printf("wrap errors in a function called 2000 times: %d\n", errs);
 }
+
+# an iterator that a list<T> lvalue would materialize to a new list, which the reference would designate: refused in
+# every mode before it is iterated, while an auto lvalue keeps the iterator object (qore#7619); and NULL, which a
+# softlist<T> whose element type takes it wraps in a new list of one element (the error says so)
+#! returns what the error of a refused store says, or "other" for an error of another kind
+string sub iter_kind(string desc) {
+    if (desc =~ /builds a new list from the iterator/) {
+        return "iterator";
+    }
+    return wrap_kind(desc);
+}
+
+string sub iter_result(*hash<ExceptionInfo> ex, auto after) {
+    return ex
+        ? sprintf("%s (%s); after: %y", ex.err, iter_kind(ex.desc), after)
+        : sprintf("stored: %y", after);
+}
+
+# locals that no closure captures, which native code stores itself
+string sub iter_plain_list(any v, bool opaque) {
+    list<int> x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return iter_result(NOTHING, x);
+}
+
+string sub iter_plain_typed_list(ListIterator v, bool opaque) {
+    list<int> x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return iter_result(NOTHING, x);
+}
+
+string sub iter_plain_softlist(any v, bool opaque) {
+    softlist x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return iter_result(NOTHING, x);
+}
+
+string sub iter_plain_auto(any v, bool opaque) {
+    auto x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return sprintf("stored: %s", x.className());
+}
+
+string sub null_plain_sl(any v, bool opaque) {
+    softlist<*int> x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return iter_result(NOTHING, x);
+}
+
+string sub null_plain_nsl(any v, bool opaque) {
+    *softlist<*int> x = (0,);
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return iter_result(NOTHING, x);
+}
+
+{
+    foreach bool opaque in ((False, True)) {
+        string op = opaque ? "@=" : ":=";
+        # a function called many times, which tiered execution compiles
+        for (int i = 0; i < 3; ++i) {
+            printf("iterator %s plain local list<int> (%d): %s\n", op, i,
+                iter_plain_list(new ListIterator((1, 2)), opaque));
+            printf("iterator %s plain local list<int>, typed (%d): %s\n", op, i,
+                iter_plain_typed_list(new ListIterator((1, 2)), opaque));
+            printf("iterator %s plain local softlist (%d): %s\n", op, i,
+                iter_plain_softlist(new ListIterator((1, 2)), opaque));
+            printf("iterator %s plain local auto (%d): %s\n", op, i,
+                iter_plain_auto(new ListIterator((1, 2)), opaque));
+        }
+        ListIterator it((1, 2));
+        any ait = it;
+        list<int> cl = (0,);
+        try {
+            if (opaque) {
+                cl @= ait;
+            } else {
+                cl := ait;
+            }
+            printf("iterator %s closure local list<int>: stored: %y\n", op, cl);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("iterator %s closure local list<int>: %s (%s); after: %y\n", op, ex.err, iter_kind(ex.desc), cl);
+        }
+        code c = sub () { cl = (0,); };
+        c();
+        printf("iterator %s left the iterator at its start: %y\n", op, it.next() ? it.getValue() : NOTHING);
+        printf("NULL %s plain local softlist<*int>: %s\n", op, null_plain_sl(NULL, opaque));
+        printf("NULL %s plain local *softlist<*int>: %s\n", op, null_plain_nsl(NULL, opaque));
+        printf("NOTHING %s plain local softlist<*int>: %s\n", op, null_plain_sl(NOTHING, opaque));
+    }
+    # the error describes the iterator, the lvalue's type and the fix
+    list<int> dl = (0,);
+    any dit = new ListIterator((1, 2));
+    try_store("iterator description", sub () { dl := dit; }, auto sub () { return dl; });
+}

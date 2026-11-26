@@ -287,9 +287,16 @@ static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const Qor
     }
     if (!maybe_nothing) {
         kind = QoreWeakWrapKind::Value;
-    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT
-            || QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT) {
+    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT) {
         kind = QoreWeakWrapKind::NoValue;
+    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT) {
+        // NULL is wrapped in a list by a softlist<T> whose element type takes it (ex: softlist<*int> gives [NULL]);
+        // the other softlist types convert it to an empty list
+        const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexSoftListOrNothing(target_ti);
+        kind = QoreTypeInfo::hasType(eti) && eti != autoTypeInfo
+                && QoreTypeInfo::parseAccepts(eti, nullTypeInfo) != QTI_NOT_EQUAL
+            ? QoreWeakWrapKind::Value
+            : QoreWeakWrapKind::NoValue;
     } else {
         kind = QoreWeakWrapKind::Either;
     }

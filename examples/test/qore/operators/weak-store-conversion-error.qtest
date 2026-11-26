@@ -105,6 +105,8 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
             ("NOTHING into a *softlist hash key keeps", "hash<string, *softlist> h = {\"k\": (1,)}; h.k := NOTHING; "
                 "if (exists h.k) { throw \"X\"; }", "ok"),
             ("maybe NOTHING into softlist", "*int n; softlist v; v := n;", "either", "softlist"),
+            ("NULL into softlist", "softlist v; v := NULL;", "empty", "softlist"),
+            ("NULL into softlist<*int>, which wraps it", "softlist<*int> v; v := NULL;", "wrap", "softlist<*int>"),
             ("maybe NOTHING into a hash key", "*int n; hash<string, softlist> h = {}; h.k @= n;", "either",
                 "softlist"),
             ("NOTHING into softlist", "softlist v; v := NOTHING;", "empty"),
@@ -221,7 +223,8 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
                     fail(sprintf("%s: unknown kind %y", c[0], c[2]));
             }
             if (c[3]) {
-                assertRegex(sprintf("in an lvalue of type '%s':", c[3]), r.out, c[0] + ": lvalue type");
+                # the type name is matched as a string: it can hold regex characters (ex: softlist<*int>)
+                assertNeq(-1, r.out.find(sprintf("in an lvalue of type '%s':", c[3])), c[0] + ": lvalue type: " + r.out);
             }
         }
         # a script that the parse refuses is not compiled

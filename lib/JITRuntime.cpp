@@ -3107,13 +3107,20 @@ static void qore_rt_check_weak_store_conversion_impl(const QoreTypeInfo* ti, uin
         o = *target;
     }
     const AbstractQoreNode* node = qore_rt_container_node(o);
-    // a list that the conversion made of a value that is not a list (a softlist local wraps it) is refused with the
-    // error that the conversion of a weak store raises (QoreTypeInfo::acceptAssignmentWeak(); qore#7619)
+    // a new list that the conversion made of a value that is not a list is refused with the error that the conversion
+    // of a weak store raises (QoreTypeInfo::acceptAssignmentWeak(); qore#7619): a softlist local wraps the value in
+    // it, and a list local materializes an iterator object to it; any other type gives no new list
     QoreValue s = fromBits(stored);
     if (s.getType() == NT_LIST && (node ? node->getType() == NT_HASH : qore_weak_value_may_wrap(o.getType()))) {
-        qore_weak_store_wrap_raise(weak, o.getTypeInfo(), o.getType() == NT_NOTHING || o.getType() == NT_NULL, ti,
-            xsink);
-        return;
+        if (QoreTypeInfo::isSoftListType(ti)) {
+            qore_weak_store_wrap_raise(weak, o.getTypeInfo(), s.get<const QoreListNode>()->empty(), ti, xsink);
+            return;
+        }
+        if (o.getType() == NT_OBJECT) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_iterator_desc(weak,
+                QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti)));
+            return;
+        }
     }
     if (!node || qore_rt_container_node(s) == node) {
         return;
