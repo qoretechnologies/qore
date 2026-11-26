@@ -319,6 +319,9 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertNothing(finding(given, "multi_row_header"));
         assertEq((1,), given.title_rows);
         assertEq(("bestätigt", "offen"), (map $1.header, given.columns)[4..5]);
+        assertEq(5, given.header_merged.size(), "the merged ranges that cover the given header row");
+        assertEq((1, 2, 3, 4, 7), (map $1.col, select given.findings, $1.code == "empty_header"),
+            "the names merged down into a given header row give no name");
         assertNothing(finding(sheet, "merged_cells_in_data"));
         assertNothing(finding(sheet, "no_header_row"));
         assertEq(6, sheet.header_merged.size());

@@ -134,7 +134,9 @@ public hashdecl TabularProfileOptions {
         as the user who knows the file says it: the rows with content above it are title rows, the data starts on
         the next row, and the columns are named from it; a row below the last row with content gives no data region
         and no column (the rows with content above it are still title rows); with 0, every row from the first row
-        with content is data, and no @c no_header_row finding is reported
+        with content is data, and no @c no_header_row finding is reported.  A header row that is set is one row:
+        no row of group names above it is found (see @ref tabular_profiler_header_rows "Headers of Two Rows"), and
+        the columns are named from its own cells only, so names merged down into it from the row above give no name
 
         @since %DataProvider 3.13
     */
@@ -411,7 +413,8 @@ public hashdecl TabularWorkbookProfile {
     merged applies only to its own column, so that a reader that does not see merged ranges reproduces these headers
     only by carrying a group name right over the empty cells of its row.  The merged ranges that cover the header
     are reported in @ref TabularSheetProfile::header_merged "TabularSheetProfile::header_merged", so that a reader
-    can choose how group names apply.
+    can choose how group names apply.  A header row given in the
+    @ref TabularProfileOptions::header_row "header_row" option is one row.
 
     @anchor tabular_profiler_encoding
     @par Character Encoding
