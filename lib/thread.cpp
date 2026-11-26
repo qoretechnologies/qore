@@ -7677,14 +7677,29 @@ static QORE_INTERN_ALWAYS_INLINE const QoreProgram* qore_sandboxed_foreign_entry
 //! As qore_sandboxed_foreign_entry(), for restricted code: the innermost restricted Program among the thread's entries
 //! of code compiled in another Program than the one it runs in (qore_program_is_restricted(), which fails closed), or
 //! nullptr (qore#7202, qore#7737)
-static const QoreProgram* qore_restricted_foreign_entry(const ThreadData* td, size_t from) {
+/** @param entry set to the Program found, or nullptr
+
+    @return 1 if a restricted Program is found, 0 if none is, -1 if a Program's sandboxes cannot be resolved for lack of
+    memory (\a entry is that Program), so that each caller fails closed in its own direction
+*/
+static int qore_restricted_foreign_entry_state(const ThreadData* td, size_t from, const QoreProgram*& entry) {
+    entry = nullptr;
     const std::vector<const QoreProgram*>& entries = td->foreign_code_entries;
     for (size_t i = entries.size(); i > from; --i) {
-        if (qore_program_is_restricted(entries[i - 1])) {
-            return entries[i - 1];
+        if (int state = qore_program_restricted_state(entries[i - 1])) {
+            entry = entries[i - 1];
+            return state;
         }
     }
-    return nullptr;
+    return 0;
+}
+
+//! As qore_restricted_foreign_entry_state(), where a Program whose sandboxes cannot be resolved counts as restricted
+//! (fails closed)
+static const QoreProgram* qore_restricted_foreign_entry(const ThreadData* td, size_t from) {
+    const QoreProgram* entry;
+    qore_restricted_foreign_entry_state(td, from, entry);
+    return entry;
 }
 
 static bool qore_foreign_code_counts(ThreadData* td, const ThreadData::ModuleInitBarrier* mib,
@@ -8157,7 +8172,9 @@ bool qore_scope_creator_is_restricted() {
         return true;
     }
     // the code of a restricted Program that runs in another Program, or the code that it called (qore#7202)
-    if (qore_restricted_foreign_entry(td, 0) || restricted(td->runtime_po_state.code_pgm)) {
+    // (the compiling Program of the code that runs as its siblings read it, qore_foreign_calling_code_program(): not for
+    // module code that it calls, which answers for itself, nor under a module initialization barrier)
+    if (qore_restricted_foreign_entry(td, 0) || restricted(qore_foreign_calling_code_program())) {
         return true;
     }
     // the class of restricted code that runs, and a callback, object or continued operation that restricted code (or
@@ -8568,9 +8585,14 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool rest
     }
     // and so is the code that such code called, which runs while the code is on the stack below it; under a module
     // initialization barrier, only such code entered under it
-    if (const QoreProgram* entry = restricted_only
-            ? qore_restricted_foreign_entry(td, mib ? mib->foreign_entries : 0)
-            : qore_sandboxed_foreign_entry(td, mib ? mib->foreign_entries : 0)) {
+    if (restricted_only) {
+        // an allocation failure gives the unknown state, so that each caller fails closed in its own direction (see
+        // qore_caller_creates_shared_objects())
+        const QoreProgram* entry;
+        if (int state = qore_restricted_foreign_entry_state(td, mib ? mib->foreign_entries : 0, entry)) {
+            return found_state(entry, state);
+        }
+    } else if (const QoreProgram* entry = qore_sandboxed_foreign_entry(td, mib ? mib->foreign_entries : 0)) {
         return found(entry);
     }
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
