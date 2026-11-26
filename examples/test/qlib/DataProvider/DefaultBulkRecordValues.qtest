@@ -44,6 +44,7 @@ class DefaultBulkRecordValuesTest inherits QUnit::Test {
     constructor() : Test("DefaultBulkRecordInterface column values", "1.0", \ARGV) {
         addTestCase("list fields become one cell per record", \listFieldsTest());
         addTestCase("absent and null fields keep columns aligned", \sparseFieldsTest());
+        addTestCase("a field a record does not have keeps the columns aligned", \differentFieldSetsTest());
         addTestCase("block size and limit bound each block", \blockBoundaryTest());
         addTestCase("heterogeneous scalar fields are unchanged", \scalarFieldsTest());
         set_return_value(main());
@@ -103,6 +104,27 @@ class DefaultBulkRecordValuesTest inherits QUnit::Test {
         # occupied, which is what block alignment depends on
         assertFalse(b.opt[2].val());
         assertEq((1, 2, 3), b.id);
+    }
+
+    #! Records with different field sets: a missing field and a field the first record does not have (qorus#1208)
+    /** The block kept the first record's fields and appended each record's own, so a record without a field left
+        that column a cell short (and one with a new field made a column of its own records only): the block was
+        refused as misaligned (PROCESSOR-SHAPE-ERROR) when it was read.
+    */
+    private differentFieldSetsTest() {
+        *hash<string, list<auto>> b = block(({"id": 1, "invoice": "I1"}, {"id": 2}, {"id": 3, "invoice": "I2",
+            "note": "n"}, {"id": 4, "invoice": "I1"}));
+        assertEq(("id", "invoice", "note"), sort(keys b));
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(b), "the block is aligned");
+        assertEq((1, 2, 3, 4), b.id);
+        assertEq(("I1", NOTHING, "I2", "I1"), b.invoice, "the record without the field has no value in its row");
+        assertEq((NOTHING, NOTHING, "n", NOTHING), b.note, "a field first seen later has no value before it");
+        # a later block starts from its own records
+        ListRecordIterator i(({"a": 1}, {"b": 2}, {"c": 3}));
+        DefaultBulkRecordInterface bulk(2, i);
+        assertEq({"a": (1, NOTHING), "b": (NOTHING, 2)}, bulk.getValue());
+        assertEq({"c": (3,)}, bulk.getValue());
+        assertNothing(bulk.getValue());
     }
 
     private blockBoundaryTest() {
