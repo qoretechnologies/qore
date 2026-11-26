@@ -21202,9 +21202,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // would let a frame holding only a weak reference run the target's
             // destructor.
             if (linst->local && weak_assigned_locals.count(key)) {
-                // A weak assignment makes a weak reference of an object only: a value with native facts (an int or a
-                // float, assigned, never NOTHING) is held by the local as a normal assignment holds it, so there is
-                // no object whose destructor an owned load could run.  The read is unboxed where it is read, as on
+                // A weak or opaque assignment, or the element store of a foreach variable, makes a weak reference
+                // of an object, a hash or a list only: a value with native facts (an int or a float, assigned, never
+                // NOTHING) is held by the local as a normal assignment holds it, so there is no object whose
+                // destructor an owned load could run.  The read is unboxed where it is read, as on
                 // the other paths of a local whose storage is boxed: the borrow of the weak load would be a value
                 // of the local that a later write to it releases while the IR still forwards it (qore#7764, see
                 // qore#7372)

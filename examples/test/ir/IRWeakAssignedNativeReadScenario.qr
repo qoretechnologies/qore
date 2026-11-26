@@ -6,10 +6,11 @@
 # The scenario of IRWeakAssignedNativeRead.qtest (qore#7764): a local int or float is assigned with the weak assignment
 # operator (:=), which holds an int or a float as a normal assignment does, and its value is read: directly, as a member
 # of a local hash or list with a fixed layout that the local is written after, in a loop, in nested try statements,
-# by a closure, as a parameter, and after its scope ends.  The values are boxed nodes in a QoreValue (an integer outside
-# the inline range, a double whose bits collide with a value tag, a NaN) and inline values.  A value of the wrong type
-# raises an exception, and a local that can hold an object still holds a weak reference to it.  Every call runs three
-# times, so that tiered execution runs it on the AST tier, the IR tier and as native code.
+# by a closure, as a parameter, as the receiver of a pseudo-method call, and after its scope ends.  The values are
+# boxed nodes in a QoreValue (an integer outside the inline range, a double whose bits collide with a value tag, a NaN)
+# and inline values.  A value of the wrong type raises an exception, and a local that can hold an object still holds a
+# weak reference to it.  Every call runs three times, so that tiered execution runs it on the AST tier, the IR tier and
+# as native code.
 
 %modern
 %allow-weak-references
@@ -213,6 +214,34 @@ sub param(int x, auto v) {
     printf("param: %y %y\n", h.a, x);
 }
 
+# the local is the receiver of a pseudo-method call
+sub receiver() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    x := v;
+    string s = x.toString();
+    hash<auto> h = {"a": x, "t": x.typeCode()};
+    x = 3;
+    printf("receiver: %y %y %y %y\n", s, h.a, h.t, x);
+    float f = 1.0;
+    auto fv = -4e+307;
+    f := fv;
+    hash<auto> hf = {"a": f, "s": f.toString()};
+    f = 2.0;
+    printf("receiver float: %y %y %y\n", hf.a, hf.s, f);
+}
+
+# a closure-bound local that is the receiver of a pseudo-method call
+sub closureReceiver() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    x := v;
+    code c = string sub () { return x.toString(); };
+    hash<auto> h = {"a": x, "s": x.toString()};
+    x = 5;
+    printf("closureReceiver: %y %y %y %y\n", h.a, h.s, c(), x);
+}
+
 sub objects() {
     {
         auto o = new WeakAssignedNativeReadObject("object");
@@ -251,6 +280,8 @@ sub run() {
     autoInt();
     closureWrite();
     param(1, 1152921504606846979);
+    receiver();
+    closureReceiver();
     objects();
 }
 
