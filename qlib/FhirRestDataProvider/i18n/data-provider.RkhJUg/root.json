@@ -1420,8 +1420,8 @@
           "message": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
-          "message": "Search All Bundle"
+          "source": "Search all Bundle",
+          "message": "Search all Bundle"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
           "source": "Search all FHIR Bundle resource pages",
@@ -1968,8 +1968,8 @@
           "message": "ETag value sent in the `If-Match` header for optimistic concurrency"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
-          "message": "Conditional Update Bundle"
+          "source": "Conditional update Bundle",
+          "message": "Conditional update Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
           "source": "Conditionally update a FHIR Bundle resource",
@@ -2612,8 +2612,8 @@
           "message": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
-          "message": "Search All Observation"
+          "source": "Search all Observation",
+          "message": "Search all Observation"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
           "source": "Search all FHIR Observation resource pages",
@@ -3976,8 +3976,8 @@
           "message": "ETag value sent in the `If-Match` header for optimistic concurrency"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
-          "message": "Conditional Update Observation"
+          "source": "Conditional update Observation",
+          "message": "Conditional update Observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
           "source": "Conditionally update a FHIR Observation resource",
@@ -5436,8 +5436,8 @@
           "message": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
-          "message": "Search All Patient"
+          "source": "Search all Patient",
+          "message": "Search all Patient"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
           "source": "Search all FHIR Patient resource pages",
@@ -6344,8 +6344,8 @@
           "message": "ETag value sent in the `If-Match` header for optimistic concurrency"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
-          "message": "Conditional Update Patient"
+          "source": "Conditional update Patient",
+          "message": "Conditional update Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {
           "source": "Conditionally update a FHIR Patient resource",

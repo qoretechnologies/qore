@@ -1716,7 +1716,7 @@
           "message": "Ak je k dispozícii, filtruje zoznam modelov iba na predvolený model ku koncovému bodu. Tento parameter je platný len vtedy, keď je zadaný `endpoint`."
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Získať dataset"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Odstrániť dataset"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.display_name": {
-          "source": "Get Embedding Job",
+          "source": "Get embedding job",
           "message": "Získať úlohu tvorby embeddingov"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.display_name": {
-          "source": "Cancel Embedding Job",
+          "source": "Cancel embedding job",
           "message": "Zrušiť úlohu tvorby embeddingov"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Získať dávku"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.short_desc": {
@@ -3228,7 +3228,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Zrušiť dávku"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.short_desc": {

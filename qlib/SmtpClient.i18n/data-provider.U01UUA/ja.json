@@ -16,7 +16,7 @@
           "message": "メール送信用の汎用 SMTP サーバー"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send an Email With SMTP",
+          "source": "Send an email with SMTP",
           "message": "SMTP でメールを送信"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {

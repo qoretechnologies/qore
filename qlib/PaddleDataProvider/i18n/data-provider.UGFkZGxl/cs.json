@@ -556,7 +556,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "ID Paddle entity zákazníka, se kterou se má pracovat.: Jedinečné ID Paddle pro tuto entitu zákazníka s předponou `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Získat ověřovací token zákazníka"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "ID Paddle entity zákazníka, se kterou se má pracovat.: Jedinečné ID Paddle pro tuto entitu zákazníka s předponou `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Vypsat zůstatky kreditů zákazníka"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Získat produkt"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Zahrnout související entity v odpovědi. Pro zadání více entit použijte čárkou oddělený seznam."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aktualizovat produkt"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "webhosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Archivovat produkt"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Název platformy nebo poskytovatele, ze kterého byl tento objekt importován."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Získat cenu"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Zahrnout do odpovědi související entity."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Aktualizovat cenu"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Nastavte na `true`, chcete-li přeskočit dotaz na počet záznamů, který Paddle při výpisu spouští.\n\n`meta.pagination.estimated_total` pak místo počtu vrátí `-1`. Vyplatí se nastavit při stránkování rozsáhlé kolekce, kde zjišťování počtu prodlužuje odezvu na každé stránce a nepoužívá se."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Získat předplatné"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "URL pro nákupní stránku používané pro platbu této transakce. Předejte URL schválené domény nebo `null` pro nastavení na výchozí platbovou URL.\n\nPaddle vytvoří jedinečný odkaz pro platbu složený z předané URL nebo vaší výchozí platbové URL + `?_ptxn=` a ID Paddle pro tuto transakci."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Získat transakci"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "nákupy"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Získat sestavu"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "ID Paddle entity sestavy."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Získat soubor sestavy"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "Tabulka, se kterou se má pracovat: `customers`, `products`, `prices`, `transactions` nebo `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Zákazník vytvořen"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Aktivuje se při vytvoření zákazníka bez ohledu na způsob – přes API, nákupní proces nebo nástěnku Paddle.\n\nToto nahrazuje dotazování seznamu zákazníků: dotazování řazené podle času vytvoření nedokáže zachytit zákazníka, který byl vytvořen a smazán mezi dvěma běhy, a spotřebovává požadavek v každém intervalu bez ohledu na to, zda došlo ke změně."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Zákazník aktualizován"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Aktivuje se při změně zákazníka včetně jeho archivace – `status` se změní na `archived`, místo aby byl zákazník smazán.\n\nPaddle posílá celého zákazníka, nikoli rozdíl, takže pokud potřebujete zjistit, které pole se změnilo, porovnejte jej s uloženými daty."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Produkt vytvořen"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Spustí se při přidání produktu do katalogu.\n\nProdukt sám o sobě nenese žádnou cenu, takže nově vytvořený produkt nelze prodávat, dokud pro něj neexistuje cena; sledujte za tímto účelem `price.created`.\n\nToto nahrazuje dotazování seznamu produktů."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Produkt aktualizován"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Spustí se při změně produktu, včetně jeho archivace – `status` se změní na `archived`, čímž je stažen z prodeje bez vlivu na stávající předplatná.\n\n**Archivace produktu nearchivuje jeho ceny**, takže cena archivovaného produktu může být stále účtována, pokud není archivována také."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Cena vytvořena"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Spustí se při vytvoření ceny pro produkt.\n\n`unit_price.amount` je řetězec v **nejmenší jednotce dané měny**, takže `1000` je 10,00 USD v USD, ale 1000 jenů v JPY. `billing_cycle` z něj dělá cenu předplatného; bez toho se jedná o jednorázový poplatek."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Cena aktualizována"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Spustí se při změně ceny, včetně archivace ceny.\n\n**Změna parametru `unit_price` ovlivní pouze nové nákupy**; předplatná, která již tuto cenu účtují, si ponechají částku, se kterou byla vytvořena, dokud nebudou výslovně aktualizována. Změna ceny tedy neznamená, že se někomu změnila fakturovaná částka."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Předplatné vytvořeno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Spustí se při vytvoření předplatného.\n\n**Vytvořeno neznamená zaplaceno.** Nové předplatné je často `trialing` a to vytvořené pro transakci, která ještě nebyla inkasována, nic nevydělává; před zřízením služby zkontrolujte `status`. `subscription.activated` je signál, že fakturace skutečně začala.\n\nToto nahrazuje dotazování seznamu předplatných."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Předplatné aktivováno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Aktivuje se, když se předplatné poprvé stane `active` – zkušební verze skončila a byla zaplacena, nebo nastal naplánovaný začátek.\n\nToto je signál k aktivaci placeného plánu: znamená to, že Paddle platbu vybral, zatímco `subscription.created` pouze znamená, že záznam existuje."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Předplatné aktualizováno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Spustí se při jakékoli změně předplatného: změně plánu, změně množství, přechodu obnovení na `next_billed_at` nebo při **naplánování** pozastavení či zrušení.\n\n`scheduled_change` je pole, které tyto poslední případy rozlišuje – předplatné může být `active` a přesto mít naplánované ukončení. Paddle odesílá celé předplatné namísto rozdílu."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Předplatné zrušeno"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Aktivuje se, když předplatné skutečně skončí a `status` se změní na `canceled`.\n\n**Toto je signál k deaktivaci služby, nikoli žádost o zrušení.** Zrušení naplánované na konec fakturačního období se nejprve zobrazí jako `scheduled_change` na `subscription.updated` a zákazník má do tohoto data zaplaceno; tato událost nastává až v okamžiku, kdy toto datum nastane."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Předplatné po splatnosti"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Spustí se, když se nepodaří inkasovat obnovení a předplatné přejde do stavu `past_due`.\n\nPaddle provádí opakované pokusy podle svého plánu upomínání, takže toto ještě není konec: pokud se opakovaný pokus zdaří, předplatné se vrátí do stavu `active`, nebo je zrušeno, jakmile se pokusy vyčerpají. Považujte to za varování k vyzvání zákazníka, nikoli za důvod k odepření přístupu."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Transakce vytvořena"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Spustí se při vytvoření transakce, včetně konceptu, který Paddle vytvoří pro nadcházející obnovení.\n\n**Vytvořená transakce ještě není zaplacena**; většina z nich je v tomto okamžiku ve stavu `draft` nebo `ready`. Pro skutečně vybrané peníze použijte `transaction.completed`.\n\nToto nahrazuje dotazování seznamu transakcí."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Transakce dokončena"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Spustí se, když je transakce `completed`: peníze byly vybrány a faktura je uhrazena.\n\nToto je událost pro vyřízení objednávky. `details.totals` rozepisuje částku na mezisoučet, daň a celkovou částku, vše jako řetězce v nejmenší jednotce `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Platba transakce se nezdařila"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Spustí se, když se pokus o inkasování transakce nezdaří.\n\n`payments` obsahuje pokus a důvod jeho selhání. Paddle se u obnovení předplatného pokouší o platbu automaticky znovu, takže jedno selhání není konečné; okamžik, kdy předplatné přejde do stavu `past_due`, je chvíle, kdy musí zákazník jednat."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Přehled vytvořen"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Spustí se při vyžádání přehledu. Dorazí ve stavu `pending`: Paddle generuje soubor na pozadí, takže zatím není co stáhnout.\n\nPřed vyžádáním souboru počkejte na `report.updated` s hodnotou `status` rovnou `ready`.\n\nToto nahrazuje dotazování seznamu přehledů."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Přehled aktualizován"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

@@ -1860,7 +1860,7 @@
           "message": "Jeśli `True`, etykieta zostanie wygenerowana asynchronicznie. Wartość domyślna to `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Pobierz etykietę wysyłkową"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {

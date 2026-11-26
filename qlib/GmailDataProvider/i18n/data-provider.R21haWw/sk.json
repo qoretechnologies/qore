@@ -852,7 +852,7 @@
           "message": "ID správy, ktorá sa má natrvalo vymazať; udalosti sledovania nesú túto hodnotu ako `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Odoslať správu"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

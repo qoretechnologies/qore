@@ -524,7 +524,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Get Balance Transaction",
+          "source": "Get balance transaction",
           "message": "Získat transakci zůstatku"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Get Connected Account",
+          "source": "Get connected account",
           "message": "Získat propojený účet"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Určuje, která pole v odpovědi mají být rozbalena."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Update Connected Account",
+          "source": "Update connected account",
           "message": "Aktualizovat propojený účet"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2416,7 +2416,7 @@
           "message": "Uživatelský agent"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Delete Connected Account",
+          "source": "Delete connected account",
           "message": "Smazat propojený účet"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "Určuje, která pole v odpovědi mají být rozbalena."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.display_name": {
-          "source": "Create Login Link",
+          "source": "Create login link",
           "message": "Vytvořit přihlašovací odkaz"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Určuje, která pole v odpovědi mají být rozbalena."
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.display_name": {
-          "source": "List External Accounts",
+          "source": "List external accounts",
           "message": "Vypsat externí účty"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.display_name": {
-          "source": "Create External Account",
+          "source": "Create external account",
           "message": "Vytvořit externí účet"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Určuje, která pole v odpovědi mají být rozbalena."
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.display_name": {
-          "source": "List Account People",
+          "source": "List account people",
           "message": "Vypsat osoby účtu"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.display_name": {
-          "source": "Create Account Person",
+          "source": "Create account person",
           "message": "Vytvořit osobu účtu"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Vrátit pouze platby pro tuto skupinu převodů, s limitem 100."
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.display_name": {
-          "source": "Get Charge",
+          "source": "Get charge",
           "message": "Získat platbu"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.short_desc": {
@@ -4068,7 +4068,7 @@
           "message": "Řetězec, který identifikuje tuto transakci jako součást skupiny. Podrobnosti naleznete v části [Seskupování transakcí](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.display_name": {
-          "source": "Update Charge",
+          "source": "Update charge",
           "message": "Aktualizovat platbu"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.short_desc": {
@@ -4348,7 +4348,7 @@
           "message": "Poskytuje seznam zákazníků přidružených k zadaným testovacím hodinám. Pokud tento parametr není nastaven, odpověď nebude zahrnovat zákazníky s testovacími hodinami."
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získat zákazníka"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -5260,7 +5260,7 @@
           "message": "ID testovacích hodin k připojení k zákazníkovi."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovat zákazníka"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "reverse"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Smazat zákazníka"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -5848,7 +5848,7 @@
           "message": "Zákazník"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.display_name": {
-          "source": "List Customer Balance Transactions",
+          "source": "List customer balance transactions",
           "message": "Vypsat transakce zůstatku zákazníka"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Create Customer Balance Transaction",
+          "source": "Create customer balance transaction",
           "message": "Vytvořit transakci zůstatku zákazníka"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -6028,7 +6028,7 @@
           "message": "Sada [dvojic klíč-hodnota](https://docs.stripe.com/api/metadata), které můžete k objektu připojit. To může být užitečné pro ukládání dalších informací o objektu ve strukturovaném formátu. Jednotlivé klíče lze zrušit odesláním prázdné hodnoty. Všechny klíče lze zrušit odesláním prázdné hodnoty do `metadata`."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.display_name": {
-          "source": "List Customer Sources",
+          "source": "List customer sources",
           "message": "Vypsat zdroje zákazníka"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.display_name": {
-          "source": "Create Customer Source",
+          "source": "Create customer source",
           "message": "Vytvořit zdroj zákazníka"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "Určuje, která pole v odpovědi mají být rozbalena."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Customer Subscriptions",
+          "source": "List customer subscriptions",
           "message": "Vypsat předplatná zákazníka"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.short_desc": {
@@ -6368,7 +6368,7 @@
           "message": "Kurzor pro použití při stránkování. `starting_after` je ID objektu, které určuje vaši pozici v seznamu. Pokud například odešlete požadavek na výpis a obdržíte 100 objektů končících `obj_foo`, může vaše následné volání obsahovat `starting_after=obj_foo`, aby načetlo další stránku seznamu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Customer Subscription",
+          "source": "Create customer subscription",
           "message": "Vytvořit předplatné zákazníka"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -7716,7 +7716,7 @@
           "message": "Vrátit pouze faktury pro předplatné zadané tímto ID předplatného."
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Získat fakturu"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -8768,7 +8768,7 @@
           "message": "Cíl"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aktualizovat fakturu"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "Cíl"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Smazat fakturu"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.short_desc": {

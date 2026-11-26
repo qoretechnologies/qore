@@ -412,7 +412,7 @@
           "message": "列出與帳戶關聯的所有組織。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "取得專案"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -436,7 +436,7 @@
           "message": "專案 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "刪除專案"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -460,7 +460,7 @@
           "message": "專案 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "更新專案"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -520,7 +520,7 @@
           "message": "是否使用客戶管理的加密金鑰 (CMEK) 強制加密。一旦啟用，CMEK 加密就無法停用。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "取得組織"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -544,7 +544,7 @@
           "message": "組織 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Delete Organization",
+          "source": "Delete organization",
           "message": "刪除組織"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -568,7 +568,7 @@
           "message": "組織 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Update Organization",
+          "source": "Update organization",
           "message": "更新組織"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -604,7 +604,7 @@
           "message": "組織的新名稱。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.display_name": {
-          "source": "List Project API Keys",
+          "source": "List project API keys",
           "message": "列出專案 API 金鑰"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.short_desc": {
@@ -628,7 +628,7 @@
           "message": "專案 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.display_name": {
-          "source": "Create API Key",
+          "source": "Create API key",
           "message": "建立 API 金鑰"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.short_desc": {
@@ -700,7 +700,7 @@
           "message": "資料平面檢視器"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.display_name": {
-          "source": "Get API Key",
+          "source": "Get API key",
           "message": "取得API金鑰"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.short_desc": {
@@ -724,7 +724,7 @@
           "message": "API金鑰ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key",
+          "source": "Delete API key",
           "message": "刪除 API 金鑰"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.short_desc": {
@@ -748,7 +748,7 @@
           "message": "API金鑰ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.display_name": {
-          "source": "Update API Key",
+          "source": "Update API key",
           "message": "更新 API 金鑰"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.short_desc": {
@@ -868,7 +868,7 @@
           "message": "遊標來自先前回應的`pagination.next`。必須與相同的查詢上下文（路徑參數、過濾器和`limit`）一起重複使用。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "取得使用者"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.short_desc": {
@@ -892,7 +892,7 @@
           "message": "使用者 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User",
+          "source": "Delete user",
           "message": "刪除用戶"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "資料平面檢視器"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.display_name": {
-          "source": "Get Invite",
+          "source": "Get invite",
           "message": "獲得邀請"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "邀請ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.display_name": {
-          "source": "Delete Invite",
+          "source": "Delete invite",
           "message": "刪除邀請"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "邀請ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.display_name": {
-          "source": "Resend Invite",
+          "source": "Resend invite",
           "message": "重新發送邀請"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "資料平面檢視器"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
+          "source": "Get service account",
           "message": "取得服務帳號"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "服務帳戶的唯一識別碼。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
+          "source": "Delete service account",
           "message": "刪除服務帳戶"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "服務帳戶的唯一識別碼。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
+          "source": "Update service account",
           "message": "更新服務帳戶"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "服務帳戶的新名稱。如果省略，則名稱不變。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.display_name": {
-          "source": "Rotate Service Account Secret",
+          "source": "Rotate service account secret",
           "message": "輪調服務帳戶秘密"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "資料平面檢視器"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.display_name": {
-          "source": "Get Role Binding",
+          "source": "Get role binding",
           "message": "獲取角色綁定"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "角色綁定ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Delete Role Binding",
+          "source": "Delete role binding",
           "message": "刪除角色綁定"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.short_desc": {

@@ -1316,7 +1316,7 @@
           "message": "Повертати лише робочі процеси, які було видалено"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "Отримати робочий процес"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Стабільний ідентифікатор, який переживає експорт до іншого середовища, на відміну від згенерованого ідентифікатора.\n\nЯкщо не задано, виводиться з `name`, і після встановлення є незмінним.  До 63 символів: малі літери, цифри та дефіси, без початкових, кінцевих чи повторюваних дефісів."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "Оновити робочий процес"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Неактивний"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.display_name": {
-          "source": "Delete Workflow",
+          "source": "Delete workflow",
           "message": "Видалити робочий процес"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "Робочий процес, який слід видалити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.display_name": {
-          "source": "Run Workflow",
+          "source": "Run workflow",
           "message": "Запустити робочий процес"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Відхилено"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.display_name": {
-          "source": "Get Job",
+          "source": "Get job",
           "message": "Отримати завдання"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Завдання, яке слід повернути"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.display_name": {
-          "source": "Get Job Details",
+          "source": "Get job details",
           "message": "Отримати подробиці завдання"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Завдання, яке слід описати"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.display_name": {
-          "source": "Get Job Failed Files",
+          "source": "Get job failed files",
           "message": "Отримати невдалі файли завдання"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Завдання, про яке слід звітувати"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.display_name": {
-          "source": "Download Job Output",
+          "source": "Download job output",
           "message": "Завантажити вихідні дані завдання"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Вузол обробки, який створив файл.  Типово останній вузол робочого процесу, тобто той, що записує результат."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.display_name": {
-          "source": "Cancel Job",
+          "source": "Cancel job",
           "message": "Скасувати завдання"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source Connector",
+          "source": "Get source connector",
           "message": "Отримати конектор джерела"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "Стабільний ідентифікатор, який переживає експорт до іншого середовища, на відміну від згенерованого ідентифікатора.\n\nЯкщо не задано, виводиться з `name`, і після встановлення є незмінним.  До 63 символів: малі літери, цифри та дефіси, без початкових, кінцевих чи повторюваних дефісів."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source Connector",
+          "source": "Update source connector",
           "message": "Оновити конектор джерела"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Sas Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source Connector",
+          "source": "Delete source connector",
           "message": "Видалити конектор джерела"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "Конектор, який слід видалити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.display_name": {
-          "source": "Check Source Connector",
+          "source": "Check source connector",
           "message": "Перевірити конектор джерела"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Конектор, який слід перевірити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.display_name": {
-          "source": "Get Source Connector Check",
+          "source": "Get source connector check",
           "message": "Отримати перевірку конектора джерела"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination Connector",
+          "source": "Get destination connector",
           "message": "Отримати конектор призначення"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Стабільний ідентифікатор, який переживає експорт до іншого середовища, на відміну від згенерованого ідентифікатора.\n\nЯкщо не задано, виводиться з `name`, і після встановлення є незмінним.  До 63 символів: малі літери, цифри та дефіси, без початкових, кінцевих чи повторюваних дефісів."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination Connector",
+          "source": "Update destination connector",
           "message": "Оновити конектор призначення"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Sas Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination Connector",
+          "source": "Delete destination connector",
           "message": "Видалити конектор призначення"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5328,7 +5328,7 @@
           "message": "Конектор, який слід видалити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.display_name": {
-          "source": "Check Destination Connector",
+          "source": "Check destination connector",
           "message": "Перевірити конектор призначення"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.short_desc": {
@@ -5348,7 +5348,7 @@
           "message": "Конектор, який слід перевірити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.display_name": {
-          "source": "Get Destination Connector Check",
+          "source": "Get destination connector check",
           "message": "Отримати перевірку конектора призначення"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.short_desc": {
@@ -5404,7 +5404,7 @@
           "message": "Увімкнено"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Get Notification Channel",
+          "source": "Get notification channel",
           "message": "Отримати канал сповіщень"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5608,7 +5608,7 @@
           "message": "Типи подій для підписки"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Update Notification Channel",
+          "source": "Update notification channel",
           "message": "Оновити канал сповіщень"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5780,7 +5780,7 @@
           "message": "Адреса електронної пошти для відповіді"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Delete Notification Channel",
+          "source": "Delete notification channel",
           "message": "Видалити канал сповіщень"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5800,7 +5800,7 @@
           "message": "Канал, який слід видалити"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Verify Notification Channel",
+          "source": "Verify notification channel",
           "message": "Підтвердити канал сповіщень"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Перелічує шаблони робочих процесів — готові ланцюжки обробки Unstructured, на основі яких можна побудувати робочий процес замість описувати його вузли вручну."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.display_name": {
-          "source": "Get Workflow Template",
+          "source": "Get workflow template",
           "message": "Отримати шаблон робочого процесу"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.short_desc": {

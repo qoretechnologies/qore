@@ -412,7 +412,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Obtenir le compte"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.display_name": {
-          "source": "Get Account Usage Filter Options",
+          "source": "Get account usage filter options",
           "message": "Obtenir les options de filtre d'utilisation du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtZmlsdGVyLW9wdGlvbnM.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Entraînement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "Lister les journaux d'audit"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.display_name": {
-          "source": "List Batch Inference Jobs",
+          "source": "List batch inference jobs",
           "message": "Lister les travaux d'inférence par lots"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1iYXRjaC1pbmZlcmVuY2Utam9icw.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Create Batch Inference Job",
+          "source": "Create batch inference job",
           "message": "Créer un job d'inférence par lots"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "ID du travail d'inférence par lot."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Get Batch Inference Job",
+          "source": "Get batch inference job",
           "message": "Obtenir le job d'inférence par lots"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.display_name": {
-          "source": "Delete Batch Inference Job",
+          "source": "Delete batch inference job",
           "message": "Supprimer le travail d'inférence par lots"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWJhdGNoLWluZmVyZW5jZS1qb2I.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.display_name": {
-          "source": "Get Billing Summary",
+          "source": "Get billing summary",
           "message": "Obtenir le résumé de facturation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc3VtbWFyeQ.short_desc": {
@@ -1328,7 +1328,7 @@
           "message": "Quotidien"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.display_name": {
-          "source": "Query Usage Costs",
+          "source": "Query usage costs",
           "message": "Interroger les coûts d'utilisation"
         },
         "app.RmlyZXdvcmtzQWk.action.cXVlcnktdXNhZ2UtY29zdHM.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Jeton opaque d’une réponse précédente. Définissez-le pour récupérer la page suivante\ntout en conservant les autres champs de la requête inchangés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.display_name": {
-          "source": "Get Billing Settings",
+          "source": "Get billing settings",
           "message": "Obtenir les paramètres de facturation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWJpbGxpbmctc2V0dGluZ3M.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.display_name": {
-          "source": "Get Account Usage",
+          "source": "Get account usage",
           "message": "Obtenir l'utilisation du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2U.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Filtrer les résultats en utilisant la [syntaxe de filtre Fireworks](https://docs.fireworks.ai/api-reference/list-models)."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Lister les jeux de données"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Créer un jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Filtre"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Obtenir le jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Mettre à jour le jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Le nom de ressource du job qui a créé ce jeu de données (par ex., job d'inférence par lots).\nUtilisé pour le suivi de la lignée afin de comprendre la provenance du jeu de données."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Supprimer le jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Dataset Download Endpoint",
+          "source": "Get dataset download endpoint",
           "message": "Obtenir le point de terminaison de téléchargement du jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtZG93bmxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Si vrai, télécharge toute la chaîne de lignée (tous les jeux de données associés).\nLes noms de fichiers seront préfixés par les ID de jeu de données pour éviter les collisions."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Dataset Upload Endpoint",
+          "source": "Get dataset upload endpoint",
           "message": "Obtenir le point de terminaison de téléversement du jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRhdGFzZXQtdXBsb2FkLWVuZHBvaW50.short_desc": {
@@ -2184,7 +2184,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.display_name": {
-          "source": "Split Dataset",
+          "source": "Split dataset",
           "message": "Diviser le jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.c3BsaXQtZGF0YXNldA.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "L'ID du compte parent du demandeur."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.display_name": {
-          "source": "Validate Dataset Upload",
+          "source": "Validate dataset upload",
           "message": "Valider le téléversement du jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZGF0YXNldC11cGxvYWQ.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.display_name": {
-          "source": "List Deployed Models",
+          "source": "List deployed models",
           "message": "Lister les modèles déployés"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3llZC1tb2RlbHM.short_desc": {
@@ -2356,7 +2356,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Create Deployed Model",
+          "source": "Create deployed model",
           "message": "Créer un modèle déployé"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Fusionne le nouvel addon au modèle de base, tout en désfusionnant/supprimant tout addon existant dans le déploiement. Doit être spécifié pour les déploiements à rechargement à chaud"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Get Deployed Model",
+          "source": "Get deployed model",
           "message": "Obtenir le modèle déployé"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Update Deployed Model",
+          "source": "Update deployed model",
           "message": "Mettre à jour le modèle déployé"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Si vrai, le modèle déployé sera accessible publiquement."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.display_name": {
-          "source": "Delete Deployed Model",
+          "source": "Delete deployed model",
           "message": "Supprimer le modèle déployé"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveWVkLW1vZGVs.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.display_name": {
-          "source": "List Deployment Shapes",
+          "source": "List deployment shapes",
           "message": "Lister les formes de déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlcw.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Modèle cible avec lequel les formes de déploiement retournées doivent être compatibles."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.display_name": {
-          "source": "Get Deployment Shape",
+          "source": "Get deployment shape",
           "message": "Obtenir la forme du déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGU.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Si vrai, renvoie la dernière version quel que soit le statut de validation.\nPar défaut, renvoie la dernière version validée."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.display_name": {
-          "source": "List Deployment Shape Versions",
+          "source": "List deployment shape versions",
           "message": "Lister les versions de forme de déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXBlLXZlcnNpb25z.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.display_name": {
-          "source": "Get Deployment Shape Version",
+          "source": "Get deployment shape version",
           "message": "Obtenir la version de la forme du déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtc2hhcGUtdmVyc2lvbg.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Lister les déploiements"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50cw.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Create Deployment",
+          "source": "Create deployment",
           "message": "Créer un déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "Si vrai, ignore la validation de la politique d’étiquetage d’image qui bloque certaines étiquettes.\nCela permet de créer des déploiements avec des étiquettes d’image qui seraient autrement bloquées."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Deployment",
+          "source": "Get deployment",
           "message": "Obtenir le déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "Mettre à jour le déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4768,7 +4768,7 @@
           "message": "Par défaut, la mise à jour d’une forme de déploiement garantira que la nouvelle forme fournie est validée.\nSi vrai, nous n’exigerons pas la validation de la forme de déploiement."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "Supprimer le déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -4828,7 +4828,7 @@
           "message": "Si vrai, ignore les vérifications et force la suppression d’un déploiement actuellement déployé et utilisé."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.display_name": {
-          "source": "Get Ledger",
+          "source": "Get ledger",
           "message": "Obtenir le registre"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWxlZGdlcg.short_desc": {
@@ -4864,7 +4864,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.display_name": {
-          "source": "Reset Ledger",
+          "source": "Reset ledger",
           "message": "Réinitialiser le registre"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzZXQtbGVkZ2Vy.short_desc": {
@@ -4900,7 +4900,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.display_name": {
-          "source": "List Deployment Shards",
+          "source": "List deployment shards",
           "message": "Lister les fragments de déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kZXBsb3ltZW50LXNoYXJkcw.short_desc": {
@@ -4996,7 +4996,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.display_name": {
-          "source": "Get Termination Message",
+          "source": "Get termination message",
           "message": "Obtenir le message de terminaison"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRlcm1pbmF0aW9uLW1lc3NhZ2U.short_desc": {
@@ -5032,7 +5032,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.display_name": {
-          "source": "Get Deployment Metrics",
+          "source": "Get deployment metrics",
           "message": "Obtenir les métriques du déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRlcGxveW1lbnQtbWV0cmljcw.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.display_name": {
-          "source": "Scale Deployment",
+          "source": "Scale deployment",
           "message": "Mettre à l'échelle le déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.c2NhbGUtZGVwbG95bWVudA.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "Le nombre souhaité de réplicas."
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.display_name": {
-          "source": "Undelete Deployment",
+          "source": "Undelete deployment",
           "message": "Restauration du déploiement"
         },
         "app.RmlyZXdvcmtzQWk.action.dW5kZWxldGUtZGVwbG95bWVudA.short_desc": {
@@ -5176,7 +5176,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.display_name": {
-          "source": "List DPO Jobs",
+          "source": "List DPO jobs",
           "message": "Lister les travaux DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1kcG8tam9icw.short_desc": {
@@ -5272,7 +5272,7 @@
           "message": "Si vrai, inclut les travaux archivés (rétention post‑suppression) dans la réponse.\nLes travaux archivés sont inactifs (aucune ressource en cours, aucune facturation supplémentaire) mais leurs points de contrôle restent promouvables jusqu’à l’expiration de la fenêtre de rétention."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.display_name": {
-          "source": "Create DPO Job",
+          "source": "Create DPO job",
           "message": "Créer un job DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWRwby1qb2I.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "ID du travail DPO, un ID aléatoire sera généré si non spécifié."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.display_name": {
-          "source": "Get DPO Job",
+          "source": "Get DPO job",
           "message": "Obtenir le job DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2I.short_desc": {
@@ -6016,7 +6016,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.display_name": {
-          "source": "Delete DPO Job",
+          "source": "Delete DPO job",
           "message": "Supprimer le travail DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWRwby1qb2I.short_desc": {
@@ -6052,7 +6052,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.display_name": {
-          "source": "Cancel DPO Job",
+          "source": "Cancel DPO job",
           "message": "Annuler le job DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLWRwby1qb2I.short_desc": {
@@ -6088,7 +6088,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.display_name": {
-          "source": "Get DPO Job Metrics File Endpoint",
+          "source": "Get DPO job metrics file endpoint",
           "message": "Obtenir le point de terminaison du fichier de métriques du job DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWRwby1qb2ItbWV0cmljcy1maWxlLWVuZHBvaW50.short_desc": {
@@ -6124,7 +6124,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.display_name": {
-          "source": "Resume DPO Job",
+          "source": "Resume DPO job",
           "message": "Reprendre le travail DPO"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLWRwby1qb2I.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.display_name": {
-          "source": "List Evaluation Jobs",
+          "source": "List evaluation jobs",
           "message": "Lister les travaux d'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9uLWpvYnM.short_desc": {
@@ -6236,7 +6236,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Create Evaluation Job",
+          "source": "Create evaluation job",
           "message": "Créer un job d'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6340,7 +6340,7 @@
           "message": "ID du travail d’évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "Obtenir le job d'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6388,7 +6388,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Delete Evaluation Job",
+          "source": "Delete evaluation job",
           "message": "Supprimer le travail d'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24tam9i.short_desc": {
@@ -6424,7 +6424,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluation Job Execution Log Endpoint",
+          "source": "Get evaluation job execution log endpoint",
           "message": "Obtenir le point de terminaison du journal d'exécution du job d'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24tam9iLWV4ZWN1dGlvbi1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -6460,7 +6460,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
+          "source": "List evaluations",
           "message": "Lister les évaluations"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Create Evaluation",
+          "source": "Create evaluation",
           "message": "Créer une évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6680,7 +6680,7 @@
           "message": "ID d’évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Obtenir l'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -6728,7 +6728,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
+          "source": "Delete evaluation",
           "message": "Supprimer l'évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
@@ -6764,7 +6764,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.display_name": {
-          "source": "Preview Evaluation",
+          "source": "Preview evaluation",
           "message": "Aperçu de l’évaluation"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0aW9u.short_desc": {
@@ -6808,7 +6808,7 @@
           "message": "Nombre maximal d'échantillons"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.display_name": {
-          "source": "Validate Assertions",
+          "source": "Validate assertions",
           "message": "Valider les assertions"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtYXNzZXJ0aW9ucw.short_desc": {
@@ -6932,7 +6932,7 @@
           "message": "Nom de la métrique"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.display_name": {
-          "source": "List Evaluators",
+          "source": "List evaluators",
           "message": "Lister les évaluateurs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3Jz.short_desc": {
@@ -7008,7 +7008,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.display_name": {
-          "source": "Get Evaluator",
+          "source": "Get evaluator",
           "message": "Obtenir l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvcg.short_desc": {
@@ -7056,7 +7056,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Update Evaluator",
+          "source": "Update evaluator",
           "message": "Mettre à jour l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7208,7 +7208,7 @@
           "message": "Si vrai, prépare une nouvelle tentative de téléchargement/construction de code en faisant passer l’évaluateur à l’état BUILDING. Peut être utilisé sans update_mask."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Delete Evaluator",
+          "source": "Delete evaluator",
           "message": "Supprimer l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvcg.short_desc": {
@@ -7244,7 +7244,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.display_name": {
-          "source": "List Evaluator Versions",
+          "source": "List evaluator versions",
           "message": "Lister les versions d'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1ldmFsdWF0b3ItdmVyc2lvbnM.short_desc": {
@@ -7332,7 +7332,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Get Evaluator Version",
+          "source": "Get evaluator version",
           "message": "Obtenir la version de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7392,7 +7392,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.display_name": {
-          "source": "Delete Evaluator Version",
+          "source": "Delete evaluator version",
           "message": "Supprimer la version de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLWV2YWx1YXRvci12ZXJzaW9u.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.display_name": {
-          "source": "Alias Evaluator Version",
+          "source": "Alias evaluator version",
           "message": "Version de l'évaluateur d'alias"
         },
         "app.RmlyZXdvcmtzQWk.action.YWxpYXMtZXZhbHVhdG9yLXZlcnNpb24.short_desc": {
@@ -7500,7 +7500,7 @@
           "message": "L'ID d'alias (ex. \"current\", un tag semver, etc.)."
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.display_name": {
-          "source": "Rollback Evaluator",
+          "source": "Rollback evaluator",
           "message": "Rétablir l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.cm9sbGJhY2stZXZhbHVhdG9y.short_desc": {
@@ -7548,7 +7548,7 @@
           "message": "L'ID de la version\n\nCette valeur accepte un ID de ressource ou le nom complet de la ressource et renvoie le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Build Log Endpoint",
+          "source": "Get evaluator build log endpoint",
           "message": "Obtenir le point de terminaison du journal de construction de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1idWlsZC1sb2ctZW5kcG9pbnQ.short_desc": {
@@ -7596,7 +7596,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.display_name": {
-          "source": "Get Evaluator Source Code Endpoint",
+          "source": "Get evaluator source code endpoint",
           "message": "Obtenir le point de terminaison du code source de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci1zb3VyY2UtY29kZS1lbmRwb2ludA.short_desc": {
@@ -7644,7 +7644,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.display_name": {
-          "source": "Get Evaluator Upload Endpoint",
+          "source": "Get evaluator upload endpoint",
           "message": "Obtenir le point de terminaison de téléchargement de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWV2YWx1YXRvci11cGxvYWQtZW5kcG9pbnQ.short_desc": {
@@ -7688,7 +7688,7 @@
           "message": "Masque de lecture"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.display_name": {
-          "source": "Validate Evaluator Upload",
+          "source": "Validate evaluator upload",
           "message": "Valider le téléversement de l'évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtZXZhbHVhdG9yLXVwbG9hZA.short_desc": {
@@ -7724,7 +7724,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.display_name": {
-          "source": "Preview Evaluator",
+          "source": "Preview evaluator",
           "message": "Aperçu de l’évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJldmlldy1ldmFsdWF0b3I.short_desc": {
@@ -7864,7 +7864,7 @@
           "message": "Nombre maximal d'échantillons"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.display_name": {
-          "source": "Create Evaluator",
+          "source": "Create evaluator",
           "message": "Créer un évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWV2YWx1YXRvcg.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "ID de l’évaluateur"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lister les modèles"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -8084,7 +8084,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "Créer un modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -8612,7 +8612,7 @@
           "message": "Le nom de ressource du cluster BYOC auquel ce modèle appartient.\nex. accounts/my-account/clusters/my-cluster. Vide s'il appartient à un cluster Fireworks."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtenir le modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVs.short_desc": {
@@ -8660,7 +8660,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "Mettre à jour le modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Si vrai, les travaux SFT pour ce modèle de base utilisent le mode service (StatefulSet +\nsidecar d’orchestration) au lieu du chemin hérité du Job batch."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Supprimer le modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Create Model Version",
+          "source": "Create model version",
           "message": "Créer une version de modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9248,7 +9248,7 @@
           "message": "ID de version"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.display_name": {
-          "source": "Deploy Model Version",
+          "source": "Deploy model version",
           "message": "Déployer la version du modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVwbG95LW1vZGVsLXZlcnNpb24.short_desc": {
@@ -9324,7 +9324,7 @@
           "message": "Rechargement à chaud"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.display_name": {
-          "source": "Get Model Version Count",
+          "source": "Get model version count",
           "message": "Obtenir le nombre de versions du modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXZlcnNpb24tY291bnQ.short_desc": {
@@ -9360,7 +9360,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.display_name": {
-          "source": "Get Model Download Endpoint",
+          "source": "Get model download endpoint",
           "message": "Obtenir le point de terminaison de téléchargement du modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLWRvd25sb2FkLWVuZHBvaW50.short_desc": {
@@ -9408,7 +9408,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.display_name": {
-          "source": "Get Model Upload Endpoint",
+          "source": "Get model upload endpoint",
           "message": "Obtenir le point de terminaison de téléversement du modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LW1vZGVsLXVwbG9hZC1lbmRwb2ludA.short_desc": {
@@ -9480,7 +9480,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.display_name": {
-          "source": "Import Model",
+          "source": "Import model",
           "message": "Importer le modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.aW1wb3J0LW1vZGVs.short_desc": {
@@ -9632,7 +9632,7 @@
           "message": "ID locataire Azure AD pour l'authentification.\nSi défini, client_id doit également être défini."
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.display_name": {
-          "source": "Prepare Model",
+          "source": "Prepare model",
           "message": "Préparer le modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.cHJlcGFyZS1tb2RlbA.short_desc": {
@@ -9760,7 +9760,7 @@
           "message": "Si vrai, annule un travail de préparation actif et réinitialise l’état de suivi de la préparation.\nAucun nouveau travail de préparation n’est lancé dans cette requête."
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Validate Model Upload",
+          "source": "Validate model upload",
           "message": "Valider le téléversement du modèle"
         },
         "app.RmlyZXdvcmtzQWk.action.dmFsaWRhdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -9832,7 +9832,7 @@
           "message": "Si vrai, ignore la validation du tokenizer et du nom des paramètres."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.display_name": {
-          "source": "List Pricing Plans",
+          "source": "List pricing plans",
           "message": "Lister les plans tarifaires"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1wcmljaW5nLXBsYW5z.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.display_name": {
-          "source": "Get Pricing Plan",
+          "source": "Get pricing plan",
           "message": "Obtenir le plan tarifaire"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXByaWNpbmctcGxhbg.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.display_name": {
-          "source": "List Quotas",
+          "source": "List quotas",
           "message": "Lister les quotas"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1xdW90YXM.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.display_name": {
-          "source": "Get Quota",
+          "source": "Get quota",
           "message": "Obtenir le quota"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXF1b3Rh.short_desc": {
@@ -10096,7 +10096,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Reinforcement Fine Tuning Jobs",
+          "source": "List reinforcement fine tuning jobs",
           "message": "Lister les travaux de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yZWluZm9yY2VtZW50LWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Reinforcement Fine Tuning Job",
+          "source": "Create reinforcement fine tuning job",
           "message": "Créer un job de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11032,7 +11032,7 @@
           "message": "ID du travail de fine‑tuning par renforcement, un UUID aléatoire sera généré si non spécifié."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job",
+          "source": "Get reinforcement fine tuning job",
           "message": "Obtenir le travail de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11080,7 +11080,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Update Reinforcement Fine Tuning Job",
+          "source": "Update reinforcement fine tuning job",
           "message": "Mettre à jour le travail de Fine‑Tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11920,7 +11920,7 @@
           "message": "Pilote"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Reinforcement Fine Tuning Job",
+          "source": "Delete reinforcement fine tuning job",
           "message": "Supprimer le travail de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11956,7 +11956,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Reinforcement Fine Tuning Job",
+          "source": "Cancel reinforcement fine tuning job",
           "message": "Annuler le job de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -11992,7 +11992,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.display_name": {
-          "source": "Get Reinforcement Fine Tuning Job Metrics File Endpoint",
+          "source": "Get reinforcement fine tuning job metrics file endpoint",
           "message": "Obtenir le point de terminaison du fichier de métriques du travail de fine‑tuning par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9iLW1ldHJpY3MtZmlsZS1lbmRwb2ludA.short_desc": {
@@ -12028,7 +12028,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Reinforcement Fine Tuning Job",
+          "source": "Resume reinforcement fine tuning job",
           "message": "Reprendre le travail d'affinage par renforcement"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXJlaW5mb3JjZW1lbnQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.display_name": {
-          "source": "List Routers",
+          "source": "List routers",
           "message": "Lister les routeurs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1yb3V0ZXJz.short_desc": {
@@ -12148,7 +12148,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.display_name": {
-          "source": "Create Router",
+          "source": "Create router",
           "message": "Créer un routeur"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXJvdXRlcg.short_desc": {
@@ -12248,7 +12248,7 @@
           "message": "ID du routeur."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.display_name": {
-          "source": "Get Router",
+          "source": "Get router",
           "message": "Obtenir le routeur"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJvdXRlcg.short_desc": {
@@ -12296,7 +12296,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.display_name": {
-          "source": "Update Router",
+          "source": "Update router",
           "message": "Mettre à jour le routeur"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLXJvdXRlcg.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "Vrai si le routeur est public (tout compte peut interroger la charge de travail sous‑jacente), faux si le routeur est privé (seul le compte propriétaire du routeur peut interroger la charge de travail sous‑jacente)."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.display_name": {
-          "source": "Delete Router",
+          "source": "Delete router",
           "message": "Supprimer le routeur"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJvdXRlcg.short_desc": {
@@ -12432,7 +12432,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.display_name": {
-          "source": "List Serverless Models",
+          "source": "List serverless models",
           "message": "Lister les modèles sans serveur"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zZXJ2ZXJsZXNzLW1vZGVscw.short_desc": {
@@ -12516,7 +12516,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs\nseront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.display_name": {
-          "source": "List Account Serverless Rate Limits",
+          "source": "List account serverless rate limits",
           "message": "Lister les limites de débit sans serveur du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1hY2NvdW50LXNlcnZlcmxlc3MtcmF0ZS1saW1pdHM.short_desc": {
@@ -12588,7 +12588,7 @@
           "message": "Taille du pas pour la série temporelle : chaque point représente le pic de limite effective observé dans cette fenêtre. Par défaut, 4 heures."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.display_name": {
-          "source": "Get Account Serverless Token Usage",
+          "source": "Get account serverless token usage",
           "message": "Obtenir l'utilisation du jeton serverless du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtc2VydmVybGVzcy10b2tlbi11c2FnZQ.short_desc": {
@@ -12664,7 +12664,7 @@
           "message": "Inclure le nombre moyen de jetons par minute par modèle de base"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.display_name": {
-          "source": "List Supervised Fine Tuning Jobs",
+          "source": "List supervised fine tuning jobs",
           "message": "Lister les travaux de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC1zdXBlcnZpc2VkLWZpbmUtdHVuaW5nLWpvYnM.short_desc": {
@@ -12748,7 +12748,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Create Supervised Fine Tuning Job",
+          "source": "Create supervised fine tuning job",
           "message": "Créer un job de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13296,7 +13296,7 @@
           "message": "ID du travail de fine‑tuning supervisé, un UUID aléatoire sera généré si non spécifié."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Get Supervised Fine Tuning Job",
+          "source": "Get supervised fine tuning job",
           "message": "Obtenir le travail de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13344,7 +13344,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Delete Supervised Fine Tuning Job",
+          "source": "Delete supervised fine tuning job",
           "message": "Supprimer le travail de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13380,7 +13380,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Cancel Supervised Fine Tuning Job",
+          "source": "Cancel supervised fine tuning job",
           "message": "Annuler le job de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2FuY2VsLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13416,7 +13416,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Resume Supervised Fine Tuning Job",
+          "source": "Resume supervised fine tuning job",
           "message": "Reprendre le travail d'affinage supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.cmVzdW1lLXN1cGVydmlzZWQtZmluZS10dW5pbmctam9i.short_desc": {
@@ -13452,7 +13452,7 @@
           "message": "Sélectionnez une ressource ou saisissez son ID ou son nom complet.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.display_name": {
-          "source": "Estimate Supervised Fine Tuning Job Cost",
+          "source": "Estimate supervised fine tuning job cost",
           "message": "Estimer le coût du travail de fine‑tuning supervisé"
         },
         "app.RmlyZXdvcmtzQWk.action.ZXN0aW1hdGUtc3VwZXJ2aXNlZC1maW5lLXR1bmluZy1qb2ItY29zdA.short_desc": {
@@ -13988,7 +13988,7 @@
           "message": "Pilote"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.display_name": {
-          "source": "List Training Shapes",
+          "source": "List training shapes",
           "message": "Lister les formes d'entraînement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZXM.short_desc": {
@@ -14072,7 +14072,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.display_name": {
-          "source": "Get Training Shape",
+          "source": "Get training shape",
           "message": "Obtenir la forme d'entraînement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBl.short_desc": {
@@ -14120,7 +14120,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.display_name": {
-          "source": "List Training Shape Versions",
+          "source": "List training shape versions",
           "message": "Lister les versions de forme d'entraînement"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC10cmFpbmluZy1zaGFwZS12ZXJzaW9ucw.short_desc": {
@@ -14216,7 +14216,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.display_name": {
-          "source": "Get Training Shape Version",
+          "source": "Get training shape version",
           "message": "Obtenir la version de la forme d'entraînement"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXRyYWluaW5nLXNoYXBlLXZlcnNpb24.short_desc": {
@@ -14276,7 +14276,7 @@
           "message": "Les champs à retourner dans la réponse. Si vide ou \"*\", tous les champs seront retournés."
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Get Account Usage Limits",
+          "source": "Get account usage limits",
           "message": "Obtenir les limites d'utilisation du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "Sélectionnez un compte ou saisissez son ID ou le nom complet de la ressource `accounts/<id>`.\n\nCette valeur est Accepter un ID de ressource ou un nom complet et envoyer le segment final de l'ID."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.display_name": {
-          "source": "Update Account Usage Limits",
+          "source": "Update account usage limits",
           "message": "Mettre à jour les limites d'utilisation du compte"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBkYXRlLWFjY291bnQtdXNhZ2UtbGltaXRz.short_desc": {
@@ -14400,7 +14400,7 @@
           "message": "Bloc"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.display_name": {
-          "source": "List User Usage Limits",
+          "source": "List user usage limits",
           "message": "Lister les limites d'utilisation des utilisateurs"
         },
         "app.RmlyZXdvcmtzQWk.action.bGlzdC11c2VyLXVzYWdlLWxpbWl0cw.short_desc": {
@@ -14448,7 +14448,7 @@
           "message": "Utilisez `nextPageToken` du résultat précédent pour récupérer une autre page."
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.display_name": {
-          "source": "Upload Dataset File",
+          "source": "Upload dataset file",
           "message": "Téléverser le fichier de jeu de données"
         },
         "app.RmlyZXdvcmtzQWk.action.dXBsb2FkLWRhdGFzZXQtZmlsZQ.short_desc": {
@@ -16760,7 +16760,7 @@
           "message": "Avant"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Obtenir la réponse"
         },
         "app.RmlyZXdvcmtzQWk.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -16776,7 +16776,7 @@
           "message": "ID de la réponse"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Supprimer la réponse"
         },
         "app.RmlyZXdvcmtzQWk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {

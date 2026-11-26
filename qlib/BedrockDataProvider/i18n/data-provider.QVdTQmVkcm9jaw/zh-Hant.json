@@ -388,7 +388,7 @@
           "message": "要刪除的一個或多個評估工作亞馬遜資源名稱 (ARN) 的列表。"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Cancel Automated Reasoning Policy Build Workflow",
+          "source": "Cancel automated reasoning policy build workflow",
           "message": "取消自動推理政策建置工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -904,7 +904,7 @@
           "message": "標籤的值。"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Create Automated Reasoning Policy Test Case",
+          "source": "Create automated reasoning policy test case",
           "message": "建立自動推理政策測試案例"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "邏輯驗證的最小信心水平。達到閾值的內容被視為可以驗證的高信心發現。"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Create Automated Reasoning Policy Version",
+          "source": "Create automated reasoning policy version",
           "message": "建立自動推理政策版本"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -3412,7 +3412,7 @@
           "message": "確保 API 請求完成不超過一次的唯一、區分大小寫的識別碼。如果此標記與先前的請求匹配，Amazon Bedrock 會忽略該請求，但不會返回錯誤。如需更多資訊，請參閱 [確保單一性](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html) 在 *Amazon S3 使用者指南*。"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.display_name": {
-          "source": "Create Guardrail Version",
+          "source": "Create guardrail version",
           "message": "建立防護框架版本"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.short_desc": {
@@ -4936,7 +4936,7 @@
           "message": "標籤的值。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Delete Automated Reasoning Policy",
+          "source": "Delete automated reasoning policy",
           "message": "刪除自動推理政策"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -4972,7 +4972,7 @@
           "message": "指定是否強制刪除自動推論政策，即使其有活動資源。\n\n當 `false` 時，亞馬遜 Bedrock 會驗證所有工件（例如政策版本、測試案例、測試結果）是否已刪除（用於政策之前）。當 `true` 時，亞馬遜 Bedrock 會刪除政策及其所有工件而不進行驗證。預設值為 `false`。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Delete Automated Reasoning Policy Build Workflow",
+          "source": "Delete automated reasoning policy build workflow",
           "message": "刪除自動推理政策建置工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "建構工作流最後更新的時間戳。這用於樂觀並發控制，以防止意外刪除已修改的工作流。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Delete Automated Reasoning Policy Test Case",
+          "source": "Delete automated reasoning policy test case",
           "message": "刪除自動推理政策測試案例"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5068,7 +5068,7 @@
           "message": "最後更新測試的時間戳。這用作並發性標記，以防止衝突修改。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Delete Custom Model",
+          "source": "Delete custom model",
           "message": "刪除自訂模型"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "要刪除的模型名稱。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Delete Custom Model Deployment",
+          "source": "Delete custom model deployment",
           "message": "刪除自訂模型部署"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5116,7 +5116,7 @@
           "message": "要刪除的自定義模型部署的亞馬遜資源名稱 (ARN) 或名稱。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Delete Enforced Guardrail Configuration",
+          "source": "Delete enforced guardrail configuration",
           "message": "刪除強制執行的防撞設定"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -5164,7 +5164,7 @@
           "message": "要刪除的模型存取的模型 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Delete Guardrail",
+          "source": "Delete guardrail",
           "message": "刪除保護桿"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.short_desc": {
@@ -5200,7 +5200,7 @@
           "message": "防護桿的版本。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Delete Imported Model",
+          "source": "Delete imported model",
           "message": "刪除匯入模型"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5224,7 +5224,7 @@
           "message": "要刪除的匯入模型的名稱。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Delete Inference Profile",
+          "source": "Delete inference profile",
           "message": "刪除推論設定"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5248,7 +5248,7 @@
           "message": "要刪除的應用推理配置檔案的亞馬遜資源名稱 (ARN) 或 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Delete Marketplace Model Endpoint",
+          "source": "Delete marketplace model endpoint",
           "message": "刪除 Marketplace 模型端點"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5284,7 +5284,7 @@
           "message": "刪除調用記錄"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Delete Prompt Router",
+          "source": "Delete prompt router",
           "message": "刪除提示路由器"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "要刪除的提示路由器的亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Delete Provisioned Model Throughput",
+          "source": "Delete provisioned model throughput",
           "message": "刪除預配置的模型穿透量"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -5332,7 +5332,7 @@
           "message": "預配置的吞吐量的亞馬遜資源名稱 (ARN) 或名稱"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Delete Resource Policy",
+          "source": "Delete resource policy",
           "message": "刪除資源政策"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -5356,7 +5356,7 @@
           "message": "適用於此資源策略的 Bedrock 資源的 ARN"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.display_name": {
-          "source": "Deregister Marketplace Model Endpoint",
+          "source": "Deregister marketplace model endpoint",
           "message": "取消註冊市場模型端點"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.short_desc": {
@@ -5380,7 +5380,7 @@
           "message": "要取消註冊的端點的亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Export Automated Reasoning Policy Version",
+          "source": "Export automated reasoning policy version",
           "message": "匯出自動推理政策版本"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -5416,7 +5416,7 @@
           "message": "返回 Amazon Bedrock 的帳戶範圍數據保留模式。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Advanced Prompt Optimization Job",
+          "source": "Get advanced prompt optimization job",
           "message": "取得進階提示優化作業"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.short_desc": {
@@ -5440,7 +5440,7 @@
           "message": "高級提示優化作業的 ARN 或 ID：高級提示優化作業的 ARN 或 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Get Automated Reasoning Policy",
+          "source": "Get automated reasoning policy",
           "message": "取得自動推理政策"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -5464,7 +5464,7 @@
           "message": "要擷取的自動推理政策的亞馬遜資源名稱 (ARN)。可以是草稿政策的未版本化 ARN，或特定政策版本的 ARN。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Get Automated Reasoning Policy Annotations",
+          "source": "Get automated reasoning policy annotations",
           "message": "獲取自動推理政策註釋"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -5500,7 +5500,7 @@
           "message": "您想要檢索其結果資產的構建工作流的唯一標識符。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow",
+          "source": "Get automated reasoning policy build workflow",
           "message": "獲取自動推理政策建置工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5536,7 +5536,7 @@
           "message": "要擷取的建置工作流程的唯一識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow Result Assets",
+          "source": "Get automated reasoning policy build workflow result assets",
           "message": "取得自動推理政策建置工作流程結果資產"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.short_desc": {
@@ -5628,7 +5628,7 @@
           "message": "當多個相同類型的資產存在時，要擷取特定資產的唯一識別碼。這在擷取 SOURCE_DOCUMENT 資產時是必須的，因為在工作流程中可能使用了多個來源文件。可以從資產清單中獲得資產 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.display_name": {
-          "source": "Get Automated Reasoning Policy Next Scenario",
+          "source": "Get automated reasoning policy next scenario",
           "message": "獲取自動推理政策下一場景"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.short_desc": {
@@ -5664,7 +5664,7 @@
           "message": "與測試場景相關聯的構建工作流的唯一標識符…"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Get Automated Reasoning Policy Test Case",
+          "source": "Get automated reasoning policy test case",
           "message": "獲取自動推理政策測試案例"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "要擷取測試的唯一識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.display_name": {
-          "source": "Get Automated Reasoning Policy Test Result",
+          "source": "Get automated reasoning policy test result",
           "message": "獲取自動推理政策測試結果"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "要擷取結果的測試的唯一識別符。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Get Custom Model",
+          "source": "Get custom model",
           "message": "取得自定義模型"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5772,7 +5772,7 @@
           "message": "自訂模型的名稱或亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Get Custom Model Deployment",
+          "source": "Get custom model deployment",
           "message": "獲取自定義模型部署"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5796,7 +5796,7 @@
           "message": "要擷取其信息的自訂模型部署的亞馬遜資源名稱 (ARN) 或名稱。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "取得評估工作"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "您要獲取信息的評估工作的亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.display_name": {
-          "source": "Get Foundation Model",
+          "source": "Get foundation model",
           "message": "取得基礎模型"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "模型識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.display_name": {
-          "source": "Get Foundation Model Availability",
+          "source": "Get foundation model availability",
           "message": "取得基礎模型可用性"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "基礎模型的模型 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.display_name": {
-          "source": "Get Guardrail",
+          "source": "Get guardrail",
           "message": "取得保護桿"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.short_desc": {
@@ -5904,7 +5904,7 @@
           "message": "要獲取詳細信息的擋牆版本。如果您未指定版本，則響應將返回 `DRAFT` 版本的詳細信息。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Get Imported Model",
+          "source": "Get imported model",
           "message": "取得匯入模型"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "匯入模型的名稱或 Amazon 資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Get Inference Profile",
+          "source": "Get inference profile",
           "message": "取得推論設定"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "推斷配置檔的 ID 或亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Get Marketplace Model Endpoint",
+          "source": "Get marketplace model endpoint",
           "message": "取得市場模型端點"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "您要獲取信息的端點的亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.display_name": {
-          "source": "Get Model Copy Job",
+          "source": "Get model copy job",
           "message": "取得模型複製工作"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "模型副本作業的 Amazon Resource Name (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Model Customization Job",
+          "source": "Get model customization job",
           "message": "獲取模型自定義工作"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "自訂作業的識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.display_name": {
-          "source": "Get Model Import Job",
+          "source": "Get model import job",
           "message": "取得模型匯入工作"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "匯入作業的識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.display_name": {
-          "source": "Get Model Invocation Job",
+          "source": "Get model invocation job",
           "message": "取得模型調用工作"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.short_desc": {
@@ -6084,7 +6084,7 @@
           "message": "取得目前的模型呼叫記錄邏輯設定值。"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Get Prompt Router",
+          "source": "Get prompt router",
           "message": "取得提示路由器"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "提示路由器的 ARN"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Get Provisioned Model Throughput",
+          "source": "Get provisioned model throughput",
           "message": "取得佈建模型產量"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -6132,7 +6132,7 @@
           "message": "預配置的吞吐量的亞馬遜資源名稱 (ARN) 或名稱"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Get Resource Policy",
+          "source": "Get resource policy",
           "message": "取得資源政策"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -6288,7 +6288,7 @@
           "message": "單次呼叫中要傳回的最大政策數量。"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.display_name": {
-          "source": "List Automated Reasoning Policy Build Workflows",
+          "source": "List automated reasoning policy build workflows",
           "message": "列出自動推理政策建置工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.short_desc": {
@@ -6336,7 +6336,7 @@
           "message": "單次回應中要返回的建置工作流程的最大數量。有效範圍是 1-100。"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.display_name": {
-          "source": "List Automated Reasoning Policy Test Cases",
+          "source": "List automated reasoning policy test cases",
           "message": "自動推理政策測試案例清單"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.short_desc": {
@@ -6384,7 +6384,7 @@
           "message": "單次呼叫中返回的測試最大數量。"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.display_name": {
-          "source": "List Automated Reasoning Policy Test Results",
+          "source": "List automated reasoning policy test results",
           "message": "列出自動推理政策測試結果"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "降序"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.display_name": {
-          "source": "List Foundation Model Agreement Offers",
+          "source": "List foundation model agreement offers",
           "message": "列出基礎模型協議優惠"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.short_desc": {
@@ -8452,7 +8452,7 @@
           "message": "放置客戶檔案請求。"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.display_name": {
-          "source": "Register Marketplace Model Endpoint",
+          "source": "Register marketplace model endpoint",
           "message": "註冊市場模型端點"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "部署在端點上的亞馬遜 Bedrock Marketplace 模型的 ARN。"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.display_name": {
-          "source": "Start Automated Reasoning Policy Build Workflow",
+          "source": "Start automated reasoning policy build workflow",
           "message": "啟動自動推理政策建置工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "一個唯一的、區分大小寫的標識符，以確保操作完成不超過一次。如果此標記與先前的請求匹配，Amazon Bedrock 會忽略請求但不會返回錯誤。"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.display_name": {
-          "source": "Start Automated Reasoning Policy Test Workflow",
+          "source": "Start automated reasoning policy test workflow",
           "message": "啟動自動推理政策測試工作流程"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "一個唯一的、區分大小寫的標識符，以確保操作完成不超過一次。如果此標記與先前的請求匹配，Amazon Bedrock 會忽略請求但不會返回錯誤。"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Advanced Prompt Optimization Job",
+          "source": "Stop advanced prompt optimization job",
           "message": "停止進階提示優化工作"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "要停止的高級提示優化工作的 ARN 或 ID：高級提示優化工作的 ARN 或 ID。"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.display_name": {
-          "source": "Stop Evaluation Job",
+          "source": "Stop evaluation job",
           "message": "停止評估工作"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "要停止的評估工作的亞馬遜資源名稱 (ARN)"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Customization Job",
+          "source": "Stop model customization job",
           "message": "停止模型自定義工作"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "要停止的工作的工作識別碼。"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Invocation Job",
+          "source": "Stop model invocation job",
           "message": "停止模型調用工作"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.short_desc": {
@@ -9292,7 +9292,7 @@
           "message": "要從資源中移除的標籤的標籤鍵"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Update Automated Reasoning Policy",
+          "source": "Update automated reasoning policy",
           "message": "更新自動推理政策"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -9532,7 +9532,7 @@
           "message": "自動推理策略的更新描述。"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Update Automated Reasoning Policy Annotations",
+          "source": "Update automated reasoning policy annotations",
           "message": "更新自動推理政策註解"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -9808,7 +9808,7 @@
           "message": "您正在更新的註釋集的哈希值。這用於樂觀並發控制以防止衝突更新。"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Update Automated Reasoning Policy Test Case",
+          "source": "Update automated reasoning policy test case",
           "message": "更新自動推理政策測試案例"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "一個唯一的、區分大小寫的標識符，以確保操作完成不超過一次。如果此標記與先前的請求匹配，Amazon Bedrock 會忽略請求，但不會返回錯誤。"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Update Custom Model Deployment",
+          "source": "Update custom model deployment",
           "message": "更新自訂模型部署"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -9980,7 +9980,7 @@
           "message": "要部署的新自定義模型的 ARN。這將替換當前部署的模型。"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Update Guardrail",
+          "source": "Update guardrail",
           "message": "更新保護桿"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.short_desc": {
@@ -11172,7 +11172,7 @@
           "message": "要加密防撞線的 KMS 金鑰的 ARN"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Update Marketplace Model Endpoint",
+          "source": "Update marketplace model endpoint",
           "message": "更新 Marketplace 模型端點"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -11232,7 +11232,7 @@
           "message": "您提供的唯一、區分大小寫的識別符，以確保請求的單一性。\n\n由於亞馬遜網路服務 SDK 會自動產生並設定此參數，因此此標記被列為不需要。如果您未使用亞馬遜網路服務 SDK 或 CLI，則必須提供此標記或動作將會失敗。"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Update Provisioned Model Throughput",
+          "source": "Update provisioned model throughput",
           "message": "更新預配置的模型穿透量"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -11280,7 +11280,7 @@
           "message": "新模型的亞馬遜資源名稱 (ARN)，用於與此預配置的總帶寬相關聯。如果此預配置的總帶寬與基本模型相關聯，則不能指定此欄位。\n\n如果此預配置的總帶寬與自定義模型相關聯，則可以指定以下選項之一：\n\n- 自定義模型自定義的基本模型。\n\n- 從同一基本模型自定義的另一個自定義模型。"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.display_name": {
-          "source": "Apply Guardrail",
+          "source": "Apply guardrail",
           "message": "套用保護桿"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.short_desc": {
@@ -12532,7 +12532,7 @@
           "message": "模型輸出必須遵循的 JSON 模式結構。"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "計算權杖數"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -13348,7 +13348,7 @@
           "message": "工具設定中要包含的 CachePoint"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.display_name": {
-          "source": "Get Async Invoke",
+          "source": "Get async invoke",
           "message": "取得異步調用"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.short_desc": {
@@ -13684,7 +13684,7 @@
           "message": "VEHICLE_IDENTIFICATION_NUMBER"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.display_name": {
-          "source": "Invoke Model",
+          "source": "Invoke model",
           "message": "啟動模型"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.short_desc": {
@@ -14088,7 +14088,7 @@
           "message": "標籤的值。"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "嵌入文字"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {

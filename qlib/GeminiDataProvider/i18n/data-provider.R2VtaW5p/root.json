@@ -808,8 +808,8 @@
           "message": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
-          "message": "Simple Chat"
+          "source": "Simple chat",
+          "message": "Simple chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat by sending one message",
@@ -1452,8 +1452,8 @@
           "message": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
-          "message": "Embed Content"
+          "source": "Embed content",
+          "message": "Embed content"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
           "source": "Generate an embedding vector for the given content",
@@ -1664,8 +1664,8 @@
           "message": "Content from the model"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
-          "message": "Batch Embed"
+          "source": "Batch embed",
+          "message": "Batch embed"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
           "source": "Generate embeddings for multiple content items in a single request",

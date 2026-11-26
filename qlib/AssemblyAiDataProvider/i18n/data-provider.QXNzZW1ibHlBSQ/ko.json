@@ -2348,7 +2348,7 @@
           "message": "제한된 스크립트만 가져오고 상태 필터를 재정의합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
+          "source": "Get transcript",
           "message": "성적 증명서 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
+          "source": "Delete transcript",
           "message": "성적 증명서 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
+          "source": "Get subtitles",
           "message": "자막 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "캡션당 최대 문자 수"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
+          "source": "Get transcript sentences",
           "message": "성적 증명서 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
+          "source": "Get transcript paragraphs",
           "message": "성적표 단락 가져오기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "성적 증명서의 ID"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
+          "source": "Search transcript words",
           "message": "성적 증명서 단어 검색"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "검색할 키워드"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
+          "source": "Get redacted audio",
           "message": "편집된 오디오 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "이 계정의 경량 상담원 기록을 최신 항목부터 나열합니다. 전체 구성을 검색하려면 Get Voice Agent를 사용하세요."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
+          "source": "Get voice agent",
           "message": "음성 에이전트 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "상담원의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
+          "source": "Update voice agent",
           "message": "음성 에이전트 업데이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "이 항목의 시간 초과를 낮춥니다. 모든 항목에는 고유한 800ms 상한선이 있습니다.\n이렇게 하면 시간이 단축될 뿐입니다. 전체 천장은 생략합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
+          "source": "Delete voice agent",
           "message": "음성 에이전트 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "이 에이전트에 대한 세션만 반환합니다."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
+          "source": "Get voice agent session",
           "message": "음성 에이전트 세션 가져오기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "세션의 고유 ID입니다."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
+          "source": "Delete voice agent session",
           "message": "음성 에이전트 세션 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "커서"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
+          "source": "Get webhook subscription",
           "message": "웹훅 구독 받기"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -4800,7 +4800,7 @@
           "message": "구독"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
+          "source": "Update webhook subscription",
           "message": "웹훅 구독 업데이트"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "사용됨"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
+          "source": "Delete webhook subscription",
           "message": "웹훅 구독 삭제"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {

@@ -2532,7 +2532,7 @@
           "message": "Значення `nextCursor` з попередньої відповіді.  Усі колекції в цьому API розбиваються на сторінки однаково: прочитайте `hasMore` і передайте сюди `nextCursor`, щоб отримати наступну сторінку."
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.display_name": {
-          "source": "Get a Research Run",
+          "source": "Get a research run",
           "message": "Отримати дослідницький запуск"
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Ідентифікатор запуску агента. Нові ідентифікатори запусків повертаються з префіксом `agent_run_`."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.display_name": {
-          "source": "List Research Run Events",
+          "source": "List research run events",
           "message": "Перелічити події дослідницького запуску"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Для відтворення SSE повертати лише події після цього ідентифікатора події."
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.display_name": {
-          "source": "Cancel a Research Run",
+          "source": "Cancel a research run",
           "message": "Скасувати дослідницький запуск"
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Ідентифікатор запуску агента. Нові ідентифікатори запусків повертаються з префіксом `agent_run_`."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.display_name": {
-          "source": "Stop a Research Run",
+          "source": "Stop a research run",
           "message": "Завершити дослідницький запуск"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.short_desc": {
@@ -2696,7 +2696,7 @@
           "message": "Розділені комами токени бета-функцій для увімкнення експериментальних можливостей."
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Delete a Research Run",
+          "source": "Delete a research run",
           "message": "Видалити дослідницький запуск"
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get a Batch",
+          "source": "Get a batch",
           "message": "Отримати пакет"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel a Batch",
+          "source": "Cancel a batch",
           "message": "Скасувати пакет"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete a Batch",
+          "source": "Delete a batch",
           "message": "Видалити пакет"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Фільтрувати монітори за парами «ключ-значення» в метаданих (точний збіг, семантика AND). Використовуйте дужкову нотацію: `metadata[key]=value`."
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.display_name": {
-          "source": "Get a Search Monitor",
+          "source": "Get a search monitor",
           "message": "Отримати монітор пошуку"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.short_desc": {
@@ -3744,7 +3744,7 @@
           "message": "Ідентифікатор монітора"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.display_name": {
-          "source": "Update a Search Monitor",
+          "source": "Update a search monitor",
           "message": "Оновити монітор пошуку"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "HTTPS-URL для отримання подій вебхуків. Не повинен вказувати на localhost або приватні діапазони IP-адрес."
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.display_name": {
-          "source": "Delete a Search Monitor",
+          "source": "Delete a search monitor",
           "message": "Видалити монітор пошуку"
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Найбільша кількість моніторів, які обробляються в одному запиті. Типове значення - 50, максимум - 500."
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.display_name": {
-          "source": "Run a Search Monitor Now",
+          "source": "Run a search monitor now",
           "message": "Запустити монітор пошуку зараз"
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "Ідентифікатор монітора"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.display_name": {
-          "source": "List Search Monitor Runs",
+          "source": "List search monitor runs",
           "message": "Перелічити запуски монітора пошуку"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.short_desc": {
@@ -4608,7 +4608,7 @@
           "message": "Кількість результатів на сторінку"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.display_name": {
-          "source": "Get a Search Monitor Run",
+          "source": "Get a search monitor run",
           "message": "Отримати запуск монітора пошуку"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.short_desc": {

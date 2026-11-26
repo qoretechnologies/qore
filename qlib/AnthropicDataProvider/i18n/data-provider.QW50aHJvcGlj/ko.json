@@ -1396,7 +1396,7 @@
           "message": "구성된 컨텍스트 저장소를 통해 대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 키입니다. 제공되면 이전 메시지가 자동으로 앞에 추가됩니다"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "토큰 수 계산"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "확장 사고에 사용할 최대 토큰 수입니다. `1024` 이상이어야 하며 `max_tokens` 미만이어야 합니다. 사고 모드가 `enabled`일 때만 적용됩니다"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "모델 가져오기"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "모델의 고유 식별자 또는 별칭(예: `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "모델 목록 조회"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "핵 샘플링(Nucleus sampling)을 사용합니다. 핵 샘플링에서는 확률 내림차순으로 각 후속 토큰에 대한 모든 옵션의 누적 분포를 계산하고 `top_p`에 지정된 특정 확률에 도달하면 차단합니다."
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "메시지 배치 가져오기"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "메시지 배치의 고유 식별자(예: `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "메시지 배치 목록 조회"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "파일 이름"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "파일 목록 보기"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "이 파일 ID 이전의 파일을 반환합니다(역방향 페이지네이션용 커서)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "파일 가져오기"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "파일의 고유 식별자"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "파일 콘텐츠 가져오기"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "스킬 동작에 대한 자세한 지침입니다. 이는 스킬이 트리거될 때 Claude가 읽는 SKILL.md 파일의 본문을 구성합니다."
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "스킬 목록 조회"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "다음 결과 페이지를 검색하기 위한 이전 응답의 `next_page` 필드의 페이지네이션 토큰"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "스킬 가져오기"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

@@ -114,7 +114,7 @@ module GeminiDataProvider {
             "action": "simple-chat",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
             "groups": "Generation",
-            "display_name": "Simple Chat",
+            "display_name": "Simple chat",
             "short_desc": "Chat by sending one message",
             "desc": "Chat with a Gemini model by sending a single message and receiving a single reply. "
                 "Simplifies the API by handling message formatting automatically",
@@ -172,7 +172,7 @@ module GeminiDataProvider {
             "action": "embed-content",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
             "groups": "Embeddings",
-            "display_name": "Embed Content",
+            "display_name": "Embed content",
             "short_desc": "Generate an embedding vector for the given content",
             "desc": "Generate an embedding vector for the given content using a Gemini embedding model. "
                 "Use the `text` field for simple text input, or `content` for multimodal input",
@@ -206,7 +206,7 @@ module GeminiDataProvider {
             "action": "batch-embed",
             "billing": <DataProviderBillingInfo>{"unit": "token"},
             "groups": "Embeddings",
-            "display_name": "Batch Embed",
+            "display_name": "Batch embed",
             "short_desc": "Generate embeddings for multiple content items in a single request",
             "desc": "Generate embeddings for multiple content items in a single batch request",
             "action_code": DPAT_API,

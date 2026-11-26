@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Repository abrufen"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Der Name des Repositorys allein, **nicht** `owner/name`.\n\nFür `qoretechnologies/qorus` ist dies `qorus`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Repository aktualisieren"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Entweder `true`, um von Mitwirkenden die Bestätigung (Signoff) für webbasierte Commits zu verlangen, oder `false`, um keine Bestätigung für webbasierte Commits zu verlangen."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Repository löschen"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRl.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.display_name": {
-          "source": "List Repositories for Owner",
+          "source": "List repositories for owner",
           "message": "Repositorys für Eigentümer auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItdXNlcg.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "Gibt an, ob dieses Repository als Vorlage zur Generierung neuer Repositorys dient."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.display_name": {
-          "source": "Create Repository in Organization",
+          "source": "Create repository in organization",
           "message": "Repository in Organisation erstellen"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Die benutzerdefinierten Eigenschaften für das neue Repository. Die Schlüssel sind die Namen der benutzerdefinierten Eigenschaften und die Werte die entsprechenden Eigenschaftswerte."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3Itb3Jn.display_name": {
-          "source": "List Organization Repositories",
+          "source": "List organization repositories",
           "message": "Organisations-Repositorys auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3Itb3Jn.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.display_name": {
-          "source": "List Contributors",
+          "source": "List contributors",
           "message": "Mitwirkende auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb250cmlidXRvcnM.short_desc": {
@@ -2296,7 +2296,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "List Collaborators",
+          "source": "List collaborators",
           "message": "Mitarbeiter auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -2412,7 +2412,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.display_name": {
-          "source": "Get File or Directory",
+          "source": "Get file or directory",
           "message": "Datei oder Verzeichnis abrufen"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWNvbnRlbnQ.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Der Name des Commits/Branchs/Tags. Standard: der Standard-Branch des Repositorys."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.display_name": {
-          "source": "Create or Update File",
+          "source": "Create or update file",
           "message": "Datei erstellen oder aktualisieren"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLW9yLXVwZGF0ZS1maWxlLWNvbnRlbnRz.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Der Name des Autors oder Commiters des Commits. Sie erhalten einen `422`-Statuscode, wenn `name` weggelassen wird."
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Datei löschen"
         },
         "app.R2l0aHVi.action.cmVwb3MtZGVsZXRlLWZpbGU.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Der Name des Autors (oder Commiters) des Commits"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.display_name": {
-          "source": "List Issues",
+          "source": "List issues",
           "message": "Issues auflisten"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Eigene"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Vorgang abrufen"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWdldA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Die Issue-**Nummer**, die in der Benutzeroberfläche und der URL angezeigt wird, nicht die interne `id`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Vorgang erstellen"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "Der Name des Issue-Typs, der mit diesem Issue verknüpft werden soll. _HINWEIS: Nur Benutzer mit Push-Zugriff können den Typ für neue Issues festlegen. Der Typ wird andernfalls stillschweigend verworfen._"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Issue aktualisieren"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.short_desc": {
@@ -3864,7 +3864,7 @@
           "message": "Der Name des Issue-Typs, der dieser Meldung zugeordnet werden soll, oder `null`, um den aktuellen Issue-Typ zu entfernen."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.display_name": {
-          "source": "Add Assignees",
+          "source": "Add assignees",
           "message": "Zugewiesene hinzufügen"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "Wenn `true`, wird der Zuweiser als ausstehender Vorschlag für die menschliche Überprüfung gespeichert, anstatt direkt angewendet zu werden."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.display_name": {
-          "source": "Remove Assignees",
+          "source": "Remove assignees",
           "message": "Zugewiesene entfernen"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXJlbW92ZS1hc3NpZ25lZXM.short_desc": {
@@ -4044,7 +4044,7 @@
           "message": "GitHub akzeptiert nur Zugewiesene mit **Push-Zugriff** auf das Repository und ignoriert den Rest stillschweigend. Daher listet dieses Dropdown-Menü die Mitwirkenden des Repositorys auf."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Labels auflisten"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtbGFiZWxzLWZvci1yZXBv.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Pull-Requests auflisten"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdA.short_desc": {
@@ -4260,7 +4260,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Pull-Request abrufen"
         },
         "app.R2l0aHVi.action.cHVsbHMtZ2V0.short_desc": {
@@ -4308,7 +4308,7 @@
           "message": "Die in der Benutzeroberfläche und der URL angezeigte Pull-Request-**Nummer**, nicht die interne `id`.\n\nGitHub nummeriert Issues und Pull Requests in einer gemeinsamen Sequenz, sodass eine Pull-Request-Nummer niemals zugleich eine Issue-Nummer ist."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Pull-Request erstellen"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.short_desc": {
@@ -4440,7 +4440,7 @@
           "message": "Ein Issue im Repository, das in einen Pull Request umgewandelt werden soll. Der Titel, Text und die Kommentare des Issues werden zu Titel, Text und Kommentaren des neuen Pull Requests. Erforderlich, es sei denn, `title` ist angegeben."
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Pull-Request aktualisieren"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.short_desc": {
@@ -4556,7 +4556,7 @@
           "message": "Gibt an, ob [Maintainer Änderungen vornehmen können](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) am Pull Request."
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.display_name": {
-          "source": "List Requested Reviewers",
+          "source": "List requested reviewers",
           "message": "Angeforderte Reviewer auflisten"
         },
         "app.R2l0aHVi.action.cHVsbHMtbGlzdC1yZXF1ZXN0ZWQtcmV2aWV3ZXJz.short_desc": {
@@ -4604,7 +4604,7 @@
           "message": "Die in der Benutzeroberfläche und der URL angezeigte Pull-Request-**Nummer**, nicht die interne `id`.\n\nGitHub nummeriert Issues und Pull Requests in einer gemeinsamen Sequenz, sodass eine Pull-Request-Nummer niemals zugleich eine Issue-Nummer ist."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.display_name": {
-          "source": "Request Reviewers",
+          "source": "Request reviewers",
           "message": "Reviewer anfordern"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVxdWVzdC1yZXZpZXdlcnM.short_desc": {
@@ -4676,7 +4676,7 @@
           "message": "Ein Array von Team-`slug`s, die angefordert werden."
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.display_name": {
-          "source": "Remove Requested Reviewers",
+          "source": "Remove requested reviewers",
           "message": "Angeforderte Reviewer entfernen"
         },
         "app.R2l0aHVi.action.cHVsbHMtcmVtb3ZlLXJlcXVlc3RlZC1yZXZpZXdlcnM.short_desc": {
@@ -4748,7 +4748,7 @@
           "message": "Ein Array von Team-`slug`s, die entfernt werden."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Branches auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "Branch abrufen"
         },
         "app.R2l0aHVi.action.cmVwb3MtZ2V0LWJyYW5jaA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Der Name des Branchs. Darf keine Platzhalterzeichen enthalten. Um Platzhalterzeichen in Branch-Namen zu verwenden, nutzen Sie [die GraphQL-API](https://docs.github.com/graphql)."
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.display_name": {
-          "source": "Create Branch or Tag",
+          "source": "Create branch or tag",
           "message": "Branch oder Tag erstellen"
         },
         "app.R2l0aHVi.action.Z2l0LWNyZWF0ZS1yZWY.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Der SHA1-Wert für diese Referenz."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Commits auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.short_desc": {
@@ -5060,7 +5060,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.display_name": {
-          "source": "List Releases",
+          "source": "List releases",
           "message": "Releases auflisten"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1yZWxlYXNlcw.short_desc": {
@@ -5120,7 +5120,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.display_name": {
-          "source": "Create Release",
+          "source": "Create release",
           "message": "Release erstellen"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.short_desc": {
@@ -5312,7 +5312,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LW1lbWJlcnM.display_name": {
-          "source": "List Organization Members",
+          "source": "List organization members",
           "message": "Organisationsmitglieder auflisten"
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LW1lbWJlcnM.short_desc": {
@@ -5660,7 +5660,7 @@
           "message": "hybrid"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.display_name": {
-          "source": "List Workflows",
+          "source": "List workflows",
           "message": "Workflows auflisten"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1saXN0LXJlcG8td29ya2Zsb3dz.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Die Seitenzahl der abzurufenden Ergebnisse. Weitere Informationen finden Sie unter „[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api)“."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.display_name": {
-          "source": "Get Secrets Public Key",
+          "source": "Get secrets public key",
           "message": "Öffentlichen Schlüssel für Secrets abrufen"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1wdWJsaWMta2V5.short_desc": {
@@ -5756,7 +5756,7 @@
           "message": "Der Name des Repositorys allein, **nicht** `owner/name`.\n\nFür `qoretechnologies/qorus` ist dies `qorus`."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.display_name": {
-          "source": "Get Secret",
+          "source": "Get secret",
           "message": "Secret abrufen"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1nZXQtcmVwby1zZWNyZXQ.short_desc": {
@@ -5804,7 +5804,7 @@
           "message": "Der Name des Secrets."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.display_name": {
-          "source": "Create or Update Secret",
+          "source": "Create or update secret",
           "message": "Secret erstellen oder aktualisieren"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1jcmVhdGUtb3ItdXBkYXRlLXJlcG8tc2VjcmV0.short_desc": {
@@ -5876,7 +5876,7 @@
           "message": "ID des Schlüssels, mit dem Sie das Secret verschlüsselt haben."
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.display_name": {
-          "source": "Delete Secret",
+          "source": "Delete secret",
           "message": "Secret löschen"
         },
         "app.R2l0aHVi.action.YWN0aW9ucy1kZWxldGUtcmVwby1zZWNyZXQ.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` oder `contributors`"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "Neuer Vorgang"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfaXNzdWU.short_desc": {
@@ -6056,7 +6056,7 @@
           "message": "Wird ausgelöst, wenn ein Issue geöffnet wird.\n\nDie Übertragung enthält `issue` selbst, `repository` und `sender`, der es geöffnet hat.\n\nDas GitHub-Ereignis `issues` deckt auch das Bearbeiten, Schließen, Labeln und Zuweisen ab; diese werden nur ausgelöst, wenn **Alle Aktionen** gesetzt ist. Lesen Sie in diesem Fall `action` der Nutzdaten aus, um sie zu unterscheiden."
         },
         "app.R2l0aHVi.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Neuer Pull-Request"
         },
         "app.R2l0aHVi.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
@@ -6068,7 +6068,7 @@
           "message": "Wird ausgelöst, wenn ein Pull Request geöffnet wird.\n\nDie Übertragung enthält `pull_request`, dessen `number`, `repository` und `sender`.\n\nDas GitHub-Ereignis `pull_request` deckt auch das Schließen, Mergen, Wiedereröffnen, Review-Anfragen und jeden Push auf den Branch (`synchronize`) ab; diese werden nur ausgelöst, wenn **Alle Aktionen** gesetzt ist."
         },
         "app.R2l0aHVi.action.bmV3X3Jldmlld19yZXF1ZXN0.display_name": {
-          "source": "New Pull Request Review",
+          "source": "New pull request review",
           "message": "Neues Pull-Request-Review"
         },
         "app.R2l0aHVi.action.bmV3X3Jldmlld19yZXF1ZXN0.short_desc": {
@@ -6080,7 +6080,7 @@
           "message": "Wird ausgelöst, wenn jemand ein Review für einen Pull Request einreicht.\n\nDie Übertragung enthält `review` – dessen Status ist `approved`, `changes_requested` oder `commented` – zusammen mit `pull_request`, auf dem es sich befindet, `repository` und `sender`.\n\n**Hierbei handelt es sich um ein abgegebenes Review, nicht um eine Review-Anfrage**, trotz der ID des Ereignisses: Die Anwendung, die durch dieses Modul ersetzt wird, nannte es `new_review_request`, während sie Reviews abonnierte. Die ID wird beibehalten, da bestehende Workflows sie verwenden. Für eine *angeforderte* Review-Anfrage verwenden Sie **Neuer Pull Request** mit aktivierter Option **Alle Aktionen** und vergleichen Sie `action` mit `review_requested`."
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Neuer Commit"
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -6092,7 +6092,7 @@
           "message": "Wird bei jedem Push in das Repository ausgelöst.\n\n**Eine Übermittlung kann viele Commits enthalten**: `commits` enthält die im Push enthaltenen Commits bis zum GitHub-Limit von 20, und `head_commit` ist der letzte davon. `ref` gibt an, in welchen Branch oder welches Tag gepusht wurde, und `before` sowie `after` begrenzen den Bereich.\n\nEin Push, der einen Branch löscht, kommt ebenfalls hier an, wobei `deleted` gesetzt und `after` nur Nullen ist."
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfYnJhbmNo.display_name": {
-          "source": "New Branch",
+          "source": "New branch",
           "message": "Neuer Branch"
         },
         "app.R2l0aHVi.action.bmV3X3JlcG9zaXRvcnlfYnJhbmNo.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "Wird ausgelöst, wenn ein Branch erstellt wird.\n\nDas GitHub-Ereignis `create` deckt **Branches und Tags gleichermaßen** ab und gibt dies über `ref_type` an; dieses Ereignis löst nur Branches aus, da es so benannt ist. Aktivieren Sie **Alle Aktionen**, um auch Tag-Erstellungen zu erhalten, und lesen Sie `ref_type` aus, um sie zu unterscheiden.\n\nDie Anwendung, die durch dieses Modul ersetzt wird, hat ein neues Tag als neuen Branch gemeldet."
         },
         "app.R2l0aHVi.action.bmV3X3JlbGVhc2U.display_name": {
-          "source": "New Release",
+          "source": "New release",
           "message": "Neues Release"
         },
         "app.R2l0aHVi.action.bmV3X3JlbGVhc2U.short_desc": {
@@ -6116,7 +6116,7 @@
           "message": "Wird ausgelöst, wenn ein Release veröffentlicht wird.\n\nEin **Entwurf**-Release löst dieses Ereignis bei seiner Erstellung nicht aus; es wird ausgelöst, wenn es veröffentlicht wird, weshalb `published` der richtige Zeitpunkt zum Reagieren ist und nicht `created`.\n\nAktivieren Sie **Alle Aktionen**, um auch Bearbeitungs-, Lösch- und Pre-Release-Übergänge zu empfangen."
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "Neuer Commit-Kommentar"
         },
         "app.R2l0aHVi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {

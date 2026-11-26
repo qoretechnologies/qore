@@ -7,10 +7,10 @@ public namespace BflDataProvider {
 public class BflJobDataProvider inherits BflDataProviderCommon {
     public {
         const Helpers = {
-            "get-routed-result": ("Get Routed Result", "Read a job through its original regional polling URL."),
-            "wait-for-result": ("Wait for Result", "Wait for an existing job without resubmitting it."),
-            "download-result": ("Download Result", "Retrieve and download a completed job's media before expiry."),
-            "generate-video": ("Generate Video", "Generate and download a FLUX 3 video within one deadline."),
+            "get-routed-result": ("Get routed result", "Read a job through its original regional polling URL."),
+            "wait-for-result": ("Wait for result", "Wait for an existing job without resubmitting it."),
+            "download-result": ("Download result", "Retrieve and download a completed job's media before expiry."),
+            "generate-video": ("Generate video", "Generate and download a FLUX 3 video within one deadline."),
         };
         const ProviderInfo = <DataProviderInfo>{"type": "BflJobDataProvider", "supports_request": True};
     }

@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
-          "source": "List Workspace Repositories",
+          "source": "List workspace repositories",
           "message": "Elenca i repository dell'area di lavoro"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Recupera repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Il repository su cui operare, specificato come slug o come UUID tra parentesi graffe.\n\nTutti gli altri elementi nell'ambito di un repository (commit, branch, pull request) vengono elencati a partire da questo repository, pertanto la sua modifica comporterà una nuova lettura degli stessi."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
-          "source": "Create Repository",
+          "source": "Create repository",
           "message": "Crea repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
@@ -796,7 +796,7 @@
           "message": "repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Aggiorna repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
@@ -1832,7 +1832,7 @@
           "message": "Tipo"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Elimina repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Se un repository è stato spostato in una nuova posizione, usa questo parametro per\nmostrare agli utenti un messaggio chiaro nell'interfaccia utente di Bitbucket che informa dello\nspostamento del repository. Tuttavia, una richiesta GET a questo endpoint restituirà\ncomunque un errore 404.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Elenca rami"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Elenca commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Ottieni commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
-          "source": "List Commit Reports",
+          "source": "List commit reports",
           "message": "Elenca report del commit"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Elenca i commenti del commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Commenta commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "commit_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
-          "source": "Approve Commit",
+          "source": "Approve commit",
           "message": "Approva commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
-          "source": "Unapprove Commit",
+          "source": "Unapprove commit",
           "message": "Rimuovi approvazione commit"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Lo SHA1 del commit."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Elenca deployment"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Elenca pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
@@ -2664,7 +2664,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Crea pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "pullrequest"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Recupera pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "L'ID della pull request."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Aggiorna pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Un flag booleano che indica se la pull request è una bozza."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Pull Request Comments",
+          "source": "List pull request comments",
           "message": "Elenca commenti pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Pull Request",
+          "source": "Comment on pull request",
           "message": "Commenta pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "pullrequest_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
-          "source": "Get Pull Request Comment",
+          "source": "Get pull request comment",
           "message": "Recupera commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
@@ -3536,7 +3536,7 @@
           "message": "L'ID del commento."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
-          "source": "Update Pull Request Comment",
+          "source": "Update pull request comment",
           "message": "Aggiorna commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "La riga di ancoraggio del commento nella nuova versione del file. Se il commento è su più righe, si tratta del numero di riga finale nella nuova versione del file."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
-          "source": "Delete Pull Request Comment",
+          "source": "Delete pull request comment",
           "message": "Elimina commento pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
@@ -3788,7 +3788,7 @@
           "message": "L'ID del commento."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
-          "source": "Search Code in a Workspace",
+          "source": "Search code in a workspace",
           "message": "Cerca codice in un'area di lavoro"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
@@ -3848,7 +3848,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
-          "source": "Search Code in a User's Repositories",
+          "source": "Search code in a user's repositories",
           "message": "Cerca codice nei repository di un utente"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
-          "source": "Search Code in a Team's Repositories",
+          "source": "Search code in a Team's repositories",
           "message": "Cerca codice nei repository di un team"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Quanti record restituire in una pagina, fino a 100. Bitbucket documenta questo per ogni raccolta, ma non lo dichiara quasi su nessuna."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Ottieni workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Il workspace in cui operare, specificato come slug o come UUID tra parentesi graffe.\n\nTutti gli altri elementi nell'ambito di un workspace (repository, membri) vengono elencati a partire da questo workspace, pertanto la sua modifica comporterà una nuova lettura degli stessi."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Elenca membri del workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Quanti record restituire in una singola richiesta, fino al valore massimo di Bitbucket pari a `100`.\n\n`next` nella risposta è l'URL della pagina successiva; impaginare in base alla sua presenza anziché a `size`, che Bitbucket non riporta per ogni raccolta."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
-          "source": "List Workspace Projects",
+          "source": "List workspace projects",
           "message": "Elenca progetti del workspace"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
@@ -4268,7 +4268,7 @@
           "message": "La tabella con cui operare: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` o `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nuovo commit"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
@@ -4280,7 +4280,7 @@
           "message": "Si attiva per ogni nuovo commit nel repository monitorato, in qualsiasi ramo.\n\nL'evento contiene il record del commit restituito da Bitbucket, inclusi hash, messaggio, autore e data."
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
-          "source": "New Deployment",
+          "source": "New deployment",
           "message": "Nuovo deployment"
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Si attiva per ogni nuovo deployment nel repository monitorato.\n\nL'evento contiene il record del deployment restituito da Bitbucket, inclusi l'ambiente di destinazione, lo stato raggiunto e la release distribuita."
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Nuova pull request"
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "バケット一覧を取得"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "次のページを取得するための、前回の呼び出しからの`next_page_token`"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
-          "source": "Get Bucket",
+          "source": "Get bucket",
           "message": "バケットの取得"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "メタデータを取得するバケットの名前"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "オブジェクトの一覧表示"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "次のページを取得するための、前回の呼び出しからの`next_page_token`"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Object Metadata",
+          "source": "Get object metadata",
           "message": "オブジェクトメタデータの取得"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "取得するコンテンツ世代。省略時はライブバージョンが使用されます"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Update Object Metadata",
+          "source": "Update object metadata",
           "message": "オブジェクトメタデータの更新"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {

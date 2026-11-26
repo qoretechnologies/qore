@@ -592,7 +592,7 @@
           "message": "Verifica ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "Recupera indirizzo"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Verifica ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Recupera pacco"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Nome del corriere (ad es. `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Ottieni spedizione"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "ID di una spedizione acquistata in precedenza da rimborsare"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "Ottieni etichetta di spedizione"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "Nome del corriere (ad es. `USPS`, `FedEx`); EasyPost lo rileva automaticamente se omesso"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "Ottieni tracker"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Webhook da eliminare"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Elenca eventi"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {

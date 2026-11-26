@@ -460,8 +460,8 @@
           "message": "Numeric ID of the parcel to retrieve"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
-          "message": "Create Parcel"
+          "source": "Create parcel",
+          "message": "Create parcel"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
           "source": "Create a new parcel",
@@ -2028,8 +2028,8 @@
           "message": "Numeric ID of the return to retrieve"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
-          "message": "Create Return"
+          "source": "Create return",
+          "message": "Create return"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {
           "source": "Create a new return",

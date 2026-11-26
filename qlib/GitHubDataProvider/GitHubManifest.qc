@@ -359,7 +359,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}",
                 "operation_id": "repos/get",
-                "display_name": "Get Repository",
+                "display_name": "Get repository",
                 "short_desc": "Retrieve one repository",
                 "desc": "Retrieves a repository with its description, default branch, visibility, "
                     "permissions and counts.\n\n"
@@ -373,7 +373,7 @@ public class GitHubManifest {
                 "method": "PATCH",
                 "path": "/repos/{owner}/{repo}",
                 "operation_id": "repos/update",
-                "display_name": "Update Repository",
+                "display_name": "Update repository",
                 "short_desc": "Change a repository's settings",
                 "desc": "Updates a repository's settings.\n\n"
                     "Only the properties supplied are changed, so this is not a read-modify-write. "
@@ -396,7 +396,7 @@ public class GitHubManifest {
                 "method": "DELETE",
                 "path": "/repos/{owner}/{repo}",
                 "operation_id": "repos/delete",
-                "display_name": "Delete Repository",
+                "display_name": "Delete repository",
                 "short_desc": "Delete a repository permanently",
                 "desc": "Deletes a repository.\n\n"
                     "**This cannot be undone.** GitHub keeps no trash for repositories; recovering one means "
@@ -430,7 +430,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/users/{username}/repos",
                 "operation_id": "repos/list-for-user",
-                "display_name": "List Repositories for Owner",
+                "display_name": "List repositories for owner",
                 "short_desc": "List the public repositories of one user or organization",
                 "desc": "Lists the repositories belonging to one account, which may be a user or an "
                     "organization.\n\n"
@@ -474,7 +474,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/orgs/{org}/repos",
                 "operation_id": "repos/create-in-org",
-                "display_name": "Create Repository in Organization",
+                "display_name": "Create repository in organization",
                 "short_desc": "Create a repository owned by an organization",
                 "desc": "Creates a repository owned by an organization.\n\n"
                     "The credential needs permission to create repositories in that organization; "
@@ -496,7 +496,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/orgs/{org}/repos",
                 "operation_id": "repos/list-for-org",
-                "display_name": "List Organization Repositories",
+                "display_name": "List organization repositories",
                 "short_desc": "List the repositories of one organization",
                 "desc": "Lists an organization's repositories. `type` selects public, private, forked, "
                     "sourced or member repositories.",
@@ -511,7 +511,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/contributors",
                 "operation_id": "repos/list-contributors",
-                "display_name": "List Contributors",
+                "display_name": "List contributors",
                 "short_desc": "List everyone who has committed to a repository",
                 "desc": "Lists contributors with a commit count each, most commits first.\n\n"
                     "A contributor is not necessarily someone who can be assigned work: GitHub only accepts "
@@ -525,7 +525,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/collaborators",
                 "operation_id": "repos/list-collaborators",
-                "display_name": "List Collaborators",
+                "display_name": "List collaborators",
                 "short_desc": "List the users with access to a repository",
                 "desc": "Lists the users with access to a repository and the permission each has.\n\n"
                     "This is what fills the assignee and reviewer dropdowns, because those are exactly the "
@@ -539,7 +539,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/contents/{path}",
                 "operation_id": "repos/get-content",
-                "display_name": "Get File or Directory",
+                "display_name": "Get file or directory",
                 "short_desc": "Read a file's contents, or list a directory",
                 "desc": "Reads a path in a repository.\n\n"
                     "For a **file** the response carries the content Base64-encoded in `content`, together "
@@ -566,7 +566,7 @@ public class GitHubManifest {
                 "method": "PUT",
                 "path": "/repos/{owner}/{repo}/contents/{path}",
                 "operation_id": "repos/create-or-update-file-contents",
-                "display_name": "Create or Update File",
+                "display_name": "Create or update file",
                 "short_desc": "Commit a file, creating it or replacing it",
                 "desc": "Writes a file and commits the change.\n\n"
                     "`content` must be **Base64-encoded**. Creating a file takes no `sha`; replacing one "
@@ -610,7 +610,7 @@ public class GitHubManifest {
                 "method": "DELETE",
                 "path": "/repos/{owner}/{repo}/contents/{path}",
                 "operation_id": "repos/delete-file",
-                "display_name": "Delete File",
+                "display_name": "Delete file",
                 "short_desc": "Delete a file and commit the change",
                 "desc": "Deletes a file and commits the deletion.\n\n"
                     "`sha` is **required** and must be the SHA of the blob being deleted, which "
@@ -645,7 +645,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/issues",
                 "operation_id": "issues/list-for-repo",
-                "display_name": "List Issues",
+                "display_name": "List issues",
                 "short_desc": "List the issues in a repository",
                 "desc": "Lists a repository's issues.\n\n"
                     "**GitHub returns pull requests here too**, because every pull request is an issue; a "
@@ -698,7 +698,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/issues/{issue_number}",
                 "operation_id": "issues/get",
-                "display_name": "Get Issue",
+                "display_name": "Get issue",
                 "short_desc": "Retrieve one issue",
                 "desc": "Retrieves an issue by number.\n\n"
                     "Giving a pull request's number returns that pull request as an issue, which is how "
@@ -714,7 +714,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/issues",
                 "operation_id": "issues/create",
-                "display_name": "Create Issue",
+                "display_name": "Create issue",
                 "short_desc": "Open an issue in a repository",
                 "desc": "Opens an issue.\n\n"
                     "Only `title` is required. `assignees` and `labels` are applied as part of the same "
@@ -741,7 +741,7 @@ public class GitHubManifest {
                 "method": "PATCH",
                 "path": "/repos/{owner}/{repo}/issues/{issue_number}",
                 "operation_id": "issues/update",
-                "display_name": "Update Issue",
+                "display_name": "Update issue",
                 "short_desc": "Change an issue, or close or reopen it",
                 "desc": "Updates an issue.\n\n"
                     "Only the properties supplied are changed. Setting `state` to `closed` closes it and "
@@ -768,7 +768,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/issues/{issue_number}/assignees",
                 "operation_id": "issues/add-assignees",
-                "display_name": "Add Assignees",
+                "display_name": "Add assignees",
                 "short_desc": "Add users to an issue's assignees",
                 "desc": "Adds assignees to an issue, keeping the ones already there.\n\n"
                     "GitHub silently ignores a user without push access, and an issue can carry at most 10 "
@@ -787,7 +787,7 @@ public class GitHubManifest {
                 "method": "DELETE",
                 "path": "/repos/{owner}/{repo}/issues/{issue_number}/assignees",
                 "operation_id": "issues/remove-assignees",
-                "display_name": "Remove Assignees",
+                "display_name": "Remove assignees",
                 "short_desc": "Remove users from an issue's assignees",
                 "desc": "Removes assignees from an issue, leaving the rest in place.",
                 "groups": (GroupIssues,),
@@ -805,7 +805,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/labels",
                 "operation_id": "issues/list-labels-for-repo",
-                "display_name": "List Labels",
+                "display_name": "List labels",
                 "short_desc": "List the labels defined in a repository",
                 "desc": "Lists a repository's labels with their colours and descriptions.\n\n"
                     "This is what backs the label dropdowns on the issue actions; the application this "
@@ -822,7 +822,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/pulls",
                 "operation_id": "pulls/list",
-                "display_name": "List Pull Requests",
+                "display_name": "List pull requests",
                 "short_desc": "List the pull requests in a repository",
                 "desc": "Lists pull requests.\n\n"
                     "`state` defaults to `open`. `head` selects pull requests from one branch and must be "
@@ -848,7 +848,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/pulls/{pull_number}",
                 "operation_id": "pulls/get",
-                "display_name": "Get Pull Request",
+                "display_name": "Get pull request",
                 "short_desc": "Retrieve one pull request",
                 "desc": "Retrieves a pull request, including the merge state and the file, commit and "
                     "review counts that the listing does not carry.",
@@ -863,7 +863,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/pulls",
                 "operation_id": "pulls/create",
-                "display_name": "Create Pull Request",
+                "display_name": "Create pull request",
                 "short_desc": "Open a pull request between two branches",
                 "desc": "Opens a pull request.\n\n"
                     "`head` is the branch the changes are on and `base` the branch they are for. For a pull "
@@ -898,7 +898,7 @@ public class GitHubManifest {
                 "method": "PATCH",
                 "path": "/repos/{owner}/{repo}/pulls/{pull_number}",
                 "operation_id": "pulls/update",
-                "display_name": "Update Pull Request",
+                "display_name": "Update pull request",
                 "short_desc": "Change a pull request, or close or reopen it",
                 "desc": "Updates a pull request.\n\n"
                     "Setting `state` to `closed` closes it without merging. `base` retargets it at a "
@@ -921,7 +921,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
                 "operation_id": "pulls/list-requested-reviewers",
-                "display_name": "List Requested Reviewers",
+                "display_name": "List requested reviewers",
                 "short_desc": "List who has been asked to review a pull request",
                 "desc": "Lists the users and teams whose review has been requested and **not yet given**: "
                     "GitHub removes a reviewer from this list once they review.",
@@ -936,7 +936,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
                 "operation_id": "pulls/request-reviewers",
-                "display_name": "Request Reviewers",
+                "display_name": "Request reviewers",
                 "short_desc": "Ask users or teams to review a pull request",
                 "desc": "Requests reviews on a pull request.\n\n"
                     "At least one of `reviewers` and `team_reviewers` must be given. A reviewer needs read "
@@ -964,7 +964,7 @@ public class GitHubManifest {
                 "method": "DELETE",
                 "path": "/repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
                 "operation_id": "pulls/remove-requested-reviewers",
-                "display_name": "Remove Requested Reviewers",
+                "display_name": "Remove requested reviewers",
                 "short_desc": "Withdraw a review request",
                 "desc": "Withdraws review requests from a pull request, leaving the rest in place.",
                 "groups": (GroupPullRequests,),
@@ -992,7 +992,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/branches",
                 "operation_id": "repos/list-branches",
-                "display_name": "List Branches",
+                "display_name": "List branches",
                 "short_desc": "List a repository's branches",
                 "desc": "Lists branches with the commit each points at.\n\n"
                     "`protected` narrows the listing to protected branches, or to unprotected ones.",
@@ -1005,7 +1005,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/branches/{branch}",
                 "operation_id": "repos/get-branch",
-                "display_name": "Get Branch",
+                "display_name": "Get branch",
                 "short_desc": "Retrieve one branch",
                 "desc": "Retrieves a branch with its head commit and its protection settings.\n\n"
                     "The head commit's `sha` is what **Create Branch** needs to branch from it.",
@@ -1020,7 +1020,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/git/refs",
                 "operation_id": "git/create-ref",
-                "display_name": "Create Branch or Tag",
+                "display_name": "Create branch or tag",
                 "short_desc": "Create a git ref pointing at a commit",
                 "desc": "Creates a git reference, which is how a branch or a tag is made.\n\n"
                     "`ref` is the **fully qualified** name - `refs/heads/my-branch` for a branch, "
@@ -1047,7 +1047,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/commits",
                 "operation_id": "repos/list-commits",
-                "display_name": "List Commits",
+                "display_name": "List commits",
                 "short_desc": "List a repository's commits",
                 "desc": "Lists commits, newest first.\n\n"
                     "`sha` selects the branch, tag or commit to start from - despite the name it accepts a "
@@ -1074,7 +1074,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/releases",
                 "operation_id": "repos/list-releases",
-                "display_name": "List Releases",
+                "display_name": "List releases",
                 "short_desc": "List a repository's releases",
                 "desc": "Lists releases, newest first.\n\n"
                     "Drafts are included only for a credential that can see them. A git tag with no release "
@@ -1088,7 +1088,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/repos/{owner}/{repo}/releases",
                 "operation_id": "repos/create-release",
-                "display_name": "Create Release",
+                "display_name": "Create release",
                 "short_desc": "Publish a release for a tag",
                 "desc": "Creates a release.\n\n"
                     "`tag_name` is required. If the tag does not exist GitHub creates it, at "
@@ -1146,7 +1146,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/orgs/{org}/members",
                 "operation_id": "orgs/list-members",
-                "display_name": "List Organization Members",
+                "display_name": "List organization members",
                 "short_desc": "List the members of an organization",
                 "desc": "Lists an organization's members.\n\n"
                     "A credential that is not itself a member sees only public members. `filter` can "
@@ -1216,7 +1216,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/actions/workflows",
                 "operation_id": "actions/list-repo-workflows",
-                "display_name": "List Workflows",
+                "display_name": "List workflows",
                 "short_desc": "List a repository's GitHub Actions workflows",
                 "desc": "Lists the workflows defined in `.github/workflows`, with the state and file path of "
                     "each. The response is `{total_count, workflows}`.",
@@ -1229,7 +1229,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/actions/secrets/public-key",
                 "operation_id": "actions/get-repo-public-key",
-                "display_name": "Get Secrets Public Key",
+                "display_name": "Get secrets public key",
                 "short_desc": "Retrieve the key a secret must be encrypted with",
                 "desc": "Retrieves the repository's public key for Actions secrets, as `{key_id, key}`.\n\n"
                     "This is the **first step of writing a secret**: GitHub never accepts a secret in the "
@@ -1244,7 +1244,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/repos/{owner}/{repo}/actions/secrets/{secret_name}",
                 "operation_id": "actions/get-repo-secret",
-                "display_name": "Get Secret",
+                "display_name": "Get secret",
                 "short_desc": "Check whether a secret exists, and when it changed",
                 "desc": "Retrieves a secret's name and timestamps.\n\n"
                     "**The value is never returned** - no GitHub API reads a secret back - so this answers "
@@ -1263,7 +1263,7 @@ public class GitHubManifest {
                 "method": "PUT",
                 "path": "/repos/{owner}/{repo}/actions/secrets/{secret_name}",
                 "operation_id": "actions/create-or-update-repo-secret",
-                "display_name": "Create or Update Secret",
+                "display_name": "Create or update secret",
                 "short_desc": "Write an encrypted Actions secret",
                 "desc": "Creates or replaces a repository secret for GitHub Actions.\n\n"
                     "`encrypted_value` is **not the secret**: it is the secret sealed with the repository's "
@@ -1295,7 +1295,7 @@ public class GitHubManifest {
                 "method": "DELETE",
                 "path": "/repos/{owner}/{repo}/actions/secrets/{secret_name}",
                 "operation_id": "actions/delete-repo-secret",
-                "display_name": "Delete Secret",
+                "display_name": "Delete secret",
                 "short_desc": "Remove an Actions secret",
                 "desc": "Deletes a repository secret. Any workflow still referring to it sees an empty value.",
                 "groups": (GroupActions,),

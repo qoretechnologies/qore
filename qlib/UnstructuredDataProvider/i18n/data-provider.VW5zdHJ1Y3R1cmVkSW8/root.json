@@ -1316,8 +1316,8 @@
           "message": "Return only workflows that have been deleted"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
-          "message": "Get Workflow"
+          "source": "Get workflow",
+          "message": "Get workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.short_desc": {
           "source": "Get one workflow by ID",
@@ -1496,8 +1496,8 @@
           "message": "A stable identifier that survives being exported to another environment, where the generated ID would not.\n\nDerived from `name` when left unset, and immutable once set.  Up to 63 characters: lowercase letters, digits and hyphens, with no leading, trailing or repeated hyphens."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
-          "message": "Update Workflow"
+          "source": "Update workflow",
+          "message": "Update workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
           "source": "Update a workflow",
@@ -1660,8 +1660,8 @@
           "message": "Inactive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.display_name": {
-          "source": "Delete Workflow",
-          "message": "Delete Workflow"
+          "source": "Delete workflow",
+          "message": "Delete workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.short_desc": {
           "source": "Delete a workflow",
@@ -1680,8 +1680,8 @@
           "message": "The workflow to delete"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.display_name": {
-          "source": "Run Workflow",
-          "message": "Run Workflow"
+          "source": "Run workflow",
+          "message": "Run workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.short_desc": {
           "source": "Run a workflow now and return the job it started",
@@ -1764,8 +1764,8 @@
           "message": "Rejected"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.display_name": {
-          "source": "Get Job",
-          "message": "Get Job"
+          "source": "Get job",
+          "message": "Get job"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.short_desc": {
           "source": "Get one job by ID",
@@ -1784,8 +1784,8 @@
           "message": "The job to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.display_name": {
-          "source": "Get Job Details",
-          "message": "Get Job Details"
+          "source": "Get job details",
+          "message": "Get job details"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.short_desc": {
           "source": "Get a job's per-node processing detail",
@@ -1804,8 +1804,8 @@
           "message": "The job to describe"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.display_name": {
-          "source": "Get Job Failed Files",
-          "message": "Get Job Failed Files"
+          "source": "Get job failed files",
+          "message": "Get job failed files"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.short_desc": {
           "source": "List the files a job could not process",
@@ -1824,8 +1824,8 @@
           "message": "The job to report on"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.display_name": {
-          "source": "Download Job Output",
-          "message": "Download Job Output"
+          "source": "Download job output",
+          "message": "Download job output"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.short_desc": {
           "source": "Download a processed file from a job",
@@ -1868,8 +1868,8 @@
           "message": "The processing node that produced the file.  Defaults to the last node in the workflow, which is the one that writes the output."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.display_name": {
-          "source": "Cancel Job",
-          "message": "Cancel Job"
+          "source": "Cancel job",
+          "message": "Cancel job"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.short_desc": {
           "source": "Cancel a running job",
@@ -2024,8 +2024,8 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source Connector",
-          "message": "Get Source Connector"
+          "source": "Get source connector",
+          "message": "Get source connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.short_desc": {
           "source": "Get one source connector by ID",
@@ -2920,8 +2920,8 @@
           "message": "A stable identifier that survives being exported to another environment, where the generated ID would not.\n\nDerived from `name` when left unset, and immutable once set.  Up to 63 characters: lowercase letters, digits and hyphens, with no leading, trailing or repeated hyphens."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source Connector",
-          "message": "Update Source Connector"
+          "source": "Update source connector",
+          "message": "Update source connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
           "source": "Update a source connector's configuration",
@@ -3656,8 +3656,8 @@
           "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source Connector",
-          "message": "Delete Source Connector"
+          "source": "Delete source connector",
+          "message": "Delete source connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
           "source": "Delete a source connector",
@@ -3676,8 +3676,8 @@
           "message": "The connector to delete"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.display_name": {
-          "source": "Check Source Connector",
-          "message": "Check Source Connector"
+          "source": "Check source connector",
+          "message": "Check source connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.short_desc": {
           "source": "Start a connection check for a source connector",
@@ -3696,8 +3696,8 @@
           "message": "The connector to check"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.display_name": {
-          "source": "Get Source Connector Check",
-          "message": "Get Source Connector Check"
+          "source": "Get source connector check",
+          "message": "Get source connector check"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.short_desc": {
           "source": "Read the latest connection check for a source connector",
@@ -3860,8 +3860,8 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination Connector",
-          "message": "Get Destination Connector"
+          "source": "Get destination connector",
+          "message": "Get destination connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
           "source": "Get one destination connector by ID",
@@ -4668,8 +4668,8 @@
           "message": "A stable identifier that survives being exported to another environment, where the generated ID would not.\n\nDerived from `name` when left unset, and immutable once set.  Up to 63 characters: lowercase letters, digits and hyphens, with no leading, trailing or repeated hyphens."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination Connector",
-          "message": "Update Destination Connector"
+          "source": "Update destination connector",
+          "message": "Update destination connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Update a destination connector's configuration",
@@ -5308,8 +5308,8 @@
           "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination Connector",
-          "message": "Delete Destination Connector"
+          "source": "Delete destination connector",
+          "message": "Delete destination connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Delete a destination connector",
@@ -5328,8 +5328,8 @@
           "message": "The connector to delete"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.display_name": {
-          "source": "Check Destination Connector",
-          "message": "Check Destination Connector"
+          "source": "Check destination connector",
+          "message": "Check destination connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.short_desc": {
           "source": "Start a connection check for a destination connector",
@@ -5348,8 +5348,8 @@
           "message": "The connector to check"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.display_name": {
-          "source": "Get Destination Connector Check",
-          "message": "Get Destination Connector Check"
+          "source": "Get destination connector check",
+          "message": "Get destination connector check"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.short_desc": {
           "source": "Read the latest connection check for a destination connector",
@@ -5404,8 +5404,8 @@
           "message": "Enabled"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Get Notification Channel",
-          "message": "Get Notification Channel"
+          "source": "Get notification channel",
+          "message": "Get notification channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
           "source": "Get one notification channel by ID",
@@ -5608,8 +5608,8 @@
           "message": "Event types to subscribe to"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Update Notification Channel",
-          "message": "Update Notification Channel"
+          "source": "Update notification channel",
+          "message": "Update notification channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
           "source": "Update a notification channel",
@@ -5780,8 +5780,8 @@
           "message": "Reply-to email address"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Delete Notification Channel",
-          "message": "Delete Notification Channel"
+          "source": "Delete notification channel",
+          "message": "Delete notification channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
           "source": "Delete a notification channel",
@@ -5800,8 +5800,8 @@
           "message": "The channel to delete"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Verify Notification Channel",
-          "message": "Verify Notification Channel"
+          "source": "Verify notification channel",
+          "message": "Verify notification channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
           "source": "Send a verification message to a notification channel",
@@ -5844,8 +5844,8 @@
           "message": "Lists workflow templates - Unstructured's ready-made processing chains, which a workflow can be built from instead of describing its nodes by hand."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.display_name": {
-          "source": "Get Workflow Template",
-          "message": "Get Workflow Template"
+          "source": "Get workflow template",
+          "message": "Get workflow template"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.short_desc": {
           "source": "Get one workflow template by ID",

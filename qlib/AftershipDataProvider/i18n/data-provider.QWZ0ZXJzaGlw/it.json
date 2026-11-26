@@ -748,7 +748,7 @@
           "message": "Identificatore per la connessione del corriere da utilizzare per questo tracciamento"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "Ottieni tracciamento"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Timestamp di quando si è verificato l'evento di completamento. Se non specificato, viene utilizzata l'ora corrente"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "Ottieni ultimo checkpoint"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "L'ID tracciamento Aftership di cui ottenere l'ultimo checkpoint"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Elenca corrieri"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Sottorigine se la ragione lo supporta"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Ottieni reso"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {

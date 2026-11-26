@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
+          "source": "List locations",
           "message": "Zoznam lokácií"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Token stránky prijatý z poľa `next_page_token` v odpovedi. Pošlite tento token stránky, aby ste dostali ďalšiu stránku."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
+          "source": "Get location",
           "message": "Získať lokalitu"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Prečítajte si informácie o umiestnení pripojenia.\n\nZíska informácie o polohe."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.display_name": {
-          "source": "List Processor Types",
+          "source": "List processor types",
           "message": "Uveďte typy procesorov"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Používa sa na získanie ďalšej strany výsledkov, ak je prázdna, ak je na konci zoznamu."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.display_name": {
-          "source": "Get Processor Type",
+          "source": "Get processor type",
           "message": "Získajte typ procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybratý typ procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.display_name": {
-          "source": "List Processors",
+          "source": "List processors",
           "message": "Zoznam procesorov"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Procesory vrátime zoradené podľa času vytvorenia. Token stránky bude ukazovať na nasledujúci procesor."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.display_name": {
-          "source": "Get Processor",
+          "source": "Get processor",
           "message": "Získajte procesor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Create Processor",
+          "source": "Create processor",
           "message": "Vytvorte procesor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Typ procesora, ako napríklad: `OCR_PROCESSOR`, `INVOICE_PROCESSOR`. Ak chcete získať zoznam typov procesorov, pozrite si tému FetchProcessorTypes."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Delete Processor",
+          "source": "Delete processor",
           "message": "Vymazať procesor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Enable Processor",
+          "source": "Enable processor",
           "message": "Povoliť procesor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.display_name": {
-          "source": "Disable Processor",
+          "source": "Disable processor",
           "message": "Zakázať procesor"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.short_desc": {
@@ -676,7 +676,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.display_name": {
-          "source": "Set Default Version",
+          "source": "Set default version",
           "message": "Nastaviť predvolenú verziu"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Názov zdroja podriadeného ProcessorVersion, ktorý sa má použiť ako predvolený. Formát: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.display_name": {
-          "source": "Start Batch Processing",
+          "source": "Start batch processing",
           "message": "Spustite dávkové spracovanie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Odkaz na typ hodnoty vlastnosti. Tento typ podlieha rovnakým konvenciám ako pole `Entity.base_types`."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.display_name": {
-          "source": "Start Version Batch Processing",
+          "source": "Start version batch processing",
           "message": "Spustite dávkové spracovanie verzie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "Odkaz na typ hodnoty vlastnosti. Tento typ podlieha rovnakým konvenciám ako pole `Entity.base_types`."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.display_name": {
-          "source": "List Processor Versions",
+          "source": "List processor versions",
           "message": "Zoznam verzií procesorov"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Vrátime verzie procesora zoradené podľa času vytvorenia. Token stránky bude ukazovať na ďalšiu verziu procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Get Processor Version",
+          "source": "Get processor version",
           "message": "Získajte verziu procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID verzie procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Delete Processor Version",
+          "source": "Delete processor version",
           "message": "Odstrániť verziu procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID verzie procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Train Processor Version",
+          "source": "Train processor version",
           "message": "Verzia vlakového procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "Identifikátor. Názov zdroja verzie procesora. Formát: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Deploy Processor Version",
+          "source": "Deploy processor version",
           "message": "Nasadiť verziu procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID verzie procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Undeploy Processor Version",
+          "source": "Undeploy processor version",
           "message": "Zrušte nasadenie verzie procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID verzie procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Evaluate Processor Version",
+          "source": "Evaluate processor version",
           "message": "Vyhodnotiť verziu procesora"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Sada dokumentov, ktoré zodpovedajú zadanému cloudovému úložisku `gcs_prefix`."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
+          "source": "List evaluations",
           "message": "Zoznam hodnotení"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
@@ -2344,7 +2344,7 @@
           "message": "Token stránky prijatý z predchádzajúceho volania `ListEvaluations`. Poskytnite to na načítanie nasledujúcej stránky."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Získať hodnotenie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID hodnotenia."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
+          "source": "List operations",
           "message": "Vypísať operácie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Keď je nastavené na `true`, operácie, ktoré sú dosiahnuteľné, sa vrátia ako normálne a tie, ktoré sú nedostupné, sa vrátia do poľa ListOperationsResponse.unreachable. Toto môže byť len `true` pri čítaní medzi zbierkami. Napríklad, keď je `parent` nastavené na `\"projects/example/locations/-\"`. Toto pole nie je štandardne podporované a bude mať za následok chybu `UNIMPLEMENTED`, ak je nastavené, pokiaľ nie je výslovne zdokumentované inak v dokumentácii špecifickej pre službu alebo produkt."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
+          "source": "Get operation",
           "message": "Získať stav operácie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID operácie."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.display_name": {
-          "source": "Cancel Operation",
+          "source": "Cancel operation",
           "message": "Zrušiť operáciu"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID operácie."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.display_name": {
-          "source": "List Schemas",
+          "source": "List schemas",
           "message": "Zoznam schém"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Vráti skupiny schém zoradené podľa času vytvorenia. Token stránky bude ukazovať na ďalšiu schému."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.display_name": {
-          "source": "Get Schema",
+          "source": "Get schema",
           "message": "Získajte schému"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.short_desc": {
@@ -2560,7 +2560,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID schémy."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.display_name": {
-          "source": "Create Schema",
+          "source": "Create schema",
           "message": "Vytvorte schému"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Identifikátor. Názov zdroja schémy. Formát: `projects/{project}/locations/{location}/schemas/{schema}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.display_name": {
-          "source": "Update Schema",
+          "source": "Update schema",
           "message": "Aktualizovať schému"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "Maska aktualizácie, ktorá sa má použiť na zdroj. **Poznámka:** Aktualizovať možno iba nasledujúce polia: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.display_name": {
-          "source": "Delete Schema",
+          "source": "Delete schema",
           "message": "Odstrániť schému"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Ak je nastavené na hodnotu true, odstránia sa aj všetky podradené zdroje tejto schémy. (V opačnom prípade bude žiadosť fungovať iba vtedy, ak schéma nemá žiadne podradené zdroje.)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.display_name": {
-          "source": "List Schema Versions",
+          "source": "List schema versions",
           "message": "Zoznam verzií schém"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "Vráti SchemaVersion zoradenú podľa času vytvorenia. Token stránky bude ukazovať na ďalšiu verziu SchemaVersion."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Get Schema Version",
+          "source": "Get schema version",
           "message": "Získajte verziu schémy"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID verzie schémy."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Create Schema Version",
+          "source": "Create schema version",
           "message": "Vytvorte verziu schémy"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Metadáta schémy."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Update Schema Version",
+          "source": "Update schema version",
           "message": "Aktualizovať verziu schémy"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Maska aktualizácie, ktorá sa má použiť na zdroj. **Poznámka:** Aktualizovať možno iba nasledujúce polia: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Delete Schema Version",
+          "source": "Delete schema version",
           "message": "Odstrániť verziu schémy"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "Identifikátor alebo úplný názov zdroja pre vybraté ID verzie schémy."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.display_name": {
-          "source": "Generate Schema Version",
+          "source": "Generate schema version",
           "message": "Generovať verziu schémy"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.short_desc": {
@@ -6184,7 +6184,7 @@
           "message": "Typ IANA MIME (RFC6838) označujúci povahu a formát obsahu."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.display_name": {
-          "source": "Update Dataset (Beta)",
+          "source": "Update dataset (beta)",
           "message": "Aktualizovať množinu údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.short_desc": {
@@ -6256,7 +6256,7 @@
           "message": "Maska aktualizácie sa vzťahuje na zdroj."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Get Dataset Schema (Beta)",
+          "source": "Get dataset schema (beta)",
           "message": "Získať schému množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.short_desc": {
@@ -6292,7 +6292,7 @@
           "message": "Ak je nastavený, vráti iba viditeľné polia schémy."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Update Dataset Schema (Beta)",
+          "source": "Update dataset schema (beta)",
           "message": "Aktualizovať schému množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.short_desc": {
@@ -6640,7 +6640,7 @@
           "message": "Maska aktualizácie sa vzťahuje na zdroj."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.display_name": {
-          "source": "Get Dataset Document (Beta)",
+          "source": "Get dataset document (beta)",
           "message": "Získať dokument množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.short_desc": {
@@ -6804,7 +6804,7 @@
           "message": "Ak je nastavené, vrátia sa iba polia, ktoré sú tu uvedené. V opačnom prípade sa predvolene vrátia všetky polia."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.display_name": {
-          "source": "List Dataset Documents (Beta)",
+          "source": "List dataset documents (beta)",
           "message": "Zoznam dokumentov množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.short_desc": {
@@ -6888,7 +6888,7 @@
           "message": "Počet výsledkov na preskočenie od `page_token`, ak sú poskytnuté. https://google.aip.dev/158#skipping-results. Musí to byť nezáporné celé číslo. Záporné hodnoty budú odmietnuté. Upozorňujeme, že toto nie je počet strán, ktoré sa majú preskočiť. Ak táto hodnota spôsobí, že sa kurzor presunie za koniec výsledkov, ListDocumentsResponse.document_metadata a ListDocumentsResponse.next_page_token budú prázdne."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Import Dataset Documents (Beta)",
+          "source": "Import dataset documents (beta)",
           "message": "Importovať dokumenty množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
@@ -7028,7 +7028,7 @@
           "message": "Ak je nastavené, určuje typ dokumentov, ktoré sa majú importovať v tejto dávke. Dá sa použiť na automatické označovanie dokumentov jednou entitou poskytnutého typu. Toto pole možno použiť iba s procesorom klasifikátora alebo rozdeľovača. Poskytnutie tohto poľa sa vzájomne vylučuje s `entities` a `auto_labeling_config`."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Dataset Documents (Beta)",
+          "source": "Delete dataset documents (beta)",
           "message": "Odstrániť dokumenty množiny údajov (beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
@@ -7124,7 +7124,7 @@
           "message": "ID dokumentu v rámci nespravovanej množiny údajov."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Import Processor Version (Beta)",
+          "source": "Import processor version (beta)",
           "message": "Importovať verziu procesora (Beta)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "Identifikátor alebo úplný názov prostriedku pre vybraté ID verzie procesora."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.display_name": {
-          "source": "Wait for Operation",
+          "source": "Wait for operation",
           "message": "Počkať na dokončenie operácie"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.short_desc": {

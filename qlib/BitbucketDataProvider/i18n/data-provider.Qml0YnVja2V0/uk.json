@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
-          "source": "List Workspace Repositories",
+          "source": "List workspace repositories",
           "message": "Отримати список репозиторіїв робочої області"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
-          "source": "Get Repository",
+          "source": "Get repository",
           "message": "Отримати репозиторій"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Репозиторій для роботи, вказаний як його slug або як його UUID у дужках.\n\nУсе інше в межах репозиторію (коміти, гілки, пул-реквести) береться з цього репозиторію, тому його зміна призводить до їх повторного зчитування."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
-          "source": "Create Repository",
+          "source": "Create repository",
           "message": "Створити репозиторій"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
@@ -796,7 +796,7 @@
           "message": "repository"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
-          "source": "Update Repository",
+          "source": "Update repository",
           "message": "Оновити репозиторій"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
@@ -1832,7 +1832,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
-          "source": "Delete Repository",
+          "source": "Delete repository",
           "message": "Видалити репозиторій"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Якщо репозиторій було переміщено до нового розташування, використовуйте цей параметр,\nщоб показувати користувачам зрозуміле повідомлення в інтерфейсі Bitbucket про те,\nщо репозиторій переміщено. Проте запит GET до цієї кінцевої точки все одно\nповертатиме 404.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Список гілок"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Отримати список комітів"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Отримати коміт"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "SHA1 коміту."
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
-          "source": "List Commit Reports",
+          "source": "List commit reports",
           "message": "Список звітів про коміт"
         },
         "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Отримати список коментарів до коміту"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Коментувати коміт"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "commit_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
-          "source": "Approve Commit",
+          "source": "Approve commit",
           "message": "Схвалити коміт"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "SHA1 коміту."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
-          "source": "Unapprove Commit",
+          "source": "Unapprove commit",
           "message": "Скасувати схвалення коміту"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "SHA1 коміту."
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
-          "source": "List Deployments",
+          "source": "List deployments",
           "message": "Список розгортань"
         },
         "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
-          "source": "List Pull Requests",
+          "source": "List pull requests",
           "message": "Отримати список pull request-ів"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
@@ -2664,7 +2664,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
-          "source": "Create Pull Request",
+          "source": "Create pull request",
           "message": "Створити пул-реквест"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "pullrequest"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
-          "source": "Get Pull Request",
+          "source": "Get pull request",
           "message": "Отримати пул-реквест"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Ідентифікатор pull request-а."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
-          "source": "Update Pull Request",
+          "source": "Update pull request",
           "message": "Оновити пул-реквест"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Булевий прапорець, який вказує, чи є пул-реквест чернеткою."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
-          "source": "List Pull Request Comments",
+          "source": "List pull request comments",
           "message": "Отримати список коментарів до pull request-а"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
-          "source": "Comment on Pull Request",
+          "source": "Comment on pull request",
           "message": "Прокоментувати pull request"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "pullrequest_comment"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
-          "source": "Get Pull Request Comment",
+          "source": "Get pull request comment",
           "message": "Отримати коментар до pull request-а"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
@@ -3536,7 +3536,7 @@
           "message": "Ідентифікатор коментаря."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
-          "source": "Update Pull Request Comment",
+          "source": "Update pull request comment",
           "message": "Оновити коментар до pull request-а"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "Номер рядка коментаря в новій версії файлу. Якщо коментар багаторядковий, це кінцевий номер рядка в новій версії файлу."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
-          "source": "Delete Pull Request Comment",
+          "source": "Delete pull request comment",
           "message": "Видалити коментар до pull request-а"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
@@ -3788,7 +3788,7 @@
           "message": "Ідентифікатор коментаря."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
-          "source": "Search Code in a Workspace",
+          "source": "Search code in a workspace",
           "message": "Шукати код у робочій області"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
@@ -3848,7 +3848,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
-          "source": "Search Code in a User's Repositories",
+          "source": "Search code in a user's repositories",
           "message": "Шукати код у репозиторіях користувача"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
-          "source": "Search Code in a Team's Repositories",
+          "source": "Search code in a Team's repositories",
           "message": "Шукати код у репозиторіях команди"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "Кількість записів, які повертаються на одній сторінці, до 100. Bitbucket документує це для кожної колекції, але майже для жодної з них не оголошує."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Отримати робочий простір"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Робоча область для роботи, вказана як її slug або як її UUID у дужках.\n\nУсе інше в межах робочої області (репозиторії, учасники) береться з цієї робочої області, тому її зміна призводить до їх повторного зчитування."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Список учасників робочого простору"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
-          "source": "List Workspace Projects",
+          "source": "List workspace projects",
           "message": "Список проєктів робочого простору"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
@@ -4268,7 +4268,7 @@
           "message": "Таблиця для роботи: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` або `branches`"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Новий коміт"
         },
         "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
@@ -4280,7 +4280,7 @@
           "message": "Спрацьовує для кожного нового коміту у відстежуваному репозиторії на всіх гілках.\n\nПодія містить запис коміту, який повертає Bitbucket, включаючи його хеш, повідомлення, автора та дату."
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
-          "source": "New Deployment",
+          "source": "New deployment",
           "message": "Нове розгортання"
         },
         "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Спрацьовує для кожного нового розгортання у відстежуваному репозиторії.\n\nПодія містить запис розгортання, який повертає Bitbucket, включаючи середовище, стан і розгорнутий реліз."
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
-          "source": "New Pull Request",
+          "source": "New pull request",
           "message": "Новий пул-реквест"
         },
         "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {

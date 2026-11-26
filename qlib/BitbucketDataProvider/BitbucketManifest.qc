@@ -415,7 +415,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}",
-                "display_name": "List Workspace Repositories",
+                "display_name": "List workspace repositories",
                 "short_desc": "List the repositories in a workspace",
                 "desc": "Lists the repositories in a workspace.\n\n"
                     "`role` restricts the listing to repositories the credential has a given relationship "
@@ -433,7 +433,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}",
-                "display_name": "Get Repository",
+                "display_name": "Get repository",
                 "short_desc": "Retrieve one repository",
                 "desc": "Retrieves a repository, including its main branch, project, size and visibility.",
                 "groups": (GroupRepositories,),
@@ -444,7 +444,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_post",
                 "method": "POST",
                 "path": "/repositories/{workspace}/{repo_slug}",
-                "display_name": "Create Repository",
+                "display_name": "Create repository",
                 "short_desc": "Create a repository",
                 "desc": "Creates a repository at the given workspace and slug.\n\n"
                     "Unusually, the **URL decides the name**: the repository is created at the slug in the "
@@ -483,7 +483,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_put",
                 "method": "PUT",
                 "path": "/repositories/{workspace}/{repo_slug}",
-                "display_name": "Update Repository",
+                "display_name": "Update repository",
                 "short_desc": "Update a repository's settings",
                 # Bitbucket declares both 200 and 201 with a body here, because the same endpoint creates
                 # the repository when it does not exist; the updated repository is the output either way
@@ -511,7 +511,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_delete",
                 "method": "DELETE",
                 "path": "/repositories/{workspace}/{repo_slug}",
-                "display_name": "Delete Repository",
+                "display_name": "Delete repository",
                 "short_desc": "Delete a repository permanently",
                 "desc": "Deletes a repository, its pull requests and its issues.\n\n"
                     "**This is immediate and permanent**; Bitbucket has no retention window for a deleted "
@@ -524,7 +524,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_refs_branches_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/refs/branches",
-                "display_name": "List Branches",
+                "display_name": "List branches",
                 "short_desc": "List a repository's branches",
                 "desc": "Lists the branches of a repository with the commit each one points at.\n\n"
                     "This is what backs the branch dropdowns on the pull request actions; the application "
@@ -543,7 +543,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commits_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/commits",
-                "display_name": "List Commits",
+                "display_name": "List commits",
                 "short_desc": "List a repository's commits",
                 "desc": "Lists commits, newest first, across every branch of the repository.",
                 "groups": (GroupCommits,),
@@ -554,7 +554,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commit_commit_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}",
-                "display_name": "Get Commit",
+                "display_name": "Get commit",
                 "short_desc": "Retrieve one commit",
                 "desc": "Retrieves a commit by hash, with its message, author, parents and participants.",
                 "groups": (GroupCommits,),
@@ -568,7 +568,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/reports",
                 "operation_id": "getReportsForCommit",
-                "display_name": "List Commit Reports",
+                "display_name": "List commit reports",
                 "short_desc": "List the code insights reports on a commit",
                 "desc": "Lists the Code Insights reports attached to a commit - the results a linter, a "
                     "test run or a security scan posted against it.",
@@ -582,7 +582,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commit_commit_comments_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/comments",
-                "display_name": "List Commit Comments",
+                "display_name": "List commit comments",
                 "short_desc": "List the comments on a commit",
                 "desc": "Lists the comments made on a commit, both standalone notes and those attached to "
                     "a line of a diff.",
@@ -598,7 +598,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commit_commit_comments_post",
                 "method": "POST",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/comments",
-                "display_name": "Comment on Commit",
+                "display_name": "Comment on commit",
                 "short_desc": "Add a comment to a commit",
                 "desc": "Adds a comment to a commit.\n\n"
                     "`content.raw` is the comment text in Bitbucket-flavored Markdown. Supplying `inline` "
@@ -628,7 +628,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commit_commit_approve_post",
                 "method": "POST",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/approve",
-                "display_name": "Approve Commit",
+                "display_name": "Approve commit",
                 "short_desc": "Approve a commit as the authenticated user",
                 "desc": "Records the authenticated user's approval of a commit.",
                 "groups": (GroupCommits,),
@@ -641,7 +641,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_commit_commit_approve_delete",
                 "method": "DELETE",
                 "path": "/repositories/{workspace}/{repo_slug}/commit/{commit}/approve",
-                "display_name": "Unapprove Commit",
+                "display_name": "Unapprove commit",
                 "short_desc": "Withdraw the authenticated user's approval of a commit",
                 "desc": "Withdraws the authenticated user's approval of a commit. Another user's approval "
                     "is untouched.",
@@ -658,7 +658,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/deployments",
                 "operation_id": "getDeploymentsForRepository",
-                "display_name": "List Deployments",
+                "display_name": "List deployments",
                 "short_desc": "List a repository's deployments",
                 "desc": "Lists deployments, newest first, with the environment each went to, the state it "
                     "reached and the commit it deployed.",
@@ -672,7 +672,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
-                "display_name": "List Pull Requests",
+                "display_name": "List pull requests",
                 "short_desc": "List a repository's pull requests",
                 "desc": "Lists pull requests.\n\n"
                     "`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults "
@@ -690,7 +690,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_post",
                 "method": "POST",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests",
-                "display_name": "Create Pull Request",
+                "display_name": "Create pull request",
                 "short_desc": "Open a pull request",
                 "desc": "Opens a pull request from one branch into another.\n\n"
                     "The repository in the URL is the **destination**. `destination` defaults to the "
@@ -730,7 +730,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}",
-                "display_name": "Get Pull Request",
+                "display_name": "Get pull request",
                 "short_desc": "Retrieve one pull request",
                 "desc": "Retrieves a pull request with its state, participants and merge commit.",
                 "groups": (GroupPullRequests,),
@@ -743,7 +743,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_put",
                 "method": "PUT",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}",
-                "display_name": "Update Pull Request",
+                "display_name": "Update pull request",
                 "short_desc": "Update a pull request",
                 "desc": "Updates a pull request's title, description, destination branch or reviewers.\n\n"
                     "Only the fields supplied are changed. This does not merge, decline or approve the "
@@ -778,7 +778,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_get",
                 "method": "GET",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
-                "display_name": "List Pull Request Comments",
+                "display_name": "List pull request comments",
                 "short_desc": "List the comments on a pull request",
                 "desc": "Lists the comments on a pull request, including the ones attached to a line of "
                     "the diff and the ones Bitbucket marks as deleted.",
@@ -792,7 +792,7 @@ public class BitbucketManifest {
                 "action": "repositories_workspace_repo_slug_pullrequests_pull_request_id_comments_post",
                 "method": "POST",
                 "path": "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments",
-                "display_name": "Comment on Pull Request",
+                "display_name": "Comment on pull request",
                 "short_desc": "Add a comment to a pull request",
                 "desc": "Adds a comment to a pull request.\n\n"
                     "`content.raw` is the comment text. Supplying `inline` with a `path` and a line number "
@@ -825,7 +825,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path":
                     "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
-                "display_name": "Get Pull Request Comment",
+                "display_name": "Get pull request comment",
                 "short_desc": "Retrieve one comment on a pull request",
                 "desc": "Retrieves a single comment on a pull request.",
                 "groups": (GroupPullRequests,),
@@ -841,7 +841,7 @@ public class BitbucketManifest {
                 "method": "PUT",
                 "path":
                     "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
-                "display_name": "Update Pull Request Comment",
+                "display_name": "Update pull request comment",
                 "short_desc": "Update a comment on a pull request",
                 "desc": "Replaces the text of a comment. Only the comment's author may change it.",
                 "groups": (GroupPullRequests,),
@@ -873,7 +873,7 @@ public class BitbucketManifest {
                 "method": "DELETE",
                 "path":
                     "/repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments/{comment_id}",
-                "display_name": "Delete Pull Request Comment",
+                "display_name": "Delete pull request comment",
                 "short_desc": "Delete a comment on a pull request",
                 "desc": "Deletes a comment. Bitbucket keeps the comment and marks it deleted rather than "
                     "removing it, so it still appears in a listing with `deleted` set.",
@@ -891,7 +891,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path": "/workspaces/{workspace}/search/code",
                 "operation_id": "searchWorkspace",
-                "display_name": "Search Code in a Workspace",
+                "display_name": "Search code in a workspace",
                 "short_desc": "Search the code in a workspace's repositories",
                 "desc": "Searches the code in every repository of a workspace.\n\n"
                     "`search_query` takes Bitbucket's code search syntax, ex: `foo lang:python` or "
@@ -912,7 +912,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path": "/users/{selected_user}/search/code",
                 "operation_id": "searchAccount",
-                "display_name": "Search Code in a User's Repositories",
+                "display_name": "Search code in a user's repositories",
                 "short_desc": "Search the code in one user's repositories",
                 "desc": "Searches the code in the repositories of one user account.",
                 "groups": (GroupSearch,),
@@ -934,7 +934,7 @@ public class BitbucketManifest {
                 "method": "GET",
                 "path": "/teams/{username}/search/code",
                 "operation_id": "searchTeam",
-                "display_name": "Search Code in a Team's Repositories",
+                "display_name": "Search code in a Team's repositories",
                 "short_desc": "Search the code in a team's repositories (deprecated by Bitbucket)",
                 "desc": "Searches the code in a team's repositories.\n\n"
                     "**Bitbucket has replaced teams with workspaces**, and this endpoint is deprecated; "
@@ -983,7 +983,7 @@ public class BitbucketManifest {
                 "action": "workspaces_workspace_get",
                 "method": "GET",
                 "path": "/workspaces/{workspace}",
-                "display_name": "Get Workspace",
+                "display_name": "Get workspace",
                 "short_desc": "Retrieve one workspace",
                 "desc": "Retrieves a workspace with its slug, name and whether it is private.",
                 "groups": (GroupWorkspaces,),
@@ -996,7 +996,7 @@ public class BitbucketManifest {
                 "action": "workspaces_workspace_members_get",
                 "method": "GET",
                 "path": "/workspaces/{workspace}/members",
-                "display_name": "List Workspace Members",
+                "display_name": "List workspace members",
                 "short_desc": "List the members of a workspace",
                 "desc": "Lists the members of a workspace.\n\n"
                     "Each record is a **membership**, so the member is under `user` rather than at the top "
@@ -1011,7 +1011,7 @@ public class BitbucketManifest {
                 "action": "workspaces_workspace_projects_get",
                 "method": "GET",
                 "path": "/workspaces/{workspace}/projects",
-                "display_name": "List Workspace Projects",
+                "display_name": "List workspace projects",
                 "short_desc": "List the projects in a workspace",
                 "desc": "Lists the projects in a workspace. A project groups repositories; it is not a "
                     "Jira project.",

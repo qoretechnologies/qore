@@ -748,7 +748,7 @@
           "message": "Ідентифікатор підключення кур'єра для використання в цьому відстеженні"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "Отримати відстеження"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Мітка часу події завершення. Якщо не вказано, використовується поточний час"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "Отримати останню контрольну точку"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "Ідентифікатор відстеження Aftership для отримання останньої контрольної точки"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Список кур'єрів"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Підпричина, якщо причина це дозволяє"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Отримати повернення"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {

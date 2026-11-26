@@ -748,7 +748,7 @@
           "message": "Kennung für die Kurierverbindung, die für diese Sendungsverfolgung verwendet werden soll"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "Sendungsverfolgung abrufen"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Zeitstempel des Abschlussereignisses. Wenn nicht angegeben, wird die aktuelle Uhrzeit verwendet"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "Letzten Checkpoint abrufen"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "Die Aftership-Tracking-ID, für die der letzte Checkpoint abgerufen werden soll"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Kuriere auflisten"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Untergrund, falls der Grund dies zulässt"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Retoure abrufen"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {

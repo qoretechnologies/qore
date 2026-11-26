@@ -556,7 +556,7 @@
           "message": "Назва платформи або постачальника, з якої було імпортовано цей об'єкт."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Отримати клієнта"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Paddle ID сутності клієнта для роботи.: Унікальний Paddle ID для цієї сутності клієнта з префіксом `ctm_`."
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Оновити клієнта"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Назва платформи або постачальника, з якої було імпортовано цей об'єкт."
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "Отримати токен автентифікації клієнта"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Paddle ID сутності клієнта для роботи.: Унікальний Paddle ID для цієї сутності клієнта з префіксом `ctm_`."
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "Список кредитних балансів клієнта"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Назва платформи або постачальника, з якої було імпортовано цей об'єкт."
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Отримати товар"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Включити пов’язані сутності у відповідь. Використовуйте список, розділений комами, щоб указати декілька сутностей."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Оновити продукт"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "хостинг вебсайтів"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "Архівувати продукт"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Назва платформи або постачальника, з якої було імпортовано цей об'єкт."
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "Отримати ціну"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Включити пов'язані сутності у відповідь."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "Оновити ціну"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Встановіть `true`, щоб пропустити запит на підрахунок кількості, який Paddle виконує для списку.\n\nУ такому разі `meta.pagination.estimated_total` повертає `-1` замість кількості. Варто встановлювати під час пагінації великих колекцій, коли підрахунок забирає час на кожній сторінці й не використовується."
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Отримати підписку"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "URL для оформлення замовлення, який використовуватиметься для посилання на оплату цієї транзакції. Передайте URL для підтвердженого домену або `null`, щоб встановити URL оплати за замовчуванням.\n\nPaddle повертає унікальне посилання на оплату, складене з URL, переданого або вашого URL за замовчуванням + `?_ptxn=` та ідентифікатора Paddle для цієї транзакції."
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Отримати транзакцію"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "оформлення"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "Отримати звіт"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "Paddle ID сутності звіту."
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "Отримати файл звіту"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "Таблиця для роботи: `customers`, `products`, `prices`, `transactions` або `reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Клієнта створено"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Спрацьовує під час створення клієнта незалежно від способу: через API, чекаут або панель керування Paddle.\n\nЦе замінює опитування списку клієнтів: опитування, впорядковане за часом створення, не може бачити клієнта, якого було створено та видалено між двома запусками, і вимагає запиту за інтервал незалежно від того, чи відбулися зміни."
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Клієнта оновлено"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Спрацьовує в разі зміни клієнта, зокрема під час архівації — `status` стає `archived`, а не клієнт видаляється.\n\nPaddle надсилає об’єкт клієнта повністю, а не різницю (diff), тому порівнюйте його з наявними у вас даними, якщо вам потрібно знати, яке поле змінилося."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "Товар створено"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "Спрацьовує під час додавання продукту до каталогу.\n\nПродукт сам по собі не містить ціни, тому щойно створений продукт не можна продати, доки для нього не створено ціну; відстежуйте для цього `price.created`.\n\nЦе замінює опитування списку продуктів."
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "Товар оновлено"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Спрацьовує у разі зміни продукту, включно з його архівацією — `status` стає `archived`, що знімає його з продажу без впливу на наявні підписки.\n\n**Архівація продукту не архівує його ціни**, тому за ціною архівованого продукту все одно можна виставляти рахунки, якщо її також не архівовано."
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "Ціну створено"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "Спрацьовує під час створення ціни для продукту.\n\n`unit_price.amount` — це рядок у **найменших одиницях відповідної валюти**, тому `1000` означає $10.00 у USD, але 1000 єн у JPY. `billing_cycle` робить її ціною підписки; без цього вона є одноразовим платежем."
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "Ціну оновлено"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "Спрацьовує у разі зміни ціни, включно з її архівацією.\n\n**Зміна `unit_price` впливає лише на нові покупки**; підписки, які вже тарифікуються за цією ціною, зберігають початкову суму, доки їх явно не оновлять. Тому зміна ціни не свідчить про те, що чийсь рахунок змінився."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Підписку створено"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "Спрацьовує під час створення підписки.\n\n**Створено — це не те саме, що оплачено.** Нова підписка часто є `trialing`, а створена для транзакції, кошти за яку ще не стягнуто, нічого не приносить; перевірте `status` перед наданням доступу. `subscription.activated` — це сигнал про те, що білінг фактично розпочався.\n\nЦе замінює опитування списку підписок."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "Підписку активовано"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Спрацьовує, коли підписка вперше стає `active` — пробний період завершився та був оплачений, або настав запланований початок.\n\nЦе сигнал для надання платного плану: це означає, що Paddle стягнув кошти, тоді як `subscription.created` означає лише те, що запис існує."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "Підписку оновлено"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "Спрацьовує у разі будь-яких змін у підписці: зміна тарифного плану, зміна кількості, поновлення, що змінює `next_billed_at`, або якщо **заплановано** призупинення чи скасування.\n\n`scheduled_change` — це поле, яке вирізняє ці останні випадки: підписка може бути `active` і водночас бути запланованою на завершення. Paddle надсилає всю підписку, а не лише різницю змін."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "Підписку скасовано"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Спрацьовує, коли підписка фактично завершується і `status` стає `canceled`.\n\n**Це сигнал про відкликання доступу, а не запит на скасування.** Скасування, заплановане на кінець розрахункового періоду, спочатку з'являється як `scheduled_change` у `subscription.updated`, і клієнт сплатив до цієї дати; ця подія настає тоді, коли настає ця дата."
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "Прострочена підписка"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "Спрацьовує, коли не вдалося стягнути плату за поновлення і підписка переходить у стан `past_due`.\n\nPaddle повторює спроби згідно зі своїм розкладом надсилання нагадувань (dunning), тому це ще не кінець: підписка повертається до `active`, якщо повторна спроба успішна, або скасовується, коли спроби вичерпано. Розглядайте це як попередження для звернення до клієнта, а не як причину блокувати доступ."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "Транзакцію створено"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "Спрацьовує під час створення транзакції, включно з чернеткою, яку Paddle створює для майбутнього поновлення.\n\n**Створена транзакція ще не оплачена**; більшість із них на цьому етапі мають статус `draft` або `ready`. Використовуйте `transaction.completed` для фактично стягнутих коштів.\n\nЦе замінює опитування списку транзакцій."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "Транзакцію завершено"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Спрацьовує, коли транзакція переходить у стан `completed`: кошти стягнуто, а інвойс закрито.\n\nЦе подія, за якою виконується замовлення. `details.totals` розбиває суму на підсумок, податок та загальну суму, усі у вигляді рядків у найменших одиницях `currency_code`."
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "Не вдалося оплатити транзакцію"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Спрацьовує у разі невдалої спроби стягнення коштів за транзакцією.\n\n`payments` містить дані спроби та причину помилки. Paddle автоматично повторює спроби для поновлення підписки, тому одна невдача не є остаточною; перехід підписки в стан `past_due` є моментом, коли клієнту потрібно діяти."
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "Звіт створено"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "Спрацьовує, коли надходить запит на звіт. Він надходить як `pending`: Paddle генерує файл у фоновому режимі, тому завантажувати ще нічого.\n\nЗачекайте на `report.updated` зі значенням `status` у `ready`, перш ніж запитувати файл.\n\nЦе замінює опитування списку звітів."
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "Звіт оновлено"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

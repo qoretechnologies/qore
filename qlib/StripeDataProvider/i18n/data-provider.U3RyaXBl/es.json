@@ -524,7 +524,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Get Balance Transaction",
+          "source": "Get balance transaction",
           "message": "Obtener transacción de saldo"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Get Connected Account",
+          "source": "Get connected account",
           "message": "Obtener cuenta conectada"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Especifica qué campos de la respuesta deben expandirse."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Update Connected Account",
+          "source": "Update connected account",
           "message": "Actualizar cuenta conectada"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2416,7 +2416,7 @@
           "message": "Agente de usuario"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Delete Connected Account",
+          "source": "Delete connected account",
           "message": "Eliminar cuenta conectada"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "Especifica qué campos de la respuesta deben expandirse."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.display_name": {
-          "source": "Create Login Link",
+          "source": "Create login link",
           "message": "Crear enlace de inicio de sesión"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Especifica qué campos de la respuesta deben expandirse."
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.display_name": {
-          "source": "List External Accounts",
+          "source": "List external accounts",
           "message": "Listar cuentas externas"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.display_name": {
-          "source": "Create External Account",
+          "source": "Create external account",
           "message": "Crear cuenta externa"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Especifica qué campos de la respuesta deben expandirse."
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.display_name": {
-          "source": "List Account People",
+          "source": "List account people",
           "message": "Listar personas de la cuenta"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.display_name": {
-          "source": "Create Account Person",
+          "source": "Create account person",
           "message": "Crear persona de la cuenta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Solo devolver cargos de este grupo de transferencias, limitado a 100."
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.display_name": {
-          "source": "Get Charge",
+          "source": "Get charge",
           "message": "Obtener cargo"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.short_desc": {
@@ -4068,7 +4068,7 @@
           "message": "Una cadena que identifica esta transacción como parte de un grupo. Para obtener detalles, consulta [Agrupación de transacciones](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.display_name": {
-          "source": "Update Charge",
+          "source": "Update charge",
           "message": "Actualizar cargo"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.short_desc": {
@@ -4348,7 +4348,7 @@
           "message": "Proporciona una lista de clientes asociados con el reloj de prueba especificado. La respuesta no incluirá clientes con relojes de prueba si este parámetro no está configurado."
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Obtener cliente"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -5260,7 +5260,7 @@
           "message": "ID del reloj de prueba que se adjuntará al cliente."
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Actualizar cliente"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "reverse"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Eliminar cliente"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -5848,7 +5848,7 @@
           "message": "Cliente"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.display_name": {
-          "source": "List Customer Balance Transactions",
+          "source": "List customer balance transactions",
           "message": "Listar transacciones del saldo del cliente"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Create Customer Balance Transaction",
+          "source": "Create customer balance transaction",
           "message": "Crear transacción de saldo de cliente"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -6028,7 +6028,7 @@
           "message": "Conjunto de [pares clave-valor](https://docs.stripe.com/api/metadata) que puedes asociar a un objeto. Puede ser útil para almacenar información adicional sobre el objeto en un formato estructurado. Las claves individuales se pueden desasignar enviando un valor vacío a ellas. Todas las claves se pueden desasignar enviando un valor vacío a `metadata`."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.display_name": {
-          "source": "List Customer Sources",
+          "source": "List customer sources",
           "message": "Listar fuentes del cliente"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.display_name": {
-          "source": "Create Customer Source",
+          "source": "Create customer source",
           "message": "Crear fuente de cliente"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "Especifica qué campos de la respuesta deben expandirse."
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Customer Subscriptions",
+          "source": "List customer subscriptions",
           "message": "Listar suscripciones del cliente"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.short_desc": {
@@ -6368,7 +6368,7 @@
           "message": "Un cursor para usar en la paginación. `starting_after` es un ID de objeto que define tu posición en la lista. Por ejemplo, si realizas una solicitud de lista y recibes 100 objetos, terminando con `obj_foo`, tu llamada posterior puede incluir `starting_after=obj_foo` para recuperar la página siguiente de la lista."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Customer Subscription",
+          "source": "Create customer subscription",
           "message": "Crear suscripción de cliente"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -7716,7 +7716,7 @@
           "message": "Solo devolver facturas de la suscripción especificada mediante este ID de suscripción."
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Obtener factura"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -8768,7 +8768,7 @@
           "message": "Destino"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Actualizar factura"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "Destino"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Eliminar factura"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.short_desc": {

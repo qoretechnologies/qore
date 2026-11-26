@@ -966,7 +966,7 @@ module CloseDataProvider {
             "action": "create-call",
             "billing": <DataProviderBillingInfo>{"model": "unknown"},
             "groups": "Calls",
-            "display_name": "Create a Call",
+            "display_name": "Create a call",
             "short_desc": "Log a new call",
             "desc": "Log a new call activity in Close CRM",
             "action_code": DPAT_API,

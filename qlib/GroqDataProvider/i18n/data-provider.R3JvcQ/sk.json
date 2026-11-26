@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.R3JvcQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Vyberte existujúci zdroj na skontrolovanie alebo správu."
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Vytvoriť odpoveď"
         },
         "app.R3JvcQ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -868,7 +868,7 @@
           "message": "Nepoužívať úložisko"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Prepísať zvuk"
         },
         "app.R3JvcQ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Segment"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.display_name": {
-          "source": "Translate Audio",
+          "source": "Translate audio",
           "message": "Preložiť zvuk"
         },
         "app.R3JvcQ.action.dHJhbnNsYXRlLWF1ZGlv.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Teplota vzorkovania medzi `0` a `1`."
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.display_name": {
-          "source": "Generate Speech",
+          "source": "Generate speech",
           "message": "Vytvoriť reč"
         },
         "app.R3JvcQ.action.Z2VuZXJhdGUtc3BlZWNo.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Rýchlosť reči od `0.5` do `5`, kde je podporované modelom."
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Nahrať súbor"
         },
         "app.R3JvcQ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Adaptér LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Zoznam súborov"
         },
         "app.R3JvcQ.action.bGlzdC1maWxlcw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Nájdite nahrané súbory a súbory výsledkov dávky.\n\nVráti zdroje poskytované overeným koncovým bodom zoznamu."
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získať súbor"
         },
         "app.R3JvcQ.action.Z2V0LWZpbGU.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Vyberte existujúci zdroj na skontrolovanie alebo správu."
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.R3JvcQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Vyberte existujúci zdroj na skontrolovanie alebo správu."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Odstrániť súbor"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Vyberte existujúci zdroj na prehľad alebo správu."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Vytvoriť dávku"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Vlastné kľúč/hodnota metadáta pre sledovanie tejto dávky."
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Zoznam dávok"
         },
         "app.R3JvcQ.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "Nájsť dávky a prehľadnúť ich aktuálny stav spracovania.\n\nVráti zdroje poskytované overeným koncovým bodom pre zoznam."
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Získať dávku"
         },
         "app.R3JvcQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Vyberte existujúci zdroj na prehľad alebo správu."
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Zrušiť dávku"
         },
         "app.R3JvcQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Vyberte existujúci zdroj na prehľad alebo správu."
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Register LoRA Adapter",
+          "source": "Register LoRA adapter",
           "message": "Zaregistrovať LoRA prispôsobenie"
         },
         "app.R3JvcQ.action.Y3JlYXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "LoRA"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.display_name": {
-          "source": "List LoRA Adapters",
+          "source": "List LoRA adapters",
           "message": "Zoznam LoRA prispôsobení"
         },
         "app.R3JvcQ.action.bGlzdC1maW5lLXR1bmluZ3M.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Nájdite prispôsobenia dostupné pre vašu organizáciu.\n\n**Požaduje sa podnikový prístup.** Nahrajte externé trénované prispôsobenie LoRA s `purpose` nastaveným na `fine_tuning`. Groq hostuje prispôsobenia a nevyučuje modely. Pozrite si [Príručku pre LoRA](https://console.groq.com/docs/lora).\n\nVráti zdroje poskytnuté overeným koncovým bodom pre zoznam."
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.display_name": {
-          "source": "Get LoRA Adapter",
+          "source": "Get LoRA adapter",
           "message": "Získať LoRA prispôsobenie"
         },
         "app.R3JvcQ.action.Z2V0LWZpbmUtdHVuaW5n.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Vyberte existujúci zdroj na prehľad alebo správu."
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.display_name": {
-          "source": "Delete LoRA Adapter",
+          "source": "Delete LoRA adapter",
           "message": "Odstrániť LoRA adaptéry"
         },
         "app.R3JvcQ.action.ZGVsZXRlLWZpbmUtdHVuaW5n.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Vyberte existujúci zdroj na prehľad alebo správu."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Dopĺňanie chatu"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Netransparentný identifikátor reprezentujúci koncového používateľa. Zaznamenáva sa na strane servera na sledovanie zneužitia a priradenie využitia; neovplyvňuje generovanie."
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Zoznam modelov"
         },
         "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "Enviar correo electrónico"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Dirección de correo electrónico para respuestas"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "Validar correo electrónico"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {

@@ -708,8 +708,8 @@
           "message": "The OData expression to describe the sorting order."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
-          "message": "Get Batch"
+          "source": "Get batch",
+          "message": "Get batch"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Retrieves a batch",
@@ -752,8 +752,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
-          "message": "Cancel Batch"
+          "source": "Cancel batch",
+          "message": "Cancel batch"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancels an in-progress batch",
@@ -2920,8 +2920,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.display_name": {
-          "source": "Get Container",
-          "message": "Get Container"
+          "source": "Get container",
+          "message": "Get container"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.short_desc": {
           "source": "Get Container",
@@ -2964,8 +2964,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.display_name": {
-          "source": "Delete Container",
-          "message": "Delete Container"
+          "source": "Delete container",
+          "message": "Delete container"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.short_desc": {
           "source": "Delete Container",
@@ -3008,8 +3008,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.display_name": {
-          "source": "List Container Files",
-          "message": "List Container Files"
+          "source": "List container files",
+          "message": "List container files"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.short_desc": {
           "source": "List Container Files",
@@ -3108,8 +3108,8 @@
           "message": "A cursor for use in pagination. `before` is an object ID that defines your place in the list.\nFor instance, if you make a list request and receive 100 objects, ending with obj_foo, your\nsubsequent call can include before=obj_foo in order to fetch the previous page of the list."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Create Container File",
-          "message": "Create Container File"
+          "source": "Create container file",
+          "message": "Create container file"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.short_desc": {
           "source": "Create Container File",
@@ -3296,8 +3296,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Get Container File",
-          "message": "Get Container File"
+          "source": "Get container file",
+          "message": "Get container file"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.short_desc": {
           "source": "Get Container File",
@@ -3352,8 +3352,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Delete Container File",
-          "message": "Delete Container File"
+          "source": "Delete container file",
+          "message": "Delete container file"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.short_desc": {
           "source": "Delete Container File",
@@ -3408,8 +3408,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Container File Content",
-          "message": "Get Container File Content"
+          "source": "Get container file content",
+          "message": "Get container file content"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.short_desc": {
           "source": "Get Container File Content",
@@ -9376,8 +9376,8 @@
           "message": "tool_approval_response"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
-          "message": "Get Conversation"
+          "source": "Get conversation",
+          "message": "Get conversation"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Get Conversation",
@@ -9400,8 +9400,8 @@
           "message": "The ID of the conversation to retrieve."
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update Conversation",
-          "message": "Update Conversation"
+          "source": "Update conversation",
+          "message": "Update conversation"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Update Conversation",
@@ -9436,8 +9436,8 @@
           "message": "Set of 16 key-value pairs that can be attached to an object. This can be         useful for storing additional information about the object in a structured         format, and querying for objects via API or the dashboard.\n  Keys are strings with a maximum length of 64 characters. Values are strings         with a maximum length of 512 characters."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
-          "message": "Delete Conversation"
+          "source": "Delete conversation",
+          "message": "Delete conversation"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Delete Conversation",
@@ -9460,8 +9460,8 @@
           "message": "The ID of the conversation to delete."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
-          "message": "List Conversation Items"
+          "source": "List conversation items",
+          "message": "List conversation items"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
           "source": "List Conversation Items",
@@ -9540,8 +9540,8 @@
           "message": "Specify additional output data to include in the model response."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Create Conversation Items",
-          "message": "Create Conversation Items"
+          "source": "Create conversation items",
+          "message": "Create conversation items"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
           "source": "Create Conversation Items",
@@ -15464,8 +15464,8 @@
           "message": "Additional fields to include in the response."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get Conversation Item",
-          "message": "Get Conversation Item"
+          "source": "Get conversation item",
+          "message": "Get conversation item"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
           "source": "Get Conversation Item",
@@ -15512,8 +15512,8 @@
           "message": "Additional fields to include in the response."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete Conversation Item",
-          "message": "Delete Conversation Item"
+          "source": "Delete conversation item",
+          "message": "Delete conversation item"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
           "source": "Delete Conversation Item",
@@ -16664,8 +16664,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
-          "message": "Get Evaluation"
+          "source": "Get evaluation",
+          "message": "Get evaluation"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
           "source": "Retrieve an evaluation by its ID",
@@ -16700,8 +16700,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Update Evaluation",
-          "message": "Update Evaluation"
+          "source": "Update evaluation",
+          "message": "Update evaluation"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.short_desc": {
           "source": "Update Evaluation",
@@ -16752,8 +16752,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
-          "message": "Delete Evaluation"
+          "source": "Delete evaluation",
+          "message": "Delete evaluation"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
           "source": "Delete Evaluation",
@@ -16788,8 +16788,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.display_name": {
-          "source": "List Evaluation Runs",
-          "message": "List Evaluation Runs"
+          "source": "List evaluation runs",
+          "message": "List evaluation runs"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.short_desc": {
           "source": "List Evaluation Runs",
@@ -16868,8 +16868,8 @@
           "message": "failed"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Create Evaluation Run",
-          "message": "Create Evaluation Run"
+          "source": "Create evaluation run",
+          "message": "Create evaluation run"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
           "source": "Create Evaluation Run",
@@ -19968,8 +19968,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
-          "message": "Get Evaluation Run"
+          "source": "Get evaluation run",
+          "message": "Get evaluation run"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
           "source": "Get Evaluation Run",
@@ -20008,8 +20008,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Cancel Evaluation Run",
-          "message": "Cancel Evaluation Run"
+          "source": "Cancel evaluation run",
+          "message": "Cancel evaluation run"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.short_desc": {
           "source": "Cancel Evaluation Run",
@@ -20048,8 +20048,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Delete Evaluation Run",
-          "message": "Delete Evaluation Run"
+          "source": "Delete evaluation run",
+          "message": "Delete evaluation run"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
           "source": "Delete Evaluation Run",
@@ -20088,8 +20088,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.display_name": {
-          "source": "List Evaluation Output Items",
-          "message": "List Evaluation Output Items"
+          "source": "List evaluation output items",
+          "message": "List evaluation output items"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.short_desc": {
           "source": "List Evaluation Output Items",
@@ -20160,8 +20160,8 @@
           "message": "desc"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.display_name": {
-          "source": "Get Evaluation Run Output Item",
-          "message": "Get Evaluation Run Output Item"
+          "source": "Get evaluation run output item",
+          "message": "Get evaluation run output item"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.short_desc": {
           "source": "Get Evaluation Run Output Item",
@@ -20468,8 +20468,8 @@
           "message": "After"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get File",
@@ -20512,8 +20512,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete File",
@@ -20556,8 +20556,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download File",
@@ -22704,8 +22704,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.display_name": {
-          "source": "List Fine-Tuning Checkpoint Permissions",
-          "message": "List Fine-Tuning Checkpoint Permissions"
+          "source": "List fine-tuning checkpoint permissions",
+          "message": "List fine-tuning checkpoint permissions"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.short_desc": {
           "source": "List checkpoint permissions",
@@ -22804,8 +22804,8 @@
           "message": "descending"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Create Fine-Tuning Checkpoint Permission",
-          "message": "Create Fine-Tuning Checkpoint Permission"
+          "source": "Create fine-tuning checkpoint permission",
+          "message": "Create fine-tuning checkpoint permission"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
           "source": "Create checkpoint permissions",
@@ -22860,8 +22860,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Delete Fine-Tuning Checkpoint Permission",
-          "message": "Delete Fine-Tuning Checkpoint Permission"
+          "source": "Delete fine-tuning checkpoint permission",
+          "message": "Delete fine-tuning checkpoint permission"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
           "source": "Delete checkpoint permission",
@@ -24084,8 +24084,8 @@
           "message": "Number of fine-tuning jobs to retrieve."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Get Fine-Tuning Job",
-          "message": "Get Fine-Tuning Job"
+          "source": "Get fine-tuning job",
+          "message": "Get fine-tuning job"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.short_desc": {
           "source": "Get Fine-Tuning Job",
@@ -24128,8 +24128,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Cancel Fine-Tuning Job",
-          "message": "Cancel Fine-Tuning Job"
+          "source": "Cancel fine-tuning job",
+          "message": "Cancel fine-tuning job"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
           "source": "Immediately cancel a fine-tune job",
@@ -24172,8 +24172,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tuning Job Checkpoints",
-          "message": "List Fine-Tuning Job Checkpoints"
+          "source": "List fine-tuning job checkpoints",
+          "message": "List fine-tuning job checkpoints"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.short_desc": {
           "source": "List the checkpoints for a fine-tuning job",
@@ -24240,8 +24240,8 @@
           "message": "Number of checkpoints to retrieve."
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Copy Fine-Tuning Checkpoint",
-          "message": "Copy Fine-Tuning Checkpoint"
+          "source": "Copy fine-tuning checkpoint",
+          "message": "Copy fine-tuning checkpoint"
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.short_desc": {
           "source": "Copy Fine-Tuning Checkpoint",
@@ -24320,8 +24320,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.display_name": {
-          "source": "Get Fine-Tuning Checkpoint Copy",
-          "message": "Get Fine-Tuning Checkpoint Copy"
+          "source": "Get fine-tuning checkpoint copy",
+          "message": "Get fine-tuning checkpoint copy"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.short_desc": {
           "source": "Get Fine-Tuning Checkpoint Copy",
@@ -24376,8 +24376,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.display_name": {
-          "source": "List Fine-Tuning Events",
-          "message": "List Fine-Tuning Events"
+          "source": "List fine-tuning events",
+          "message": "List fine-tuning events"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.short_desc": {
           "source": "Get status updates for a fine-tuning job",
@@ -24444,8 +24444,8 @@
           "message": "Number of events to retrieve."
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Pause Fine-Tuning Job",
-          "message": "Pause Fine-Tuning Job"
+          "source": "Pause fine-tuning job",
+          "message": "Pause fine-tuning job"
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.short_desc": {
           "source": "Pause a fine-tune job",
@@ -24488,8 +24488,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Resume Fine-Tuning Job",
-          "message": "Resume Fine-Tuning Job"
+          "source": "Resume fine-tuning job",
+          "message": "Resume fine-tuning job"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
           "source": "Resume a paused fine-tune job",
@@ -25444,8 +25444,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Inspect a model in the resource catalog",
@@ -25488,8 +25488,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
-          "message": "Delete Model"
+          "source": "Delete model",
+          "message": "Delete model"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.short_desc": {
           "source": "Deletes a model instance",
@@ -26388,8 +26388,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Accept Realtime Call",
-          "message": "Accept Realtime Call"
+          "source": "Accept realtime call",
+          "message": "Accept realtime call"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.short_desc": {
           "source": "Accept Realtime Call",
@@ -27232,8 +27232,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Hangup Realtime Call",
-          "message": "Hangup Realtime Call"
+          "source": "Hangup realtime call",
+          "message": "Hangup realtime call"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.short_desc": {
           "source": "End an active Realtime API call, whether it was initiated over SIP or WebRTC",
@@ -27276,8 +27276,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.display_name": {
-          "source": "Refer Realtime Call",
-          "message": "Refer Realtime Call"
+          "source": "Refer realtime call",
+          "message": "Refer realtime call"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.short_desc": {
           "source": "Transfer an active SIP call to a new destination using the SIP REFER verb",
@@ -27332,8 +27332,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Reject Realtime Call",
-          "message": "Reject Realtime Call"
+          "source": "Reject realtime call",
+          "message": "Reject realtime call"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.short_desc": {
           "source": "Decline an incoming SIP call by returning a SIP status code to the caller",
@@ -36376,8 +36376,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
-          "message": "Get Response"
+          "source": "Get response",
+          "message": "Get response"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.short_desc": {
           "source": "Get Response",
@@ -36460,8 +36460,8 @@
           "message": "When true, stream obfuscation will be enabled. Stream obfuscation adds random characters to an `obfuscation` field on streaming delta events to normalize payload sizes as a mitigation to certain side-channel attacks. These obfuscation fields are included by default, but add a small amount of overhead to the data stream. You can set `include_obfuscation` to false to optimize for bandwidth if you trust the network links between your application and the OpenAI API."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
-          "message": "Delete Response"
+          "source": "Delete response",
+          "message": "Delete response"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
           "source": "Delete Response",
@@ -36496,8 +36496,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel Response",
-          "message": "Cancel Response"
+          "source": "Cancel response",
+          "message": "Cancel response"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
           "source": "Cancel Response",
@@ -36532,8 +36532,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
-          "message": "List Response Input Items"
+          "source": "List response input items",
+          "message": "List response input items"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
           "source": "List Response Input Items",
@@ -36904,8 +36904,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Get Vector Store",
-          "message": "Get Vector Store"
+          "source": "Get vector store",
+          "message": "Get vector store"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.short_desc": {
           "source": "Retrieves a vector store",
@@ -36948,8 +36948,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Update Vector Store",
-          "message": "Update Vector Store"
+          "source": "Update vector store",
+          "message": "Update vector store"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
           "source": "Modifies a vector store",
@@ -37056,8 +37056,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Delete Vector Store",
-          "message": "Delete Vector Store"
+          "source": "Delete vector store",
+          "message": "Delete vector store"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
           "source": "Delete a vector store",
@@ -37100,8 +37100,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Create Vector Store File Batch",
-          "message": "Create Vector Store File Batch"
+          "source": "Create vector store file batch",
+          "message": "Create vector store file batch"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
           "source": "Create a vector store file batch",
@@ -37324,8 +37324,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Get Vector Store File Batch",
-          "message": "Get Vector Store File Batch"
+          "source": "Get vector store file batch",
+          "message": "Get vector store file batch"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
           "source": "Retrieves a vector store file batch",
@@ -37380,8 +37380,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Cancel Vector Store File Batch",
-          "message": "Cancel Vector Store File Batch"
+          "source": "Cancel vector store file batch",
+          "message": "Cancel vector store file batch"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
           "source": "Cancel Vector Store File Batch",
@@ -37436,8 +37436,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.display_name": {
-          "source": "List Files In Vector Store Batch",
-          "message": "List Files In Vector Store Batch"
+          "source": "List files in vector store batch",
+          "message": "List files in vector store batch"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.short_desc": {
           "source": "Returns a list of vector store files in a batch",
@@ -37576,8 +37576,8 @@
           "message": "cancelled"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.display_name": {
-          "source": "List Vector Store Files",
-          "message": "List Vector Store Files"
+          "source": "List vector store files",
+          "message": "List vector store files"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.short_desc": {
           "source": "Returns a list of vector store files",
@@ -37704,8 +37704,8 @@
           "message": "cancelled"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Create Vector Store File",
-          "message": "Create Vector Store File"
+          "source": "Create vector store file",
+          "message": "Create vector store file"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
           "source": "Create Vector Store File",
@@ -37844,8 +37844,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Get Vector Store File",
-          "message": "Get Vector Store File"
+          "source": "Get vector store file",
+          "message": "Get vector store file"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
           "source": "Retrieves a vector store file",
@@ -37900,8 +37900,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.display_name": {
-          "source": "Update Vector Store File Attributes",
-          "message": "Update Vector Store File Attributes"
+          "source": "Update vector store file attributes",
+          "message": "Update vector store file attributes"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.short_desc": {
           "source": "Update Vector Store File Attributes",
@@ -37952,8 +37952,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Delete Vector Store File",
-          "message": "Delete Vector Store File"
+          "source": "Delete vector store file",
+          "message": "Delete vector store file"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
           "source": "Delete Vector Store File",
@@ -38008,8 +38008,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Vector Store File Content",
-          "message": "Get Vector Store File Content"
+          "source": "Get vector store file content",
+          "message": "Get vector store file content"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.short_desc": {
           "source": "Retrieve vector store file content",
@@ -38064,8 +38064,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Search Vector Store",
-          "message": "Search Vector Store"
+          "source": "Search vector store",
+          "message": "Search vector store"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.short_desc": {
           "source": "Find relevant content in indexed files",
@@ -38620,8 +38620,8 @@
           "message": "desc"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
-          "message": "Get Video"
+          "source": "Get video",
+          "message": "Get video"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.short_desc": {
           "source": "Get Video",
@@ -38664,8 +38664,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.display_name": {
-          "source": "Delete Video",
-          "message": "Delete Video"
+          "source": "Delete video",
+          "message": "Delete video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.short_desc": {
           "source": "Delete Video",
@@ -38708,8 +38708,8 @@
           "message": "preview"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.display_name": {
-          "source": "Download Video",
-          "message": "Download Video"
+          "source": "Download video",
+          "message": "Download video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.short_desc": {
           "source": "Download Video",
@@ -38764,8 +38764,8 @@
           "message": "Selectable asset variants for downloaded content."
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.display_name": {
-          "source": "Remix Video",
-          "message": "Remix Video"
+          "source": "Remix video",
+          "message": "Remix video"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.short_desc": {
           "source": "Remix Video",
@@ -38792,8 +38792,8 @@
           "message": "Prompt"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.display_name": {
-          "source": "Create Transcription",
-          "message": "Create Transcription"
+          "source": "Create transcription",
+          "message": "Create transcription"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.short_desc": {
           "source": "Transcribes audio into the input language",
@@ -39040,8 +39040,8 @@
           "message": "Version of the deployment-based Azure audio API. The default supports Whisper and GPT transcription deployments."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.display_name": {
-          "source": "Create Translation",
-          "message": "Create Translation"
+          "source": "Create translation",
+          "message": "Create translation"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.short_desc": {
           "source": "Translate spoken audio into English",

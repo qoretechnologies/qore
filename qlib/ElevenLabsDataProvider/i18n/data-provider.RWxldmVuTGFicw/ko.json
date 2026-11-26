@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
-          "source": "Text to Speech",
+          "source": "Text to speech",
           "message": "텍스트 음성 변환"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
@@ -716,7 +716,7 @@
           "message": "사용할 발음 사전의 버전 ID"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
-          "source": "Speech to Speech",
+          "source": "Speech to speech",
           "message": "Speech to Speech"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "PCM 16비트, 16kHz 모노, 리틀 엔디언 — 더 낮은 지연 시간"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
-          "source": "Text to Sound Effects",
+          "source": "Text to sound effects",
           "message": "텍스트-음향 효과 변환"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "`True`인 경우 매끄럽게 반복되는 음향 효과를 생성합니다"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
-          "source": "Audio Isolation",
+          "source": "Audio isolation",
           "message": "오디오 분리"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "생성된 음성 미리보기에서 발화될 샘플 텍스트"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
-          "source": "List Voices",
+          "source": "List voices",
           "message": "음성 목록 조회"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "내림차순 정렬"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "음성 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "삭제할 음성의 고유 식별자"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "모델 목록 조회"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "사용 가능한 ElevenLabs AI 모델 및 해당 기능 나열"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
-          "source": "List History",
+          "source": "List history",
           "message": "히스토리 나열"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "페이지 매김을 위해 이후부터 시작할 히스토리 항목 ID"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Get History Item",
+          "source": "Get history item",
           "message": "기록 항목 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "삭제할 기록 항목의 고유 식별자입니다"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
-          "source": "Get History Audio",
+          "source": "Get history audio",
           "message": "기록 오디오 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "오디오를 가져올 기록 항목의 고유 식별자입니다"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
-          "source": "Create Dubbing",
+          "source": "Create dubbing",
           "message": "더빙 생성"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "`True`(이)면 전사본의 비속어가 검열됩니다. **참고**: 이 기능은 베타 기능입니다"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
-          "source": "Get Dubbing Status",
+          "source": "Get dubbing status",
           "message": "더빙 상태 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "조회할 더빙 프로젝트의 고유 식별자입니다"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
-          "source": "Get Dubbing Audio",
+          "source": "Get dubbing audio",
           "message": "더빙 오디오 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "삭제할 더빙 프로젝트의 고유 식별자입니다"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
-          "source": "List Dubbing Projects",
+          "source": "List dubbing projects",
           "message": "더빙 프로젝트 목록 조회"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "워크스페이스 멤버는 사전만 조회할 수 있습니다"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
-          "source": "List Pronunciation Dictionaries",
+          "source": "List pronunciation dictionaries",
           "message": "발음 사전 나열"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "결과의 다음 페이지를 검색하기 위한 페이지 매김에 사용할 커서"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Get Pronunciation Dictionary",
+          "source": "Get pronunciation dictionary",
           "message": "발음 사전 가져오기"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {

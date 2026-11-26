@@ -808,7 +808,7 @@
           "message": "Název úložiště vyhledávání v souborech, které se má použít pro retrieval-augmented generation (RAG). Model prohledá dokumenty v úložišti, aby svou odpověď podložil relevantním obsahem"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Jednoduchý chat"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Název úložiště vyhledávání v souborech, které se má použít pro retrieval-augmented generation (RAG). Model prohledá dokumenty v úložišti, aby svou odpověď podložil relevantním obsahem"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Vytvořit embedding obsahu"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Obsah z modelu"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Dávkový embedding"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

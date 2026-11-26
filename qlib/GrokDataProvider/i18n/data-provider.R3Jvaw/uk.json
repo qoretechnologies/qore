@@ -1108,7 +1108,7 @@
           "message": "Унікальний ідентифікатор вашого кінцевого користувача для моніторингу зловживань"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Простий чат"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "Не усікати; повертати помилку, якщо контекст перевищує ліміт"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Отримати відповідь"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

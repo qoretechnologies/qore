@@ -860,7 +860,7 @@
           "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Prosty czat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Zestaw 16 par klucz-wartość, które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie oraz wyszukiwania obiektów za pośrednictwem API lub panelu. Klucze to ciągi znaków o maksymalnej długości 64 znaków; wartości to ciągi znaków o maksymalnej długości 512 znaków"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Pobierz konwersację"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Identyfikator konwersacji"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Wyświetl listę elementów konwersacji"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Dodatkowe pola do uwzględnienia w odpowiedzi.\n\nInformacje o obsługiwanych wartościach można znaleźć w dokumentacji [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Pobierz element konwersacji"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "Identyfikator odpowiedzi do pobrania"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Wyświetl listę elementów wejściowych odpowiedzi"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

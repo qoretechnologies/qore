@@ -1596,7 +1596,7 @@
           "message": "Trova classificatori salvati da riutilizzare o eliminare. **Disponibilità del servizio:** Jina ha restituito HTTP 500 per questo endpoint durante la verifica del 7 settembre 2026; gli ID dei classificatori possono comunque essere forniti direttamente."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Elimina Classificatore"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Il classificatore salvato da rimuovere."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Elenca modelli"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Confronta le capacità dei modelli prima di scegliere un modello di embedding o di reranking. Il catalogo è pubblico; usa il ping di connessione per verificare la tua chiave API."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Recupera modello"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Se `true` (impostazione predefinita), gli embedding sono normalizzati L2 a lunghezza unitaria."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "Ottieni stato batch"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Il batch di embedding da ispezionare o annullare."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Annulla batch"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Numero massimo di batch recenti da restituire."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Leggi pagina web o documento"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Collegamento rapido"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Cercare nel web"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {

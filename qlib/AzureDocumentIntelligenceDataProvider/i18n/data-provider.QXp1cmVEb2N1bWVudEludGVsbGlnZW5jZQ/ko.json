@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "분류기 목록"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -380,7 +380,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
-          "source": "Get Classifier",
+          "source": "Get classifier",
           "message": "분류기 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
@@ -432,7 +432,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "분류기 삭제"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -484,7 +484,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
-          "source": "Start Classification",
+          "source": "Start classification",
           "message": "분류 시작"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
@@ -608,7 +608,7 @@
           "message": "1 기반 페이지 번호를 분석할 수 있습니다. 예: \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
-          "source": "Copy Classifier",
+          "source": "Copy classifier",
           "message": "분류기 복사"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
-          "source": "Get Classification Result",
+          "source": "Get classification result",
           "message": "분류 결과 보기"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
@@ -772,7 +772,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
-          "source": "Authorize Classifier Copy",
+          "source": "Authorize classifier copy",
           "message": "분류기 복사 권한 부여"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
@@ -836,7 +836,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
-          "source": "Build Classifier",
+          "source": "Build classifier",
           "message": "분류기 학습"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
@@ -924,7 +924,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "모델 목록 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -964,7 +964,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Analysis",
+          "source": "Start analysis",
           "message": "분석 시작"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "그림"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
-          "source": "Start Batch Analysis",
+          "source": "Start batch analysis",
           "message": "배치 분석 시작"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "그림"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "모델 가져오기"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "모델 삭제"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
-          "source": "Copy Model",
+          "source": "Copy model",
           "message": "모델 복사"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
-          "source": "List Batch Results",
+          "source": "List batch results",
           "message": "배치 결과 목록 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Get Batch Result",
+          "source": "Get batch result",
           "message": "배치 결과 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Delete Batch Result",
+          "source": "Delete batch result",
           "message": "배치 결과 삭제"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Get Analysis Result",
+          "source": "Get analysis result",
           "message": "분석 결과 받기"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Delete Analysis Result",
+          "source": "Delete analysis result",
           "message": "분석 결과 삭제"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
-          "source": "Download Figure",
+          "source": "Download figure",
           "message": "그림 다운로드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
-          "source": "Download Searchable PDF",
+          "source": "Download searchable PDF",
           "message": "검색 가능한 PDF 다운로드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
-          "source": "Authorize Model Copy",
+          "source": "Authorize model copy",
           "message": "모델 복사 승인"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
-          "source": "Build Model",
+          "source": "Build model",
           "message": "모델 학습"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
-          "source": "Compose Model",
+          "source": "Compose model",
           "message": "모델 결합"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
-          "source": "Get Resource Information",
+          "source": "Get resource information",
           "message": "자료 정보 받기"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
+          "source": "List operations",
           "message": "작업 목록 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
@@ -2460,7 +2460,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
+          "source": "Get operation",
           "message": "작업 조회"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "요청을 위한 불투명하고 전 세계적으로 고유한 클라이언트 생성 문자열 식별자입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
-          "source": "Start Analysis from Bytes",
+          "source": "Start analysis from bytes",
           "message": "바이트에서 분석 시작"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "그림"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
-          "source": "Start Classification from Bytes",
+          "source": "Start classification from bytes",
           "message": "바이트에서 분류 시작"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "1 기반 페이지 번호를 분석할 수 있습니다. 예: \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "문서 분석"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {

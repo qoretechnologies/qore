@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
+          "source": "Detect document text",
           "message": "Rozpoznať text dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Voliteľné ID verzie S3 objektu pre verzované buckety."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "Analyzovať dokument"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Verzia vybratého zdroja."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
+          "source": "Analyze expense",
           "message": "Analyzujte náklady"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Zdrojový objekt v segmente S3 v oblasti AWS pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
+          "source": "Create adapter",
           "message": "Vytvoriť adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
+          "source": "Create adapter version",
           "message": "Vytvoriť verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
+          "source": "Delete adapter",
           "message": "Odstrániť adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
+          "source": "Delete adapter version",
           "message": "Odstrániť verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Verzia patriaca k vybranému adaptéru."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
+          "source": "Get adapter",
           "message": "Získajte adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
+          "source": "Get adapter version",
           "message": "Získajte verziu adaptéra"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Verzia patriaca k vybranému adaptéru."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
+          "source": "Get document analysis",
           "message": "Získajte analýzu dokumentov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
+          "source": "Get document text detection",
           "message": "Získajte detekciu textu dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
@@ -1212,7 +1212,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
+          "source": "Get expense analysis",
           "message": "Získajte analýzu nákladov"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
+          "source": "Get lending analysis",
           "message": "Získajte analýzu pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
+          "source": "Get lending analysis summary",
           "message": "Získajte súhrn analýzy pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "ID úlohy vrátené zodpovedajúcou akciou spustenia; AWS neposkytuje žiadny zoznam úloh."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
+          "source": "List adapter versions",
           "message": "Zoznam verzií adaptérov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
+          "source": "List adapters",
           "message": "Zoznam adaptérov"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Token pokračovania z predchádzajúcej odpovede v rovnakej operácii."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
+          "source": "List tags for resource",
           "message": "Zoznam značiek pre zdrojovú položku"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Zdroj Textract ARN v účte AWS a regióne pripojenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
+          "source": "Start document analysis",
           "message": "Spustite analýzu dokumentov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Verzia vybratého zdroja."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
+          "source": "Start document text detection",
           "message": "Spustite detekciu textu dokumentu"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
+          "source": "Start expense analysis",
           "message": "Spustite analýzu výdavkov"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
+          "source": "Start lending analysis",
           "message": "Spustite analýzu pôžičiek"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "ID kľúča KMS alebo ARN na šifrovanie výstupu; musia byť udelené požadované povolenia."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
+          "source": "Tag resource",
           "message": "ID testovacieho prípadu"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Značky zdrojov ako mapa názvov k hodnotám; prázdna hodnota značky je platná."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
+          "source": "Untag resource",
           "message": "Odstrániť značku z zdroja"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Názvy značiek prostriedkov, ktoré sa majú odstrániť."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
+          "source": "Update adapter",
           "message": "Aktualizovať adaptér"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {

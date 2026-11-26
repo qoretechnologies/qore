@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
-          "source": "Scrape a Web Page",
+          "source": "Scrape a web page",
           "message": "Raspar una página web"
         },
         "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Si `True`, los cambios realizados durante el escaneo (cookies, almacenamiento local, etc.) se guardan de nuevo en el perfil con nombre. Por defecto es `False`"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
-          "source": "Batch Scrape Web Pages",
+          "source": "Batch scrape web pages",
           "message": "Scraping de páginas web por lotes"
         },
         "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "El identificador único del trabajo de extracción por lotes que se cancelará"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
-          "source": "Get Batch Scrape Status",
+          "source": "Get batch scrape status",
           "message": "Obtener estado de la extracción por lotes"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "El identificador único del trabajo de extracción por lotes a comprobar"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Website",
+          "source": "Crawl a website",
           "message": "Rastrear un sitio web"
         },
         "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Si es `True`, Firecrawl no conserva ningún dato del rastreo en sus servidores tras devolver la respuesta. Característica Enterprise: contacte con el soporte de Firecrawl para habilitarla"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
-          "source": "Get Crawl Status",
+          "source": "Get crawl status",
           "message": "Obtener estado del rastreo"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "El identificador único del trabajo de rastreo que se cancelará"
         },
         "app.RmlyZWNyYXds.action.bWFw.display_name": {
-          "source": "Map a Website",
+          "source": "Map a website",
           "message": "Mapear un sitio web"
         },
         "app.RmlyZWNyYXds.action.bWFw.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Lista de idiomas/locales preferidos en orden de prioridad. Predeterminado: el idioma de la ubicación especificada"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Buscar en la web"
         },
         "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Retención cero de datos anonimizada"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
-          "source": "Extract Structured Data",
+          "source": "Extract structured data",
           "message": "Extraer datos estructurados"
         },
         "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Si `True`, Firecrawl no retiene ningún dato escaneado en sus servidores después de devolver la respuesta. Característica empresarial — contacte al soporte de Firecrawl para habilitarla"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
-          "source": "Get Extraction Status",
+          "source": "Get extraction status",
           "message": "Obtener estado de extracción"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "El identificador único del trabajo de extracción a comprobar"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
-          "source": "Run AI Agent",
+          "source": "Run AI agent",
           "message": "Ejecutar agente de IA"
         },
         "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
@@ -3960,7 +3960,7 @@
           "message": "El identificador único del trabajo de agente que se cancelará"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
-          "source": "Get Agent Status",
+          "source": "Get agent status",
           "message": "Obtener estado del agente"
         },
         "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
@@ -3984,7 +3984,7 @@
           "message": "El identificador único del trabajo de agente a comprobar"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
-          "source": "Parse a Document",
+          "source": "Parse a document",
           "message": "Analizar un documento"
         },
         "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {

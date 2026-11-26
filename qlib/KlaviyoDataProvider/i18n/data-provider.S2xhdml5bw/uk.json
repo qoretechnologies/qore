@@ -524,7 +524,7 @@
           "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "Отримати профіль"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "IP-адреса"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "Оновити профіль"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Отримати список"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "Оновити список"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Видалити список"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Отримати сегмент"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "Чи позначено сегмент зірочкою в інтерфейсі Klaviyo"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "Оновити сегмент"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "Установіть значення false, щоб деактивувати сегмент. У разі деактивації це має бути єдиний атрибут у тілі запиту. Деактивацію не можна поєднувати з іншими оновленнями. Позначення сегмента як неактивного вплине на кампанії, потоки (flows), синхронізацію реклами, форми, маршрутизацію служби підтримки та інші функції, що посилаються на цей сегмент. Установіть true, щоб знову активувати деактивований сегмент."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "Видалити сегмент"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Отримати тег"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "tag-group"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Оновити тег"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "Назва тегу"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Видалити тег"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Отримати кампанію"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "Список параметрів відстеження. Якщо вказаний порожній список, а add_tracking_params — True, використовуються стандартні параметри компанії."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "Оновити кампанію"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "Список параметрів відстеження. Якщо вказаний порожній список, а add_tracking_params — True, використовуються стандартні параметри компанії."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "Видалити кампанію"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Звузити список до відповідних подій у синтаксисі фільтрів Klaviyo.\n\n`equals(metric_id,\"…\")` та `equals(profile_id,\"…\")` вибирають одну метрику або один профіль, а `datetime` та `timestamp` приймають чотири порівняння діапазонів — наприклад, `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Предикати розділяються комами й означають **і**; Klaviyo не підтримує тут `or`."
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Отримати подію"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "Отримати метрику"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "Сегмент, з якого слід вилучити тег"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Створити подію"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Власні властивості для запису разом із подією у вигляді пар ім'я/значення"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "Підписати профіль"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Підписати профіль **через цей список**, що додає його до списку та застосовує процес подвійного підтвердження (double opt-in), якщо такий налаштовано.\n\nБез цього згода реєструється безпосередньо для профілю і підтвердження не надсилається."
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "Скасувати підписку профілю"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Типи SMS-повідомлень, для яких слід відкликати згоду.\n\nМає сенс лише разом із `phoneNumber`; типовим значенням є маркетингові повідомлення."
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "Новий профіль"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Спрацьовує для кожного профілю, створеного в обліковому записі.\n\nПодія містить профіль з його атрибутами разом з ідентифікатором у тій самій структурі, яку повертають дії **Get Profile** та **List Profiles**.\n\nПрофіль, який редагується пізніше, **не** викликає повторного спрацьовування: позиція стрічки визначається за `created`."
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "Нова подія"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Спрацьовує для кожної події, зареєстрованої для вибраної метрики.\n\nПараметр `metric` є обов'язковим і вказує метрику за **ID** — стрічка всіх подій в обліковому записі була б надто великою, а процесу, який реагує на \"Placed Order\", не потрібен \"Viewed Product\".\n\nПодія містить запис події з її атрибутами разом з ідентифікатором. Позиція стрічки визначається за `datetime`, тобто за часом настання події, а не коли Klaviyo її отримав."
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "Профіль додано до списку"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Спрацьовує для кожного профілю, доданого до вибраного списку.\n\nПозиція стрічки визначається за `joined_group_at`, тому тригер спрацьовує, коли профіль **приєднується до списку**, а не коли сам профіль був створений — профіль, що існував рік, викличе спрацьовування в момент додавання.\n\nПодія містить профіль з його атрибутами разом з ідентифікатором."
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "Профіль додано до сегмента"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

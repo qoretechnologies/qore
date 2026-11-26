@@ -524,7 +524,7 @@
           "message": "다음 페이지 커서: 이전 응답의 `links.next` 값을 전달하세요.\n\n이 값은 불투명하며 직접 생성해서는 안 됩니다. 첫 페이지를 읽으려면 비워 두세요."
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "프로필 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "IP 주소"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "프로필 업데이트"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "리스트 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "각 프로필에 포함할 계산된 블록입니다. 생성 비용이 많이 들기 때문에 Klaviyo는 기본적으로 이를 생략합니다:\n\n- `subscriptions`: 채널별 프로필 동의 상태\n- `predictive_analytics`: Klaviyo의 예측 생애 가치 및 이탈 확률"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "목록 업데이트"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "목록 삭제"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "한 페이지에 반환할 레코드 수입니다.\n\nKlaviyo는 엔드포인트별로 이를 제한하며, 더 큰 값이 전달되면 값을 조정하지 않고 요청을 거부합니다. 최댓값은 인자 설명에 나와 있습니다."
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "세그먼트 조회"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "Klaviyo UI에서 세그먼트에 별표를 표시할지 여부"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "세그먼트 업데이트"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "세그먼트를 비활성화하려면 false로 설정하십시오. 비활성화할 때는 요청 본문에 이 속성만 포함되어야 합니다. 비활성화는 다른 업데이트와 결합할 수 없습니다. 세그먼트를 비활성으로 표시하면 이 세그먼트를 참조하는 캠페인, 플로우, 광고 동기화, 폼, 헬프데스크 라우팅 및 기타 기능에 영향을 미칩니다. 비활성화된 세그먼트를 다시 활성화하려면 true로 설정하십시오."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "세그먼트 삭제"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "한 페이지에 반환할 레코드 수입니다.\n\nKlaviyo는 엔드포인트별로 이를 제한하며, 더 큰 값이 전달되면 값을 조정하지 않고 요청을 거부합니다. 최댓값은 인자 설명에 나와 있습니다."
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "태그 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "태그 그룹"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "태그 업데이트"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "태그 이름"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "태그 삭제"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "다음 페이지 커서: 이전 응답의 `links.next` 값을 전달하세요.\n\n이 값은 불투명하며 직접 생성해서는 안 됩니다. 첫 페이지를 읽으려면 비워 두세요."
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "캠페인 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "사용자 정의 추적 매개변수 목록입니다. 빈 목록이 주어지고 add_tracking_params가 True인 경우, 회사 기본값을 사용합니다."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "캠페인 업데이트"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "사용자 정의 추적 매개변수 목록입니다. 빈 목록이 주어지고 add_tracking_params가 True인 경우, 회사 기본값을 사용합니다."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "캠페인 삭제"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Klaviyo 필터 구문을 사용하여 일치하는 이벤트로 목록을 좁힙니다.\n\n`equals(metric_id,\"…\")` 및 `equals(profile_id,\"…\")`은 단일 지표나 프로필을 선택하고, `datetime` 및 `timestamp`은 4가지 범위 비교(예: `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`)를 사용합니다. 조건은 쉼표로 연결되며 **and**를 의미합니다. Klaviyo에는 여기에 해당하는 `or`이 없습니다."
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "이벤트 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "다음 페이지 커서: 이전 응답의 `links.next` 값을 전달하세요.\n\n이 값은 불투명하며 직접 생성해서는 안 됩니다. 첫 페이지를 읽으려면 비워 두세요."
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "메트릭 가져오기"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "태그를 제거할 세그먼트"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "이벤트 생성"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "이벤트와 함께 기록할 이름/값 쌍 형태의 사용자 지정 속성"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "프로필 구독"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "**이 목록을 통해** 프로필을 구독 처리합니다. 이를 통해 프로필이 목록에 추가되고, 목록에 더블 옵트인 프로세스가 설정되어 있는 경우 해당 프로세스가 적용됩니다.\n\n이 항목을 지정하지 않으면 프로필에 동의가 직접 기록되며 확인 메시지가 발송되지 않습니다."
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "프로필 구독 취소"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "동의를 철회할 SMS 메시지 유형입니다.\n\n`phoneNumber`과(와) 함께 사용할 때만 유효하며, 기본값은 마케팅입니다."
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "새 프로필"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "계정에 새 프로필이 생성될 때마다 실행됩니다.\n\n이벤트는 식별자와 함께 속성이 포함된 프로필을 전달하며, 이는 **Get Profile** 및 **List Profiles**가 반환하는 형태와 동일합니다.\n\n나중에 프로필을 수정해도 다시 실행되지 **않습니다**. 피드는 `created`을 기준으로 정렬됩니다."
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "새 이벤트"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "선택한 지표에 대해 이벤트가 기록될 때마다 실행됩니다.\n\n`metric`은 필수 항목이며 **ID**로 지표를 지정합니다. 계정의 모든 이벤트 피드는 크기가 너무 커서 사용할 수 없으며, \"주문 완료\"에 반응하는 워크플로에 \"제품 조회\"가 필요하지 않기 때문입니다.\n\n이벤트는 식별자와 함께 속성이 포함된 이벤트 레코드를 전달합니다. 피드는 Klaviyo가 수신한 시점이 아닌 이벤트가 발생한 시점인 `datetime`을 기준으로 정렬됩니다."
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "목록에 프로필 추가됨"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "선택한 목록에 프로필이 추가될 때마다 실행됩니다.\n\n피드는 `joined_group_at`을 기준으로 정렬되므로 프로필 생성 시점이 아니라 **목록에 추가된 시점**에 실행됩니다. 예를 들어 1년 동안 존재했던 프로필도 목록에 추가되는 즉시 트리거됩니다.\n\n이벤트는 식별자와 함께 속성이 포함된 프로필을 전달합니다."
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "세그먼트에 프로필 추가됨"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

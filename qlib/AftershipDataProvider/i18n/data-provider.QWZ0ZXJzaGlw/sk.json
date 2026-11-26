@@ -748,7 +748,7 @@
           "message": "Identifikátor kuriérskeho prepojenia, ktoré sa má použiť pre toto sledovanie"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "Získať sledovanie"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Časová pečiatka udalosti dokončenia. Ak nie je zadaná, použije sa aktuálny čas"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "Získať posledný kontrolný bod"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "ID sledovania Aftership, pre ktoré sa má získať posledný kontrolný bod"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Zoznam kuriérov"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Poddôvod, ak je dôvod podporovaný"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Získať vrátenie"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {

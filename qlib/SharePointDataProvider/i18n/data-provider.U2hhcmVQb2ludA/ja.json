@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
+          "source": "List sites",
           "message": "サイトの一覧取得"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "サイトのタイトルおよびURLを検索するための用語。省略すると、テナントのルートサイトとそのサブサイトが返されます"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
+          "source": "Get site",
           "message": "サイトの取得"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "対象のSharePointサイト。利用可能なサイトを検出するには`list-sites`アクションを使用します。テナントのルートサイトは常に提供されます"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
+          "source": "List document libraries",
           "message": "ドキュメントライブラリを一覧表示"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "対象のSharePointサイト。利用可能なサイトを検出するには`list-sites`アクションを使用します。テナントのルートサイトは常に提供されます"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
+          "source": "Get document library info",
           "message": "ドキュメントライブラリ情報の取得"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -448,7 +448,7 @@
           "message": "対象のドキュメントライブラリ。サイト内のライブラリ一覧を取得するには`list-drives`アクションを使用します"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "ドキュメントを検索"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -532,7 +532,7 @@
           "message": "結果の並べ替え順序 (例: `name asc`、`size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
+          "source": "Get document",
           "message": "ドキュメントを取得"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
@@ -592,7 +592,7 @@
           "message": "ドライブのルートからのアイテムの相対パス (例: `/Documents/file.txt`)。`id` または `path` のいずれかを指定してください"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "フォルダを作成"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -700,7 +700,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
+          "source": "Upload document",
           "message": "ドキュメントをアップロード"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -880,7 +880,7 @@
           "message": "親フォルダーのID。省略した場合、ファイルはドライブのルートにアップロードされます"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "アップロードセッションを作成"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -976,7 +976,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
+          "source": "Download document",
           "message": "ドキュメントをダウンロード"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "ダウンロードするファイルの一意の識別子"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
+          "source": "Delete document",
           "message": "ドキュメントを削除"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "削除するアイテムの一意の識別子"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
+          "source": "Update document",
           "message": "ドキュメントの更新"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "アイテムの移動先フォルダーのID。アイテムを別のフォルダーに移動するにはこれを設定します"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
+          "source": "Copy document",
           "message": "ドキュメントのコピー"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "リクエストをエラーとして失敗させる"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "共有リンクを作成"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "共有リンクの有効期限の日時"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "リストを一覧表示"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "テンプレートが`documentLibrary`のリストを含める"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "リストを取得"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "対象のリスト。サイト内のリスト一覧を取得するには`list-lists`アクションを使用します"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "リストを作成"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "リストを作成するための列。Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) オブジェクトのリストとして指定します（例: `{\"name\": \"Amount\", \"number\": {}}`）。省略した場合、リストはデフォルトの`Title`列のみで作成されます"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "リストを削除"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "対象のリスト。サイト内のリスト一覧を取得するには`list-lists`アクションを使用します"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
+          "source": "List columns",
           "message": "列を一覧表示"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "書き込み可能な列のみを返します。SharePointには作成または更新呼び出しで拒否される読み取り専用の列が多数保持されています"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
+          "source": "Search list items",
           "message": "リストアイテムを検索"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "すべてのページを合わせて、この総アイテム数に達したら停止します"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
+          "source": "Get list item",
           "message": "リストアイテムの取得"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "対象のリストアイテム"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
+          "source": "Create list item",
           "message": "リストアイテムの作成"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "アイテムの列に設定する値（内部列名をキーとします）。サイトとリストを選択すると個別の列がそれぞれの型とともに提示されます。`columns`アクションでこれらを一覧表示できます"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
+          "source": "Update list item",
           "message": "リストアイテムを更新"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "アイテムの列に設定する値（内部列名をキーとします）。サイトとリストを選択すると個別の列がそれぞれの型とともに提示されます。`columns`アクションでこれらを一覧表示できます"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
+          "source": "Delete list item",
           "message": "リストアイテムを削除"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {

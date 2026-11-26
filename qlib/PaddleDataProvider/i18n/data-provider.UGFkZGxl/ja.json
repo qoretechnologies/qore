@@ -556,7 +556,7 @@
           "message": "このエンティティがインポートされたプラットフォームまたはプロバイダの名前。"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "顧客を取得"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
@@ -580,7 +580,7 @@
           "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "顧客を更新"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "このエンティティがインポートされたプラットフォームまたはプロバイダの名前。"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
-          "source": "Get Customer Authentication Token",
+          "source": "Get customer authentication token",
           "message": "顧客認証トークンを取得"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
@@ -744,7 +744,7 @@
           "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
-          "source": "List Customer Credit Balances",
+          "source": "List customer credit balances",
           "message": "顧客のクレジット残高を一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "このエンティティがインポートされたプラットフォームまたはプロバイダの名前。"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "製品の取得"
         },
         "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "製品を更新"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
@@ -1280,7 +1280,7 @@
           "message": "website-hosting"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
-          "source": "Archive Product",
+          "source": "Archive product",
           "message": "製品をアーカイブ"
         },
         "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "このエンティティがインポートされたプラットフォームまたはプロバイダの名前。"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
-          "source": "Get Price",
+          "source": "Get price",
           "message": "価格を取得"
         },
         "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "レスポンスに関連エンティティを含めます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
-          "source": "Update Price",
+          "source": "Update price",
           "message": "価格の更新"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "サブスクリプションを取得"
         },
         "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "この取引用の支払いリンク用のチェックアウトURL。承認されたドメインのURLを渡すか、`null` を指定してデフォルトの支払いURLに設定してください。\n\nPaddleは、渡されたURLまたはデフォルトの支払いURL + `?_ptxn=` およびこの取引のPaddle IDを組み合わせた一意の支払いリンクを返します。"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "トランザクションを取得"
         },
         "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "checkouts"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
-          "source": "Get Report",
+          "source": "Get report",
           "message": "レポートを取得"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
@@ -4688,7 +4688,7 @@
           "message": "レポートエンティティのPaddle ID。"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
-          "source": "Get Report File",
+          "source": "Get report file",
           "message": "レポートファイルを取得"
         },
         "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "顧客が作成されました"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "API、チェックアウト、Paddleダッシュボードなど、方法を問わず顧客が作成されたときにトリガーされます。\n\nこれにより顧客一覧のポーリングが不要になります。作成日時順のポーリングでは実行と実行の間に作成・削除された顧客を検知できず、変更がない場合でもインターバルごとにリクエストコストが発生します。"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "顧客更新"
         },
         "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "顧客が削除されるのではなく `status` が `archived` になるアーカイブ時を含め、顧客が変更されたときにトリガーされます。\n\nPaddleは差分ではなく顧客全体を送信するため、どのフィールドが変更されたかを確認する必要がある場合は保持しているデータと比較してください。"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "製品作成"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -4844,7 +4844,7 @@
           "message": "商品がカタログに追加されたときにトリガーされます。\n\n商品自体には価格が含まれていないため、新規作成された商品は価格が設定されるまで販売できません。それについては `price.created` を監視してください。\n\nこれにより、商品一覧のポーリングが不要になります。"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "製品更新"
         },
         "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "商品が変更されたとき（アーカイブされたときを含む。`status` が `archived` になり、既存のサブスクリプションに影響を与えることなく販売が停止されます）にトリガーされます。\n\n**商品をアーカイブしてもその価格はアーカイブされない**ため、アーカイブされた商品の価格もアーカイブされない限り引き続き請求可能です。"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
-          "source": "Price Created",
+          "source": "Price created",
           "message": "価格が作成されました"
         },
         "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
@@ -4868,7 +4868,7 @@
           "message": "製品に対して価格が作成されたときにトリガーされます。\n\n`unit_price.amount` はその**通貨の最小単位**の文字列であるため、`1000` はUSDでは$10.00ですが、JPYでは1000円になります。`billing_cycle` があるとサブスクリプション価格になり、ない場合は都度請求になります。"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
-          "source": "Price Updated",
+          "source": "Price updated",
           "message": "価格更新"
         },
         "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
@@ -4880,7 +4880,7 @@
           "message": "価格が変更されたとき（アーカイブされた場合を含む）にトリガーされます。\n\n**`unit_price` の変更は新規購入にのみ適用されます**。すでにこの価格で請求されているサブスクリプションは、明示的に更新されるまで作成時の金額が維持されます。したがって、価格の変更は誰かの請求額が変更された合図ではありません。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "サブスクリプション作成"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
@@ -4892,7 +4892,7 @@
           "message": "サブスクリプションが作成されたときにトリガーされます。\n\n**作成されたことは支払い済みと同じではありません。** 新しいサブスクリプションは多くの場合 `trialing` であり、まだ回収されていないトランザクションに対して作成されたものは収益を生んでいません。プロビジョニングする前に `status` を確認してください。`subscription.activated` は請求が実際に開始された合図です。\n\nこれはサブスクリプション一覧のポーリングの代わりとなります。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
-          "source": "Subscription Activated",
+          "source": "Subscription activated",
           "message": "サブスクリプション有効化"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "サブスクリプションが初めて `active` になったとき（トライアルが終了して支払いが完了したか、スケジュールされた開始日に達したとき）にトリガーされます。\n\nこれは有料プランをプロビジョニングする合図です。`subscription.created` はレコードが存在することを示すだけですが、これはPaddleが回収したことを意味します。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
-          "source": "Subscription Updated",
+          "source": "Subscription updated",
           "message": "サブスクリプション更新"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
@@ -4916,7 +4916,7 @@
           "message": "サブスクリプションに対するあらゆる変更（プランの変更、数量の変更、`next_billed_at` に進む更新、あるいは一時停止や解約の**スケジュール**など）でトリガーされます。\n\n`scheduled_change` はこれらの最後のケースを区別するフィールドです。サブスクリプションは `active` のままでも終了が予約されている場合があります。Paddleは差分ではなくサブスクリプション全体を送信します。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
-          "source": "Subscription Canceled",
+          "source": "Subscription canceled",
           "message": "サブスクリプションが解約されました"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "サブスクリプションが実際に終了し、`status` が `canceled` になったときにトリガーされます。\n\n**これはプロビジョニング解除の合図であり、解約リクエストではありません。** 請求期間の終了時に予約された解約は、まず `subscription.updated` 上の `scheduled_change` として表示され、顧客はその日付まで支払いを済ませています。このイベントはその日付が到来したときに発生します。"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
-          "source": "Subscription Past Due",
+          "source": "Subscription past due",
           "message": "サブスクリプションの期日超過"
         },
         "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
@@ -4940,7 +4940,7 @@
           "message": "更新の回収ができず、サブスクリプションが `past_due` になったときにトリガーされます。\n\nPaddleは督促スケジュールに従って再試行するため、これはまだ終了ではありません。再試行が成功した場合はサブスクリプションが `active` に復旧し、再試行回数を使い果たすと解約されます。これをアクセスを遮断する理由ではなく、顧客に支払いを促すための警告として扱ってください。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
-          "source": "Transaction Created",
+          "source": "Transaction created",
           "message": "取引作成"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "取引が作成されたとき（今後の更新のために Paddle が作成する下書きを含む）にトリガーされます。\n\n**作成された取引はまだ支払われていません**。現時点ではほとんどが `draft` または `ready` です。実際に回収された金額については `transaction.completed` を使用してください。\n\nこれにより、取引一覧のポーリングが不要になります。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
-          "source": "Transaction Completed",
+          "source": "Transaction completed",
           "message": "取引完了"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "取引が `completed` になったとき（代金が回収され、請求書が決済されたとき）にトリガーされます。\n\nこれは注文を履行するためのイベントです。`details.totals` は金額を小計、税額、合計金額に分類し、すべて `currency_code` の最小単位の文字列として表されます。"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "Transaction Payment Failed",
+          "source": "Transaction payment failed",
           "message": "取引支払い失敗"
         },
         "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "取引の回収試行が失敗したときにトリガーされます。\n\n`payments` には試行内容と失敗理由が含まれます。Paddle はサブスクリプションの更新について自動的に再試行するため、1 回の失敗が最終的なものではありません。サブスクリプションが `past_due` に移行した時点が、顧客の対応が必要なタイミングです。"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
-          "source": "Report Created",
+          "source": "Report created",
           "message": "レポート作成"
         },
         "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
@@ -4988,7 +4988,7 @@
           "message": "レポートがリクエストされたときにトリガーされます。`pending` の状態で届きます。Paddle がバックグラウンドでファイルを生成するため、この時点ではダウンロードできません。\n\nファイルを要求する前に、`status` が `ready` である `report.updated` を待機してください。\n\nこれにより、レポート一覧のポーリングが不要になります。"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
-          "source": "Report Updated",
+          "source": "Report updated",
           "message": "レポート更新"
         },
         "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {

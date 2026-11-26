@@ -8244,7 +8244,7 @@
           "message": "Ermöglicht das Erstellen einer Rechnung, selbst wenn eine oder mehrere Positionen nachverfolgten Bestand enthalten, bei dem die Rechnungsmenge dazu führen würde, dass der verfügbare Bestand negativ wird"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Rechnungsverlauf suchen"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Eindeutige Kennung für eine Rechnung"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Notiz zu Rechnung hinzufügen"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "hat den Wert 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Rechnung per E-Mail senden"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Gibt nur Datensätze zurück, die seit diesem Zeitpunkt erstellt oder geändert wurden.\n\nDies ermöglicht einen inkrementellen Abgleich: Ohne diesen liest jeder Aufruf die gesamte Sammlung."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Gutschrift zuweisen"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen. Der Standardwert von Xero ist 100 und das Maximum 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Aufgaben suchen"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen. Der Standardwert von Xero ist 100 und das Maximum 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Aufgabe erstellen"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` oder `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Mitarbeiter suchen"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Listet die Mitarbeiter in der Gehaltsabrechnung der Organisation auf.\n\n**Welche Gehaltsabrechnungs-API verwendet wird, hängt von `payroll_region` der Verbindung ab**, da Xero keine einheitliche Payroll-API hat: Australien wird unter `payroll.xro/1.0` bedient und Neuseeland sowie das Vereinigte Königreich unter `payroll.xro/2.0`. Eine Verbindung ohne festgelegte Region meldet dies, anstatt eine zu erraten.\n\nDie Regionen verpacken das Ergebnis unterschiedlich – `{Employees: [...]}` in Australien und `{employees: [...], pagination}` in den beiden anderen –, und diese Aktion gibt die Mitarbeiter in jedem Fall als einfache Liste zurück.\n\nDie Anwendung, die dieses Modul ersetzt, las Mitarbeiter über die Accounting-API ein, wo sie nicht existieren, sodass dies nie etwas zurückgab."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Mitarbeiter erstellen"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Erstellt Mitarbeiter in der Gehaltsabrechnung der Organisation.\n\n`Employees` ist selbst für einen Mitarbeiter eine Liste. Die Payroll-API für Australien nimmt eine Liste direkt entgegen; die für Neuseeland und das Vereinigte Königreich nehmen einen Mitarbeiter pro Aufruf entgegen, sodass eine Liste mehrerer nacheinander gesendet und die Ergebnisse gesammelt werden.\n\n**Welche Payroll-API verwendet wird, ergibt sich aus dem `payroll_region` der Verbindung.** Die für einen Mitarbeiter erforderlichen Felder unterscheiden sich je nach Region – ein Mitarbeiter im Vereinigten Königreich hat eine National Insurance Number, während ein Mitarbeiter in Neuseeland eine IRD-Nummer hat –, daher wird der Mitarbeiter wie angegeben übergeben, anstatt die Struktur einer Region für alle festzulegen."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Neuer Kontakt"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Wird für jeden in der Organisation erstellten oder geänderten Kontakt ausgelöst.\n\nXero positioniert einen Kontakt nach `UpdatedDateUTC` und bietet keinen „Erstellt seit“-Filter, sodass ein später bearbeiteter Kontakt dies erneut auslöst. Das Ereignis überträgt den von Xero zurückgegebenen Kontaktdatensatz."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Neue Lieferantenrechnung"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Wird für jede erstellte oder geänderte Lieferantenrechnung ausgelöst.\n\nEine Lieferantenrechnung ist eine Rechnung vom Typ `ACCPAY`, was dem von diesem Ereignis angewendeten Filter entspricht; eine Ausgangsrechnung (`ACCREC`) löst es nicht aus. Das Ereignis überträgt den von Xero zurückgegebenen Rechnungsdatensatz."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Neue Gutschrift"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Wird für jede erstellte oder geänderte Gutschrift ausgelöst.\n\nDas Ereignis überträgt den von Xero zurückgegebenen Gutschriftdatensatz. Die Anwendung, die dieses Modul ersetzt, hat Gutschriften abgefragt, ohne eine Möglichkeit zum Auflisten oder Lesen bereitzustellen; **Gutschriften suchen** existiert, damit dieses Ereignis ein Gegenstück hat."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Neue Banktransaktion"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Wird für jede erstellte oder geänderte Banktransaktion ausgelöst – für ein Bankkonto ausgegebenes oder erhaltenes Geld.\n\nDas Ereignis überträgt den von Xero zurückgegebenen Banktransaktionsdatensatz."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Neue Zahlung"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Wird für jede Zahlung ausgelöst, die für eine Rechnung oder eine Gutschrift erstellt oder geändert wird.\n\nDas Ereignis überträgt den von Xero zurückgegebenen Zahlungsdatensatz."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Neue Bestellung"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Wird für jede erstellte oder geänderte Bestellung ausgelöst.\n\nDas Ereignis überträgt den von Xero zurückgegebenen Bestellungsdatensatz."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Neuer Mitarbeiter"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

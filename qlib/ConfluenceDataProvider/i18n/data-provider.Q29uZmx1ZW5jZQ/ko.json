@@ -724,7 +724,7 @@
           "message": "페이지가 스페이스의 루트 수준(스페이스 홈페이지 트리 외부)에 생성됩니다. true인 경우 \n`parentId` 본문 매개변수에 값을 제공할 수 없습니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "페이지 가져오기"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -944,7 +944,7 @@
           "message": "`ChildrenResponse` 개체에 정의된 페이지의 직속 하위 항목을 포함합니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "페이지 업데이트"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "페이지 소유자의 계정 ID입니다.\n\n이를 통해 페이지 소유권을 다른 사용자에게 이전할 수 있습니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "페이지 이름 변경"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "초안"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "페이지 삭제"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "초안인 페이지를 삭제하려는 경우입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "공간의 페이지 나열"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "root"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "라벨별 페이지 목록"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "\"yyyy-MM-ddTHH:mm:ss.SSSZ\" 형식의 블로그 게시물 생성 날짜입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "블로그 게시물 가져오기"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "블로그 게시물의 공동 작업자를 포함합니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "블로그 게시물 업데이트"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "\"yyyy-MM-ddTHH:mm:ss.SSSZ\" 형식의 블로그 게시물 생성 날짜입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "블로그 게시물 삭제"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "초안 상태인 블로그 게시물을 삭제하려는 경우입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "스페이스 내 블로그 게시물 목록"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "페이지네이션 커서: 이전 응답의 `_links.next` URL에서 `cursor` 쿼리 인수를 가져와 여기에 전달합니다.\n\n불투명한 값이며 직접 생성해서는 안 됩니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "라벨별 블로그 게시물 목록"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "스페이스 아이콘을 가져올지 여부입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "스페이스 가져오기"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "완료 날짜를 기준으로 작업의 날짜/시간 범위 종료 시점을 필터링합니다(경계값 포함). 입력값은 밀리초 단위의 epoch 시간입니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "작업 가져오기"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "작업 업데이트"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "작업할 테이블: `pages`, `blogposts`, `tasks`, `spaces`, `labels` 또는 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "새 페이지"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "사이트 전체 또는 특정 공간에서 새 페이지가 생성될 때마다 트리거됩니다.\n\n이 이벤트는 Confluence가 반환하는 페이지 레코드(ID, 제목, 공간, 작성자 및 상태)를 전달합니다. 나중에 편집된 페이지는 이 이벤트를 다시 트리거하지 않으며, 생성 시에만 보고합니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "새 블로그 게시물"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "사이트 전체 또는 특정 공간에서 새 블로그 게시물이 생성될 때마다 트리거됩니다.\n\n이 이벤트는 Confluence가 반환하는 블로그 게시물 레코드(ID, 제목, 공간, 작성자 및 상태)를 전달합니다."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "새 첨부 파일"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

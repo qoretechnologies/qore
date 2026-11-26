@@ -2356,8 +2356,8 @@
           "message": "Only get throttled transcripts, overrides the status filter"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
-          "message": "Get Transcript"
+          "source": "Get transcript",
+          "message": "Get transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
           "source": "Retrieve transcript status, text, and requested analysis",
@@ -2380,8 +2380,8 @@
           "message": "ID of the transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
-          "message": "Delete Transcript"
+          "source": "Delete transcript",
+          "message": "Delete transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
           "source": "Delete a transcript and its associated uploaded media",
@@ -2404,8 +2404,8 @@
           "message": "ID of the transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
-          "message": "Get Subtitles"
+          "source": "Get subtitles",
+          "message": "Get subtitles"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
           "source": "Export a completed transcript as SRT or WebVTT captions",
@@ -2460,8 +2460,8 @@
           "message": "The maximum number of characters per caption"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
-          "message": "Get Transcript Sentences"
+          "source": "Get transcript sentences",
+          "message": "Get transcript sentences"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
           "source": "Split a completed transcript into timed sentences",
@@ -2484,8 +2484,8 @@
           "message": "ID of the transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
-          "message": "Get Transcript Paragraphs"
+          "source": "Get transcript paragraphs",
+          "message": "Get transcript paragraphs"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
           "source": "Split a completed transcript into timed paragraphs",
@@ -2508,8 +2508,8 @@
           "message": "ID of the transcript"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
-          "message": "Search Transcript Words"
+          "source": "Search transcript words",
+          "message": "Search transcript words"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
           "source": "Find words or short phrases and their audio timestamps",
@@ -2544,8 +2544,8 @@
           "message": "Keywords to search for"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
-          "message": "Get Redacted Audio"
+          "source": "Get redacted audio",
+          "message": "Get redacted audio"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
           "source": "Retrieve the status and download URL of redacted audio",
@@ -3128,8 +3128,8 @@
           "message": "List lightweight agent records for this account, newest first. Use Get Voice Agent to retrieve a complete configuration."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
-          "message": "Get Voice Agent"
+          "source": "Get voice agent",
+          "message": "Get voice agent"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
           "source": "Retrieve a saved voice agent configuration",
@@ -3152,8 +3152,8 @@
           "message": "The agent's unique ID."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
-          "message": "Update Voice Agent"
+          "source": "Update voice agent",
+          "message": "Update voice agent"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
           "source": "Change selected settings of a saved voice agent",
@@ -3672,8 +3672,8 @@
           "message": "Lowers this entry's timeout. Every entry has its own 800 ms ceiling;\nthis can only shorten it. Omit for the full ceiling.\n"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
-          "message": "Delete Voice Agent"
+          "source": "Delete voice agent",
+          "message": "Delete voice agent"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
           "source": "Remove a saved voice agent",
@@ -3756,8 +3756,8 @@
           "message": "Return only sessions for this agent."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
-          "message": "Get Voice Agent Session"
+          "source": "Get voice agent session",
+          "message": "Get voice agent session"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
           "source": "Retrieve session details and artifact download URLs",
@@ -3780,8 +3780,8 @@
           "message": "The session's unique ID."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
-          "message": "Delete Voice Agent Session"
+          "source": "Delete voice agent session",
+          "message": "Delete voice agent session"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
           "source": "Remove a voice agent session",
@@ -4792,8 +4792,8 @@
           "message": "Cursor"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
-          "message": "Get Webhook Subscription"
+          "source": "Get webhook subscription",
+          "message": "Get webhook subscription"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
           "source": "Retrieve an event subscription",
@@ -4808,8 +4808,8 @@
           "message": "Subscription"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
-          "message": "Update Webhook Subscription"
+          "source": "Update webhook subscription",
+          "message": "Update webhook subscription"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Change an event subscription or rotate its signing secret",
@@ -4840,8 +4840,8 @@
           "message": "Enabled"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
-          "message": "Delete Webhook Subscription"
+          "source": "Delete webhook subscription",
+          "message": "Delete webhook subscription"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
           "source": "Remove an event subscription",

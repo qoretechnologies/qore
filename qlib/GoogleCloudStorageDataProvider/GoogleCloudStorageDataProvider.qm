@@ -131,7 +131,7 @@ module GoogleCloudStorageDataProvider {
             "path": "/list-buckets",
             "action": "list-buckets",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "List Buckets",
+            "display_name": "List buckets",
             "short_desc": "List the buckets in the project",
             "desc": "Lists the buckets in the connection's GCP project.\n\n"
                 "A listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it "
@@ -155,7 +155,7 @@ module GoogleCloudStorageDataProvider {
             "path": "/get-bucket",
             "action": "get-bucket",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "Get Bucket",
+            "display_name": "Get bucket",
             "short_desc": "Get a bucket's metadata",
             "desc": "Retrieves a bucket's metadata: its location, storage class, versioning and "
                 "uniform bucket-level access settings, labels, and timestamps.",
@@ -179,7 +179,7 @@ module GoogleCloudStorageDataProvider {
             "path": "/list-objects",
             "action": "list-objects",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "List Objects",
+            "display_name": "List objects",
             "short_desc": "List the objects in a bucket",
             "desc": "Lists the objects in a bucket.\n\n"
                 "Object names are a flat key space, so `prefix` is how a subset is selected; it is "
@@ -213,7 +213,7 @@ module GoogleCloudStorageDataProvider {
             "path": "/get-object-metadata",
             "action": "get-object-metadata",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "Get Object Metadata",
+            "display_name": "Get object metadata",
             "short_desc": "Get an object's metadata without its content",
             "desc": "Retrieves an object's metadata — size, content type, checksums, storage class, "
                 "generation, and user-defined metadata — without transferring its content.",
@@ -237,7 +237,7 @@ module GoogleCloudStorageDataProvider {
             "path": "/update-object-metadata",
             "action": "update-object-metadata",
             "billing": <DataProviderBillingInfo>{"unit": "request"},
-            "display_name": "Update Object Metadata",
+            "display_name": "Update object metadata",
             "short_desc": "Update an object's metadata without rewriting it",
             "desc": "Updates an object's metadata in place, without re-uploading its content: the "
                 "content type, the cache and content headers served with it, a custom timestamp, and "

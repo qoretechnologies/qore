@@ -1860,7 +1860,7 @@
           "message": "Si `True`, l'étiquette sera générée de manière asynchrone. La valeur par défaut est `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Obtenir une étiquette d'expédition"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {

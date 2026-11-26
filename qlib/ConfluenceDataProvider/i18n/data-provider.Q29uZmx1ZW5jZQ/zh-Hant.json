@@ -724,7 +724,7 @@
           "message": "頁面將建立在空間的根層級 (位於空間首頁樹狀結構之外)。若為 true，則不得提供 `parentId` 內文參數的值。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "取得頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -944,7 +944,7 @@
           "message": "包含頁面的直接子頁面，如 `ChildrenResponse` 物件中所定義。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "更新頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "頁面擁有者的帳戶 ID。\n\n這可將頁面擁有權轉移給其他使用者。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "重新命名頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "草稿"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "刪除頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "如果嘗試刪除屬於草稿的頁面。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "列出空間中的頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "根"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "列出標籤的頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "部落格文章的建立日期，格式為 \"yyyy-MM-ddTHH:mm:ss.SSSZ\"。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "取得部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "納入網誌文章的協作者。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "更新網誌文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "部落格文章的建立日期，格式為 \"yyyy-MM-ddTHH:mm:ss.SSSZ\"。"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "刪除部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "嘗試刪除為草稿的網誌文章時。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "列出空間中的部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "列出標籤的部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "是否應擷取空間的圖示。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "取得聊天室"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "根據完成日期篩選任務日期時間範圍的終點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "取得任務"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "更新任務"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "要操作的表格：`pages`、`blogposts`、`tasks`、`spaces`、`labels` 或 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "新頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "在全站或單一空間中，針對每個新頁面觸發。\n\n此事件包含 Confluence 傳回的頁面記錄：其 ID、標題、空間、作者和狀態。稍後編輯的頁面不會再次觸發此事件；它僅報告建立。"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "新部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "在整個網站或單一空間中有每個新部落格文章時觸發。\n\n此事件包含 Confluence 傳回的部落格文章記錄：其 ID、標題、空間、作者和狀態。"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "新附件"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

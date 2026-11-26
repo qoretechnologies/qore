@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "列出分支"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "開始進行分頁的分支名稱"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.display_name": {
-          "source": "Create Branch",
+          "source": "Create branch",
           "message": "建立分支"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "從提交 SHA 或現有分支建立分支"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "取得分支"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -532,7 +532,7 @@
           "message": "分支名稱"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Delete Branch",
+          "source": "Delete branch",
           "message": "刪除分支"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -568,7 +568,7 @@
           "message": "分支名稱"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.display_name": {
-          "source": "Delete Merged Branches",
+          "source": "Delete merged branches",
           "message": "刪除已合併的分支"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "此動作操作的專案，指定為其數值 ID 或路徑 (`group/project`)。\n\n請直接提供原始路徑；傳輸層會將其逸出為 GitLab 預期的單一路徑區段。手動逸出的路徑會被二次逸出而無法解析。\n\n所有其他以專案為範圍的選項（分支、問題、成員、變數）都會從此專案列出，因此變更專案會重新讀取它們。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "列出提交"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.short_desc": {
@@ -812,7 +812,7 @@
           "message": "開始鍵集分頁的記錄"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "取得提交"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.short_desc": {
@@ -860,7 +860,7 @@
           "message": "包含提交統計資訊"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "列出提交評論"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "單一請求中傳回的記錄筆數，最多為 GitLab 的上限 `100`。\n\n總數與下一頁會回報在 `X-Total`、`X-Page` 和 `X-Next-Page` **回應標頭**中，而非在主體中，因此分頁表示持續請求下一頁，直到傳回的記錄少於 `per_page` 筆為止。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "評論提交"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "舊"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.display_name": {
-          "source": "List Deploy Keys",
+          "source": "List deploy keys",
           "message": "列出部署金鑰"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "單一請求中傳回的記錄筆數，最多為 GitLab 的上限 `100`。\n\n總數與下一頁會回報在 `X-Total`、`X-Page` 和 `X-Next-Page` **回應標頭**中，而非在主體中，因此分頁表示持續請求下一頁，直到傳回的記錄少於 `per_page` 筆為止。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.display_name": {
-          "source": "Add Deploy Key",
+          "source": "Add deploy key",
           "message": "新增部署金鑰"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "以 ISO 8601 格式表示的 SSH 金鑰到期日 (YYYY-MM-DDTHH:MM:SSZ)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Get Deploy Key",
+          "source": "Get deploy key",
           "message": "取得部署金鑰"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "部署金鑰的 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Update Deploy Key",
+          "source": "Update deploy key",
           "message": "更新部署金鑰"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "部署金鑰是否可以推送至專案的儲存庫"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Delete Deploy Key",
+          "source": "Delete deploy key",
           "message": "刪除部署金鑰"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "部署金鑰的 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.display_name": {
-          "source": "Enable Deploy Key",
+          "source": "Enable deploy key",
           "message": "啟用部署金鑰"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "中斷"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Get Group",
+          "source": "Get group",
           "message": "取得群組"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "使用自訂屬性篩選"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Update Group",
+          "source": "Update group",
           "message": "更新群組"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -4332,7 +4332,7 @@
           "message": "設為 true 時，記錄基於 DAP 的程式碼審查路由的明確命名空間同意"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Delete Group",
+          "source": "Delete group",
           "message": "刪除群組"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.short_desc": {
@@ -5084,7 +5084,7 @@
           "message": "傳回未封存專案中的問題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.display_name": {
-          "source": "List Project Issues",
+          "source": "List project issues",
           "message": "列出專案問題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.short_desc": {
@@ -5824,7 +5824,7 @@
           "message": "用於獲取下一組記錄的游標"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "建立問題"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.short_desc": {
@@ -6156,7 +6156,7 @@
           "message": "要與議題建立關聯的史詩 IID（已棄用）"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "取得議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6192,7 +6192,7 @@
           "message": "議題的 **IID**：在 Web UI 中顯示並寫作 `#42` 的專案相對編號。\n\n這不是全域議題清單用來篩選的整個執行個體層級 `id`；兩者是同一個議題的不同編號。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "更新問題"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6524,7 +6524,7 @@
           "message": "建立時間"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Delete Issue",
+          "source": "Delete issue",
           "message": "刪除議題"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6560,7 +6560,7 @@
           "message": "議題的 **IID**：在 Web UI 中顯示並寫作 `#42` 的專案相對編號。\n\n這不是全域議題清單用來篩選的整個執行個體層級 `id`；兩者是同一個議題的不同編號。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.display_name": {
-          "source": "Get Issue Time Stats",
+          "source": "Get issue time stats",
           "message": "獲取議題時間統計"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.short_desc": {
@@ -6596,7 +6596,7 @@
           "message": "議題的 **IID**：在 Web UI 中顯示並寫作 `#42` 的專案相對編號。\n\n這不是全域議題清單用來篩選的整個執行個體層級 `id`；兩者是同一個議題的不同編號。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.display_name": {
-          "source": "List Milestones",
+          "source": "List milestones",
           "message": "列出里程碑"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "僅篩選稽核員使用者"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.display_name": {
-          "source": "List Project Users",
+          "source": "List project users",
           "message": "列出專案使用者"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.short_desc": {
@@ -7188,7 +7188,7 @@
           "message": "篩選排除具有指定 ID 的使用者"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.display_name": {
-          "source": "List Project Members",
+          "source": "List project members",
           "message": "列出專案成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.short_desc": {
@@ -7296,7 +7296,7 @@
           "message": "僅列出具有已連結 SAML 身分的成員"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.display_name": {
-          "source": "Add Project Member",
+          "source": "Add project member",
           "message": "新增專案成員"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.short_desc": {
@@ -7376,7 +7376,7 @@
           "message": "觸發成員建立流程的來源"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Get Project Member",
+          "source": "Get project member",
           "message": "獲取專案成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7412,7 +7412,7 @@
           "message": "成員的使用者 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Update Project Member",
+          "source": "Update project member",
           "message": "更新專案成員"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "要更新的成員角色 ID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Remove Project Member",
+          "source": "Remove project member",
           "message": "移除專案成員"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7544,7 +7544,7 @@
           "message": "若為 `true`，該成員將保留在子群組或專案中的任何直接成員資格。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.display_name": {
-          "source": "List Group Members",
+          "source": "List group members",
           "message": "列集群組成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.short_desc": {
@@ -7652,7 +7652,7 @@
           "message": "僅列出具有已連結 SAML 身分的成員"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.display_name": {
-          "source": "Add Group Member",
+          "source": "Add group member",
           "message": "新增群組成員"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.short_desc": {
@@ -7732,7 +7732,7 @@
           "message": "觸發成員建立流程的來源"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Get Group Member",
+          "source": "Get group member",
           "message": "取得群組成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7768,7 +7768,7 @@
           "message": "成員的使用者 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Update Group Member",
+          "source": "Update group member",
           "message": "更新群組成員"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7840,7 +7840,7 @@
           "message": "要更新的成員角色 ID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Remove Group Member",
+          "source": "Remove group member",
           "message": "移除群組成員"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7900,7 +7900,7 @@
           "message": "如果 `true`，則會取消指派成員至群組中的任何問題或合併請求。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.display_name": {
-          "source": "List Merge Requests",
+          "source": "List merge requests",
           "message": "列出合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "傳回具有指定 `iid` 的請求。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.display_name": {
-          "source": "Create Merge Request",
+          "source": "Create merge request",
           "message": "建立合併請求"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.short_desc": {
@@ -8900,7 +8900,7 @@
           "message": "規則的 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Get Merge Request",
+          "source": "Get merge request",
           "message": "獲取合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -8972,7 +8972,7 @@
           "message": "若為 `true`，回應將包含 rebase 操作是否正在進行中。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Update Merge Request",
+          "source": "Update merge request",
           "message": "更新合併請求"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "規則的 ID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Delete Merge Request",
+          "source": "Delete merge request",
           "message": "刪除合併請求"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "合併請求的 **IID**：在 Web UI 中顯示並寫作 `!7` 的專案相對編號，而非整個執行個體層級的 `id`。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.display_name": {
-          "source": "Approve Merge Request",
+          "source": "Approve merge request",
           "message": "核准合併請求"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.short_desc": {
@@ -9380,7 +9380,7 @@
           "message": "若專案設定為在核准時需要明確驗證，則為目前使用者的密碼"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.display_name": {
-          "source": "Unapprove Merge Request",
+          "source": "Unapprove merge request",
           "message": "取消核准合併請求"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.short_desc": {
@@ -11640,7 +11640,7 @@
           "message": "用於建立專案的範本專案 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "取得專案"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -11712,7 +11712,7 @@
           "message": "使用自訂屬性篩選"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "更新專案"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13740,7 +13740,7 @@
           "message": "dap_powered"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "刪除專案"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13836,7 +13836,7 @@
           "message": "主題的組織 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.display_name": {
-          "source": "List Project Variables",
+          "source": "List project variables",
           "message": "列出專案變數"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.short_desc": {
@@ -13884,7 +13884,7 @@
           "message": "單一請求中傳回的記錄筆數，最多為 GitLab 的上限 `100`。\n\n總數與下一頁會回報在 `X-Total`、`X-Page` 和 `X-Next-Page` **回應標頭**中，而非在主體中，因此分頁表示持續請求下一頁，直到傳回的記錄少於 `per_page` 筆為止。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "Create Project Variable",
+          "source": "Create project variable",
           "message": "建立專案變數"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "變數是否展開"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Get Project Variable",
+          "source": "Get project variable",
           "message": "取得專案變數"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "可用篩選條件：[environment_scope]。範例：filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Update Project Variable",
+          "source": "Update project variable",
           "message": "更新專案變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14236,7 +14236,7 @@
           "message": "變數的描述"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Delete Project Variable",
+          "source": "Delete project variable",
           "message": "刪除專案變數"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14296,7 +14296,7 @@
           "message": "可用篩選條件：[environment_scope]。範例：filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "List Group Variables",
+          "source": "List group variables",
           "message": "列出群組變數"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14344,7 +14344,7 @@
           "message": "單一請求中傳回的記錄筆數，最多為 GitLab 的上限 `100`。\n\n總數與下一頁會回報在 `X-Total`、`X-Page` 和 `X-Next-Page` **回應標頭**中，而非在主體中，因此分頁表示持續請求下一頁，直到傳回的記錄少於 `per_page` 筆為止。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.display_name": {
-          "source": "Create Group Variable",
+          "source": "Create group variable",
           "message": "建立群組變數"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.short_desc": {
@@ -14484,7 +14484,7 @@
           "message": "變數是否展開"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Get Group Variable",
+          "source": "Get group variable",
           "message": "取得群組變數"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14520,7 +14520,7 @@
           "message": "變數的索引鍵"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Update Group Variable",
+          "source": "Update group variable",
           "message": "更新群組變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14648,7 +14648,7 @@
           "message": "變數的描述"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Delete Group Variable",
+          "source": "Delete group variable",
           "message": "刪除群組變數"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14684,7 +14684,7 @@
           "message": "變數的鍵"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.display_name": {
-          "source": "List Wiki Pages",
+          "source": "List wiki pages",
           "message": "列出 Wiki 頁面"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.short_desc": {
@@ -14720,7 +14720,7 @@
           "message": "包含頁面內容"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.display_name": {
-          "source": "Create Wiki Page",
+          "source": "Create wiki page",
           "message": "建立 Wiki 頁面"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.short_desc": {
@@ -14820,7 +14820,7 @@
           "message": "wiki 頁面的前置內容標題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Get Wiki Page",
+          "source": "Get wiki page",
           "message": "取得 Wiki 頁面"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14880,7 +14880,7 @@
           "message": "將內容轉譯為 HTML"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Update Wiki Page",
+          "source": "Update wiki page",
           "message": "更新 Wiki 頁面"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14992,7 +14992,7 @@
           "message": "wiki 頁面的前置內容標題"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Delete Wiki Page",
+          "source": "Delete wiki page",
           "message": "刪除 Wiki 頁面"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -15148,7 +15148,7 @@
           "message": "要操作的資料表：`projects`、`groups`、`issues`、`merge-requests`、`branches`、`commit-comments`、`project-members`、`group-members`、`project-variables`、`group-variables`、`deploy-keys` 或 `wikis`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
-          "source": "Create Commit",
+          "source": "Create commit",
           "message": "建立提交"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.short_desc": {
@@ -15404,7 +15404,7 @@
           "message": "使用基於 `start_branch` 或 `start_sha` 的新提交覆寫目標分支。\n\n**這會捨棄目標分支上的所有內容**，因此這是此處唯一可能遺失工作成果的選項"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.display_name": {
-          "source": "Get Project ID by URL",
+          "source": "Get project ID by URL",
           "message": "依 URL 取得專案 ID"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.short_desc": {
@@ -15428,7 +15428,7 @@
           "message": "從瀏覽器複製的專案 URL。\n\n專案**內**的任何 URL 皆適用，不僅限於首頁：`https://gitlab.com/group/project`、`https://gitlab.com/group/project/-/issues/17` 及 `https://gitlab.com/group/project.git` 都代表同一個專案。"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "新提交"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -15440,7 +15440,7 @@
           "message": "在受監視的專案中每次有新提交時觸發。\n\n使用 `ref_name` 將其限制為單一分支或標籤，使用 `path` 限制為涉及單一檔案或目錄的提交，或使用 `author` 限制為單一作者。此事件攜帶 GitLab 傳回的提交記錄，包含其訊息、作者和 Web URL。"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "新 Commit 評論"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {
@@ -15452,7 +15452,7 @@
           "message": "在單一提交上有新留言時觸發。\n\n提交是必填選項，因此這會監視該提交上的留言，而非專案中的每則留言。此事件攜帶備註、其在 diff 中的位置（若有）以及其作者。"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "新議題"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.short_desc": {
@@ -15464,7 +15464,7 @@
           "message": "在受監視的專案中建立每個新議題時觸發。\n\n此事件攜帶 GitLab 傳回的議題記錄，包含其 IID、標題、標籤、被指派者和 Web URL。稍後編輯的議題不會再次觸發此事件；它僅回報建立。"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.display_name": {
-          "source": "New Merge Request",
+          "source": "New merge request",
           "message": "新增合併請求"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.short_desc": {

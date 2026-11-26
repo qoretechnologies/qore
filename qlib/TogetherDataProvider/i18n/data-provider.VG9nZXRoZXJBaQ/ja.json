@@ -792,7 +792,7 @@
           "message": "バージョンはマウントするボリュームバージョンです。作成時、デフォルトは最新バージョンです。更新時、デフォルトは現在マウントされているバージョンです。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "デプロイメントの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "デプロイメント ID または名前"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.display_name": {
-          "source": "Get Deployment By ID Or Name",
+          "source": "Get deployment by ID or name",
           "message": "IDまたは名前で展開を取得する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.short_desc": {
@@ -840,7 +840,7 @@
           "message": "デプロイメント ID または名前"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "デプロイメントの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "バージョンはマウントするボリュームバージョンです。作成時、デフォルトは最新バージョンです。更新時、デフォルトは現在マウントされているバージョンです。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Logs For Deployment",
+          "source": "Get logs for deployment",
           "message": "デプロイメント用のログを取得する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "価値は、安全に保管する機密データ(例えば、 API キー、パスワード、トークン) 残りで暗号化します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.display_name": {
-          "source": "Delete Secret",
+          "source": "Delete secret",
           "message": "シークレットの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "秘密IDまたは名前"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Secret By ID Or Name",
+          "source": "Get secret by ID or name",
           "message": "IDまたは名前で秘密を入手する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "秘密IDまたは名前"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.display_name": {
-          "source": "Update Secret",
+          "source": "Update secret",
           "message": "シークレット更新"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "価値は、安全に保存するための新しい機密データです。 これにより、既存の秘密値が置き換えられます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.display_name": {
-          "source": "Download Storage File",
+          "source": "Download storage file",
           "message": "ストレージファイルのダウンロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "ファイル名"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.display_name": {
-          "source": "Get File Download URL",
+          "source": "Get file download URL",
           "message": "ファイルのダウンロード URL を取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "readOnly"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.display_name": {
-          "source": "Delete Volume",
+          "source": "Delete volume",
           "message": "ボリュームの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "ボリュームIDまたは名前"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Volume By ID Or Name",
+          "source": "Get volume by ID or name",
           "message": "IDまたは名前でボリュームを取得する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "ボリュームバージョンを記述する(現在のバージョンへのデフォルト)"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.display_name": {
-          "source": "Update Volume",
+          "source": "Update volume",
           "message": "更新ボリューム"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.short_desc": {
@@ -2996,7 +2996,7 @@
           "message": "loraプールは、それが反対に実行するように設定した場合、アダプターのために使用するために、, 言う, 専用のプール. ご利用に限る model_type `adapter`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.display_name": {
-          "source": "Get Model Upload Job",
+          "source": "Get model upload job",
           "message": "モデル アップロード ジョブ"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "アップロードされたすべてのデータファイルのメタデータをリストします。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "ファイルの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "取得するファイルのID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "ファイルを削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "削除するファイルのID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "ファイルのダウンロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -4476,7 +4476,7 @@
           "message": "トレーニングファイルの開始からトークン化までの行の最大数。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.display_name": {
-          "source": "Get Fine-Tune",
+          "source": "Get fine-tune",
           "message": "Fine-Tuneを入手する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "取得するジョブのID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "Fine-Tuneの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "未使用のパラメータ。"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.display_name": {
-          "source": "List Fine-Tune Events",
+          "source": "List fine-tune events",
           "message": "ファインチューンイベント一覧"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "イベントを一覧表示するジョブのID"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tune Checkpoints",
+          "source": "List fine-tune checkpoints",
           "message": "ファインチューンチェックポイントの一覧"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.short_desc": {
@@ -4584,7 +4584,7 @@
           "message": "チェックポイントを一覧表示するジョブの ID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.display_name": {
-          "source": "Download Tokenized Dataset",
+          "source": "Download tokenized dataset",
           "message": "トークン化されたデータセットをダウンロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "モデル 出力道"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.display_name": {
-          "source": "Cancel Fine-Tune",
+          "source": "Cancel fine-tune",
           "message": "Fine-Tuneをキャンセル"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.short_desc": {
@@ -4692,7 +4692,7 @@
           "message": "キャンセルする罰金のtune ID。 先頭から始まる文字列 `ft-`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.display_name": {
-          "source": "Get Fine-Tune Metrics",
+          "source": "Get fine-tune metrics",
           "message": "Fine-Tuneメトリクスを入手"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.short_desc": {
@@ -6544,7 +6544,7 @@
           "message": "このアドオンインスタンスのHuman-readable名。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Get GPU Cluster By Cluster ID",
+          "source": "Get GPU cluster by cluster ID",
           "message": "詳しくはこちら GPU クラスタ ID によるクラスタ"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -6568,7 +6568,7 @@
           "message": "取得するクラスターのID"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.display_name": {
-          "source": "Update GPU Cluster",
+          "source": "Update GPU cluster",
           "message": "新着情報 GPU クラスター"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.short_desc": {
@@ -6980,7 +6980,7 @@
           "message": "更新するアドオンの名前。クラスタ上に既存のアドオンと一致する必要があります。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Delete GPU Cluster By Cluster ID",
+          "source": "Delete GPU cluster by cluster ID",
           "message": "削除 GPU クラスタ ID によるクラスタ"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -7148,7 +7148,7 @@
           "message": "ボリュームを所有するプロジェクトID。 省略すると、呼び出し主のデフォルトプロジェクトが使用されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Get Shared Volume By ID",
+          "source": "Get shared volume by ID",
           "message": "共有ボリュームを ID で取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "取得するボリュームのID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Delete Shared Volume By ID",
+          "source": "Delete shared volume by ID",
           "message": "共有ボリュームを ID で削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "指定された可用性ゾーン(例、当社-central-4b)でエンドポイントを作成します。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.display_name": {
-          "source": "Get Endpoint",
+          "source": "Get endpoint",
           "message": "エンドポイントの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.short_desc": {
@@ -7448,7 +7448,7 @@
           "message": "取得するエンドポイントのID"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.display_name": {
-          "source": "Update Endpoint",
+          "source": "Update endpoint",
           "message": "エンドポイントの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.short_desc": {
@@ -7552,7 +7552,7 @@
           "message": "エンドポイントが自動的に停止した後の非アクティブの分数。 0 に設定して、自動タイムアウトを無効にします。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.display_name": {
-          "source": "Delete Endpoint",
+          "source": "Delete endpoint",
           "message": "エンドポイントの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.short_desc": {
@@ -7576,7 +7576,7 @@
           "message": "削除するエンドポイントのID"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.display_name": {
-          "source": "Add LoRA Adapter To Endpoint",
+          "source": "Add LoRA adapter to endpoint",
           "message": "追加 LoRA エンドポイントへのアダプタ"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.short_desc": {
@@ -7612,7 +7612,7 @@
           "message": "フォーマットで識別子を結合endpoint_name:adapter_model_name\"."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.display_name": {
-          "source": "List Adapters On Endpoint",
+          "source": "List adapters on endpoint",
           "message": "エンドポイントでアダプターを一覧表示"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "エンドポイントID"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.display_name": {
-          "source": "Remove LoRA Adapter From Endpoint",
+          "source": "Remove LoRA adapter from endpoint",
           "message": "削除 LoRA エンドポイントからのアダプタ"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.short_desc": {
@@ -7896,7 +7896,7 @@
           "message": "バッチリクエストの処理に使用するモデル"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "バッチを取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "取得するバッチジョブのID"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "バッチをキャンセル"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "ソースによるフィルタモデル"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "評価取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "取得する評価ジョブのID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.display_name": {
-          "source": "Get Evaluation Results",
+          "source": "Get evaluation results",
           "message": "評価結果の取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.short_desc": {
@@ -9560,7 +9560,7 @@
           "message": "ミューオンスケーリング戦略：オリジナル"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.display_name": {
-          "source": "Get Model Resources",
+          "source": "Get model resources",
           "message": "モデルリソースを取得する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.short_desc": {
@@ -9584,7 +9584,7 @@
           "message": "モデルリソースのID"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.display_name": {
-          "source": "Stop Model Resources",
+          "source": "Stop model resources",
           "message": "モデルリソースを停止する"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "RLサービスでサポートされているモデルと、トレーニング/サンプリング操作の制限を返します。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Get Training Session",
+          "source": "Get training session",
           "message": "トレーニングセッションを受講する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -9968,7 +9968,7 @@
           "message": "トレーニングセッションのID"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Update Training Session",
+          "source": "Update training session",
           "message": "トレーニングセッションの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -10100,7 +10100,7 @@
           "message": "Weights & Biases実行用のHTTPS URL"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.display_name": {
-          "source": "Stop Training Session",
+          "source": "Stop training session",
           "message": "トレーニングセッションの停止"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.short_desc": {
@@ -10124,7 +10124,7 @@
           "message": "トレーニングセッションのID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Backward Operation",
+          "source": "Get forward backward operation",
           "message": "後方操作を進む"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.short_desc": {
@@ -10160,7 +10160,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.display_name": {
-          "source": "Get Optim Step Operation",
+          "source": "Get optim step operation",
           "message": "ステップ操作を最適化する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.short_desc": {
@@ -10196,7 +10196,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.display_name": {
-          "source": "Get Weights Sync Operation",
+          "source": "Get weights sync operation",
           "message": "重量の同期操作を得る"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.short_desc": {
@@ -10232,7 +10232,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.display_name": {
-          "source": "Get Sample Operation",
+          "source": "Get sample operation",
           "message": "サンプル操作を入手"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.short_desc": {
@@ -10268,7 +10268,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.display_name": {
-          "source": "Forward Backward Pass",
+          "source": "Forward backward pass",
           "message": "後方後方パスを進む"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.short_desc": {
@@ -10616,7 +10616,7 @@
           "message": "Loss Type Dro"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.display_name": {
-          "source": "Custom Forward Backward Pass",
+          "source": "Custom forward backward pass",
           "message": "カスタムフォワードバックワードパス"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.short_desc": {
@@ -10796,7 +10796,7 @@
           "message": "D型：Bfloat16"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.display_name": {
-          "source": "Get Custom Forward Backward Operation",
+          "source": "Get custom forward backward operation",
           "message": "カスタムフォワード後方操作を入手"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.short_desc": {
@@ -10832,7 +10832,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.display_name": {
-          "source": "Forward Pass",
+          "source": "Forward pass",
           "message": "フォワードパス"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.short_desc": {
@@ -10968,7 +10968,7 @@
           "message": "バッファ形状 `[num_tokens, num_layers, width]`。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Operation",
+          "source": "Get forward operation",
           "message": "フォワード・オペレーション"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.short_desc": {
@@ -11004,7 +11004,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.display_name": {
-          "source": "Optimizer Step",
+          "source": "Optimizer step",
           "message": "オプティマイザステップ"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.short_desc": {
@@ -11268,7 +11268,7 @@
           "message": "重み減衰係数"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.display_name": {
-          "source": "Weights Sync",
+          "source": "Weights sync",
           "message": "重量 同期"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.short_desc": {
@@ -11528,7 +11528,7 @@
           "message": "一緒に真のとき `return_routed_experts`、各ルーティングキャプチャをバックエンド所有として返します。 `object_uri` インラインベース64データではなく、形状をプラスします。 従来のインライン応答を維持しないクライアント。"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.display_name": {
-          "source": "Create Inference Checkpoint",
+          "source": "Create inference checkpoint",
           "message": "インフェレンスチェックポイントを作成する"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.short_desc": {
@@ -11552,7 +11552,7 @@
           "message": "トレーニングセッションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Inference Checkpoint Operation",
+          "source": "Get inference checkpoint operation",
           "message": "推論チェックポイント操作"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.short_desc": {
@@ -11588,7 +11588,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Save Training Checkpoint",
+          "source": "Save training checkpoint",
           "message": "トレーニングチェックポイントの保存"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.short_desc": {
@@ -11612,7 +11612,7 @@
           "message": "トレーニングセッションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.display_name": {
-          "source": "Get Save Training Checkpoint Operation",
+          "source": "Get save training checkpoint operation",
           "message": "トレーニングチェックポイントの操作を保存"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.short_desc": {
@@ -11648,7 +11648,7 @@
           "message": "オペレーションID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.display_name": {
-          "source": "Get Checkpoint",
+          "source": "Get checkpoint",
           "message": "チェックポイントの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.short_desc": {
@@ -11672,7 +11672,7 @@
           "message": "チェックポイントのID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.display_name": {
-          "source": "Download Checkpoint",
+          "source": "Download checkpoint",
           "message": "チェックポイントのダウンロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.short_desc": {
@@ -11720,7 +11720,7 @@
           "message": "チェックポイント バリアントアダプター"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.display_name": {
-          "source": "List Addons",
+          "source": "List addons",
           "message": "リストアドオン"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.short_desc": {
@@ -11744,7 +11744,7 @@
           "message": "リストにアドオンを追加するクラスターのID。"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.display_name": {
-          "source": "Create Addon",
+          "source": "Create addon",
           "message": "Addon の作成"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "Model Aware TorchPass アドオンを有効にするか。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.display_name": {
-          "source": "Get Addon",
+          "source": "Get addon",
           "message": "Addonを入手する"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.short_desc": {
@@ -11928,7 +11928,7 @@
           "message": "取得するアドオンのID。"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.display_name": {
-          "source": "Update Addon",
+          "source": "Update addon",
           "message": "Addonの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "Model Aware TorchPass アドオンを有効にするか。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.display_name": {
-          "source": "Delete Addon",
+          "source": "Delete addon",
           "message": "Addonの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.short_desc": {
@@ -12100,7 +12100,7 @@
           "message": "削除するアドオンのID。"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.display_name": {
-          "source": "List Remediations",
+          "source": "List remediations",
           "message": "リストの修正"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.short_desc": {
@@ -12204,7 +12204,7 @@
           "message": "修正モード(s)でフィルタリングします。 指定されたモードのいずれかに合った修正を返します。"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Create Remediation",
+          "source": "Create remediation",
           "message": "Remediation の作成"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.short_desc": {
@@ -12288,7 +12288,7 @@
           "message": "クライアント指定の ID は、潜在能力の ID です。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Get Remediation",
+          "source": "Get remediation",
           "message": "是正を得る"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12324,7 +12324,7 @@
           "message": "是正 ID の値"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.display_name": {
-          "source": "Approve Remediation",
+          "source": "Approve remediation",
           "message": "承認の修正"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.short_desc": {
@@ -12404,7 +12404,7 @@
           "message": "是正モード ホストの電力周期"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Cancel Remediation",
+          "source": "Cancel remediation",
           "message": "キャンセルの修正"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.short_desc": {
@@ -12452,7 +12452,7 @@
           "message": "修正ID。"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Reject Remediation",
+          "source": "Reject remediation",
           "message": "Rejectの修正"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "前の応答からの不透明カーソル `next_cursor`. 発行された月と粒度のみ有効です。 現在の月データは移動スナップショットです。各ページはリクエストとしてデータを反映していますので、新たに完了したウィンドウはシーケンスの最後に表示されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.display_name": {
-          "source": "Dedicated: List Organization Endpoints",
+          "source": "Dedicated: list organization endpoints",
           "message": "専用:リスト組織エンドポイント"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "フィルタ式を使用して `name`, `created_at`, または `updated_at` 比較演算子と AND/OR/NOT; タイムスタンプは RFC 3339 文字列でなければなりません。 `name` substring の一致をと支えて下さい `:` と接頭辞/サフィックスワイルドカード `*`, , ベアエンドポイント名でなければなりません."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.display_name": {
-          "source": "Dedicated: List Organization Models",
+          "source": "Dedicated: list organization models",
           "message": "専用: リスト 組織モデル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.short_desc": {
@@ -12840,7 +12840,7 @@
           "message": "以前のリストの応答からカーソルを移動します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.display_name": {
-          "source": "Dedicated: List Model Configurations",
+          "source": "Dedicated: list model configurations",
           "message": "専用: リストモデル構成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.short_desc": {
@@ -12912,7 +12912,7 @@
           "message": "以前のリストの応答からカーソルを移動します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Dedicated: Get Model Configuration",
+          "source": "Dedicated: get model configuration",
           "message": "専用:モデル構成の取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -12948,7 +12948,7 @@
           "message": "リビジョン識別子を設定します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.display_name": {
-          "source": "Dedicated: List Endpoints",
+          "source": "Dedicated: list endpoints",
           "message": "専用:リストエンドポイント"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.short_desc": {
@@ -13020,7 +13020,7 @@
           "message": "フィルタ式を使用して `name`, `created_at`, または `updated_at` 比較演算子と AND/OR/NOT; タイムスタンプは RFC 3339 文字列でなければなりません。 `name` substring の一致をと支えて下さい `:` と接頭辞/サフィックスワイルドカード `*`, と 受信する bare エンドポイント名 または `<project_slug>/<endpoint_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Create Endpoint",
+          "source": "Dedicated: create endpoint",
           "message": "専用:エンドポイントの作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.short_desc": {
@@ -13076,7 +13076,7 @@
           "message": "可視性 内部"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Update Endpoint",
+          "source": "Dedicated: update endpoint",
           "message": "専用:エンドポイントの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.short_desc": {
@@ -13204,7 +13204,7 @@
           "message": "更新するフィールド。 設定されていない場合、入力されたフィールドが更新されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Get Endpoint",
+          "source": "Dedicated: get endpoint",
           "message": "専用:エンドポイントの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.short_desc": {
@@ -13240,7 +13240,7 @@
           "message": "エンドポイント識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Delete Endpoint",
+          "source": "Dedicated: delete endpoint",
           "message": "専用:エンドポイントの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.short_desc": {
@@ -13288,7 +13288,7 @@
           "message": "楽観的な通貨のためのEtag。 設定すると、現在の etag が一致しない場合、削除は拒否されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.display_name": {
-          "source": "Dedicated: List Deployments",
+          "source": "Dedicated: list deployments",
           "message": "専用:リストの展開"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.short_desc": {
@@ -13372,7 +13372,7 @@
           "message": "フィルタ式を使用して `name`, `state`, `model`, `created_at`, または `updated_at` 比較演算子および AND/OR/NOT を使って; `state` deploymentState の enum の名前をとり、 `model` モデルのリソース名をとります。 `name` substring の一致をと支えて下さい `:` と接頭辞/サフィックスワイルドカード `*`, ベア展開名や `<project_slug>/<endpoint_name>/<deployment_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Create Deployment",
+          "source": "Dedicated: create deployment",
           "message": "専用:デプロイメントの作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13716,7 +13716,7 @@
           "message": "true の場合、デプロイメントの作成やプロビジョニングなしでリクエストを検証します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Update Deployment",
+          "source": "Dedicated: update deployment",
           "message": "専用: 更新の展開"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13976,7 +13976,7 @@
           "message": "更新するフィールド。 設定されていない場合、フィールドがポップアップ表示されます。 `deployment` 更新情報"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Get Deployment",
+          "source": "Dedicated: get deployment",
           "message": "専用:デプロイメントの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "デプロイメント識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Delete Deployment",
+          "source": "Dedicated: delete deployment",
           "message": "専用:デプロイメントの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "楽観的な通貨のためのEtag。 設定すると、現在の etag が一致しない場合、削除は拒否されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.display_name": {
-          "source": "Dedicated: List Deployment Adapters",
+          "source": "Dedicated: list deployment adapters",
           "message": "専用:リストの展開のアダプター"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.short_desc": {
@@ -14156,7 +14156,7 @@
           "message": "以前のアダプターリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Add Deployment Adapter",
+          "source": "Dedicated: add deployment adapter",
           "message": "専用:デプロイメントアダプタを追加"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14240,7 +14240,7 @@
           "message": "デプロイメントがアダプター容量である場合、最も古いアダプターを緩和するかどうか。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Get Deployment Adapter",
+          "source": "Dedicated: get deployment adapter",
           "message": "専用: デプロイメントアダプタを入手"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "アダプターモデル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Remove Deployment Adapter",
+          "source": "Dedicated: remove deployment adapter",
           "message": "専用: デプロイメント アダプターの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14372,7 +14372,7 @@
           "message": "以前の追加、更新、取得、またはリストの応答からアダプターのetag。 その応答後にアダプターが変更された場合、除去は拒否されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Update Deployment Adapter",
+          "source": "Dedicated: update deployment adapter",
           "message": "専用: 導入アダプタの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14456,7 +14456,7 @@
           "message": "AddAdapter、 UpdateAdapter、GetAdapter、ListAdapter の以前のレスポンスから、Row-Level Etag を記述します。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.display_name": {
-          "source": "Dedicated: List Endpoint Rollouts",
+          "source": "Dedicated: list endpoint rollouts",
           "message": "専用:リストエンドポイントロールアウト"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.short_desc": {
@@ -14536,7 +14536,7 @@
           "message": "ロールアウト フィルター ターミナル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Create Rollout",
+          "source": "Dedicated: create rollout",
           "message": "専用:ロールアウトの作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.short_desc": {
@@ -14816,7 +14816,7 @@
           "message": "完成時にオプションのターゲットレプリカフロア。 設定時に少なくとも1つでなければなりません。 ソースのデプロイメントのレプリカカウントへのデフォルトは、作成時に作成するか、ソースとターゲットのデプロイメントと組み合わせたレプリカのカウントの両方が既にエンドポイントのトラフィックがキャンセル後に分割されているとき。 これは、ターゲットオートスケーリングを最大超える場合、オペレータが最大ミッドランを変更しない限り、最初に必要なときにロールアウトが最大上昇します。 上げられた天井は完了後に残ります。 自己のオートスケーリング分を所有する既存のターゲットは床を高く保ちます、として報告される FINAL_BELOW_INHERITED_MIN. この値で土地を正確に停止し始めるターゲット。 ソースの分が高かった場合、PreviewRolloutDefaults レポート FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.display_name": {
-          "source": "Dedicated: Preview Rollout Defaults",
+          "source": "Dedicated: preview rollout defaults",
           "message": "専用:プレビューロールアウトデフォルト"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.short_desc": {
@@ -15096,7 +15096,7 @@
           "message": "完成時にオプションのターゲットレプリカフロア。 設定時に少なくとも1つでなければなりません。 ソースのデプロイメントのレプリカカウントへのデフォルトは、作成時に作成するか、ソースとターゲットのデプロイメントと組み合わせたレプリカのカウントの両方が既にエンドポイントのトラフィックがキャンセル後に分割されているとき。 これは、ターゲットオートスケーリングを最大超える場合、オペレータが最大ミッドランを変更しない限り、最初に必要なときにロールアウトが最大上昇します。 上げられた天井は完了後に残ります。 自己のオートスケーリング分を所有する既存のターゲットは床を高く保ちます、として報告される FINAL_BELOW_INHERITED_MIN. この値で土地を正確に停止し始めるターゲット。 ソースの分が高かった場合、PreviewRolloutDefaults レポート FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Get Rollout",
+          "source": "Dedicated: get rollout",
           "message": "専用:ロールアウトを取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.short_desc": {
@@ -15144,7 +15144,7 @@
           "message": "ロールアウト識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Delete Rollout",
+          "source": "Dedicated: delete rollout",
           "message": "専用:ロールアウトの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.short_desc": {
@@ -15204,7 +15204,7 @@
           "message": "楽観的な通貨のためのEtag。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Start Rollout",
+          "source": "Dedicated: start rollout",
           "message": "専用: スタートロールアウト"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.short_desc": {
@@ -15252,7 +15252,7 @@
           "message": "ロールアウト識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Pause Rollout",
+          "source": "Dedicated: pause rollout",
           "message": "専用: パユースロールアウト"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.short_desc": {
@@ -15324,7 +15324,7 @@
           "message": "ロールアウト一時停止メタデータに記録された任意人間可読性の理由。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Resume Rollout",
+          "source": "Dedicated: resume rollout",
           "message": "専用:Resume Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.short_desc": {
@@ -15384,7 +15384,7 @@
           "message": "最適化された通貨のオプションのetag。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Cancel Rollout",
+          "source": "Dedicated: cancel rollout",
           "message": "専用:ロールアウトをキャンセル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.short_desc": {
@@ -15476,7 +15476,7 @@
           "message": "キャンセル 転倒の処分"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.display_name": {
-          "source": "Dedicated: Promote Rollout",
+          "source": "Dedicated: promote rollout",
           "message": "専用:ロールアウトを促進して下さい"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.short_desc": {
@@ -15536,7 +15536,7 @@
           "message": "最適化された通貨のオプションのetag。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List A B Experiments",
+          "source": "Dedicated: list A B experiments",
           "message": "専用:B実験をリスト"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.short_desc": {
@@ -15596,7 +15596,7 @@
           "message": "前のカーサーター A/B 実験リスト応答。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create A B Experiment",
+          "source": "Dedicated: create A B experiment",
           "message": "専用: B 実験を作成する"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15712,7 +15712,7 @@
           "message": "A/B実験メンバー役割バリエーション"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update A B Experiment",
+          "source": "Dedicated: update A B experiment",
           "message": "専用:B実験の更新"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15852,7 +15852,7 @@
           "message": "更新するフィールド。 省略した場合は、すべてのミュータブルフィールドが上書きされます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get A B Experiment",
+          "source": "Dedicated: get A B experiment",
           "message": "専用: B 実験を入手する"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15900,7 +15900,7 @@
           "message": "A/B 実験識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete A B Experiment",
+          "source": "Dedicated: delete A B experiment",
           "message": "専用:B実験の削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15960,7 +15960,7 @@
           "message": "楽観的な通貨のためのEtag。 設定すると、現在の etag が一致しない場合、削除は拒否されます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List Shadow Experiments",
+          "source": "Dedicated: list shadow experiments",
           "message": "専用:リストシャドウ実験"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.short_desc": {
@@ -16032,7 +16032,7 @@
           "message": "各返されたシャドウ実験にターゲットの展開を含むかどうか。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create Shadow Experiment",
+          "source": "Dedicated: create shadow experiment",
           "message": "専用:シャドウ実験の作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16200,7 +16200,7 @@
           "message": "ミラーされたトラフィックを受信する親エンドポイントの下の展開。 これは、ライブトラフィック分割メンバーまたはアクティブなロールアウトのソースまたはターゲットでなければなりません。 トラフィック分割重量0ウォームアップターゲットが許可されています。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update Shadow Experiment",
+          "source": "Dedicated: update shadow experiment",
           "message": "専用:シャドウ実験の更新"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16356,7 +16356,7 @@
           "message": "説明やソースなどの更新に必要なフィールド。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get Shadow Experiment",
+          "source": "Dedicated: get shadow experiment",
           "message": "専用:シャドウ実験"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16404,7 +16404,7 @@
           "message": "Shadow実験識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment",
+          "source": "Dedicated: delete shadow experiment",
           "message": "専用:シャドウ実験の削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16464,7 +16464,7 @@
           "message": "楽観的な通貨のためのEtag。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.display_name": {
-          "source": "Dedicated: List Shadow Experiment Targets",
+          "source": "Dedicated: list shadow experiment targets",
           "message": "専用:リストシャドウ実験ターゲット"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.short_desc": {
@@ -16536,7 +16536,7 @@
           "message": "以前のシャドウ実験ターゲットリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Create Shadow Experiment Target",
+          "source": "Dedicated: create shadow experiment target",
           "message": "専用:シャドウ実験ターゲットの作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16620,7 +16620,7 @@
           "message": "オプションのフリーフォームターゲットの説明。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Update Shadow Experiment Target",
+          "source": "Dedicated: update shadow experiment target",
           "message": "専用:シャドウ実験ターゲットの更新"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16740,7 +16740,7 @@
           "message": "更新するコンマ区切りフィールド。 サポートされているフィールドは `name`, `targetDeploymentId`, と `description`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Get Shadow Experiment Target",
+          "source": "Dedicated: get shadow experiment target",
           "message": "専用:シャドウ実験ターゲットの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16800,7 +16800,7 @@
           "message": "Shadow 実験対象識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment Target",
+          "source": "Dedicated: delete shadow experiment target",
           "message": "専用:影実験ターゲットの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16872,7 +16872,7 @@
           "message": "楽観的な通貨のためのEtag。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.display_name": {
-          "source": "Dedicated: Get Endpoint Analytics",
+          "source": "Dedicated: get endpoint analytics",
           "message": "専用:エンドポイント アナリティクスの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.short_desc": {
@@ -16968,7 +16968,7 @@
           "message": "時間系列のバケツの持続期間、のような `1m`, `1h`, または `1d`. デフォルト値 `1d`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.display_name": {
-          "source": "Dedicated: List Endpoint Events",
+          "source": "Dedicated: list endpoint events",
           "message": "専用:リストエンドポイントイベント"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.short_desc": {
@@ -17128,7 +17128,7 @@
           "message": "ロールアウトなど、イベントに関連付けられている主題のID。 AND を使用して他のフィルタと組み合わせます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.display_name": {
-          "source": "Dedicated: List Project Models",
+          "source": "Dedicated: list project models",
           "message": "専用:リストプロジェクトモデル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.short_desc": {
@@ -17208,7 +17208,7 @@
           "message": "以前のモデルリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Create Model",
+          "source": "Dedicated: create model",
           "message": "専用:モデルの作成"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.short_desc": {
@@ -17280,7 +17280,7 @@
           "message": "サポートされているベースモデルのIDは、このモデルが派生したものです。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.display_name": {
-          "source": "Dedicated: Get Model",
+          "source": "Dedicated: get model",
           "message": "専用:モデルの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.short_desc": {
@@ -17316,7 +17316,7 @@
           "message": "モデル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Delete Model",
+          "source": "Dedicated: delete model",
           "message": "専用:モデルの削除"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.short_desc": {
@@ -17352,7 +17352,7 @@
           "message": "モデル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Update Model",
+          "source": "Dedicated: update model",
           "message": "専用: 更新モデル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.short_desc": {
@@ -17444,7 +17444,7 @@
           "message": "更新するフィールド。 省略した場合は、すべてのミュータブルフィールドが上書きされます。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.display_name": {
-          "source": "Dedicated: List Placement Profiles",
+          "source": "Dedicated: list placement profiles",
           "message": "専用:リスト配置プロファイル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.short_desc": {
@@ -17492,7 +17492,7 @@
           "message": "前の配置プロファイルリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.display_name": {
-          "source": "Dedicated: Get Placement Profile",
+          "source": "Dedicated: get placement profile",
           "message": "専用:配置プロファイルの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.short_desc": {
@@ -17528,7 +17528,7 @@
           "message": "配置プロファイル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.display_name": {
-          "source": "Dedicated: List Model Files",
+          "source": "Dedicated: list model files",
           "message": "専用: リストモデルファイル"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.short_desc": {
@@ -17576,7 +17576,7 @@
           "message": "識別子の修正から読み込む。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.display_name": {
-          "source": "Dedicated: List Model Revisions",
+          "source": "Dedicated: list model revisions",
           "message": "専用:リストモデルの修正"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.short_desc": {
@@ -17612,7 +17612,7 @@
           "message": "モデル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.display_name": {
-          "source": "Dedicated: Get Model Volume Revision",
+          "source": "Dedicated: get model volume revision",
           "message": "専用:モデルボリュームリビジョンを入手"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.short_desc": {
@@ -17660,7 +17660,7 @@
           "message": "識別子の修正。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.display_name": {
-          "source": "Dedicated: List Remote Model Uploads",
+          "source": "Dedicated: list remote model uploads",
           "message": "専用:リストリモートモデルのアップロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.short_desc": {
@@ -17708,7 +17708,7 @@
           "message": "以前のリモートアップロードリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Create Remote Model Upload",
+          "source": "Dedicated: create remote model upload",
           "message": "専用:リモートモデルのアップロードを作成する"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17768,7 +17768,7 @@
           "message": "リモートロケーションへのアクセスに使用されるオプションのソース資格。 値が書き込みのみで返されず、返すことはありません。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Get Remote Model Upload",
+          "source": "Dedicated: get remote model upload",
           "message": "専用:リモートモデルのアップロード"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17804,7 +17804,7 @@
           "message": "リモートアップロード識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.display_name": {
-          "source": "Dedicated: List Remote Model Upload Events",
+          "source": "Dedicated: list remote model upload events",
           "message": "専用:リストリモートモデルアップロードイベント"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.short_desc": {
@@ -17936,7 +17936,7 @@
           "message": "現在、インフェレンス展開に使用できるリストのハードウェアインスタンスタイプ GPU リソース、価格設定、地域、および最高の設備容量のヘッドルーム。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.display_name": {
-          "source": "Dedicated: Get Inference Instance Type",
+          "source": "Dedicated: get inference instance type",
           "message": "専用:インフェレンスインスタンスタイプを入手"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.short_desc": {
@@ -18060,7 +18060,7 @@
           "message": "以前のサポート済みモデルリストの応答からカーソル。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.display_name": {
-          "source": "Dedicated: Get Supported Model",
+          "source": "Dedicated: get supported model",
           "message": "専用: 対応モデルの取得"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.short_desc": {
@@ -18084,7 +18084,7 @@
           "message": "サポートされているモデル識別子。"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
+          "source": "Get video",
           "message": "ビデオを入手"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.short_desc": {

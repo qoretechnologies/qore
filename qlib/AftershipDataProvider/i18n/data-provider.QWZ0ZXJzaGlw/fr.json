@@ -748,7 +748,7 @@
           "message": "Identifiant de la connexion du transporteur à utiliser pour ce suivi"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
-          "source": "Get Tracking",
+          "source": "Get tracking",
           "message": "Obtenir le suivi"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Horodatage du moment où l'événement d'achèvement s'est produit. S'il n'est pas fourni, l'heure actuelle est utilisée"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
-          "source": "Get Last Checkpoint",
+          "source": "Get last checkpoint",
           "message": "Obtenir le dernier point de contrôle"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "L'ID de suivi Aftership pour lequel récupérer le dernier point de contrôle"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Lister les transporteurs"
         },
         "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Sous-cause si la cause le permet"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Obtenir le retour"
         },
         "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {

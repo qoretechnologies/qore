@@ -592,7 +592,7 @@
           "message": "Verificación ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "Obtener dirección"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Verificación ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Obtener paquete"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Nombre del transportista (p. ej., `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Obtener envío"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "ID de un envío adquirido previamente a reembolsar"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "Obtener etiqueta de envío"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "Nombre del transportista (p. ej., `USPS`, `FedEx`); EasyPost lo detecta automáticamente si se omite"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "Obtener rastreador"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Webhook a eliminar"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Listar eventos"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {

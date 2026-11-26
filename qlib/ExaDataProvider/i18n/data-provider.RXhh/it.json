@@ -2532,7 +2532,7 @@
           "message": "Il `nextCursor` della risposta precedente.  Ogni raccolta di questa API si pagina allo stesso modo: leggi `hasMore` e passa qui `nextCursor` per ottenere la pagina successiva."
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.display_name": {
-          "source": "Get a Research Run",
+          "source": "Get a research run",
           "message": "Ottieni un'esecuzione di ricerca approfondita"
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "ID esecuzione dell'agente. I nuovi ID esecuzione vengono restituiti con il prefisso `agent_run_`."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.display_name": {
-          "source": "List Research Run Events",
+          "source": "List research run events",
           "message": "Elenca gli eventi di un'esecuzione di ricerca approfondita"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Per la riproduzione SSE, restituisce solo gli eventi successivi a questo ID evento."
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.display_name": {
-          "source": "Cancel a Research Run",
+          "source": "Cancel a research run",
           "message": "Annulla un'esecuzione di ricerca approfondita"
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "ID esecuzione dell'agente. I nuovi ID esecuzione vengono restituiti con il prefisso `agent_run_`."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.display_name": {
-          "source": "Stop a Research Run",
+          "source": "Stop a research run",
           "message": "Ferma un'esecuzione di ricerca approfondita"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.short_desc": {
@@ -2696,7 +2696,7 @@
           "message": "Token di funzionalità beta separati da virgole per attivare funzionalità sperimentali."
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Delete a Research Run",
+          "source": "Delete a research run",
           "message": "Elimina un'esecuzione di ricerca approfondita"
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get a Batch",
+          "source": "Get a batch",
           "message": "Ottieni un lotto"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel a Batch",
+          "source": "Cancel a batch",
           "message": "Annulla un lotto"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete a Batch",
+          "source": "Delete a batch",
           "message": "Elimina un lotto"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Filtra i monitor per coppie chiave-valore dei metadati (corrispondenza esatta, semantica AND). Usa la notazione tra parentesi quadre: `metadata[key]=value`."
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.display_name": {
-          "source": "Get a Search Monitor",
+          "source": "Get a search monitor",
           "message": "Ottieni un monitor di ricerca"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.short_desc": {
@@ -3744,7 +3744,7 @@
           "message": "L'ID del monitor"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.display_name": {
-          "source": "Update a Search Monitor",
+          "source": "Update a search monitor",
           "message": "Aggiorna un monitor di ricerca"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "URL HTTPS per ricevere eventi webhook. Non deve puntare a localhost o a intervalli di indirizzi IP privati."
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.display_name": {
-          "source": "Delete a Search Monitor",
+          "source": "Delete a search monitor",
           "message": "Elimina un monitor di ricerca"
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Numero massimo di monitor da elaborare in una singola richiesta. Il valore predefinito è 50, il massimo 500."
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.display_name": {
-          "source": "Run a Search Monitor Now",
+          "source": "Run a search monitor now",
           "message": "Esegui subito un monitor di ricerca"
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "L'ID del monitor"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.display_name": {
-          "source": "List Search Monitor Runs",
+          "source": "List search monitor runs",
           "message": "Elenca le esecuzioni di un monitor di ricerca"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.short_desc": {
@@ -4608,7 +4608,7 @@
           "message": "Numero di risultati per pagina"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.display_name": {
-          "source": "Get a Search Monitor Run",
+          "source": "Get a search monitor run",
           "message": "Ottieni un'esecuzione di un monitor di ricerca"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.short_desc": {

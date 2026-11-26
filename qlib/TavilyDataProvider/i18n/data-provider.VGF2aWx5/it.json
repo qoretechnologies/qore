@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.VGF2aWx5.action.c2VhcmNo.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Cercare nel web"
         },
         "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Limita una ricerca `news` agli ultimi N giorni.\n\n**Sostituito da `time_range`**, che vale per ogni argomento; questa opzione è ancora accettata perché i flussi esistenti continuino a funzionare."
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
-          "source": "Read Pages",
+          "source": "Read pages",
           "message": "Leggere pagine"
         },
         "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Restituire quanto è costata questa richiesta in crediti, in `usage`."
         },
         "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
-          "source": "Crawl a Site",
+          "source": "Crawl a site",
           "message": "Scansionare un sito"
         },
         "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Restituire quanto è costata questa richiesta in crediti, in `usage`."
         },
         "app.VGF2aWx5.action.bWFw.display_name": {
-          "source": "Map a Site",
+          "source": "Map a site",
           "message": "Mappare un sito"
         },
         "app.VGF2aWx5.action.bWFw.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Restituire quanto è costata questa richiesta in crediti, in `usage`."
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.display_name": {
-          "source": "Start Research",
+          "source": "Start research",
           "message": "Avviare una ricerca approfondita"
         },
         "app.VGF2aWx5.action.cmVzZWFyY2g.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Come sono codificati i contenuti. Il valore predefinito è `base64`, l'unico encoding supportato dai documenti Tavily."
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.display_name": {
-          "source": "Get Research Report",
+          "source": "Get research report",
           "message": "Ottenere il rapporto di ricerca"
         },
         "app.VGF2aWx5.action.Z2V0LXJlc2VhcmNo.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "L'attività di ricerca da leggere, così come restituita da **Avviare una ricerca approfondita** in `request_id`.\n\nL'elenco a discesa mostra le attività di ricerca avviate da questo account, prese dal registro d'uso.  Il registro viene scritto qualche minuto dopo l'avvio di un'attività, quindi un'attività appena avviata non vi compare ancora: in quel caso usa il `request_id` restituito da **Avviare una ricerca approfondita**."
         },
         "app.VGF2aWx5.action.dXNhZ2U.display_name": {
-          "source": "Get Credit Usage",
+          "source": "Get credit usage",
           "message": "Ottenere il consumo di crediti"
         },
         "app.VGF2aWx5.action.dXNhZ2U.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Riportare l'uso solo di questo progetto, anziché dell'intero account.  Inviato nell'intestazione `X-Project-ID`.\n\nTavily non pubblica alcun endpoint che elenchi i progetti, quindi questo non può essere offerto come elenco a discesa; prendi il valore dalla dashboard di Tavily."
         },
         "app.VGF2aWx5.action.bG9ncw.display_name": {
-          "source": "List API Usage Logs",
+          "source": "List API usage logs",
           "message": "Elencare i registri d'uso dell'API"
         },
         "app.VGF2aWx5.action.bG9ncw.short_desc": {

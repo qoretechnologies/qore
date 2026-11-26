@@ -852,7 +852,7 @@
           "message": "完全に削除するメッセージのID。ウォッチイベントはこの値を `message_id` として渡します"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "メッセージを送信"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

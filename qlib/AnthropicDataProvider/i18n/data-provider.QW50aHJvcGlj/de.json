@@ -1396,7 +1396,7 @@
           "message": "Ein opaker Schlüssel zum Laden und Speichern des Konversationskontexts über den konfigurierten Kontextspeicher. Wenn angegeben, werden vorherige Nachrichten automatisch vorangestellt"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Token zählen"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Die maximale Anzahl an Token, die für erweitertes Denken verwendet werden sollen. Muss mindestens `1024` und weniger als `max_tokens` sein. Nur anwendbar, wenn der Denkmodus `enabled` ist"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Modell abrufen"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Die eindeutige Kennung oder der Alias für das Modell (z. B. `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Nucleus-Sampling verwenden. Beim Nucleus-Sampling wird die kumulative Verteilung über alle Optionen für jedes nachfolgende Token in absteigender Wahrscheinlichkeitsreihenfolge berechnet und abgeschnitten, sobald eine bestimmte, durch `top_p` festgelegte Wahrscheinlichkeit erreicht wird"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "Nachrichten-Batch abrufen"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Die eindeutige Kennung für den Nachrichten-Batch (z. B. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "Nachrichten-Batches auflisten"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Der Dateiname"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Dateien auflisten"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Dateien vor dieser Datei-ID zurückgeben (Cursor für Rückwärts-Paginierung)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Datei abrufen"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Die eindeutige Kennung für die Datei"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "Dateinhalt abrufen"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "Detaillierte Anweisungen für das Verhalten des Skills. Diese bilden den Textkörper der SKILL.md-Datei, die Claude liest, wenn der Skill ausgelöst wird"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "Skills auflisten"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Paginierungs-Token aus dem Feld `next_page` einer vorherigen Antwort zum Abrufen der nächsten Ergebnisseite"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Skill abrufen"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

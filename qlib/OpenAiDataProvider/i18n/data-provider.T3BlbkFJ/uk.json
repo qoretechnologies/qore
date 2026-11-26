@@ -860,7 +860,7 @@
           "message": "Унікальний ідентифікатор кінцевого користувача, який може допомогти OpenAI відстежувати та виявляти зловживання"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Простий чат"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Набір із 16 пар «ключ-значення», які можна прикріпити до об'єкта. Це може бути корисно для збереження додаткової інформації про об'єкт у структурованому форматі та запитів до об'єктів через API або інформаційну панель. Ключі — це рядки довжиною до 64 символів; значення — рядки довжиною до 512 символів"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Отримати бесіду"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Ідентифікатор розмови"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Список елементів бесіди"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Додаткові поля для включення у відповідь.\n\nДивіться документацію до [параметра include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) щодо підтримуваних значень"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Отримати елемент бесіди"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "Ідентифікатор відповіді, яку потрібно отримати"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Список вхідних елементів відповіді"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

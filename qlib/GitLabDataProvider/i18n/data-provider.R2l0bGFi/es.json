@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Listar ramas"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Nombre de la rama desde la que comenzar la paginación"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.display_name": {
-          "source": "Create Branch",
+          "source": "Create branch",
           "message": "Crear rama"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Crear rama a partir del SHA de commit o de una rama existente"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "Obtener rama"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -532,7 +532,7 @@
           "message": "El nombre de la rama"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Delete Branch",
+          "source": "Delete branch",
           "message": "Eliminar rama"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -568,7 +568,7 @@
           "message": "El nombre de la rama"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.display_name": {
-          "source": "Delete Merged Branches",
+          "source": "Delete merged branches",
           "message": "Eliminar ramas fusionadas"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "El proyecto sobre el que actúa esta acción, indicado como su ID numérico o como su ruta (`group/project`).\n\nIndique la ruta tal como aparece; el transporte la escapa en el segmento de ruta único que espera GitLab. Una ruta escapada manualmente se escaparía una segunda vez y no se resolvería.\n\nCualquier otra opción con ámbito de proyecto (ramas, incidencias, miembros, variables) se enumera a partir de este proyecto, por lo que cambiarlo volverá a leerlas."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Listar commits"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Registro a partir del cual iniciar la paginación por conjunto de claves"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Obtener commit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Incluir estadísticas de commit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Listar comentarios de commit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Cuántos registros devolver en una solicitud, hasta el máximo de GitLab de `100`.\n\nEl total y la página siguiente se informan en los **encabezados de respuesta** `X-Total`, `X-Page` y `X-Next-Page`, no en el cuerpo, por lo que la paginación significa solicitar la página siguiente hasta que se devuelvan menos de `per_page` registros."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Comentar en commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "antiguo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.display_name": {
-          "source": "List Deploy Keys",
+          "source": "List deploy keys",
           "message": "Enumerar claves de despliegue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Cuántos registros devolver en una solicitud, hasta el máximo de GitLab de `100`.\n\nEl total y la página siguiente se informan en los **encabezados de respuesta** `X-Total`, `X-Page` y `X-Next-Page`, no en el cuerpo, por lo que la paginación significa solicitar la página siguiente hasta que se devuelvan menos de `per_page` registros."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.display_name": {
-          "source": "Add Deploy Key",
+          "source": "Add deploy key",
           "message": "Añadir clave de despliegue"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "La fecha de expiración de la clave SSH en formato ISO 8601 (AAAA-MM-DDTHH:MM:SSZ)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Get Deploy Key",
+          "source": "Get deploy key",
           "message": "Obtener clave de despliegue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "El ID de la clave de despliegue"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Update Deploy Key",
+          "source": "Update deploy key",
           "message": "Actualizar clave de despliegue"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Indica si la clave de despliegue puede hacer push al repositorio del proyecto"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Delete Deploy Key",
+          "source": "Delete deploy key",
           "message": "Eliminar clave de despliegue"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "El ID de la clave de despliegue"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.display_name": {
-          "source": "Enable Deploy Key",
+          "source": "Enable deploy key",
           "message": "Habilitar clave de despliegue"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "interrumpir"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Get Group",
+          "source": "Get group",
           "message": "Obtener grupo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Filtrar con atributos personalizados"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Update Group",
+          "source": "Update group",
           "message": "Actualizar grupo"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -4332,7 +4332,7 @@
           "message": "Cuando es true, registra el consentimiento explícito del espacio de nombres para el enrutamiento de Code Review basado en DAP"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Delete Group",
+          "source": "Delete group",
           "message": "Eliminar grupo"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.short_desc": {
@@ -5084,7 +5084,7 @@
           "message": "Devuelve incidencias de proyectos no archivados"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.display_name": {
-          "source": "List Project Issues",
+          "source": "List project issues",
           "message": "Listar problemas del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.short_desc": {
@@ -5824,7 +5824,7 @@
           "message": "Cursor para obtener el siguiente conjunto de registros"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Crear incidencia"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.short_desc": {
@@ -6156,7 +6156,7 @@
           "message": "El IID de una épica con la que asociar la incidencia (obsoleto)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Obtener incidencia"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6192,7 +6192,7 @@
           "message": "El **IID** del issue: el número relativo al proyecto que se muestra en la interfaz web y se escribe `#42`.\n\nEste no es el `id` a nivel de instancia por el cual filtra el listado global de issues; ambos son números diferentes para el mismo issue."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Actualizar problema"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6524,7 +6524,7 @@
           "message": "Fecha de creación"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Delete Issue",
+          "source": "Delete issue",
           "message": "Eliminar incidencia"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6560,7 +6560,7 @@
           "message": "El **IID** del issue: el número relativo al proyecto que se muestra en la interfaz web y se escribe `#42`.\n\nEste no es el `id` a nivel de instancia por el cual filtra el listado global de issues; ambos son números diferentes para el mismo issue."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.display_name": {
-          "source": "Get Issue Time Stats",
+          "source": "Get issue time stats",
           "message": "Obtener estadísticas de tiempo del issue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.short_desc": {
@@ -6596,7 +6596,7 @@
           "message": "El **IID** del issue: el número relativo al proyecto que se muestra en la interfaz web y se escribe `#42`.\n\nEste no es el `id` a nivel de instancia por el cual filtra el listado global de issues; ambos son números diferentes para el mismo issue."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.display_name": {
-          "source": "List Milestones",
+          "source": "List milestones",
           "message": "Listar hitos"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "Filtra solo usuarios auditores"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.display_name": {
-          "source": "List Project Users",
+          "source": "List project users",
           "message": "Listar usuarios del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.short_desc": {
@@ -7188,7 +7188,7 @@
           "message": "Filtrar usuarios con los ID especificados"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.display_name": {
-          "source": "List Project Members",
+          "source": "List project members",
           "message": "Enumerar miembros del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.short_desc": {
@@ -7296,7 +7296,7 @@
           "message": "Listar solo miembros con identidad SAML vinculada"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.display_name": {
-          "source": "Add Project Member",
+          "source": "Add project member",
           "message": "Añadir miembro al proyecto"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.short_desc": {
@@ -7376,7 +7376,7 @@
           "message": "Fuente que activó el proceso de creación del miembro"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Get Project Member",
+          "source": "Get project member",
           "message": "Obtener miembro del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7412,7 +7412,7 @@
           "message": "El ID de usuario del miembro"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Update Project Member",
+          "source": "Update project member",
           "message": "Actualizar miembro del proyecto"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "El ID del rol de miembro que se actualizará"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Remove Project Member",
+          "source": "Remove project member",
           "message": "Eliminar miembro del proyecto"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7544,7 +7544,7 @@
           "message": "Si es `true`, el miembro conserva cualquier membresía directa en subgrupos o proyectos."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.display_name": {
-          "source": "List Group Members",
+          "source": "List group members",
           "message": "Listar miembros del grupo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.short_desc": {
@@ -7652,7 +7652,7 @@
           "message": "Listar solo miembros con identidad SAML vinculada"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.display_name": {
-          "source": "Add Group Member",
+          "source": "Add group member",
           "message": "Añadir miembro del grupo"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.short_desc": {
@@ -7732,7 +7732,7 @@
           "message": "Fuente que activó el proceso de creación del miembro"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Get Group Member",
+          "source": "Get group member",
           "message": "Obtener miembro del grupo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7768,7 +7768,7 @@
           "message": "El ID de usuario del miembro"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Update Group Member",
+          "source": "Update group member",
           "message": "Actualizar miembro del grupo"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7840,7 +7840,7 @@
           "message": "El ID del rol de miembro que se actualizará"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Remove Group Member",
+          "source": "Remove group member",
           "message": "Eliminar miembro del grupo"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7900,7 +7900,7 @@
           "message": "Si se establece en `true`, desasigna al miembro de cualquier incidencia o solicitud de fusión en el grupo."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.display_name": {
-          "source": "List Merge Requests",
+          "source": "List merge requests",
           "message": "Enumerar merge requests"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "Devuelve la solicitud que tiene el `iid` indicado."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.display_name": {
-          "source": "Create Merge Request",
+          "source": "Create merge request",
           "message": "Crear solicitud de fusión"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.short_desc": {
@@ -8900,7 +8900,7 @@
           "message": "El ID de una regla"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Get Merge Request",
+          "source": "Get merge request",
           "message": "Obtener merge request"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -8972,7 +8972,7 @@
           "message": "Si es `true`, la respuesta incluye si una operación de rebase está en curso."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Update Merge Request",
+          "source": "Update merge request",
           "message": "Actualizar solicitud de fusión"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "El ID de una regla"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Delete Merge Request",
+          "source": "Delete merge request",
           "message": "Eliminar solicitud de fusión"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "El **IID** de la merge request: el número relativo al proyecto mostrado en la interfaz web y escrito `!7`, no el `id` a nivel de instancia."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.display_name": {
-          "source": "Approve Merge Request",
+          "source": "Approve merge request",
           "message": "Aprobar solicitud de fusión"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.short_desc": {
@@ -9380,7 +9380,7 @@
           "message": "Contraseña del usuario actual si el proyecto está configurado para requerir autenticación explícita en la aprobación"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.display_name": {
-          "source": "Unapprove Merge Request",
+          "source": "Unapprove merge request",
           "message": "Retirar aprobación de solicitud de fusión"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.short_desc": {
@@ -11640,7 +11640,7 @@
           "message": "ID de proyecto de la plantilla a partir de la cual crear el proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Obtener proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -11712,7 +11712,7 @@
           "message": "Filtrar con atributos personalizados"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Actualizar proyecto"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13740,7 +13740,7 @@
           "message": "dap_powered"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "Eliminar proyecto"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13836,7 +13836,7 @@
           "message": "El ID de la organización para los temas"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.display_name": {
-          "source": "List Project Variables",
+          "source": "List project variables",
           "message": "Listar variables del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.short_desc": {
@@ -13884,7 +13884,7 @@
           "message": "Cuántos registros devolver en una solicitud, hasta el máximo de GitLab de `100`.\n\nEl total y la página siguiente se informan en los **encabezados de respuesta** `X-Total`, `X-Page` y `X-Next-Page`, no en el cuerpo, por lo que la paginación significa solicitar la página siguiente hasta que se devuelvan menos de `per_page` registros."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "Create Project Variable",
+          "source": "Create project variable",
           "message": "Crear variable de proyecto"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "Indica si la variable se expandirá"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Get Project Variable",
+          "source": "Get project variable",
           "message": "Obtener variable del proyecto"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "Filtros disponibles: [environment_scope]. Ejemplo: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Update Project Variable",
+          "source": "Update project variable",
           "message": "Actualizar variable del proyecto"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14236,7 +14236,7 @@
           "message": "La descripción de la variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Delete Project Variable",
+          "source": "Delete project variable",
           "message": "Eliminar variable del proyecto"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14296,7 +14296,7 @@
           "message": "Filtros disponibles: [environment_scope]. Ejemplo: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "List Group Variables",
+          "source": "List group variables",
           "message": "Listar variables de grupo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14344,7 +14344,7 @@
           "message": "Cuántos registros devolver en una solicitud, hasta el máximo de GitLab de `100`.\n\nEl total y la página siguiente se informan en los **encabezados de respuesta** `X-Total`, `X-Page` y `X-Next-Page`, no en el cuerpo, por lo que la paginación significa solicitar la página siguiente hasta que se devuelvan menos de `per_page` registros."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.display_name": {
-          "source": "Create Group Variable",
+          "source": "Create group variable",
           "message": "Crear variable de grupo"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.short_desc": {
@@ -14484,7 +14484,7 @@
           "message": "Indica si la variable se expandirá"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Get Group Variable",
+          "source": "Get group variable",
           "message": "Obtener variable de grupo"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14520,7 +14520,7 @@
           "message": "La clave de la variable"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Update Group Variable",
+          "source": "Update group variable",
           "message": "Actualizar variable de grupo"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14648,7 +14648,7 @@
           "message": "La descripción de la variable"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Delete Group Variable",
+          "source": "Delete group variable",
           "message": "Eliminar variable de grupo"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14684,7 +14684,7 @@
           "message": "La clave de una variable"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.display_name": {
-          "source": "List Wiki Pages",
+          "source": "List wiki pages",
           "message": "Listar páginas wiki"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.short_desc": {
@@ -14720,7 +14720,7 @@
           "message": "Incluir contenido de las páginas"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.display_name": {
-          "source": "Create Wiki Page",
+          "source": "Create wiki page",
           "message": "Crear página de wiki"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.short_desc": {
@@ -14820,7 +14820,7 @@
           "message": "Título del frontmatter de una página wiki"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Get Wiki Page",
+          "source": "Get wiki page",
           "message": "Obtener página wiki"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14880,7 +14880,7 @@
           "message": "Representar el contenido como HTML"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Update Wiki Page",
+          "source": "Update wiki page",
           "message": "Actualizar página wiki"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14992,7 +14992,7 @@
           "message": "Título del frontmatter de una página wiki"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Delete Wiki Page",
+          "source": "Delete wiki page",
           "message": "Eliminar página de wiki"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -15148,7 +15148,7 @@
           "message": "La tabla con la que trabajar: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` o `wikis`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
-          "source": "Create Commit",
+          "source": "Create commit",
           "message": "Crear commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.short_desc": {
@@ -15404,7 +15404,7 @@
           "message": "Sobrescribe la rama de destino con un nuevo commit basado en `start_branch` o `start_sha`.\n\n**Esto descarta todo lo que había en la rama de destino**, por lo que es la única opción aquí que puede perder trabajo"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.display_name": {
-          "source": "Get Project ID by URL",
+          "source": "Get project ID by URL",
           "message": "Obtener ID de proyecto por URL"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.short_desc": {
@@ -15428,7 +15428,7 @@
           "message": "La URL del proyecto, tal como se copió de un navegador.\n\nCualquier URL **dentro** del proyecto funciona, no solo su página principal: `https://gitlab.com/group/project`, `https://gitlab.com/group/project/-/issues/17` y `https://gitlab.com/group/project.git` identifican el mismo proyecto."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nuevo commit"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -15440,7 +15440,7 @@
           "message": "Se activa con cada nuevo commit en el proyecto supervisado.\n\nRestríngelo a una rama o etiqueta con `ref_name`, a commits que modifiquen un archivo o directorio con `path`, o a un autor con `author`. El evento incluye el registro del commit que devuelve GitLab, incluidos su mensaje, autor y URL web."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "Nuevo comentario en commit"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {
@@ -15452,7 +15452,7 @@
           "message": "Se activa con cada nuevo comentario en un commit.\n\nEl commit es una opción obligatoria, por lo que supervisa los comentarios de ese commit en lugar de todos los comentarios del proyecto. El evento incluye la nota, su posición en el diff si la tiene y su autor."
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "Nueva incidencia"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.short_desc": {
@@ -15464,7 +15464,7 @@
           "message": "Se activa con cada nueva incidencia en el proyecto supervisado.\n\nEl evento incluye el registro de la incidencia que devuelve GitLab, incluidos su IID, título, etiquetas, asignados y URL web. Una incidencia que se edita más adelante no vuelve a activar este evento; solo informa de la creación."
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.display_name": {
-          "source": "New Merge Request",
+          "source": "New merge request",
           "message": "Nueva solicitud de fusión"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.short_desc": {

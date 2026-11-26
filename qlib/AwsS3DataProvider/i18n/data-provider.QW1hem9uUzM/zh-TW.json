@@ -1408,7 +1408,7 @@
           "message": "可在數小時內擷取的長期封存資料；成本最低的儲存類別"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "建立預先簽署的 URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

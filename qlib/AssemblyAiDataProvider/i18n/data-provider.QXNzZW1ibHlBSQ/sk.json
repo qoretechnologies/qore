@@ -2348,7 +2348,7 @@
           "message": "Získajte iba obmedzené prepisy, prepíše stavový filter"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
+          "source": "Get transcript",
           "message": "Získajte prepis"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
+          "source": "Delete transcript",
           "message": "Odstrániť prepis"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
+          "source": "Get subtitles",
           "message": "Získajte titulky"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Maximálny počet znakov na titulok"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
+          "source": "Get transcript sentences",
           "message": "Získajte prepis viet"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
+          "source": "Get transcript paragraphs",
           "message": "Získajte odseky prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
+          "source": "Search transcript words",
           "message": "Hľadať prepisové slová"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Kľúčové slová na vyhľadávanie"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
+          "source": "Get redacted audio",
           "message": "Získajte upravený zvuk"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Zoznam záznamov zjednodušeného agenta pre tento účet, od najnovších. Použite Get Voice Agent na získanie kompletnej konfigurácie."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
+          "source": "Get voice agent",
           "message": "Získajte hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Jedinečné ID agenta."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
+          "source": "Update voice agent",
           "message": "Aktualizujte hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Znižuje časový limit tejto položky. Každý vstup má svoj vlastný 800 ms strop;\ntým sa to dá len skrátiť. Vynechať pre úplný strop."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
+          "source": "Delete voice agent",
           "message": "Odstrániť Voice Agent"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "Vrátiť iba relácie pre tohto agenta."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
+          "source": "Get voice agent session",
           "message": "Získajte reláciu hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "Jedinečné ID relácie."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
+          "source": "Delete voice agent session",
           "message": "Odstrániť reláciu hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "Kurzor"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
+          "source": "Get webhook subscription",
           "message": "Získajte predplatné Webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -4800,7 +4800,7 @@
           "message": "Predplatné"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
+          "source": "Update webhook subscription",
           "message": "Aktualizujte predplatné Webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Povolené"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
+          "source": "Delete webhook subscription",
           "message": "Odstrániť predplatné Webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {

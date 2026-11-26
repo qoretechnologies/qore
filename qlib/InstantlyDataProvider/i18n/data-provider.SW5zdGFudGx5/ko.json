@@ -3532,7 +3532,7 @@
           "message": "페이지당 반환할 최대 결과 수"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "이메일 인증 생성"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {

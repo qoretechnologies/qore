@@ -684,7 +684,7 @@
           "message": "Передайте `true`, щоб включити масив `merge_history` для кожного контакту у відповіді. Повертається лише для контактів із роллю `user`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Створити примітку"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Повертає список усіх тегів, визначених у робочій області.\n\nЦей список не розбивається на сторінки: Intercom повертає весь набір в одній відповіді."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
+          "source": "List tags on contact",
           "message": "Список тегів контакту"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Унікальний ідентифікатор контакту, наданий Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
+          "source": "Add tag to contact",
           "message": "Додати тег до контакту"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Унікальний ідентифікатор тегу, наданий Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Видалити тег із контакту"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Якщо встановлено значення true, відповідь міститиме об'єкт аватара адміністратора з URL-адресою зображення. За замовчуванням false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Передайте `true`, щоб включити у відповідь історію об'єднань контакту. Повертається лише для контактів із роллю `user`."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Передайте `true`, щоб включити у відповідь історію об'єднань контакту. Повертається лише для контактів із роллю `user`."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Отримати розмову"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Якщо встановлено значення true, частини розмови перекладатимуться виявленою мовою розмови."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
+          "source": "Get company",
           "message": "Отримати компанію"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Унікальний ідентифікатор компанії, наданий Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
+          "source": "Update company",
           "message": "Оновити компанію"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Обсяг доходу, який компанія приносить вашому бізнесу. Зверніть увагу, що дійсні числа будуть усічені: дозволено лише цілі числа (наприклад, 155.98 буде усічено до 155). Верхня межа становить 2**31-1 або 2147483647."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
+          "source": "Delete company",
           "message": "Видалити компанію"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "Унікальний ідентифікатор компанії, наданий Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
+          "source": "Get article",
           "message": "Отримати статтю"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "Унікальний ідентифікатор статті, наданий Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
+          "source": "Update article",
           "message": "Оновити статтю"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
@@ -4200,7 +4200,7 @@
           "message": "Мітка часу ISO 8601 для планування майбутнього скасування публікації статті. Встановлення `null` скасовує заплановане зняття з публікації. Мітки часу в минулому або рівні поточному часу відхиляються з помилкою 400 `parameter_invalid` — значення має бути суворо в майбутньому. Відхиляється з помилкою 400 `parameter_invalid`, якщо стаття ніколи не публікувалася. Надсилання в одному запиті з `scheduled_publish_at` повертає 400 — дозволено лише один активний розклад для статті. Порожній рядок повертає 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
+          "source": "Delete article",
           "message": "Видалити статтю"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
@@ -4224,7 +4224,7 @@
           "message": "Унікальний ідентифікатор статті, наданий Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Отримати колекцію"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
@@ -4248,7 +4248,7 @@
           "message": "Унікальний ідентифікатор колекції, наданий Intercom."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Отримати тег"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
@@ -4272,7 +4272,7 @@
           "message": "Унікальний ідентифікатор заданого теґу"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Видалити тег"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "Таблиця для роботи: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` або `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
+          "source": "Reply to conversation",
           "message": "Відповісти на розмову"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
@@ -4524,7 +4524,7 @@
           "message": "Додати відповідь без сповіщення контакту"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Спрацьовує для кожного контакту, створеного в робочій області.\n\n`role` обмежує потік користувачами (контакт, який зареєструвався) або лідами (контакт, який не зареєструвався); якщо не вказано, передаються обидва типи. Подія містить запис контакту, який повертає Intercom.\n\nКонтакт, відредагований пізніше, **не** викликає цю подію повторно: позиція у стрічці визначається за `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
+          "source": "New conversation",
           "message": "Нова розмова"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {

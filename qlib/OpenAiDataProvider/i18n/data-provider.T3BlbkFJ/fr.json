@@ -860,7 +860,7 @@
           "message": "Un identifiant unique représentant votre utilisateur final, pouvant aider OpenAI à surveiller et détecter les abus"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat simple"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Ensemble de 16 paires clé-valeur qui peuvent être attachées à un objet. Cela peut être utile pour stocker des informations supplémentaires sur l'objet dans un format structuré et interroger des objets via l'API ou le tableau de bord. Les clés sont des chaînes d'une longueur maximale de 64 caractères ; les valeurs sont des chaînes d'une longueur maximale de 512 caractères"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Obtenir une conversation"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "L'ID de la conversation"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Lister les éléments de la conversation"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Champs supplémentaires à inclure dans la réponse.\n\nConsultez la documentation du [paramètre include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) pour connaître les valeurs prises en charge"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Obtenir un élément de conversation"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "L'identifiant de la réponse à obtenir"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Lister les éléments d'entrée de la réponse"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

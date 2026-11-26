@@ -1420,7 +1420,7 @@
           "message": "Pole pomocnicze zamapowane na parametr wyszukiwania FHIR `_revinclude`; użyj listy dla powtarzających się wartości odwrotnego dołączenia"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
+          "source": "Search all Bundle",
           "message": "Wyszukaj wszystkie Bundle"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Wartość ETag wysyłana w nagłówku `If-Match` dla optymistycznej kontroli współbieżności"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
+          "source": "Conditional update Bundle",
           "message": "Warunkowa aktualizacja Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "Pole pomocnicze zamapowane na parametr wyszukiwania FHIR `_revinclude`; użyj listy dla powtarzających się wartości odwrotnego dołączenia"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
+          "source": "Search all Observation",
           "message": "Wyszukaj wszystkie Observation"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "Wartość ETag wysyłana w nagłówku `If-Match` dla optymistycznej kontroli współbieżności"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
+          "source": "Conditional update Observation",
           "message": "Warunkowa aktualizacja Observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
@@ -5436,7 +5436,7 @@
           "message": "Pole pomocnicze zamapowane na parametr wyszukiwania FHIR `_revinclude`; użyj listy dla powtarzających się wartości odwrotnego dołączenia"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
+          "source": "Search all Patient",
           "message": "Wyszukaj wszystkie Patient"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
@@ -6344,7 +6344,7 @@
           "message": "Wartość ETag wysyłana w nagłówku `If-Match` dla optymistycznej kontroli współbieżności"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
+          "source": "Conditional update Patient",
           "message": "Warunkowa aktualizacja Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {

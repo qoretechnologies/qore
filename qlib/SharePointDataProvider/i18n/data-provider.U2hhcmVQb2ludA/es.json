@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
+          "source": "List sites",
           "message": "Listar sitios"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Un término para buscar títulos y URL de sitios. Si se omite, se devuelven el sitio raíz del inquilino y sus subsitios"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
+          "source": "Get site",
           "message": "Obtener sitio"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "El sitio de SharePoint al que dirigirse. Utilice la acción `list-sites` para detectar los sitios disponibles; siempre se ofrece el sitio raíz del inquilino"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
+          "source": "List document libraries",
           "message": "Listar bibliotecas de documentos"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "El sitio de SharePoint al que dirigirse. Utilice la acción `list-sites` para detectar los sitios disponibles; siempre se ofrece el sitio raíz del inquilino"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
+          "source": "Get document library info",
           "message": "Obtener información de biblioteca de documentos"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -448,7 +448,7 @@
           "message": "La biblioteca de documentos a la que dirigirse. Utilice la acción `list-drives` para enumerar las bibliotecas de un sitio"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "Buscar documentos"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Orden de clasificación para los resultados (p. ej., `name asc`, `size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
+          "source": "Get document",
           "message": "Obtener documento"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
@@ -592,7 +592,7 @@
           "message": "La ruta del elemento relativa a la raíz de la unidad (p. ej., `/Documents/file.txt`). Proporcione `id` o `path`"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Crear carpeta"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -700,7 +700,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
+          "source": "Upload document",
           "message": "Subir documento"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -880,7 +880,7 @@
           "message": "El ID de la carpeta principal. Si se omite, el archivo se carga en la raíz de la unidad"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Crear sesión de carga"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
+          "source": "Download document",
           "message": "Descargar documento"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "El identificador único del archivo a descargar"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
+          "source": "Delete document",
           "message": "Eliminar documento"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "El identificador único del elemento que se va a eliminar"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
+          "source": "Update document",
           "message": "Actualizar documento"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "El ID de la carpeta de destino a la que se va a mover el elemento. Establézcalo para mover un elemento a una carpeta diferente"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
+          "source": "Copy document",
           "message": "Copiar documento"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Hacer fallar la solicitud con un error"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Crear enlace para compartir"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "La fecha y hora en que caduca el enlace para compartir"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "Listar listas"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Incluir listas cuya plantilla sea `documentLibrary`"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Obtener lista"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "La lista a la que dirigirse. Utilice la acción `list-lists` para enumerar las listas de un sitio"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "Crear lista"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Las columnas con las que crear la lista, como una lista de objetos [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) de Microsoft Graph, por ejemplo `{\"name\": \"Amount\", \"number\": {}}`. Cuando se omite, la lista se crea únicamente con la columna predeterminada `Title`"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Eliminar lista"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "La lista a la que dirigirse. Utilice la acción `list-lists` para enumerar las listas de un sitio"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
+          "source": "List columns",
           "message": "Listar columnas"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Devolver solo las columnas que se pueden escribir; SharePoint mantiene muchas columnas de solo lectura que una llamada de creación o actualización rechazaría"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
+          "source": "Search list items",
           "message": "Buscar elementos de lista"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Detenerse después de esta cantidad total de elementos en todas las páginas"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
+          "source": "Get list item",
           "message": "Obtener elemento de lista"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "El elemento de lista al que dirigirse"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
+          "source": "Create list item",
           "message": "Crear elemento de lista"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Los valores que se van a establecer para las columnas del elemento, indexados por el nombre interno de la columna. Una vez seleccionados un sitio y una lista, las columnas individuales se ofrecen con sus propios tipos; la acción `columns` las enumera"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
+          "source": "Update list item",
           "message": "Actualizar elemento de lista"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Los valores que se van a establecer para las columnas del elemento, indexados por el nombre interno de la columna. Una vez seleccionados un sitio y una lista, las columnas individuales se ofrecen con sus propios tipos; la acción `columns` las enumera"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
+          "source": "Delete list item",
           "message": "Eliminar elemento de lista"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {

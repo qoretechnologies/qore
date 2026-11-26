@@ -1396,7 +1396,7 @@
           "message": "Niejawny klucz używany do wczytywania i zapisywania kontekstu konwersacji za pośrednictwem skonfigurowanego magazynu kontekstu. Po podaniu poprzednie wiadomości są automatycznie dołączane na początku"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Zlicz tokeny"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Maksymalna liczba tokenów do użycia przy rozszerzonym myśleniu. Musi wynosić co najmniej `1024` i być mniejsza niż `max_tokens`. Ma zastosowanie tylko wtedy, gdy tryb myślenia to `enabled`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Pobierz model"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Unikalny identyfikator lub alias modelu (np. `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lista modeli"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Użyj próbkowania jądrowego. W próbkowaniu jądrowym obliczany jest rozkład skumulowany dla wszystkich opcji każdego kolejnego tokenu w porządku malejącego prawdopodobieństwa i odcinany po osiągnięciu określonego prawdopodobieństwa podanego przez `top_p`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "Pobierz partię wiadomości"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Unikalny identyfikator partii wiadomości (np. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "Wyświetl listę partii wiadomości"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Nazwa pliku"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Wyświetl listę plików"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Zwróć pliki przed tym identyfikatorem pliku (kursor do stronnicowania wstecz)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Pobierz plik"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Unikalny identyfikator pliku"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "Pobierz zawartość pliku"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "Szczegółowe instrukcje dotyczące zachowania umiejętności. Stanowią one treść pliku SKILL.md, który Claude odczytuje po wywołaniu umiejętności"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "Wyświetl listę umiejętności"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Token stronnicowania z pola `next_page` poprzedniej odpowiedzi służący do pobrania kolejnej strony wyników"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Pobierz umiejętność"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

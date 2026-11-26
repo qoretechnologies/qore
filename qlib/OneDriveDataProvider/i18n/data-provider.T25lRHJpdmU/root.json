@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Drive Info",
-          "message": "Get Drive Info"
+          "source": "Get drive info",
+          "message": "Get drive info"
         },
         "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
           "source": "Get drive metadata and quota",
@@ -352,8 +352,8 @@
           "message": "Retrieve the current user's OneDrive metadata including storage quota, drive type, and owner information"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Items",
-          "message": "Search Items"
+          "source": "Search items",
+          "message": "Search items"
         },
         "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
           "source": "List or search files and folders",
@@ -412,8 +412,8 @@
           "message": "Sort order for results (e.g., `name asc`, `size desc`)"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
-          "message": "Get Item"
+          "source": "Get item",
+          "message": "Get item"
         },
         "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
           "source": "Get file or folder metadata",
@@ -448,8 +448,8 @@
           "message": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
-          "message": "Create Folder"
+          "source": "Create folder",
+          "message": "Create folder"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
           "source": "Create a new folder",
@@ -532,8 +532,8 @@
           "message": "Fail the request with an error"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file (up to 4 MB)",
@@ -688,8 +688,8 @@
           "message": "The ID of the parent folder. If omitted, the file is uploaded to the drive root"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
-          "message": "Create Upload Session"
+          "source": "Create upload session",
+          "message": "Create upload session"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
           "source": "Create a resumable upload session",
@@ -760,8 +760,8 @@
           "message": "Fail the request with an error"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download a file",
@@ -784,8 +784,8 @@
           "message": "The unique identifier of the file to download"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
-          "message": "Delete Item"
+          "source": "Delete item",
+          "message": "Delete item"
         },
         "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
           "source": "Delete a file or folder",
@@ -808,8 +808,8 @@
           "message": "The unique identifier of the item to delete"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
-          "message": "Update Item"
+          "source": "Update item",
+          "message": "Update item"
         },
         "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
           "source": "Rename, move, or update a file or folder",
@@ -868,8 +868,8 @@
           "message": "The ID of the destination folder to move the item to. Set this to move an item to a different folder"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Item",
-          "message": "Copy Item"
+          "source": "Copy item",
+          "message": "Copy item"
         },
         "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
           "source": "Copy a file or folder",
@@ -964,8 +964,8 @@
           "message": "Fail the request with an error"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
-          "message": "Create Sharing Link"
+          "source": "Create sharing link",
+          "message": "Create sharing link"
         },
         "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
           "source": "Create a sharing link for an item",

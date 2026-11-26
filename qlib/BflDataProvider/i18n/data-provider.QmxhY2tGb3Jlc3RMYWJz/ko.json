@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.display_name": {
-          "source": "Get Fine-Tune Details",
+          "source": "Get fine-tune details",
           "message": "미세 조정 모델 세부 정보 가져오기"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWZpbmV0dW5l.short_desc": {
@@ -364,7 +364,7 @@
           "message": "보유 모델을 선택하거나 공유 LoRA의 `org-id/lora-name`을 입력합니다. 기반 모델과 정밀도를 일치시키세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.display_name": {
-          "source": "List Fine-Tunes",
+          "source": "List fine-tunes",
           "message": "Fine-Tunes 목록"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bGlzdC1maW5ldHVuZXM.short_desc": {
@@ -376,7 +376,7 @@
           "message": "선택한 계정이 보유한 미세 조정 모델을 나열합니다.\n\n**이용 가능 여부:** 현재 스키마에는 이 작업이 남아 있지만 이전 미세 조정 절차는 더 이상 권장되지 않습니다. 계정의 지원 여부를 확인해야 합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "Fine-Tune 삭제"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZGVsZXRlLWZpbmV0dW5l.short_desc": {
@@ -400,7 +400,7 @@
           "message": "보유 모델을 선택하거나 공유 LoRA의 `org-id/lora-name`을 입력합니다. 기반 모델과 정밀도를 일치시키세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "크레딧 잔액 조회"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LWNyZWRpdHM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "미디어를 생성하기 전에 사용 가능한 잔액을 확인하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.display_name": {
-          "source": "Get Result on This Region",
+          "source": "Get result on this region",
           "message": "이 리전의 결과 가져오기"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJlc3VsdA.short_desc": {
@@ -436,7 +436,7 @@
           "message": "시작 작업이 반환한 작업 ID입니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.display_name": {
-          "source": "Start FLUX Pro 1.1 Image",
+          "source": "Start FLUX Pro 1.1 image",
           "message": "FLUX Pro 1.1 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0x.short_desc": {
@@ -712,7 +712,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.display_name": {
-          "source": "Start FLUX Dev Image",
+          "source": "Start FLUX Dev image",
           "message": "FLUX Dev 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1kZXY.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.display_name": {
-          "source": "Start FLUX Pro 1.1 Ultra Image",
+          "source": "Start FLUX Pro 1.1 Ultra image",
           "message": "FLUX Pro 1.1 Ultra 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8tMS0xLXVsdHJh.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.display_name": {
-          "source": "Start Image Fill",
+          "source": "Start image fill",
           "message": "이미지 채우기 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmlsbA.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.display_name": {
-          "source": "Start Image Expansion",
+          "source": "Start image expansion",
           "message": "이미지 확장 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXhwYW5k.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.display_name": {
-          "source": "Start Legacy Fine-Tuned Fill",
+          "source": "Start legacy fine-tuned fill",
           "message": "이전 미세 조정 모델로 채우기 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLWZpbGw.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.display_name": {
-          "source": "Start Legacy Fine-Tuned Ultra",
+          "source": "Start legacy fine-tuned Ultra",
           "message": "이전 Ultra 미세 조정 모델 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmluZXR1bmVkLXVsdHJh.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.display_name": {
-          "source": "Start FLUX.2 Flex Image",
+          "source": "Start FLUX.2 Flex image",
           "message": "FLUX.2 Flex 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWZsZXg.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.display_name": {
-          "source": "Start FLUX.2 Klein 9B Image",
+          "source": "Start FLUX.2 Klein 9B image",
           "message": "FLUX.2 Klein 9B 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTli.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.display_name": {
-          "source": "Start FLUX.2 Klein 9B Preview",
+          "source": "Start FLUX.2 Klein 9B preview",
           "message": "FLUX.2 Klein 9B Preview 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTliLXByZXZpZXc.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.display_name": {
-          "source": "Start FLUX.2 Klein 4B Image",
+          "source": "Start FLUX.2 Klein 4B image",
           "message": "FLUX.2 Klein 4B 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLWtsZWluLTRi.short_desc": {
@@ -5968,7 +5968,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.display_name": {
-          "source": "Start FLUX.2 Max Image",
+          "source": "Start FLUX.2 Max image",
           "message": "FLUX.2 Max 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLW1heA.short_desc": {
@@ -7168,7 +7168,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.display_name": {
-          "source": "Start FLUX.2 Pro Preview",
+          "source": "Start FLUX.2 Pro preview",
           "message": "FLUX.2 Pro Preview 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXByby1wcmV2aWV3.short_desc": {
@@ -8368,7 +8368,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.display_name": {
-          "source": "Start FLUX.2 Pro Image",
+          "source": "Start FLUX.2 Pro image",
           "message": "FLUX.2 Pro 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC0yLXBybw.short_desc": {
@@ -9568,7 +9568,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.display_name": {
-          "source": "Start FLUX 3 Video",
+          "source": "Start FLUX 3 video",
           "message": "FLUX 3 동영상 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8.short_desc": {
@@ -10048,7 +10048,7 @@
           "message": "파일 이름"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.display_name": {
-          "source": "Start Video Upscale",
+          "source": "Start video upscale",
           "message": "동영상 확대 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tdXBzY2FsZQ.short_desc": {
@@ -10284,7 +10284,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.display_name": {
-          "source": "Start Video Edit",
+          "source": "Start video edit",
           "message": "동영상 편집 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdmlkZW8tZWRpdA.short_desc": {
@@ -10464,7 +10464,7 @@
           "message": "값이 낮을수록 콘텐츠 검토가 엄격해집니다. 서비스에서 추가 제한을 적용할 수 있습니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.display_name": {
-          "source": "Start Image Outpainting",
+          "source": "Start image outpainting",
           "message": "이미지 외부 영역 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtb3V0cGFpbnQ.short_desc": {
@@ -10760,7 +10760,7 @@
           "message": "프롬프트를 자동 확장하지 않고 작성된 그대로 사용합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.display_name": {
-          "source": "Start Virtual Try-On v1",
+          "source": "Start virtual try-on v1",
           "message": "가상 피팅 v1 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYx.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.display_name": {
-          "source": "Start Virtual Try-On v2",
+          "source": "Start virtual try-on v2",
           "message": "가상 피팅 v2 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtdHJ5LW9uLXYy.short_desc": {
@@ -11504,7 +11504,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.display_name": {
-          "source": "Start Object Erasure",
+          "source": "Start object erasure",
           "message": "객체 제거 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZXJhc2U.short_desc": {
@@ -11876,7 +11876,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.display_name": {
-          "source": "Start Image Deblurring",
+          "source": "Start image deblurring",
           "message": "이미지 흐림 제거 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZGVibHVy.short_desc": {
@@ -12104,7 +12104,7 @@
           "message": "콜백 서명 검증에 사용하는 비밀 값입니다. 웹훅 URL이 필요합니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.display_name": {
-          "source": "Start FLUX Kontext Max Image",
+          "source": "Start FLUX Kontext Max image",
           "message": "FLUX Kontext Max 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LW1heA.short_desc": {
@@ -12764,7 +12764,7 @@
           "message": "값이 낮을수록 콘텐츠 검토가 엄격해집니다. 서비스에서 추가 제한을 적용할 수 있습니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.display_name": {
-          "source": "Start FLUX Kontext Pro Image",
+          "source": "Start FLUX Kontext Pro image",
           "message": "FLUX Kontext Pro 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1rb250ZXh0LXBybw.short_desc": {
@@ -13424,7 +13424,7 @@
           "message": "값이 낮을수록 콘텐츠 검토가 엄격해집니다. 서비스에서 추가 제한을 적용할 수 있습니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.display_name": {
-          "source": "Report Licensed Model Usage",
+          "source": "Report licensed model usage",
           "message": "라이선스 모델 사용량 보고"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.cmVwb3J0LWxpY2Vuc2UtdXNhZ2U.short_desc": {
@@ -13460,7 +13460,7 @@
           "message": "보고할 라이선스 생성의 실제 횟수입니다. 이 보고는 청구에 영향을 줍니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.display_name": {
-          "source": "Start FLUX Pro Image",
+          "source": "Start FLUX Pro image",
           "message": "FLUX Pro 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtZmx1eC1wcm8.short_desc": {
@@ -13712,7 +13712,7 @@
           "message": "파일 이름"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.display_name": {
-          "source": "Start Klein 4B LoRA Image",
+          "source": "Start Klein 4B LoRA image",
           "message": "Klein 4B LoRA 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS00Yg.short_desc": {
@@ -14396,7 +14396,7 @@
           "message": "선택한 모델의 영향력을 조절합니다. 필요한 경우 프롬프트에 트리거 문구를 포함하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.display_name": {
-          "source": "Start Klein 9B LoRA Image",
+          "source": "Start Klein 9B LoRA image",
           "message": "Klein 9B LoRA 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yg.short_desc": {
@@ -15080,7 +15080,7 @@
           "message": "선택한 모델의 영향력을 조절합니다. 필요한 경우 프롬프트에 트리거 문구를 포함하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.display_name": {
-          "source": "Start Klein 9B KV LoRA Image",
+          "source": "Start Klein 9B KV LoRA image",
           "message": "Klein 9B KV LoRA 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS05Yi1rdg.short_desc": {
@@ -16448,7 +16448,7 @@
           "message": "선택한 모델의 영향력을 조절합니다. 필요한 경우 프롬프트에 트리거 문구를 포함하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.display_name": {
-          "source": "Start Klein Base 4B LoRA Image",
+          "source": "Start Klein Base 4B LoRA image",
           "message": "Klein Base 4B LoRA 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTRi.short_desc": {
@@ -17084,7 +17084,7 @@
           "message": "선택한 모델의 영향력을 조절합니다. 필요한 경우 프롬프트에 트리거 문구를 포함하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.display_name": {
-          "source": "Start Klein Base 9B LoRA Image",
+          "source": "Start Klein Base 9B LoRA image",
           "message": "Klein Base 9B LoRA 이미지 생성 시작"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.c3RhcnQtbG9yYS1iYXNlLTli.short_desc": {
@@ -17720,7 +17720,7 @@
           "message": "선택한 모델의 영향력을 조절합니다. 필요한 경우 프롬프트에 트리거 문구를 포함하세요."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.display_name": {
-          "source": "Get Routed Result",
+          "source": "Get routed result",
           "message": "할당된 리전에서 결과 가져오기"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2V0LXJvdXRlZC1yZXN1bHQ.short_desc": {
@@ -17792,7 +17792,7 @@
           "message": "최대 다운로드 바이트 수입니다. 기본값은 100 MiB이며 상한은 512 MiB입니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.display_name": {
-          "source": "Wait for Result",
+          "source": "Wait for result",
           "message": "결과 대기"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.d2FpdC1mb3ItcmVzdWx0.short_desc": {
@@ -17864,7 +17864,7 @@
           "message": "최대 다운로드 바이트 수입니다. 기본값은 100 MiB이며 상한은 512 MiB입니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.display_name": {
-          "source": "Download Result",
+          "source": "Download result",
           "message": "결과 다운로드"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.ZG93bmxvYWQtcmVzdWx0.short_desc": {
@@ -17956,7 +17956,7 @@
           "message": "초안 캐시"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.display_name": {
-          "source": "Generate Video",
+          "source": "Generate video",
           "message": "회사연혁"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtdmlkZW8.short_desc": {
@@ -18472,7 +18472,7 @@
           "message": "최대 다운로드 바이트 수입니다. 기본값은 100 MiB이며 상한은 512 MiB입니다."
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "이미지 생성"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
@@ -18536,7 +18536,7 @@
           "message": "FLUX.2 Pro"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1wcm8tcHJldmlldw.display_name": {
-          "source": "FLUX.2 Pro Preview",
+          "source": "FLUX.2 Pro preview",
           "message": "FLUX.2 Pro Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1tYXg.display_name": {
@@ -18556,7 +18556,7 @@
           "message": "FLUX.2 Klein 9B"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtMi1rbGVpbi05Yi1wcmV2aWV3.display_name": {
-          "source": "FLUX.2 Klein 9B Preview",
+          "source": "FLUX.2 Klein 9B preview",
           "message": "FLUX.2 Klein 9B Preview"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {

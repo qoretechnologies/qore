@@ -808,7 +808,7 @@
           "message": "Le nom d'un magasin de recherche de fichiers à utiliser pour la génération augmentée par récupération (RAG). Le modèle effectuera des recherches dans les documents du magasin pour étayer sa réponse avec du contenu pertinent"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat simple"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Le nom d'un magasin de recherche de fichiers à utiliser pour la génération augmentée par récupération (RAG). Le modèle effectuera des recherches dans les documents du magasin pour étayer sa réponse avec du contenu pertinent"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Générer un embedding du contenu"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Contenu généré par le modèle"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Générer des embeddings par lot"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

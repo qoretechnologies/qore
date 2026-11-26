@@ -2532,7 +2532,7 @@
           "message": "Hodnota `nextCursor` z predchádzajúcej odpovede.  Všetky kolekcie v tomto API stránkujú rovnako: prečítajte `hasMore` a sem odovzdajte `nextCursor`, ak chcete získať ďalšiu stranu."
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.display_name": {
-          "source": "Get a Research Run",
+          "source": "Get a research run",
           "message": "Získať výskumný beh"
         },
         "app.RXhh.action.Z2V0LWFnZW50LXJ1bg.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.display_name": {
-          "source": "List Research Run Events",
+          "source": "List research run events",
           "message": "Vypísať udalosti výskumného behu"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Pri prehraní SSE vrátiť iba udalosti po tomto ID udalosti."
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.display_name": {
-          "source": "Cancel a Research Run",
+          "source": "Cancel a research run",
           "message": "Zrušiť výskumný beh"
         },
         "app.RXhh.action.Y2FuY2VsLWFnZW50LXJ1bg.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "ID behu agenta. Nové ID behov sa vracajú s predponou `agent_run_`."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.display_name": {
-          "source": "Stop a Research Run",
+          "source": "Stop a research run",
           "message": "Ukončiť výskumný beh"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.short_desc": {
@@ -2696,7 +2696,7 @@
           "message": "Tokeny beta funkcií oddelené čiarkami na zapnutie experimentálnych funkcií."
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Delete a Research Run",
+          "source": "Delete a research run",
           "message": "Odstrániť výskumný beh"
         },
         "app.RXhh.action.ZGVsZXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get a Batch",
+          "source": "Get a batch",
           "message": "Získať dávku"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel a Batch",
+          "source": "Cancel a batch",
           "message": "Zrušiť dávku"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete a Batch",
+          "source": "Delete a batch",
           "message": "Odstrániť dávku"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Filtrovať monitory podľa dvojíc kľúč-hodnota v metaúdajoch (presná zhoda, sémantika AND). Použite hranatú notáciu: `metadata[key]=value`."
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.display_name": {
-          "source": "Get a Search Monitor",
+          "source": "Get a search monitor",
           "message": "Získať monitor hľadania"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3I.short_desc": {
@@ -3744,7 +3744,7 @@
           "message": "ID monitora"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.display_name": {
-          "source": "Update a Search Monitor",
+          "source": "Update a search monitor",
           "message": "Aktualizovať monitor hľadania"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "HTTPS URL pre prijímanie udalostí webhooku. Nesmie ukazovať na localhost alebo súkromné IP rozsahy."
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.display_name": {
-          "source": "Delete a Search Monitor",
+          "source": "Delete a search monitor",
           "message": "Odstrániť monitor hľadania"
         },
         "app.RXhh.action.ZGVsZXRlLW1vbml0b3I.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Najvyšší počet monitorov spracovaných v jednej požiadavke. Predvolená hodnota je 50, maximum 500."
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.display_name": {
-          "source": "Run a Search Monitor Now",
+          "source": "Run a search monitor now",
           "message": "Spustiť monitor hľadania ihneď"
         },
         "app.RXhh.action.dHJpZ2dlci1tb25pdG9y.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "ID monitora"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.display_name": {
-          "source": "List Search Monitor Runs",
+          "source": "List search monitor runs",
           "message": "Vypísať behy monitora hľadania"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9yLXJ1bnM.short_desc": {
@@ -4608,7 +4608,7 @@
           "message": "Počet výsledkov na stranu"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.display_name": {
-          "source": "Get a Search Monitor Run",
+          "source": "Get a search monitor run",
           "message": "Získať beh monitora hľadania"
         },
         "app.RXhh.action.Z2V0LW1vbml0b3ItcnVu.short_desc": {

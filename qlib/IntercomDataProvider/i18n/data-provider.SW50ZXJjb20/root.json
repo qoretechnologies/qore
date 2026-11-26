@@ -684,8 +684,8 @@
           "message": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
-          "message": "Create Note"
+          "source": "Create note",
+          "message": "Create note"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
           "source": "Add a note to a contact",
@@ -744,8 +744,8 @@
           "message": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
-          "message": "List Tags on Contact"
+          "source": "List tags on contact",
+          "message": "List tags on contact"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
           "source": "List the tags applied to one contact",
@@ -768,8 +768,8 @@
           "message": "The unique identifier for the contact which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
-          "message": "Add Tag to Contact"
+          "source": "Add tag to contact",
+          "message": "Add tag to contact"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
           "source": "Apply an existing tag to a contact",
@@ -804,8 +804,8 @@
           "message": "The unique identifier for the tag which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
-          "message": "Remove Tag from Contact"
+          "source": "Remove tag from contact",
+          "message": "Remove tag from contact"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
           "source": "Remove a tag from a contact",
@@ -2856,8 +2856,8 @@
           "message": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
           "source": "Retrieve a contact by its identity",
@@ -2892,8 +2892,8 @@
           "message": "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
           "source": "Update an existing contact",
@@ -3072,8 +3072,8 @@
           "message": "Pass `true` to include the contact's merge history in the response. Only returned for contacts with a `user` role."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
           "source": "Delete a contact",
@@ -3096,8 +3096,8 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
-          "message": "Get Conversation"
+          "source": "Get conversation",
+          "message": "Get conversation"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
           "source": "Retrieve a conversation by its identity",
@@ -3144,8 +3144,8 @@
           "message": "If set to true, conversation parts will be translated to the detected language of the conversation."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
-          "message": "Get Company"
+          "source": "Get company",
+          "message": "Get company"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
           "source": "Retrieve a company by its identity",
@@ -3168,8 +3168,8 @@
           "message": "The unique identifier for the company which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
-          "message": "Update Company"
+          "source": "Update company",
+          "message": "Update company"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
           "source": "Update an existing company by its identity",
@@ -3276,8 +3276,8 @@
           "message": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647.."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
-          "message": "Delete Company"
+          "source": "Delete company",
+          "message": "Delete company"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
           "source": "Delete a company",
@@ -3300,8 +3300,8 @@
           "message": "The unique identifier for the company which is given by Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
-          "message": "Get Article"
+          "source": "Get article",
+          "message": "Get article"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
           "source": "Retrieve a help center article by its identity",
@@ -3324,8 +3324,8 @@
           "message": "The unique identifier for the article which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
-          "message": "Update Article"
+          "source": "Update article",
+          "message": "Update article"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
           "source": "Update an existing help center article",
@@ -4200,8 +4200,8 @@
           "message": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
-          "message": "Delete Article"
+          "source": "Delete article",
+          "message": "Delete article"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
           "source": "Delete a help center article",
@@ -4224,8 +4224,8 @@
           "message": "The unique identifier for the article which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
-          "message": "Get Collection"
+          "source": "Get collection",
+          "message": "Get collection"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
           "source": "Retrieve a help center collection by its identity",
@@ -4248,8 +4248,8 @@
           "message": "The unique identifier for the collection which is given by Intercom."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
-          "message": "Get Tag"
+          "source": "Get tag",
+          "message": "Get tag"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
           "source": "Retrieve a tag by its identity",
@@ -4272,8 +4272,8 @@
           "message": "The unique identifier of a given tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
-          "message": "Delete Tag"
+          "source": "Delete tag",
+          "message": "Delete tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
           "source": "Delete a tag",
@@ -4416,8 +4416,8 @@
           "message": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
-          "message": "Reply to Conversation"
+          "source": "Reply to conversation",
+          "message": "Reply to conversation"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
           "source": "Reply to a conversation as a teammate",
@@ -4524,8 +4524,8 @@
           "message": "Add the reply without notifying the contact about it"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Fires when a contact is created",
@@ -4536,8 +4536,8 @@
           "message": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
-          "message": "New Conversation"
+          "source": "New conversation",
+          "message": "New conversation"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Fires when a conversation is created",

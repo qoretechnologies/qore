@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
-          "source": "Detect Document Text",
-          "message": "Detect Document Text"
+          "source": "Detect document text",
+          "message": "Detect document text"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
           "source": "Extract lines and words from a document",
@@ -412,8 +412,8 @@
           "message": "Optional S3 object version ID for versioned buckets."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
-          "message": "Analyze Document"
+          "source": "Analyze document",
+          "message": "Analyze document"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
           "source": "Extract tables, forms, signatures, layout, and query answers",
@@ -692,8 +692,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
-          "source": "Analyze Expense",
-          "message": "Analyze Expense"
+          "source": "Analyze expense",
+          "message": "Analyze expense"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
           "source": "Extract invoice and receipt totals, vendors, and line items",
@@ -852,8 +852,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Create Adapter",
-          "message": "Create Adapter"
+          "source": "Create adapter",
+          "message": "Create adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
           "source": "Create a custom query adapter",
@@ -948,8 +948,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Create Adapter Version",
-          "message": "Create Adapter Version"
+          "source": "Create adapter version",
+          "message": "Create adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Train a version of a custom query adapter",
@@ -1088,8 +1088,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
-          "source": "Delete Adapter",
-          "message": "Delete Adapter"
+          "source": "Delete adapter",
+          "message": "Delete adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
           "source": "Delete an unused custom query adapter",
@@ -1112,8 +1112,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Delete Adapter Version",
-          "message": "Delete Adapter Version"
+          "source": "Delete adapter version",
+          "message": "Delete adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Delete a version of a custom query adapter",
@@ -1148,8 +1148,8 @@
           "message": "Version belonging to the selected adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
-          "source": "Get Adapter",
-          "message": "Get Adapter"
+          "source": "Get adapter",
+          "message": "Get adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
           "source": "Read a custom query adapter's settings",
@@ -1172,8 +1172,8 @@
           "message": "Adapter in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
-          "source": "Get Adapter Version",
-          "message": "Get Adapter Version"
+          "source": "Get adapter version",
+          "message": "Get adapter version"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
           "source": "Read training status and evaluation results for an adapter version",
@@ -1208,8 +1208,8 @@
           "message": "Version belonging to the selected adapter."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
-          "source": "Get Document Analysis",
-          "message": "Get Document Analysis"
+          "source": "Get document analysis",
+          "message": "Get document analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
           "source": "Read a page of asynchronous document analysis results",
@@ -1256,8 +1256,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
-          "source": "Get Document Text Detection",
-          "message": "Get Document Text Detection"
+          "source": "Get document text detection",
+          "message": "Get document text detection"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
           "source": "Read a page of asynchronous text detection results",
@@ -1304,8 +1304,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
-          "source": "Get Expense Analysis",
-          "message": "Get Expense Analysis"
+          "source": "Get expense analysis",
+          "message": "Get expense analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
           "source": "Read a page of asynchronous expense analysis results",
@@ -1352,8 +1352,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
-          "source": "Get Lending Analysis",
-          "message": "Get Lending Analysis"
+          "source": "Get lending analysis",
+          "message": "Get lending analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
           "source": "Read a page of asynchronous lending analysis results",
@@ -1400,8 +1400,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
-          "source": "Get Lending Analysis Summary",
-          "message": "Get Lending Analysis Summary"
+          "source": "Get lending analysis summary",
+          "message": "Get lending analysis summary"
         },
         "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
           "source": "Read the document classification summary for a lending job",
@@ -1424,8 +1424,8 @@
           "message": "Job ID returned by the matching start action; AWS provides no job listing."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
-          "source": "List Adapter Versions",
-          "message": "List Adapter Versions"
+          "source": "List adapter versions",
+          "message": "List adapter versions"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
           "source": "List versions of custom query adapters",
@@ -1496,8 +1496,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
-          "source": "List Adapters",
-          "message": "List Adapters"
+          "source": "List adapters",
+          "message": "List adapters"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
           "source": "List custom query adapters in this account and region",
@@ -1556,8 +1556,8 @@
           "message": "Continuation token from the preceding response in the same operation."
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
-          "source": "List Tags For Resource",
-          "message": "List Tags For Resource"
+          "source": "List tags for resource",
+          "message": "List tags for resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
           "source": "Read the tags attached to a Textract resource",
@@ -1580,8 +1580,8 @@
           "message": "Textract resource ARN in the connection's AWS account and region."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Document Analysis",
-          "message": "Start Document Analysis"
+          "source": "Start document analysis",
+          "message": "Start document analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
           "source": "Start asynchronous extraction of document structure",
@@ -1896,8 +1896,8 @@
           "message": "Version of the selected resource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
-          "source": "Start Document Text Detection",
-          "message": "Start Document Text Detection"
+          "source": "Start document text detection",
+          "message": "Start document text detection"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
           "source": "Start asynchronous extraction of document text",
@@ -2076,8 +2076,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
-          "source": "Start Expense Analysis",
-          "message": "Start Expense Analysis"
+          "source": "Start expense analysis",
+          "message": "Start expense analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
           "source": "Start asynchronous invoice and receipt analysis",
@@ -2256,8 +2256,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
-          "source": "Start Lending Analysis",
-          "message": "Start Lending Analysis"
+          "source": "Start lending analysis",
+          "message": "Start lending analysis"
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
           "source": "Start asynchronous classification and extraction of lending documents",
@@ -2412,8 +2412,8 @@
           "message": "KMS key ID or ARN for encrypting output; required permissions must be granted."
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
-          "source": "Tag Resource",
-          "message": "Tag Resource"
+          "source": "Tag resource",
+          "message": "Tag resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
           "source": "Add or update tags on a Textract resource",
@@ -2448,8 +2448,8 @@
           "message": "Resource tags as a map of names to values; an empty tag value is valid."
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
-          "source": "Untag Resource",
-          "message": "Untag Resource"
+          "source": "Untag resource",
+          "message": "Untag resource"
         },
         "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
           "source": "Remove tags from a Textract resource",
@@ -2484,8 +2484,8 @@
           "message": "Names of the resource tags to remove."
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
-          "source": "Update Adapter",
-          "message": "Update Adapter"
+          "source": "Update adapter",
+          "message": "Update adapter"
         },
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
           "source": "Update a custom query adapter's settings",

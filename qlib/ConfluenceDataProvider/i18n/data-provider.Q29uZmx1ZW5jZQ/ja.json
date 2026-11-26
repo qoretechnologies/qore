@@ -724,7 +724,7 @@
           "message": "ページはスペースのルートレベル（スペースのホームページツリーの外側）に作成されます。true の場合、`parentId` ボディパラメータに値を指定することはできません。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "ページを取得"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -944,7 +944,7 @@
           "message": "`ChildrenResponse` オブジェクトで定義されている、ページの直接の子を含めます。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "ページの更新"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "ページの所有者のアカウントID。\n\nこれにより、ページの所有権を別のユーザーに譲渡できます。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "ページの名前を変更"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "ドラフト"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "ページを削除"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "下書きであるページを削除しようとする場合。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "スペース内のページを一覧表示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "root"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "ラベルのページを一覧表示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "\"yyyy-MM-ddTHH:mm:ss.SSSZ\" 形式のブログ投稿の作成日。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "ブログ投稿の取得"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "ブログ投稿の共同編集者を含めます。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "ブログ投稿の更新"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "\"yyyy-MM-ddTHH:mm:ss.SSSZ\" 形式のブログ投稿の作成日。"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "ブログ投稿を削除"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "下書きのブログ投稿を削除しようとする場合。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "スペース内のブログ投稿を一覧表示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "ページネーションカーソル: 前回のレスポンス内の `_links.next` URL から `cursor` クエリ引数を取得し、ここに渡します。\n\nこれは不透明な値であり、手動で構築してはなりません。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "ラベルのブログ投稿を一覧表示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "スペースのアイコンを取得するかどうか。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "スペースを取得"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "完了日に基づくタスクの日時範囲の終了（境界値を含む）でフィルタリングします。入力はミリ秒単位のエポック時間です。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "タスクの取得"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "タスクの更新"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "操作対象のテーブル: `pages`、`blogposts`、`tasks`、`spaces`、`labels`、または `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "新規ページ"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "サイト全体または1つのスペースで、新しいページごとにトリガーされます。\n\nこのイベントには、Confluenceが返すページレコード（ID、タイトル、スペース、作成者、ステータス）が含まれます。後から編集されたページではこのイベントは再トリガーされず、作成のみが報告されます。"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "新規ブログ投稿"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "サイト全体または1つのスペースで、新しいブログ投稿ごとにトリガーされます。\n\nこのイベントには、Confluenceが返すブログ投稿レコード（ID、タイトル、スペース、作成者、ステータス）が含まれます。"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "新しい添付ファイル"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

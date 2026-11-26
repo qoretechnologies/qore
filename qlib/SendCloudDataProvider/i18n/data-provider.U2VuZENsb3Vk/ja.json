@@ -460,7 +460,7 @@
           "message": "取得する荷物の数値 ID"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "小包を作成"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "取得する返品の数値 ID"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
+          "source": "Create return",
           "message": "返品を作成"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {

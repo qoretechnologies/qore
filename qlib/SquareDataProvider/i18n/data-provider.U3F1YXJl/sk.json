@@ -740,7 +740,7 @@
           "message": "Externá referencia"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
+          "source": "Create paid order",
           "message": "Vytvoriť zaplatenú objednávku"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Aktuálna verzia objednávky (pre optimistickú súbežnosť)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
+          "source": "Create a payment",
           "message": "Vytvoriť platbu"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "Ak je `True` (predvolené), platba sa dokončí okamžite. Ak je `False`, musí sa dokončiť neskôr pomocou complete-payment."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
+          "source": "Complete payment",
           "message": "Dokončiť platbu"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {

@@ -1048,7 +1048,7 @@
           "message": "存在しない顧客IDを無視するかどうか"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
-          "source": "Send Transactional Email",
+          "source": "Send transactional email",
           "message": "トランザクションメールを送信"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {

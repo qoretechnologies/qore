@@ -1816,8 +1816,8 @@
           "message": "The task ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
-          "source": "Create a Call",
-          "message": "Create a Call"
+          "source": "Create a call",
+          "message": "Create a call"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
           "source": "Log a new call",

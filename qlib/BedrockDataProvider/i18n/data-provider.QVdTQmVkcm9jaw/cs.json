@@ -388,7 +388,7 @@
           "message": "Seznam jednoho nebo více názvů Amazon Resource Name (ARN) hodnotících úkolů, které chcete odstranit."
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Cancel Automated Reasoning Policy Build Workflow",
+          "source": "Cancel automated reasoning policy build workflow",
           "message": "Zrušit pracovní postup sestavení politiky automatického úsudku"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Hodnota pro značku."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Create Automated Reasoning Policy Test Case",
+          "source": "Create automated reasoning policy test case",
           "message": "Vytvořit testovací případ automatizovaného řízení"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Minimální úroveň důvěry pro validaci logiky. Obsah, který splňuje prahový hodnotu, je považován za vysoce důvěryhodný nález, který lze ověřit."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Create Automated Reasoning Policy Version",
+          "source": "Create automated reasoning policy version",
           "message": "Vytvořit verzi automatizovaného řízení"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -3412,7 +3412,7 @@
           "message": "Jedinečný, rozlišující velká a malá písmena identifikátor pro zajištění, že požadavek API dokončí ne více než jednou. Pokud tento token odpovídá předchozímu požadavku, Amazon Bedrock ignoruje požadavek, ale nevrací chybu. Další informace naleznete v článku [Ensuring idempotency](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html) v *Amazon S3 User Guide*."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.display_name": {
-          "source": "Create Guardrail Version",
+          "source": "Create guardrail version",
           "message": "Vytvořit verzi záruky"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.short_desc": {
@@ -4936,7 +4936,7 @@
           "message": "Hodnota pro značku."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Delete Automated Reasoning Policy",
+          "source": "Delete automated reasoning policy",
           "message": "Odstranit politiku automatického zdůvodnění"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -4972,7 +4972,7 @@
           "message": "Určuje, zda má být automatická politika automatického úsudku vynucena k odstranění i tehdy, když má aktivní zdroje. Když je `false`, Amazon Bedrock ověří, zda byly všechny artefakty odstraněny (např. verze politiky, testovací případ, výsledek testu) pro politiku před odstraněním. Když je `true`, Amazon Bedrock odstraní politiku a všechny její artefakty bez ověření. Výchozí hodnota je `false`."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Delete Automated Reasoning Policy Build Workflow",
+          "source": "Delete automated reasoning policy build workflow",
           "message": "Odstraní pracovní postup sestavení politiky automatického úsudku"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Časová značka, kdy byl poslední aktualizovaný pracovní postup sestavení. Toto se používá pro optimistickou kontrolu souběžnosti k předcházení neúmyslného smazání pracovních postupů, které byly upraveny."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Delete Automated Reasoning Policy Test Case",
+          "source": "Delete automated reasoning policy test case",
           "message": "Odstranit testovací případ automatizovaného řízení"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5068,7 +5068,7 @@
           "message": "Časová značka, kdy byl test naposledy aktualizován. Používá se jako concurrency token k předcházení konfliktních úprav."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Delete Custom Model",
+          "source": "Delete custom model",
           "message": "Odstranit vlastní model"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "Název modelu k odstranění."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Delete Custom Model Deployment",
+          "source": "Delete custom model deployment",
           "message": "Odstranit vlastní nasazení modelu"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5116,7 +5116,7 @@
           "message": "Název Amazon Resource Name (ARN) nebo název vlastního nasazení modelu, které chcete odstranit."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Delete Enforced Guardrail Configuration",
+          "source": "Delete enforced guardrail configuration",
           "message": "Odstranit konfiguraci vynuceného ochranného pásu"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -5164,7 +5164,7 @@
           "message": "ID modelu přístupu k modelu, který chcete odstranit."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Delete Guardrail",
+          "source": "Delete guardrail",
           "message": "Vymazat ochranné opatření"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.short_desc": {
@@ -5200,7 +5200,7 @@
           "message": "Verze ochranného pásu."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Delete Imported Model",
+          "source": "Delete imported model",
           "message": "Odstranit importovaný model"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5224,7 +5224,7 @@
           "message": "Název importované modelu, který chcete odstranit."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Delete Inference Profile",
+          "source": "Delete inference profile",
           "message": "Odstranit profil inferencí"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5248,7 +5248,7 @@
           "message": "Amazon Resource Name (ARN) nebo ID aplikace pro inferenci dat, kterou chcete odstranit."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Delete Marketplace Model Endpoint",
+          "source": "Delete marketplace model endpoint",
           "message": "Odstranit koncový bod modelu na tržiště"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5284,7 +5284,7 @@
           "message": "Odstranit protokolování volání"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Delete Prompt Router",
+          "source": "Delete prompt router",
           "message": "Odstranit směrovač výzvy"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Amazonský prostředek jménem (ARN) směrovače výzva ke smazání."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Delete Provisioned Model Throughput",
+          "source": "Delete provisioned model throughput",
           "message": "Odstranit provisionovanou propustnost modelu"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -5332,7 +5332,7 @@
           "message": "Amazon Resource Name (ARN) nebo název provisionovaného průtoku."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Delete Resource Policy",
+          "source": "Delete resource policy",
           "message": "Odstranit zásadu prostředku"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -5356,7 +5356,7 @@
           "message": "ARN prostředku Bedrock, na který se tato politika prostředku vztahuje."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.display_name": {
-          "source": "Deregister Marketplace Model Endpoint",
+          "source": "Deregister marketplace model endpoint",
           "message": "Odhlásit koncový bod modelu na tržiště"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.short_desc": {
@@ -5380,7 +5380,7 @@
           "message": "Amazon Resource Name (ARN) koncového bodu, který chcete odregistrovat."
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Export Automated Reasoning Policy Version",
+          "source": "Export automated reasoning policy version",
           "message": "Export verze automatizovaného řízení"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -5416,7 +5416,7 @@
           "message": "Vrátí režim retenčních dat pro celou účtu Amazon Bedrock."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Advanced Prompt Optimization Job",
+          "source": "Get advanced prompt optimization job",
           "message": "Získat pokročilou optimalizaci výzvy"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.short_desc": {
@@ -5440,7 +5440,7 @@
           "message": "ARN nebo ID pokročilého úkolu optimalizace podnětu: ARN nebo ID pokročilého úkolu optimalizace podnětu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Get Automated Reasoning Policy",
+          "source": "Get automated reasoning policy",
           "message": "Získat zásadu automatického zdůvodnění"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -5464,7 +5464,7 @@
           "message": "Amazon Resource Name (ARN) politiky Automatického úsudku, kterou chcete načíst. Může to být buď neverzovaný ARN pro návrh politiky nebo ARN pro konkrétní verzi politiky."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Get Automated Reasoning Policy Annotations",
+          "source": "Get automated reasoning policy annotations",
           "message": "Získat anotace automatického řízení"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -5500,7 +5500,7 @@
           "message": "Jedinečný identifikátor pracovního toku, jehož anotace chcete získat."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow",
+          "source": "Get automated reasoning policy build workflow",
           "message": "Získat pracovní postup sestavení automatizovaného řízení politiky"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5536,7 +5536,7 @@
           "message": "Jedinečný identifikátor sestavovacího pracovního postupu, který chcete získat."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow Result Assets",
+          "source": "Get automated reasoning policy build workflow result assets",
           "message": "Získá výsledky sestavy politiky automatického zdůvodnění"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.short_desc": {
@@ -5628,7 +5628,7 @@
           "message": "Jedinečný identifikátor konkrétního majetku, který je třeba načíst, když existuje více majetků stejného typu. Toto je požadováno při načítání majetků SOURCE_DOCUMENT, protože v pracovním postupu mohlo být použito více zdrojový dokumentů. Identifikátor majetku lze získat z manifestu majetku."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.display_name": {
-          "source": "Get Automated Reasoning Policy Next Scenario",
+          "source": "Get automated reasoning policy next scenario",
           "message": "Získat další scénář automatizovaného řízení politiky"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.short_desc": {
@@ -5664,7 +5664,7 @@
           "message": "Jedinečný identifikátor pracovního toku sestavení spojeného s testovacími scénáři."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Get Automated Reasoning Policy Test Case",
+          "source": "Get automated reasoning policy test case",
           "message": "Získat testovací případ automatického řízení"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Jedinečný identifikátor testu, který chcete získat."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.display_name": {
-          "source": "Get Automated Reasoning Policy Test Result",
+          "source": "Get automated reasoning policy test result",
           "message": "Získat výsledek testu automatického řízení"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "Jedinečný identifikátor testu, pro který chcete získat výsledky."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Get Custom Model",
+          "source": "Get custom model",
           "message": "Získat vlastní model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5772,7 +5772,7 @@
           "message": "Jméno nebo Amazon Resource Name (ARN) vlastního modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Get Custom Model Deployment",
+          "source": "Get custom model deployment",
           "message": "Získat vlastní nasazení modelu"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5796,7 +5796,7 @@
           "message": "Amazon Resource Name (ARN) nebo název nasazení vlastního modelu, o kterém chcete získat informace."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "Získat úlohu hodnocení"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "Název Amazon Resource Name (ARN) hodnotícího úkolu, o kterém chcete získat informace."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.display_name": {
-          "source": "Get Foundation Model",
+          "source": "Get foundation model",
           "message": "Získat základní model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Identifikátor modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.display_name": {
-          "source": "Get Foundation Model Availability",
+          "source": "Get foundation model availability",
           "message": "Získat dostupnost základního modelu"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "ID modelu základního modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.display_name": {
-          "source": "Get Guardrail",
+          "source": "Get guardrail",
           "message": "Získat ochranné opatření"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.short_desc": {
@@ -5904,7 +5904,7 @@
           "message": "Verze zábrany, pro kterou chcete získat podrobnosti. Pokud nespecifikujete verzi, odpověď vrátí podrobnosti pro verzi `DRAFT`."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Get Imported Model",
+          "source": "Get imported model",
           "message": "Získat importovaný model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Název nebo Amazon Resource Name (ARN) importovaného modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Get Inference Profile",
+          "source": "Get inference profile",
           "message": "Získat profil inferencí"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "ID nebo Amazonský prostředek jménem (ARN) profilu inference."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Get Marketplace Model Endpoint",
+          "source": "Get marketplace model endpoint",
           "message": "Získat koncový bod modelu z Marketplace"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Název Amazon Resource Name (ARN) koncového bodu, o kterém chcete získat informace."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.display_name": {
-          "source": "Get Model Copy Job",
+          "source": "Get model copy job",
           "message": "Zkopírovat model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "Amazon Resource Name (ARN) kopie modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Model Customization Job",
+          "source": "Get model customization job",
           "message": "Získat nasazení vlastního modelu"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Identifikátor přizpůsobeného procesu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.display_name": {
-          "source": "Get Model Import Job",
+          "source": "Get model import job",
           "message": "Zkopírovat importovaný model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "Identifikátor importovaného procesu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.display_name": {
-          "source": "Get Model Invocation Job",
+          "source": "Get model invocation job",
           "message": "Získat úkol indukce modelu"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.short_desc": {
@@ -6084,7 +6084,7 @@
           "message": "Získejte současná hodnotová nastavení pro protokolování volání modelu."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Get Prompt Router",
+          "source": "Get prompt router",
           "message": "Získat směrovač výzva"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "ARN směrovače výzvy"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Get Provisioned Model Throughput",
+          "source": "Get provisioned model throughput",
           "message": "Získat provozní propustnost provisionovaného modelu"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -6132,7 +6132,7 @@
           "message": "Amazon Resource Name (ARN) nebo název provisionovaného průtoku."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Get Resource Policy",
+          "source": "Get resource policy",
           "message": "Získat zásadu prostředku"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -6288,7 +6288,7 @@
           "message": "Maximální počet politik, které se mají vrátit v jednom volání."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.display_name": {
-          "source": "List Automated Reasoning Policy Build Workflows",
+          "source": "List automated reasoning policy build workflows",
           "message": "Seznam pracovních postupů sestavení politiky automatického úsudku"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.short_desc": {
@@ -6336,7 +6336,7 @@
           "message": "Maximální počet buildových pracovních toků, které mají být vrátily v jednom odpovědi. Platný rozsah je 1-100."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.display_name": {
-          "source": "List Automated Reasoning Policy Test Cases",
+          "source": "List automated reasoning policy test cases",
           "message": "Seznam testovacích případů automatického řízení"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.short_desc": {
@@ -6384,7 +6384,7 @@
           "message": "Maximální počet testů, které mají být vráceny v jednom volání."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.display_name": {
-          "source": "List Automated Reasoning Policy Test Results",
+          "source": "List automated reasoning policy test results",
           "message": "Seznam testů automatizovaného řízení politiky"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Sestupně"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.display_name": {
-          "source": "List Foundation Model Agreement Offers",
+          "source": "List foundation model agreement offers",
           "message": "Seznam nabídek dohody základního modelu"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.short_desc": {
@@ -8452,7 +8452,7 @@
           "message": "Požadavek na vložení zákaznického profilu."
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.display_name": {
-          "source": "Register Marketplace Model Endpoint",
+          "source": "Register marketplace model endpoint",
           "message": "Registrovat koncový bod modelu na tržiště"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "Název Amazon Resource Name (ARN) modelu z Amazon Bedrock Marketplace, který je nasazený na koncovém bodu."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.display_name": {
-          "source": "Start Automated Reasoning Policy Build Workflow",
+          "source": "Start automated reasoning policy build workflow",
           "message": "Spusťte pracovní postup sestavení politiky automatického úsudku"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "Jedinečný, rozlišující velká a malá písmena identifikátor pro zajištění, že operace dokončí ne více než jednou. Pokud tento token odpovídá předchozímu požadavku, Amazon Bedrock ignoruje požadavek, ale nevrací chybu."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.display_name": {
-          "source": "Start Automated Reasoning Policy Test Workflow",
+          "source": "Start automated reasoning policy test workflow",
           "message": "Spusťte pracovní postup testování politiky automatického úsudku"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "Jedinečný, rozlišující velká a malá písmena identifikátor pro zajištění, že operace dokončí ne více než jednou. Pokud tento token odpovídá předchozímu požadavku, Amazon Bedrock ignoruje požadavek, ale nevrací chybu."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Advanced Prompt Optimization Job",
+          "source": "Stop advanced prompt optimization job",
           "message": "Zastavit úkol Advanced Prompt Optimization"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "ARN nebo ID pokročilého pracovního postupu optimalizace promptů, který chcete zastavit. ARN nebo ID pokročilého pracovního postupu optimalizace promptů."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.display_name": {
-          "source": "Stop Evaluation Job",
+          "source": "Stop evaluation job",
           "message": "Zastavit hodnocení úkolu"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "Amazon Resource Name (ARN) hodnocení, které chcete zastavit."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Customization Job",
+          "source": "Stop model customization job",
           "message": "Zastavit nasazení vlastního modelu"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Identifikátor úkolu úkolu, který má být zastaven."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Invocation Job",
+          "source": "Stop model invocation job",
           "message": "Zastavit svolení modelu"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.short_desc": {
@@ -9292,7 +9292,7 @@
           "message": "Klíče značek, které chcete odstranit ze zdroje"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Update Automated Reasoning Policy",
+          "source": "Update automated reasoning policy",
           "message": "Aktualizovat politiku automatického zdůvodnění"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -9532,7 +9532,7 @@
           "message": "Aktualizovaná popis Automatického zdůvodnění politiky."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Update Automated Reasoning Policy Annotations",
+          "source": "Update automated reasoning policy annotations",
           "message": "Aktualizovat anotace automatizovaného řízení politiky"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -9808,7 +9808,7 @@
           "message": "Hash hodnota sady anotací, kterou aktualizujete. Toto se používá pro optimistickou kontrolu souběžnosti k předcházení konfliktních aktualizací."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Update Automated Reasoning Policy Test Case",
+          "source": "Update automated reasoning policy test case",
           "message": "Aktualizovat test automatizovaného řízení politiky"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "Jedinečný, rozlišující velká a malá písmena identifikátor pro zajištění, že operace dokončí ne více než jednou. Pokud tento token odpovídá předchozímu požadavku, Amazon Bedrock ignoruje požadavek, ale nevrací chybu."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Update Custom Model Deployment",
+          "source": "Update custom model deployment",
           "message": "Aktualizace vlastního nasazení modelu"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -9980,7 +9980,7 @@
           "message": "ARN nového vlastního modelu k nasazení. Toto nahradí momentálně nasazený model."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Update Guardrail",
+          "source": "Update guardrail",
           "message": "Aktualizovat ochranné opatření"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.short_desc": {
@@ -11172,7 +11172,7 @@
           "message": "ARN KMS klíče, kterým se má ochrana šifrovaná."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Update Marketplace Model Endpoint",
+          "source": "Update marketplace model endpoint",
           "message": "Aktualizovat koncový bod modelu na tržiště"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -11232,7 +11232,7 @@
           "message": "Jedinečný, rozlišující velká a malá písmena identifikátor, který poskytnete k zajištění idempotence požadavku. Tento token je uveden jako nepovinný, protože Amazon Web Services SDKs jej automaticky vygenerují a nastaví tento parametr. Pokud nepoužíváte Amazon Web Services SDK nebo CLI, musíte tento token poskytnout nebo požadavek selže."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Update Provisioned Model Throughput",
+          "source": "Update provisioned model throughput",
           "message": "Aktualizovat provisionovanou propustnost modelu"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -11280,7 +11280,7 @@
           "message": "Amazonský prostředek (ARN) nového modelu, který chcete přidružit k tomuto provoznímu průměru. Toto pole nelze specifikovat, pokud je tento provozní průměr přidružen k základnímu modelu.\n\nPokud je tento provozní průměr přidružen k vlastnímu modelu, můžete specifikovat jednu z následujících možností:\n\n- Základní model, ze kterého byl vlastní model upraven.\n\n- Jiný vlastní model, který byl upraven ze stejného základního modelu jako váš vlastní model."
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.display_name": {
-          "source": "Apply Guardrail",
+          "source": "Apply guardrail",
           "message": "Použít ochranné opatření"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.short_desc": {
@@ -12532,7 +12532,7 @@
           "message": "Struktura JSON schématu, kterému musí výstup modelu dodržovat."
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Spočítat tokeny"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -13348,7 +13348,7 @@
           "message": "CachePoint k zahrnutí do konfigurace nástroje."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.display_name": {
-          "source": "Get Async Invoke",
+          "source": "Get async invoke",
           "message": "Získat asynčně vyvoláno"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.short_desc": {
@@ -13684,7 +13684,7 @@
           "message": "VEHICLE_IDENTIFICATION_NUMBER"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.display_name": {
-          "source": "Invoke Model",
+          "source": "Invoke model",
           "message": "Volání modelu"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.short_desc": {
@@ -14088,7 +14088,7 @@
           "message": "Hodnota značky."
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Generovat embedding textu"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {

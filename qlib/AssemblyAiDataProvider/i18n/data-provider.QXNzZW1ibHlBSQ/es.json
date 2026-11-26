@@ -2348,7 +2348,7 @@
           "message": "Obtener solo transcripciones limitadas, anula el filtro de estado"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.display_name": {
-          "source": "Get Transcript",
+          "source": "Get transcript",
           "message": "Obtener transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXRyYW5zY3JpcHQ.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "ID de la transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Delete Transcript",
+          "source": "Delete transcript",
           "message": "Eliminar transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "ID de la transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.display_name": {
-          "source": "Get Subtitles",
+          "source": "Get subtitles",
           "message": "Obtener subtítulos"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "El número máximo de caracteres por título."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.display_name": {
-          "source": "Get Transcript Sentences",
+          "source": "Get transcript sentences",
           "message": "Obtener oraciones de transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlbnRlbmNlcw.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "ID de la transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.display_name": {
-          "source": "Get Transcript Paragraphs",
+          "source": "Get transcript paragraphs",
           "message": "Obtener párrafos de transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXBhcmFncmFwaHM.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "ID de la transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.display_name": {
-          "source": "Search Transcript Words",
+          "source": "Search transcript words",
           "message": "Buscar palabras de transcripción"
         },
         "app.QXNzZW1ibHlBSQ.action.c2VhcmNoLXRyYW5zY3JpcHQtd29yZHM.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Palabras clave para buscar"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.display_name": {
-          "source": "Get Redacted Audio",
+          "source": "Get redacted audio",
           "message": "Obtener audio redactado"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXJlZGFjdGVkLWF1ZGlv.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Enumere los registros de agentes livianos para esta cuenta, los más nuevos primero. Utilice Get Voice Agent para recuperar una configuración completa."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Voice Agent",
+          "source": "Get voice agent",
           "message": "Obtener agente de voz"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LWFnZW50.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "La identificación única del agente."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Voice Agent",
+          "source": "Update voice agent",
           "message": "Actualizar agente de voz"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "Reduce el tiempo de espera de esta entrada. Cada entrada tiene su propio techo de 800 ms;\nesto sólo puede acortarlo. Omitir para todo el techo."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Voice Agent",
+          "source": "Delete voice agent",
           "message": "Eliminar agente de voz"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "Devuelve sólo sesiones para este agente."
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.display_name": {
-          "source": "Get Voice Agent Session",
+          "source": "Get voice agent session",
           "message": "Obtener sesión de agente de voz"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXNlc3Npb24.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "El ID único de la sesión."
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.display_name": {
-          "source": "Delete Voice Agent Session",
+          "source": "Delete voice agent session",
           "message": "Eliminar sesión del agente de voz"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXNlc3Npb24.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "Cursor"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook Subscription",
+          "source": "Get webhook subscription",
           "message": "Obtenga una suscripción a Webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -4800,7 +4800,7 @@
           "message": "Suscripción"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook Subscription",
+          "source": "Update webhook subscription",
           "message": "Actualizar suscripción a webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -4832,7 +4832,7 @@
           "message": "Habilitado"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook Subscription",
+          "source": "Delete webhook subscription",
           "message": "Eliminar suscripción a webhook"
         },
         "app.QXNzZW1ibHlBSQ.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {

@@ -792,7 +792,7 @@
           "message": "Verzia je verzia objemu, ktorú sa má pripojiť. Pri vytváraní predvolené je najnovšia verzia. Pri aktualizácii predvolené je aktuálne pripojená verzia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Deployment",
+          "source": "Delete deployment",
           "message": "Odstrániť nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "ID alebo meno nasadenia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.display_name": {
-          "source": "Get Deployment By ID Or Name",
+          "source": "Get deployment by ID or name",
           "message": "Zapnúť podľa ID alebo mena"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWRlcGxveW1lbnQtYnktaWQtb3ItbmFtZQ.short_desc": {
@@ -840,7 +840,7 @@
           "message": "ID alebo meno nasadenia"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Deployment",
+          "source": "Update deployment",
           "message": "Aktualizovať nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWRlcGxveW1lbnQ.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Verzia je verzia objemu, ktorú sa má pripojiť. Pri vytváraní predvolené je najnovšia verzia. Pri aktualizácii predvolené je aktuálne pripojená verzia."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Logs For Deployment",
+          "source": "Get logs for deployment",
           "message": "Získať záznamy na nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWxvZ3MtZm9yLWRlcGxveW1lbnQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Hodnota sú citlivé údaje na bezpečné uchovávanie (napr. API kľúče, heslá, žetóny). Rozšifrované v pokoji."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.display_name": {
-          "source": "Delete Secret",
+          "source": "Delete secret",
           "message": "Odstrániť tajomstvo"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNlY3JldA.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "Tajné ID alebo meno"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Secret By ID Or Name",
+          "source": "Get secret by ID or name",
           "message": "Získať tajomstvo podľa totožnosti alebo mena"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNlY3JldC1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Tajné ID alebo meno"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.display_name": {
-          "source": "Update Secret",
+          "source": "Update secret",
           "message": "Aktualizovať tajomstvo"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXNlY3JldA.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "Hodnota sú nové citlivé údaje na bezpečné uchovávanie. Aktualizácia nahrádza existujúcu tajnú hodnotu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.display_name": {
-          "source": "Download Storage File",
+          "source": "Download storage file",
           "message": "Stiahnuť úložný súbor"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtc3RvcmFnZS1maWxl.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "Názov súboru"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.display_name": {
-          "source": "Get File Download URL",
+          "source": "Get file download URL",
           "message": "Získať adresu URL na stiahnutie súboru"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGUtZG93bmxvYWQtdXJs.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "readOnly"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.display_name": {
-          "source": "Delete Volume",
+          "source": "Delete volume",
           "message": "Odstrániť hlasitosť"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXZvbHVtZQ.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "ID zväzku alebo názov"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.display_name": {
-          "source": "Get Volume By ID Or Name",
+          "source": "Get volume by ID or name",
           "message": "Získať hlasitosť podľa ID alebo mena"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZvbHVtZS1ieS1pZC1vci1uYW1l.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Verzia hlasitosti pre opis (predvolené pre aktuálnu verziu)"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.display_name": {
-          "source": "Update Volume",
+          "source": "Update volume",
           "message": "Aktualizovať hlasitosť"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXZvbHVtZQ.short_desc": {
@@ -2996,7 +2996,7 @@
           "message": "Lora bazén použiť pre adaptér, ak nastavenie beží proti, povedzme, dedikovaný bazén. Používa sa len na model_type `adapter`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.display_name": {
-          "source": "Get Model Upload Job",
+          "source": "Get model upload job",
           "message": "Získať model nahrať úlohu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXVwbG9hZC1qb2I.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Zoznam metadát pre všetky nahrané dátové súbory."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získať súbor"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbGU.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "ID súboru, ktorý sa má získať"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Odstrániť súbor"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "ID súboru na vymazanie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -4476,7 +4476,7 @@
           "message": "Maximálny počet riadkov od začiatku tréningového súboru až po tokenizáciu."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.display_name": {
-          "source": "Get Fine-Tune",
+          "source": "Get fine-tune",
           "message": "Get Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZQ.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "ID úlohy na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.display_name": {
-          "source": "Delete Fine-Tune",
+          "source": "Delete fine-tune",
           "message": "Odstrániť Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWZpbmUtdHVuZQ.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Prehĺbený a nevyužitý parameter."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.display_name": {
-          "source": "List Fine-Tune Events",
+          "source": "List fine-tune events",
           "message": "Zoznam podujatí Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtZXZlbnRz.short_desc": {
@@ -4560,7 +4560,7 @@
           "message": "ID presnej úlohy zoznam udalostí pre"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tune Checkpoints",
+          "source": "List fine-tune checkpoints",
           "message": "Zoznam kontrolných bodov Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1maW5lLXR1bmUtY2hlY2twb2ludHM.short_desc": {
@@ -4584,7 +4584,7 @@
           "message": "Identifikovať dolaďovacie úlohy zoznam kontrolných bodov pre"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.display_name": {
-          "source": "Download Tokenized Dataset",
+          "source": "Download tokenized dataset",
           "message": "Stiahnuť tokenizovaný súbor dát"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtdG9rZW5pemVkLWRhdGFzZXQ.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Vzor Výstupnej cesty"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.display_name": {
-          "source": "Cancel Fine-Tune",
+          "source": "Cancel fine-tune",
           "message": "Zrušiť Fine-Tune"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWZpbmUtdHVuZQ.short_desc": {
@@ -4692,7 +4692,7 @@
           "message": "Dohodnuté ID na zrušenie. Reťazec, ktorý začína `ft-`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.display_name": {
-          "source": "Get Fine-Tune Metrics",
+          "source": "Get fine-tune metrics",
           "message": "Získať jemné-Tune metriky"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZpbmUtdHVuZS1tZXRyaWNz.short_desc": {
@@ -6544,7 +6544,7 @@
           "message": "Ľudsky čitateľný názov pre tento prídavok."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Get GPU Cluster By Cluster ID",
+          "source": "Get GPU cluster by cluster ID",
           "message": "Získať GPU Zoskupenie podľa ID zoskupenia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -6568,7 +6568,7 @@
           "message": "ID klastra na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.display_name": {
-          "source": "Update GPU Cluster",
+          "source": "Update GPU cluster",
           "message": "Aktualizácia GPU Klaster"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWdwdS1jbHVzdGVy.short_desc": {
@@ -6980,7 +6980,7 @@
           "message": "Názov doplnku na aktualizáciu. Musí zodpovedať existujúcemu doplnku v klasteri."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.display_name": {
-          "source": "Delete GPU Cluster By Cluster ID",
+          "source": "Delete GPU cluster by cluster ID",
           "message": "Vymazať GPU Zoskupenie podľa ID zoskupenia"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWdwdS1jbHVzdGVyLWJ5LWNsdXN0ZXItaWQ.short_desc": {
@@ -7148,7 +7148,7 @@
           "message": "ID projektu, ktorý bude vlastniť objem. Po vynechaní sa použije predvolený projekt volajúceho."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Get Shared Volume By ID",
+          "source": "Get shared volume by ID",
           "message": "Získať zdieľaný objem podľa ID"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "ID objemu na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.display_name": {
-          "source": "Delete Shared Volume By ID",
+          "source": "Delete shared volume by ID",
           "message": "Odstrániť zdieľaný zväzok ID"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLXNoYXJlZC12b2x1bWUtYnktaWQ.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "Vytvoriť koncový ukazovateľ v špecifikovanej zóne dostupnosti (napr. my-central-4b)"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.display_name": {
-          "source": "Get Endpoint",
+          "source": "Get endpoint",
           "message": "Get Endpoint"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWVuZHBvaW50.short_desc": {
@@ -7448,7 +7448,7 @@
           "message": "ID koncového ukazovateľa na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.display_name": {
-          "source": "Update Endpoint",
+          "source": "Update endpoint",
           "message": "Aktualizovať koncový ukazovateľ"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWVuZHBvaW50.short_desc": {
@@ -7552,7 +7552,7 @@
           "message": "Počet minút nečinnosti, po ktorých sa koncový ukazovateľ automaticky zastaví. Nastaviť na 0 na vypnutie automatického timeoutu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.display_name": {
-          "source": "Delete Endpoint",
+          "source": "Delete endpoint",
           "message": "Odstrániť koncový bod"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWVuZHBvaW50.short_desc": {
@@ -7576,7 +7576,7 @@
           "message": "ID koncového ukazovateľa na vymazanie"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.display_name": {
-          "source": "Add LoRA Adapter To Endpoint",
+          "source": "Add LoRA adapter to endpoint",
           "message": "Pridať LoRA Adaptér do koncového bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.YWRkLWxvcmEtYWRhcHRlci10by1lbmRwb2ludA.short_desc": {
@@ -7612,7 +7612,7 @@
           "message": "Kombinované identifikačné číslo vo formáte \"endpoint_name:adapter_model_name\"."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.display_name": {
-          "source": "List Adapters On Endpoint",
+          "source": "List adapters on endpoint",
           "message": "Zoznam adaptérov na koncovom bode"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGFwdGVycy1vbi1lbmRwb2ludA.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "ID koncového ukazovateľa"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.display_name": {
-          "source": "Remove LoRA Adapter From Endpoint",
+          "source": "Remove LoRA adapter from endpoint",
           "message": "Odstrániť LoRA Adaptér z koncového bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVtb3ZlLWxvcmEtYWRhcHRlci1mcm9tLWVuZHBvaW50.short_desc": {
@@ -7896,7 +7896,7 @@
           "message": "Vzor na použitie pre spracovanie žiadostí o dávky"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Získať dávku"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "ID úlohy vsádzky na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Zrušiť dávku"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "Modely filtrov podľa zdroja"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Získať hodnotenie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "ID hodnotiacej úlohy na získanie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.display_name": {
-          "source": "Get Evaluation Results",
+          "source": "Get evaluation results",
           "message": "Získajte výsledky hodnotenia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWV2YWx1YXRpb24tcmVzdWx0cw.short_desc": {
@@ -9560,7 +9560,7 @@
           "message": "Pôvodná stratégia škálovania Muon"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.display_name": {
-          "source": "Get Model Resources",
+          "source": "Get model resources",
           "message": "Získať modelové zdroje"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW1vZGVsLXJlc291cmNlcw.short_desc": {
@@ -9584,7 +9584,7 @@
           "message": "ID modelu zdroja"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.display_name": {
-          "source": "Stop Model Resources",
+          "source": "Stop model resources",
           "message": "Stop Modelové zdroje"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC1tb2RlbC1yZXNvdXJjZXM.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "Vracia modely podporované službou RL a ich limity pre výcvikové/vzorkovacie operácie."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Get Training Session",
+          "source": "Get training session",
           "message": "Získať tréningové sedenie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -9968,7 +9968,7 @@
           "message": "ID výcvikového zasadnutia"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.display_name": {
-          "source": "Update Training Session",
+          "source": "Update training session",
           "message": "Aktualizovať tréningové sedenie"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLXRyYWluaW5nLXNlc3Npb24.short_desc": {
@@ -10100,7 +10100,7 @@
           "message": "HTTPS URL pre beh Weights & Biases"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.display_name": {
-          "source": "Stop Training Session",
+          "source": "Stop training session",
           "message": "Zastaviť tréningové sedenie"
         },
         "app.VG9nZXRoZXJBaQ.action.c3RvcC10cmFpbmluZy1zZXNzaW9u.short_desc": {
@@ -10124,7 +10124,7 @@
           "message": "ID výcvikového zasadnutia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Backward Operation",
+          "source": "Get forward backward operation",
           "message": "Dostať sa späť do operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtYmFja3dhcmQtb3BlcmF0aW9u.short_desc": {
@@ -10160,7 +10160,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.display_name": {
-          "source": "Get Optim Step Operation",
+          "source": "Get optim step operation",
           "message": "Získať optimálnu operáciu kroku"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LW9wdGltLXN0ZXAtb3BlcmF0aW9u.short_desc": {
@@ -10196,7 +10196,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.display_name": {
-          "source": "Get Weights Sync Operation",
+          "source": "Get weights sync operation",
           "message": "Získať hmotnosť Synchronizovať operáciu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXdlaWdodHMtc3luYy1vcGVyYXRpb24.short_desc": {
@@ -10232,7 +10232,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.display_name": {
-          "source": "Get Sample Operation",
+          "source": "Get sample operation",
           "message": "Získať vzorku operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhbXBsZS1vcGVyYXRpb24.short_desc": {
@@ -10268,7 +10268,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.display_name": {
-          "source": "Forward Backward Pass",
+          "source": "Forward backward pass",
           "message": "Dopredu späť priesmyk"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1iYWNrd2FyZC1wYXNz.short_desc": {
@@ -10616,7 +10616,7 @@
           "message": "Typ straty Dro"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.display_name": {
-          "source": "Custom Forward Backward Pass",
+          "source": "Custom forward backward pass",
           "message": "Custom Forward Backward Pass"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3VzdG9tLWZvcndhcmQtYmFja3dhcmQtcGFzcw.short_desc": {
@@ -10796,7 +10796,7 @@
           "message": "D Typ Bfloat16"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.display_name": {
-          "source": "Get Custom Forward Backward Operation",
+          "source": "Get custom forward backward operation",
           "message": "Získať vlastnú spätnú operáciu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWN1c3RvbS1mb3J3YXJkLWJhY2t3YXJkLW9wZXJhdGlvbg.short_desc": {
@@ -10832,7 +10832,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.display_name": {
-          "source": "Forward Pass",
+          "source": "Forward pass",
           "message": "Prejsť dopredu"
         },
         "app.VG9nZXRoZXJBaQ.action.Zm9yd2FyZC1wYXNz.short_desc": {
@@ -10968,7 +10968,7 @@
           "message": "Tvar vyrovnávacej pamäte ako `[num_tokens, num_layers, width]`."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.display_name": {
-          "source": "Get Forward Operation",
+          "source": "Get forward operation",
           "message": "Získať operáciu dopredu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWZvcndhcmQtb3BlcmF0aW9u.short_desc": {
@@ -11004,7 +11004,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.display_name": {
-          "source": "Optimizer Step",
+          "source": "Optimizer step",
           "message": "Krok optimalizátora"
         },
         "app.VG9nZXRoZXJBaQ.action.b3B0aW1pemVyLXN0ZXA.short_desc": {
@@ -11268,7 +11268,7 @@
           "message": "koeficient úbytku hmotnosti"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.display_name": {
-          "source": "Weights Sync",
+          "source": "Weights sync",
           "message": "Synchronizácia hmotnosti"
         },
         "app.VG9nZXRoZXJBaQ.action.d2VpZ2h0cy1zeW5j.short_desc": {
@@ -11528,7 +11528,7 @@
           "message": "Keď je pravda spolu s `return_routed_experts`, vrátiť každý smer zachytávanie ako backend-vlastnený `object_uri` plus tvar namiesto inline base64 dát. Klienti, ktorí sa nerozhodnú ponechať odkaz v riadku odpoveď."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.display_name": {
-          "source": "Create Inference Checkpoint",
+          "source": "Create inference checkpoint",
           "message": "Vytvoriť kontrolný bod vyvodzovania"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWluZmVyZW5jZS1jaGVja3BvaW50.short_desc": {
@@ -11552,7 +11552,7 @@
           "message": "ID výcvikového zasadnutia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Inference Checkpoint Operation",
+          "source": "Get inference checkpoint operation",
           "message": "Získajte kontrolu kontrolného bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWluZmVyZW5jZS1jaGVja3BvaW50LW9wZXJhdGlvbg.short_desc": {
@@ -11588,7 +11588,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Save Training Checkpoint",
+          "source": "Save training checkpoint",
           "message": "Uložiť kontrolný bod výcviku"
         },
         "app.VG9nZXRoZXJBaQ.action.c2F2ZS10cmFpbmluZy1jaGVja3BvaW50.short_desc": {
@@ -11612,7 +11612,7 @@
           "message": "ID výcvikového zasadnutia"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.display_name": {
-          "source": "Get Save Training Checkpoint Operation",
+          "source": "Get save training checkpoint operation",
           "message": "Získať Uložiť prevádzku výcvikového kontrolného bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXNhdmUtdHJhaW5pbmctY2hlY2twb2ludC1vcGVyYXRpb24.short_desc": {
@@ -11648,7 +11648,7 @@
           "message": "ID operácie"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.display_name": {
-          "source": "Get Checkpoint",
+          "source": "Get checkpoint",
           "message": "Získať kontrolný bod"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWNoZWNrcG9pbnQ.short_desc": {
@@ -11672,7 +11672,7 @@
           "message": "ID kontrolného bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.display_name": {
-          "source": "Download Checkpoint",
+          "source": "Download checkpoint",
           "message": "Stiahnuť kontrolný bod"
         },
         "app.VG9nZXRoZXJBaQ.action.ZG93bmxvYWQtY2hlY2twb2ludA.short_desc": {
@@ -11720,7 +11720,7 @@
           "message": "Variačný adaptér kontrolného bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.display_name": {
-          "source": "List Addons",
+          "source": "List addons",
           "message": "Pridanie zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1hZGRvbnM.short_desc": {
@@ -11744,7 +11744,7 @@
           "message": "ID skupiny, ktorej zoznam sa pridal."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.display_name": {
-          "source": "Create Addon",
+          "source": "Create addon",
           "message": "Vytvoriť addon"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWFkZG9u.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "Či povoliť prídavný modul Model Aware TorchPass."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.display_name": {
-          "source": "Get Addon",
+          "source": "Get addon",
           "message": "Získajte Addon"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LWFkZG9u.short_desc": {
@@ -11928,7 +11928,7 @@
           "message": "Identifikovať add-on získať."
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.display_name": {
-          "source": "Update Addon",
+          "source": "Update addon",
           "message": "Aktualizovať Addon"
         },
         "app.VG9nZXRoZXJBaQ.action.dXBkYXRlLWFkZG9u.short_desc": {
@@ -12064,7 +12064,7 @@
           "message": "Či povoliť prídavný modul Model Aware TorchPass."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.display_name": {
-          "source": "Delete Addon",
+          "source": "Delete addon",
           "message": "Odstrániť prídavok"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVsZXRlLWFkZG9u.short_desc": {
@@ -12100,7 +12100,7 @@
           "message": "ID add-on vymazať."
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.display_name": {
-          "source": "List Remediations",
+          "source": "List remediations",
           "message": "Prostriedky nápravy zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.bGlzdC1yZW1lZGlhdGlvbnM.short_desc": {
@@ -12204,7 +12204,7 @@
           "message": "Filter podľa rekultivácie (-ov). Návraty sanácie zodpovedajúce niektorému zo špecifikovaných režimov."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Create Remediation",
+          "source": "Create remediation",
           "message": "Vytvoriť nápravné opatrenia"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLXJlbWVkaWF0aW9u.short_desc": {
@@ -12288,7 +12288,7 @@
           "message": "ID špecifikované klientom pre iracionalitu."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Get Remediation",
+          "source": "Get remediation",
           "message": "Získať nápravu"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12324,7 +12324,7 @@
           "message": "Hodnota pre ID nápravy"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.display_name": {
-          "source": "Approve Remediation",
+          "source": "Approve remediation",
           "message": "Schvaľovanie opravného prostriedku"
         },
         "app.VG9nZXRoZXJBaQ.action.YXBwcm92ZS1yZW1lZGlhdGlvbg.short_desc": {
@@ -12404,7 +12404,7 @@
           "message": "Opravný režim cyklu napájania hostiteľa"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.display_name": {
-          "source": "Cancel Remediation",
+          "source": "Cancel remediation",
           "message": "Zrušiť nápravu"
         },
         "app.VG9nZXRoZXJBaQ.action.Y2FuY2VsLXJlbWVkaWF0aW9u.short_desc": {
@@ -12452,7 +12452,7 @@
           "message": "ID nápravy."
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.display_name": {
-          "source": "Reject Remediation",
+          "source": "Reject remediation",
           "message": "Odmietnuť nápravu"
         },
         "app.VG9nZXRoZXJBaQ.action.cmVqZWN0LXJlbWVkaWF0aW9u.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "Nepriehľadné kurzor z predchádzajúcej reakcie `next_cursor`. Platí len na mesiac a granulát, na ktorý bol vydaný. Aktuálne mesačné údaje sú pohyblivá snímka: každá stránka odráža dáta ako jej žiadosť, takže novo dokončené okná sa môžu objaviť na konci sekvencie."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.display_name": {
-          "source": "Dedicated: List Organization Endpoints",
+          "source": "Dedicated: list organization endpoints",
           "message": "Určené: Koncové body organizácie zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLWVuZHBvaW50cw.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "S použitím výrazu filtra `name`, `created_at`alebo `updated_at` pri porovnaní prevádzkovateľov a AND/OR/NOT; časové pečiatky musia byť reťazcami RFC 3339. `name` podporuje priraďovanie podreťazcov s `:` a predpona/sufix divoké karty s `*`, a musí byť holým koncovým názvom."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.display_name": {
-          "source": "Dedicated: List Organization Models",
+          "source": "Dedicated: list organization models",
           "message": "Venované: Zoznam Modely organizácií"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtb3JnYW5pemF0aW9uLW1vZGVscw.short_desc": {
@@ -12840,7 +12840,7 @@
           "message": "Kurzor z predchádzajúceho zoznamu odpovedí."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.display_name": {
-          "source": "Dedicated: List Model Configurations",
+          "source": "Dedicated: list model configurations",
           "message": "Dedikované: Konfigurácie modelov zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtY29uZmlndXJhdGlvbnM.short_desc": {
@@ -12912,7 +12912,7 @@
           "message": "Kurzor z predchádzajúceho zoznamu odpovedí."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Dedicated: Get Model Configuration",
+          "source": "Dedicated: get model configuration",
           "message": "Venované: Získajte nastavenie modelu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -12948,7 +12948,7 @@
           "message": "Identifikátor preklenovacej revízie."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.display_name": {
-          "source": "Dedicated: List Endpoints",
+          "source": "Dedicated: list endpoints",
           "message": "Vyčlenené: Zoznam koncových bodov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnRz.short_desc": {
@@ -13020,7 +13020,7 @@
           "message": "S použitím výrazu filtra `name`, `created_at`alebo `updated_at` pri porovnaní prevádzkovateľov a AND/OR/NOT; časové pečiatky musia byť reťazcami RFC 3339. `name` podporuje priraďovanie podreťazcov s `:` a predpona/sufix divoké karty s `*`a akceptuje holý názov koncového ukazovateľa alebo `<project_slug>/<endpoint_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Create Endpoint",
+          "source": "Dedicated: create endpoint",
           "message": "Dedikovaný: Vytvoriť koncový bod"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1lbmRwb2ludA.short_desc": {
@@ -13076,7 +13076,7 @@
           "message": "Interná viditeľnosť"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Update Endpoint",
+          "source": "Dedicated: update endpoint",
           "message": "Dedikovaný: Aktualizovať koncový ukazovateľ"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1lbmRwb2ludA.short_desc": {
@@ -13204,7 +13204,7 @@
           "message": "Polia pre aktualizáciu. Ak nie je nastavený, polia sú aktualizované."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Get Endpoint",
+          "source": "Dedicated: get endpoint",
           "message": "Oddaný: Získajte koncový bod"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludA.short_desc": {
@@ -13240,7 +13240,7 @@
           "message": "Identifikátor koncového bodu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.display_name": {
-          "source": "Dedicated: Delete Endpoint",
+          "source": "Dedicated: delete endpoint",
           "message": "Dedikovaný: Odstrániť koncový bod"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1lbmRwb2ludA.short_desc": {
@@ -13288,7 +13288,7 @@
           "message": "Etag pre optimistické concurrency. Ak je nastavená, zmazanie je zamietnuté, ak sa aktuálna etag nezhoduje."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.display_name": {
-          "source": "Dedicated: List Deployments",
+          "source": "Dedicated: list deployments",
           "message": "Vyčlenené: Nasadenie zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudHM.short_desc": {
@@ -13372,7 +13372,7 @@
           "message": "S použitím výrazu filtra `name`, `state`, `model`, `created_at`alebo `updated_at` s porovnateľnými prevádzkovateľmi a AND/OR/NOT; `state` berie názov enum DeploymentState a `model` berie meno modelu zdroja. `name` podporuje priraďovanie podreťazcov s `:` a predpona/sufix divoké karty s `*`, a akceptuje holé meno nasadenia alebo `<project_slug>/<endpoint_name>/<deployment_name>`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Create Deployment",
+          "source": "Dedicated: create deployment",
           "message": "Venované: Vytvoriť rozmiestnenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13716,7 +13716,7 @@
           "message": "Ak je to pravda, validuje žiadosť bez vytvorenia alebo zabezpečenia nasadenia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Update Deployment",
+          "source": "Dedicated: update deployment",
           "message": "Zadané: Aktualizovať nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50.short_desc": {
@@ -13976,7 +13976,7 @@
           "message": "Polia pre aktualizáciu. Ak nie je nastavený, polia sú obsadené `deployment` sú aktualizované."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Get Deployment",
+          "source": "Dedicated: get deployment",
           "message": "Vyhradená: Nasadiť"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "Identifikátor nasadenia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.display_name": {
-          "source": "Dedicated: Delete Deployment",
+          "source": "Dedicated: delete deployment",
           "message": "Vyčlenené: Odstrániť rozmiestnenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1kZXBsb3ltZW50.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "Etag pre optimistické concurrency. Ak je nastavená, zmazanie je zamietnuté, ak sa aktuálna etag nezhoduje."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.display_name": {
-          "source": "Dedicated: List Deployment Adapters",
+          "source": "Dedicated: list deployment adapters",
           "message": "Vyhradené: Adaptéry na rozmiestnenie zoznamu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZGVwbG95bWVudC1hZGFwdGVycw.short_desc": {
@@ -14156,7 +14156,7 @@
           "message": "Kurzor z predchádzajúceho zoznamu adaptérov odpoveď."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Add Deployment Adapter",
+          "source": "Dedicated: add deployment adapter",
           "message": "Dedikovaný: Pridať adaptér na nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWFkZC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14240,7 +14240,7 @@
           "message": "Či vysťahovať najstarší adaptér, ak je nasadenie na kapacitu adaptéra."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Get Deployment Adapter",
+          "source": "Dedicated: get deployment adapter",
           "message": "Venované: Nasadiť adaptér"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14300,7 +14300,7 @@
           "message": "Identifikátor modelu adaptéra."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Remove Deployment Adapter",
+          "source": "Dedicated: remove deployment adapter",
           "message": "Dedikovaný: Odstrániť adaptér na nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlbW92ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14372,7 +14372,7 @@
           "message": "Adaptér etag z predchádzajúceho pridania, aktualizácie, získať, alebo zoznam odpovede. Odstránenie sa zamietne, ak sa adaptér zmení po tejto odpovedi."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.display_name": {
-          "source": "Dedicated: Update Deployment Adapter",
+          "source": "Dedicated: update deployment adapter",
           "message": "Venované: Aktualizovať Adaptér na nasadenie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1kZXBsb3ltZW50LWFkYXB0ZXI.short_desc": {
@@ -14456,7 +14456,7 @@
           "message": "Etag na úrovni riadkov z predchádzajúceho AddAdaptera, UpdateAdapter, GetAdapter, alebo ListAdapters odpoveď."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.display_name": {
-          "source": "Dedicated: List Endpoint Rollouts",
+          "source": "Dedicated: list endpoint rollouts",
           "message": "Venované: Zoznam koncových rozjazdov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtcm9sbG91dHM.short_desc": {
@@ -14536,7 +14536,7 @@
           "message": "Terminál pre rozbaľovací filter"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Create Rollout",
+          "source": "Dedicated: create rollout",
           "message": "Venované: Vytvoriť rozbeh"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.short_desc": {
@@ -14816,7 +14816,7 @@
           "message": "Nepovinná replika cieľa po dokončení. Musí byť aspoň 1 pri nastavení; predvolený počet replík zdrojového nasadenia v čase vytvorenia, alebo kombinovaný počet replík zdroja a cieľového nasadenia, keď oba už stoja v koncovej prevádzke rozdelený po zrušení. Ak toto prekročí maximálnu cieľovú rýchlosť automatického posuvu, dojazd zvýši túto maximálnu hodnotu raz, keď je to prvýkrát potrebné, pokiaľ prevádzkovateľ nezmení maximálnu rýchlosť stredného chodu; zvýšený strop zostane po dokončení. Už existujúci cieľ, ktorého vlastná autoscaling min je vyššia udržuje túto podlahu, hlásený ako FINAL_BELOW_INHERITED_MIN. Cieľ, ktorý sa začína zastavovať pristane presne na tejto hodnote; ak zdroj min bol vyšší, PreviewRolloutDefaults hlási FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.display_name": {
-          "source": "Dedicated: Preview Rollout Defaults",
+          "source": "Dedicated: preview rollout defaults",
           "message": "Dedikovaný: Náhľad Rollout Štandardy"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.short_desc": {
@@ -15096,7 +15096,7 @@
           "message": "Nepovinná replika cieľa po dokončení. Musí byť aspoň 1 pri nastavení; predvolený počet replík zdrojového nasadenia v čase vytvorenia, alebo kombinovaný počet replík zdroja a cieľového nasadenia, keď oba už stoja v koncovej prevádzke rozdelený po zrušení. Ak toto prekročí maximálnu cieľovú rýchlosť automatického posuvu, dojazd zvýši túto maximálnu hodnotu raz, keď je to prvýkrát potrebné, pokiaľ prevádzkovateľ nezmení maximálnu rýchlosť stredného chodu; zvýšený strop zostane po dokončení. Už existujúci cieľ, ktorého vlastná autoscaling min je vyššia udržuje túto podlahu, hlásený ako FINAL_BELOW_INHERITED_MIN. Cieľ, ktorý sa začína zastavovať pristane presne na tejto hodnote; ak zdroj min bol vyšší, PreviewRolloutDefaults hlási FINAL_BELOW_SOURCE_MIN."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Get Rollout",
+          "source": "Dedicated: get rollout",
           "message": "Venované: dostať Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yb2xsb3V0.short_desc": {
@@ -15144,7 +15144,7 @@
           "message": "Identifikátor rozjazdu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Delete Rollout",
+          "source": "Dedicated: delete rollout",
           "message": "Venované: Odstrániť Rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1yb2xsb3V0.short_desc": {
@@ -15204,7 +15204,7 @@
           "message": "Etag pre optimistické concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Start Rollout",
+          "source": "Dedicated: start rollout",
           "message": "Vyhradené: Spustiť rozbaľovač"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXN0YXJ0LXJvbGxvdXQ.short_desc": {
@@ -15252,7 +15252,7 @@
           "message": "Identifikátor rozjazdu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.display_name": {
-          "source": "Dedicated: Pause Rollout",
+          "source": "Dedicated: pause rollout",
           "message": "Zadané: pauza rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXBhdXNlLXJvbGxvdXQ.short_desc": {
@@ -15324,7 +15324,7 @@
           "message": "Nepovinný dôvod čitateľný človekom zaznamenaný v metaúdajoch o odstávke."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Resume Rollout",
+          "source": "Dedicated: resume rollout",
           "message": "Venované: Obnoviť rozjazd"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXJlc3VtZS1yb2xsb3V0.short_desc": {
@@ -15384,7 +15384,7 @@
           "message": "Voliteľný etag pre optimistické concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.display_name": {
-          "source": "Dedicated: Cancel Rollout",
+          "source": "Dedicated: cancel rollout",
           "message": "Venované: Zrušiť rollout"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNhbmNlbC1yb2xsb3V0.short_desc": {
@@ -15476,7 +15476,7 @@
           "message": "Zrušiť reverzáciu disposition"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.display_name": {
-          "source": "Dedicated: Promote Rollout",
+          "source": "Dedicated: promote rollout",
           "message": "Vyhradené: Podporovať rozbehnutie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByb21vdGUtcm9sbG91dA.short_desc": {
@@ -15536,7 +15536,7 @@
           "message": "Voliteľný etag pre optimistické concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List A B Experiments",
+          "source": "Dedicated: list A B experiments",
           "message": "Venované: Zoznam experimentov B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtYS1iLWV4cGVyaW1lbnRz.short_desc": {
@@ -15596,7 +15596,7 @@
           "message": "Kurzor z predchádzajúceho A/B reakcia na zoznam experimentov."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create A B Experiment",
+          "source": "Dedicated: create A B experiment",
           "message": "Venované: Vytvorte B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15712,7 +15712,7 @@
           "message": "Variant účastníka experimentu A/B"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update A B Experiment",
+          "source": "Dedicated: update A B experiment",
           "message": "Venované: Aktualizácia B experimentu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15852,7 +15852,7 @@
           "message": "Polia pre aktualizáciu. Ak sa vynechá, všetky mutované polia sú prepísané."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get A B Experiment",
+          "source": "Dedicated: get A B experiment",
           "message": "Venované: Získajte B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15900,7 +15900,7 @@
           "message": "A/B identifikátor experimentu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete A B Experiment",
+          "source": "Dedicated: delete A B experiment",
           "message": "Venované: Vymazať B experiment"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1hLWItZXhwZXJpbWVudA.short_desc": {
@@ -15960,7 +15960,7 @@
           "message": "Etag pre optimistické concurrency. Ak je nastavená, zmazanie je zamietnuté, ak sa aktuálna etag nezhoduje."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.display_name": {
-          "source": "Dedicated: List Shadow Experiments",
+          "source": "Dedicated: list shadow experiments",
           "message": "Venované: Zoznam Tieňových experimentov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnRz.short_desc": {
@@ -16032,7 +16032,7 @@
           "message": "Či zahrnúť cieľové nasadenie do každého vráteného tieňového experimentu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Create Shadow Experiment",
+          "source": "Dedicated: create shadow experiment",
           "message": "Venované: Vytvoriť experiment Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16200,7 +16200,7 @@
           "message": "Nasadenie pod rodičovským koncovým ukazovateľom, ktorý dostáva zrkadlovú premávku. Nesmie to byť živý člen dopravy, ani zdroj alebo cieľ aktívneho rozjazdu; povolená je hmotnosť rozštiepená na prevádzku 0 zahrievacích cieľov."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Update Shadow Experiment",
+          "source": "Dedicated: update shadow experiment",
           "message": "Venované: Aktualizácia Experimentu Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16356,7 +16356,7 @@
           "message": "Požadované polia na aktualizáciu, ako je opis alebo zdroj."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Get Shadow Experiment",
+          "source": "Dedicated: get shadow experiment",
           "message": "Venované: Získajte experiment Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16404,7 +16404,7 @@
           "message": "Tieňový identifikátor experimentu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment",
+          "source": "Dedicated: delete shadow experiment",
           "message": "Venované: Vymazať experiment Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudA.short_desc": {
@@ -16464,7 +16464,7 @@
           "message": "Etag pre optimistické concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.display_name": {
-          "source": "Dedicated: List Shadow Experiment Targets",
+          "source": "Dedicated: list shadow experiment targets",
           "message": "Venované: Zoznam Tieňov Experiment ciele"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3Qtc2hhZG93LWV4cGVyaW1lbnQtdGFyZ2V0cw.short_desc": {
@@ -16536,7 +16536,7 @@
           "message": "Kurzor z predchádzajúceho zoznamu cieľov tieňového experimentu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Create Shadow Experiment Target",
+          "source": "Dedicated: create shadow experiment target",
           "message": "Venované: Vytvoriť cieľ experimentovania Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16620,7 +16620,7 @@
           "message": "Nepovinný opis cieľa vo voľnej forme."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Update Shadow Experiment Target",
+          "source": "Dedicated: update shadow experiment target",
           "message": "Venované: Aktualizovať pokus Tieňov cieľ"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16740,7 +16740,7 @@
           "message": "Čiarkou oddelené polia aktualizovať. Podporované polia sú `name`, `targetDeploymentId`a `description`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Get Shadow Experiment Target",
+          "source": "Dedicated: get shadow experiment target",
           "message": "Venované: Získajte tieň Experiment cieľ"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16800,7 +16800,7 @@
           "message": "Tieňový identifikátor cieľa experimentu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.display_name": {
-          "source": "Dedicated: Delete Shadow Experiment Target",
+          "source": "Dedicated: delete shadow experiment target",
           "message": "Venované: Odstrániť cieľ experimentovania Tieňov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1zaGFkb3ctZXhwZXJpbWVudC10YXJnZXQ.short_desc": {
@@ -16872,7 +16872,7 @@
           "message": "Etag pre optimistické concurrency."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.display_name": {
-          "source": "Dedicated: Get Endpoint Analytics",
+          "source": "Dedicated: get endpoint analytics",
           "message": "Vyhradená: Získajte analýzu koncového bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1lbmRwb2ludC1hbmFseXRpY3M.short_desc": {
@@ -16968,7 +16968,7 @@
           "message": "Doba trvania kýbla časových radov, ako napríklad `1m`, `1h`alebo `1d`. Štandardne `1d`."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.display_name": {
-          "source": "Dedicated: List Endpoint Events",
+          "source": "Dedicated: list endpoint events",
           "message": "Venované: Zoznam udalostí koncového bodu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtZW5kcG9pbnQtZXZlbnRz.short_desc": {
@@ -17128,7 +17128,7 @@
           "message": "ID predmetu spojeného s udalosťou, ako je napríklad dojazd. V kombinácii s inými filtrami pomocou AND."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.display_name": {
-          "source": "Dedicated: List Project Models",
+          "source": "Dedicated: list project models",
           "message": "Vyčlenené: Zoznam modelov projektu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcHJvamVjdC1tb2RlbHM.short_desc": {
@@ -17208,7 +17208,7 @@
           "message": "Kurzor z predchádzajúceho zoznamu modelov reakcie."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Create Model",
+          "source": "Dedicated: create model",
           "message": "Venované: Vytvoriť model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1tb2RlbA.short_desc": {
@@ -17280,7 +17280,7 @@
           "message": "Identifikácia podporovaného základného modelu, z ktorého bol model odvodený."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.display_name": {
-          "source": "Dedicated: Get Model",
+          "source": "Dedicated: get model",
           "message": "Venované: Získajte model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbA.short_desc": {
@@ -17316,7 +17316,7 @@
           "message": "Identifikátor modelu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Delete Model",
+          "source": "Dedicated: delete model",
           "message": "Dedikovaný: Odstrániť model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWRlbGV0ZS1tb2RlbA.short_desc": {
@@ -17352,7 +17352,7 @@
           "message": "Identifikátor modelu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.display_name": {
-          "source": "Dedicated: Update Model",
+          "source": "Dedicated: update model",
           "message": "Venované: Model aktualizácie"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1tb2RlbA.short_desc": {
@@ -17444,7 +17444,7 @@
           "message": "Polia pre aktualizáciu. Ak sa vynechá, všetky mutované polia sú prepísané."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.display_name": {
-          "source": "Dedicated: List Placement Profiles",
+          "source": "Dedicated: list placement profiles",
           "message": "Venované: Zoznam profilov umiestnenia"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcGxhY2VtZW50LXByb2ZpbGVz.short_desc": {
@@ -17492,7 +17492,7 @@
           "message": "Kurzor z predchádzajúcej odpovede zoznamu profilov umiestnenia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.display_name": {
-          "source": "Dedicated: Get Placement Profile",
+          "source": "Dedicated: get placement profile",
           "message": "Venované: Získajte profil umiestnenia"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1wbGFjZW1lbnQtcHJvZmlsZQ.short_desc": {
@@ -17528,7 +17528,7 @@
           "message": "Identifikátor profilu umiestnenia."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.display_name": {
-          "source": "Dedicated: List Model Files",
+          "source": "Dedicated: list model files",
           "message": "Dedikované: Zoznam modelových súborov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtZmlsZXM.short_desc": {
@@ -17576,7 +17576,7 @@
           "message": "Identifikátor revízie, z ktorého sa má čítať."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.display_name": {
-          "source": "Dedicated: List Model Revisions",
+          "source": "Dedicated: list model revisions",
           "message": "Určené: Zoznam modelov revízií"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtbW9kZWwtcmV2aXNpb25z.short_desc": {
@@ -17612,7 +17612,7 @@
           "message": "Identifikátor modelu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.display_name": {
-          "source": "Dedicated: Get Model Volume Revision",
+          "source": "Dedicated: get model volume revision",
           "message": "Venované: Získajte revíziu modelového zväzku"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1tb2RlbC12b2x1bWUtcmV2aXNpb24.short_desc": {
@@ -17660,7 +17660,7 @@
           "message": "Identifikátor revízie."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.display_name": {
-          "source": "Dedicated: List Remote Model Uploads",
+          "source": "Dedicated: list remote model uploads",
           "message": "Venované: Zoznam vzdialené nahrávanie modelov"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZHM.short_desc": {
@@ -17708,7 +17708,7 @@
           "message": "Kurzor z predchádzajúceho diaľkového odosielania."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Create Remote Model Upload",
+          "source": "Dedicated: create remote model upload",
           "message": "Venované: Vytvoriť vzdialené nahrávanie modelu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17768,7 +17768,7 @@
           "message": "Voliteľný zdroj, ktorý sa používa na prístup k súkromnému vzdialenému miestu. Hodnota je len pre zápis a nie je vrátená."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.display_name": {
-          "source": "Dedicated: Get Remote Model Upload",
+          "source": "Dedicated: get remote model upload",
           "message": "Venované: Získajte vzdialené nahrávanie modelu"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1yZW1vdGUtbW9kZWwtdXBsb2Fk.short_desc": {
@@ -17804,7 +17804,7 @@
           "message": "Diaľkový identifikátor odosielania."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.display_name": {
-          "source": "Dedicated: List Remote Model Upload Events",
+          "source": "Dedicated: list remote model upload events",
           "message": "Venované: Zoznam vzdialeného modelu Upload udalosti"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWxpc3QtcmVtb3RlLW1vZGVsLXVwbG9hZC1ldmVudHM.short_desc": {
@@ -17936,7 +17936,7 @@
           "message": "Zoznamy typov inštancií hardvéru, ktoré sú v súčasnosti k dispozícii na odvodzovanie, vrátane GPU zdroje, ceny, regióny a najlepšie predpoklady, pokiaľ ide o kapacitu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.display_name": {
-          "source": "Dedicated: Get Inference Instance Type",
+          "source": "Dedicated: get inference instance type",
           "message": "Venované: Získajte typ inference incension"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1pbmZlcmVuY2UtaW5zdGFuY2UtdHlwZQ.short_desc": {
@@ -18060,7 +18060,7 @@
           "message": "Kurzor z predchádzajúceho podporovaného zoznamu."
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.display_name": {
-          "source": "Dedicated: Get Supported Model",
+          "source": "Dedicated: get supported model",
           "message": "Venované: Získajte podporovaný model"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWdldC1zdXBwb3J0ZWQtbW9kZWw.short_desc": {
@@ -18084,7 +18084,7 @@
           "message": "Podporovaný identifikátor modelu."
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
+          "source": "Get video",
           "message": "Získať video"
         },
         "app.VG9nZXRoZXJBaQ.action.Z2V0LXZpZGVv.short_desc": {

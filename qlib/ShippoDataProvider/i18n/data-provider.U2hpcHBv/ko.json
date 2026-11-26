@@ -1860,7 +1860,7 @@
           "message": "`True`인 경우 라벨이 비동기식으로 생성됩니다. 기본값은 `False`입니다."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "배송 라벨 가져오기"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {

@@ -376,7 +376,7 @@
           "message": "이 작업에 대한 `model` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "모델 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -400,7 +400,7 @@
           "message": "이 작업에 대한 `model_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "모델 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "이 작업에 대한 `metadata` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "대화 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "메타데이터를 가져올 대화 ID"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
+          "source": "Delete conversation",
           "message": "대화 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "메타데이터를 가져올 대화 ID"
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Append Conversation",
+          "source": "Append conversation",
           "message": "대화 추가"
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "도구 호출 ID"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Conversation History",
+          "source": "Get conversation history",
           "message": "대화 역사 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "엔트리를 가져올 대화 ID"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.display_name": {
-          "source": "Get Conversation Messages",
+          "source": "Get conversation messages",
           "message": "대화 메시지 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "메시지를 가져올 대화 ID"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.display_name": {
-          "source": "Restart Conversation",
+          "source": "Restart conversation",
           "message": "대화 재시작"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "이 작업에 대한 `metadata` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Agent",
+          "source": "Get agent",
           "message": "에이전트 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "이 작업에 대한 `agent_version` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Agent",
+          "source": "Update agent",
           "message": "에이전트 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "이 작업에 대한 `version_message` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Agent",
+          "source": "Delete agent",
           "message": "에이전트 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "이전 응답의 next_page_token에서 가져온 불투명 커서. 설정 시 커서부터 페이지가 전진됩니다."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Update Agent Version",
+          "source": "Update agent version",
           "message": "에이전트 버전 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.short_desc": {
@@ -4772,7 +4772,7 @@
           "message": "이 작업에 대한 `version` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Agent Versions",
+          "source": "List agent versions",
           "message": "에이전트 버전 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "페이지당 버전 수"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Get Agent Version",
+          "source": "Get agent version",
           "message": "에이전트 버전 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "이 작업에 대한 `version` 값."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.display_name": {
-          "source": "Set Agent Alias",
+          "source": "Set agent alias",
           "message": "에이전트 별명 설정"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "이 작업에 대한 `version` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.display_name": {
-          "source": "List Agent Aliases",
+          "source": "List agent aliases",
           "message": "에이전트 별명 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "이 작업에 대한 `agent_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.display_name": {
-          "source": "Delete Agent Alias",
+          "source": "Delete agent alias",
           "message": "에이전트 별명 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.short_desc": {
@@ -5316,7 +5316,7 @@
           "message": "이 작업에 대한 `mimetypes` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "파일 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.short_desc": {
@@ -5340,7 +5340,7 @@
           "message": "이 작업에 대한 `file_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "파일 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -5364,7 +5364,7 @@
           "message": "이 작업에 대한 `file_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "파일 다운로드"
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -5388,7 +5388,7 @@
           "message": "이 작업에 대한 `file_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.display_name": {
-          "source": "Get File URL",
+          "source": "Get file URL",
           "message": "파일 URL 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.short_desc": {
@@ -5420,7 +5420,7 @@
           "message": "URL이 유효하지 않게 되는 시간(시간)"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Update Fine Tuned Model",
+          "source": "Update fine tuned model",
           "message": "미세 조정된 모델 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "이 작업에 대한 `description` 값."
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.display_name": {
-          "source": "Archive Fine Tuned Model",
+          "source": "Archive fine tuned model",
           "message": "Fine-Tuned 모델 아카이브"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "이 작업에 대한 `model_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Unarchive Fine Tuned Model",
+          "source": "Unarchive fine tuned model",
           "message": "미세 조정된 모델 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5808,7 +5808,7 @@
           "message": "배치 추론 작업의 타임아웃(시간 단위)."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.display_name": {
-          "source": "Get Batch Job",
+          "source": "Get batch job",
           "message": "배치 작업 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "이 작업에 대한 `inline` 값."
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.display_name": {
-          "source": "Cancel Batch Job",
+          "source": "Cancel batch job",
           "message": "배치 작업 취소"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "확장 감지용 원본 파일 이름"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "음성 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "이 작업에 대한 `voice_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.display_name": {
-          "source": "Update Voice",
+          "source": "Update voice",
           "message": "음성 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.short_desc": {
@@ -8576,7 +8576,7 @@
           "message": "이 작업에 대한 `tags` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "음성 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -8600,7 +8600,7 @@
           "message": "이 작업에 대한 `voice_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.display_name": {
-          "source": "Get Voice Sample",
+          "source": "Get voice sample",
           "message": "음성 샘플 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.short_desc": {
@@ -8684,7 +8684,7 @@
           "message": "이 작업에 대한 `chunk_size` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.display_name": {
-          "source": "Get Library",
+          "source": "Get library",
           "message": "라이브러리 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.short_desc": {
@@ -8708,7 +8708,7 @@
           "message": "이 작업에 대한 `library_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.display_name": {
-          "source": "Delete Library",
+          "source": "Delete library",
           "message": "라이브러리 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.short_desc": {
@@ -8732,7 +8732,7 @@
           "message": "이 작업에 대한 `library_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.display_name": {
-          "source": "Update Library",
+          "source": "Update library",
           "message": "라이브러리 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.short_desc": {
@@ -8780,7 +8780,7 @@
           "message": "이 작업에 대한 `description` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.display_name": {
-          "source": "List Library Documents",
+          "source": "List library documents",
           "message": "라이브러리 문서 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.short_desc": {
@@ -8876,7 +8876,7 @@
           "message": "이 작업에 대한 `sort_order` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Upload Library Document",
+          "source": "Upload library document",
           "message": "라이브러리 문서 업로드"
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "파일 이름"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Get Library Document",
+          "source": "Get library document",
           "message": "라이브러리 문서 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9068,7 +9068,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Update Library Document",
+          "source": "Update library document",
           "message": "라이브러리 문서 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9128,7 +9128,7 @@
           "message": "이 작업에 대한 `attributes` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Delete Library Document",
+          "source": "Delete library document",
           "message": "라이브러리 문서 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9164,7 +9164,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.display_name": {
-          "source": "Get Library Document Text",
+          "source": "Get library document text",
           "message": "라이브러리 문서 텍스트 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.short_desc": {
@@ -9200,7 +9200,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.display_name": {
-          "source": "Get Library Document Status",
+          "source": "Get library document status",
           "message": "라이브러리 문서 상태 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.short_desc": {
@@ -9236,7 +9236,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.display_name": {
-          "source": "Get Library Document URL",
+          "source": "Get library document URL",
           "message": "라이브러리 문서 URL 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.display_name": {
-          "source": "Get Library Document Text URL",
+          "source": "Get library document text URL",
           "message": "라이브러리 문서 텍스트 URL 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Reprocess Library Document",
+          "source": "Reprocess library document",
           "message": "문서 재처리"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9344,7 +9344,7 @@
           "message": "이 작업에 대한 `document_id` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.display_name": {
-          "source": "List Library Access",
+          "source": "List library access",
           "message": "라이브러리 접근 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.short_desc": {
@@ -9368,7 +9368,7 @@
           "message": "이 작업에 대한 `library_id` 값."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Set Library Access",
+          "source": "Set library access",
           "message": "라이브러리 접근 권한 설정"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9452,7 +9452,7 @@
           "message": "워크스페이스"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Delete Library Access",
+          "source": "Delete library access",
           "message": "라이브러리 접근 권한 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9600,7 +9600,7 @@
           "message": "이 작업에 대한 `q` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "데이터셋 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -9624,7 +9624,7 @@
           "message": "이 작업에 대한 `dataset_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "데이터셋 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -9648,7 +9648,7 @@
           "message": "이 작업에 대한 `dataset_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "데이터셋 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -9696,7 +9696,7 @@
           "message": "이 작업에 대한 `description` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.display_name": {
-          "source": "List Dataset Records",
+          "source": "List dataset records",
           "message": "데이터셋 레코드 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.short_desc": {
@@ -9744,7 +9744,7 @@
           "message": "이 작업에 대한 `page` 값."
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Add Dataset Record",
+          "source": "Add dataset record",
           "message": "데이터셋 레코드 추가"
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -9792,7 +9792,7 @@
           "message": "이 작업에 대한 `properties` 값."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.display_name": {
-          "source": "Import Dataset From File",
+          "source": "Import dataset from file",
           "message": "파일에서 데이터셋 가져오기"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "이 작업에 대한 `file_id` 값."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.display_name": {
-          "source": "Import Dataset From Playground",
+          "source": "Import dataset from playground",
           "message": "플레이그라운드에서 데이터셋 가져오기"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "이 작업에 대한 `conversation_ids` 값."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.display_name": {
-          "source": "Import Dataset From Dataset",
+          "source": "Import dataset from dataset",
           "message": "데이터셋에서 데이터셋 가져오기"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "이 작업에 대한 `dataset_record_ids` 값."
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.display_name": {
-          "source": "Export Dataset JSONl",
+          "source": "Export dataset JSONl",
           "message": "데이터셋 JSONl 내보내기"
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.short_desc": {
@@ -9924,7 +9924,7 @@
           "message": "이 작업에 대한 `dataset_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.display_name": {
-          "source": "Get Dataset Task",
+          "source": "Get dataset task",
           "message": "데이터셋 작업 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.short_desc": {
@@ -9960,7 +9960,7 @@
           "message": "이 작업에 대한 `task_id` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.display_name": {
-          "source": "List Dataset Tasks",
+          "source": "List dataset tasks",
           "message": "데이터셋 작업 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.short_desc": {
@@ -10008,7 +10008,7 @@
           "message": "이 작업에 대한 `page` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Get Dataset Record",
+          "source": "Get dataset record",
           "message": "데이터셋 레코드 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "이 작업에 대한 `dataset_record_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Delete Dataset Record",
+          "source": "Delete dataset record",
           "message": "데이터셋 레코드 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10080,7 +10080,7 @@
           "message": "이 작업에 대한 `dataset_record_ids` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.display_name": {
-          "source": "Update Dataset Record Payload",
+          "source": "Update dataset record payload",
           "message": "데이터셋 레코드 페이로드 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.short_desc": {
@@ -10116,7 +10116,7 @@
           "message": "이 작업에 대한 `payload` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.display_name": {
-          "source": "Update Dataset Record Properties",
+          "source": "Update dataset record properties",
           "message": "데이터셋 레코드 속성 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.short_desc": {
@@ -10152,7 +10152,7 @@
           "message": "이 작업에 대한 `properties` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Get Workflow Execution",
+          "source": "Get workflow execution",
           "message": "워크플로우 실행 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10176,7 +10176,7 @@
           "message": "이 작업에 대한 `execution_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Execution History",
+          "source": "Get workflow execution history",
           "message": "워크플로우 실행 역사 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.short_desc": {
@@ -10212,7 +10212,7 @@
           "message": "이 작업에 대한 `decode_payloads` 값."
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Signal Workflow Execution",
+          "source": "Signal workflow execution",
           "message": "워크플로우 실행 신호"
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "암호화된 부분"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.display_name": {
-          "source": "Query Workflow Execution",
+          "source": "Query workflow execution",
           "message": "워크플로 실행 쿼리"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.short_desc": {
@@ -10404,7 +10404,7 @@
           "message": "암호화된 부분"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Terminate Workflow Execution",
+          "source": "Terminate workflow execution",
           "message": "워크플로우 실행 종료"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10452,7 +10452,7 @@
           "message": "처리할 실행 ID 목록"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Cancel Workflow Execution",
+          "source": "Cancel workflow execution",
           "message": "워크플로우 실행 취소"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10500,7 +10500,7 @@
           "message": "처리할 실행 ID 목록"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.display_name": {
-          "source": "Reset Workflow",
+          "source": "Reset workflow",
           "message": "워크플로 재설정"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.short_desc": {
@@ -10572,7 +10572,7 @@
           "message": "리셋 포인트 이후 발생한 업데이트를 제외할지 여부"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Update Workflow Execution",
+          "source": "Update workflow execution",
           "message": "작업 흐름 실행 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10668,7 +10668,7 @@
           "message": "암호화된 부분"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.display_name": {
-          "source": "Get Workflow Execution Trace Otel",
+          "source": "Get workflow execution trace OTel",
           "message": "워크플로우 실행 추적 OpenTelemetry 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.short_desc": {
@@ -10692,7 +10692,7 @@
           "message": "이 작업에 대한 `execution_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.display_name": {
-          "source": "Get Workflow Execution Trace Summary",
+          "source": "Get workflow execution trace summary",
           "message": "워크플로우 실행 추적 요약 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.short_desc": {
@@ -10716,7 +10716,7 @@
           "message": "이 작업에 대한 `execution_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.display_name": {
-          "source": "Get Workflow Execution Trace Events",
+          "source": "Get workflow execution trace events",
           "message": "워크플로우 실행 추적 이벤트 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.short_desc": {
@@ -10764,7 +10764,7 @@
           "message": "이 작업에 대한 `include_internal_events` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.display_name": {
-          "source": "Get Workflow Metrics",
+          "source": "Get workflow metrics",
           "message": "워크플로우 메트릭 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.short_desc": {
@@ -10912,7 +10912,7 @@
           "message": "다음 페이지 결과의 토큰"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.display_name": {
-          "source": "Get Workflow Run",
+          "source": "Get workflow run",
           "message": "작업 흐름 실행 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.short_desc": {
@@ -10936,7 +10936,7 @@
           "message": "이 작업에 대한 `run_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Run History",
+          "source": "Get workflow run history",
           "message": "작업 흐름 실행 내역 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.short_desc": {
@@ -11316,7 +11316,7 @@
           "message": "이 스케줄을 라우팅할 배포의 이름"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.display_name": {
-          "source": "Unschedule Workflow",
+          "source": "Unschedule workflow",
           "message": "작업 흐름 예약 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.short_desc": {
@@ -11448,7 +11448,7 @@
           "message": "이 작업에 대한 `workflow_name` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Workflow Deployment",
+          "source": "Get workflow deployment",
           "message": "워크플로우 배포 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -11600,7 +11600,7 @@
           "message": "페이지네이션을 위한 커서."
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.display_name": {
-          "source": "Execute Workflow",
+          "source": "Execute workflow",
           "message": "워크플로우 실행"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.short_desc": {
@@ -11704,7 +11704,7 @@
           "message": "이 실행을 라우팅할 배포의 이름"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.display_name": {
-          "source": "Execute Workflow Registration",
+          "source": "Execute workflow registration",
           "message": "워크플로우 등록 실행"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.short_desc": {
@@ -11808,7 +11808,7 @@
           "message": "이 실행을 라우팅할 배포의 이름"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "워크플로우 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -11832,7 +11832,7 @@
           "message": "이 작업에 대한 `workflow_identifier` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "작업 흐름 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "채팅 어시스턴트에서 워크플로우를 사용할 수 있도록 할지 여부"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.display_name": {
-          "source": "Get Workflow Registration",
+          "source": "Get workflow registration",
           "message": "워크플로우 등록 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.short_desc": {
@@ -11940,7 +11940,7 @@
           "message": "공유된 워크플로우 버전을 포함할지 여부"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.display_name": {
-          "source": "Archive Workflow",
+          "source": "Archive workflow",
           "message": "워크플로우 아카이브"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.short_desc": {
@@ -11964,7 +11964,7 @@
           "message": "이 작업에 대한 `workflow_identifier` 값."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.display_name": {
-          "source": "Unarchive Workflow",
+          "source": "Unarchive workflow",
           "message": "작업 흐름 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.short_desc": {
@@ -12132,7 +12132,7 @@
           "message": "이 작업에 대한 `page_size` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.display_name": {
-          "source": "Get Connector Auth URL",
+          "source": "Get connector auth URL",
           "message": "연결자 인증 URL 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.short_desc": {
@@ -12180,7 +12180,7 @@
           "message": "이 작업에 대한 `credentials_name` 값."
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.display_name": {
-          "source": "Call Connector Tool",
+          "source": "Call connector tool",
           "message": "연결도구 호출"
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.short_desc": {
@@ -12240,7 +12240,7 @@
           "message": "이 작업에 대한 `credentials_name` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.display_name": {
-          "source": "List Connector Tools",
+          "source": "List connector tools",
           "message": "연결기구 도구 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.short_desc": {
@@ -12312,7 +12312,7 @@
           "message": "이 작업에 대한 `credentials_name` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.display_name": {
-          "source": "Get Connector Authentication Methods",
+          "source": "Get connector authentication methods",
           "message": "연결자 인증 방법 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.short_desc": {
@@ -12336,7 +12336,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Organization Credentials For A Connector",
+          "source": "List organization credentials for a connector",
           "message": "연결기용 조직 자격 증명 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "이 작업에 대한 `fetch_default` 값."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Organization Credentials For A Connector",
+          "source": "Create or update organization credentials for a connector",
           "message": "연결자의 조직 자격 증명 생성 또는 업데이트"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12464,7 +12464,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Workspace Credentials For A Connector",
+          "source": "List workspace credentials for a connector",
           "message": "워크스페이스 연결기 자격 증명 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12524,7 +12524,7 @@
           "message": "이 작업에 대한 `fetch_default` 값."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Workspace Credentials For A Connector",
+          "source": "Create or update workspace credentials for a connector",
           "message": "연결자의 워크스페이스 자격 증명 생성 또는 업데이트"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12592,7 +12592,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "List User Credentials For A Connector",
+          "source": "List user credentials for a connector",
           "message": "연결기용 사용자 자격 증명 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12652,7 +12652,7 @@
           "message": "이 작업에 대한 `fetch_default` 값."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Create Or Update User Credentials For A Connector",
+          "source": "Create or update user credentials for a connector",
           "message": "연결자의 사용자 자격 증명 생성 또는 업데이트"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Organization Credentials For A Connector",
+          "source": "Delete organization credentials for a connector",
           "message": "연결자의 조직 자격 증명 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12756,7 +12756,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Workspace Credentials For A Connector",
+          "source": "Delete workspace credentials for a connector",
           "message": "워크스페이스 자격 증명 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Delete User Credentials For A Connector",
+          "source": "Delete user credentials for a connector",
           "message": "연결자의 사용자 자격 증명 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12828,7 +12828,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.display_name": {
-          "source": "Get Connector",
+          "source": "Get connector",
           "message": "연결자 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Update Connector",
+          "source": "Update connector",
           "message": "연결자 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -12932,7 +12932,7 @@
           "message": "MCP 커넥터의 새로운 서버 URL"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete Connector",
+          "source": "Delete connector",
           "message": "연결자 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -15968,7 +15968,7 @@
           "message": "로그 검색 식에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Log Field Options",
+          "source": "List log field options",
           "message": "로그 필드 옵션 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
@@ -16228,7 +16228,7 @@
           "message": "추적 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
-          "source": "List Trace Field Options",
+          "source": "List trace field options",
           "message": "추적 필드 옵션 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
@@ -16276,7 +16276,7 @@
           "message": "시간 범위의 끝입니다."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
-          "source": "Get Trace",
+          "source": "Get trace",
           "message": "추적 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
@@ -16300,7 +16300,7 @@
           "message": "추적의 32자리 16진수 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
-          "source": "List Trace Spans",
+          "source": "List trace spans",
           "message": "추적 스팬 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
@@ -16364,7 +16364,7 @@
           "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
-          "source": "Get Trace Span",
+          "source": "Get trace span",
           "message": "추적 스팬 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
@@ -16628,7 +16628,7 @@
           "message": "스팬 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
-          "source": "List Span Field Options",
+          "source": "List span field options",
           "message": "스팬 필드 옵션 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
@@ -16932,7 +16932,7 @@
           "message": "스팬 평가 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Span Evaluation Field Options",
+          "source": "List span evaluation field options",
           "message": "스팬 평가 필드 옵션 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
@@ -17124,7 +17124,7 @@
           "message": "활성화됨"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
-          "source": "Get Pipeline",
+          "source": "Get pipeline",
           "message": "파이프라인 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
@@ -17148,7 +17148,7 @@
           "message": "평가 파이프라인의 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
-          "source": "Update Pipeline",
+          "source": "Update pipeline",
           "message": "파이프라인 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
@@ -17236,7 +17236,7 @@
           "message": "활성화됨"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
-          "source": "Delete Pipeline",
+          "source": "Delete pipeline",
           "message": "파이프라인 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
@@ -17256,7 +17256,7 @@
           "message": "평가 파이프라인의 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
-          "source": "List Pipeline Result Fields",
+          "source": "List pipeline result fields",
           "message": "파이프라인 결과 필드 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
@@ -17336,7 +17336,7 @@
           "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
-          "source": "Import Dataset From Spans",
+          "source": "Import dataset from spans",
           "message": "스팬에서 데이터셋 가져오기"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
@@ -17468,7 +17468,7 @@
           "message": "결과를 검색할 파이프라인 구성의 슬러그로, 파이프라인의 `pipeline_configs`에 나열된 값입니다. 하나 이상 필요합니다."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.display_name": {
-          "source": "Delete Batch Job",
+          "source": "Delete batch job",
           "message": "배치 작업 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.short_desc": {
@@ -18416,7 +18416,7 @@
           "message": "응답 생성에 사용할 에이전트 ID."
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.display_name": {
-          "source": "Patch Library",
+          "source": "Patch library",
           "message": "라이브러리 업데이트 (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.short_desc": {
@@ -18440,7 +18440,7 @@
           "message": "설명"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.display_name": {
-          "source": "Patch Library Document",
+          "source": "Patch library document",
           "message": "라이브러리 문서 업데이트 (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.short_desc": {
@@ -21004,7 +21004,7 @@
           "message": "편집자"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "프롬프트 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.short_desc": {
@@ -21032,7 +21032,7 @@
           "message": "필드"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.display_name": {
-          "source": "Delete Prompt",
+          "source": "Delete prompt",
           "message": "프롬프트 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.short_desc": {
@@ -21048,7 +21048,7 @@
           "message": "프롬프트 ID"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.display_name": {
-          "source": "Update Prompt",
+          "source": "Update prompt",
           "message": "프롬프트 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.short_desc": {
@@ -21128,7 +21128,7 @@
           "message": "편집자"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.display_name": {
-          "source": "List Prompt Versions",
+          "source": "List prompt versions",
           "message": "프롬프트 버전 목록 조회"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.short_desc": {
@@ -21144,7 +21144,7 @@
           "message": "프롬프트 ID"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Create Prompt Version",
+          "source": "Create prompt version",
           "message": "프롬프트 버전 만들기"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21232,7 +21232,7 @@
           "message": "이 버전을 가리키는 별칭."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Get Prompt Version",
+          "source": "Get prompt version",
           "message": "프롬프트 버전 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21256,7 +21256,7 @@
           "message": "필드"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Update Prompt Version",
+          "source": "Update prompt version",
           "message": "프롬프트 버전 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21556,7 +21556,7 @@
           "message": "편집자"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "스킬 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.short_desc": {
@@ -21584,7 +21584,7 @@
           "message": "필드"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.display_name": {
-          "source": "Delete Skill",
+          "source": "Delete skill",
           "message": "스킬 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.short_desc": {
@@ -21600,7 +21600,7 @@
           "message": "스킬 ID"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.display_name": {
-          "source": "Update Skill",
+          "source": "Update skill",
           "message": "스킬 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.short_desc": {
@@ -21656,7 +21656,7 @@
           "message": "편집자"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.display_name": {
-          "source": "List Skill Versions",
+          "source": "List skill versions",
           "message": "스킬 버전 목록 조회"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.short_desc": {
@@ -21672,7 +21672,7 @@
           "message": "스킬 ID"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Create Skill Version",
+          "source": "Create skill version",
           "message": "스킬 버전 만들기"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21760,7 +21760,7 @@
           "message": "이 버전을 가리키는 별칭."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Get Skill Version",
+          "source": "Get skill version",
           "message": "스킬 버전 가져오기"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.short_desc": {
@@ -21784,7 +21784,7 @@
           "message": "필드"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Update Skill Version",
+          "source": "Update skill version",
           "message": "스킬 버전 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21864,7 +21864,7 @@
           "message": "페이지"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.display_name": {
-          "source": "Get Observability Project",
+          "source": "Get observability project",
           "message": "관측성 프로젝트 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.short_desc": {
@@ -21880,7 +21880,7 @@
           "message": "프로젝트 슬러그"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.display_name": {
-          "source": "List Project Evaluations",
+          "source": "List project evaluations",
           "message": "프로젝트 평가 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.short_desc": {
@@ -21904,7 +21904,7 @@
           "message": "페이지"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "평가 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -21920,7 +21920,7 @@
           "message": "평가 슬러그"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.display_name": {
-          "source": "Search Evaluation Runs",
+          "source": "Search evaluation runs",
           "message": "평가 실행 검색"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.short_desc": {
@@ -22580,7 +22580,7 @@
           "message": "페이지"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
+          "source": "Get evaluation run",
           "message": "평가 실행 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -22596,7 +22596,7 @@
           "message": "실행 ID"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Evaluation Run Statistics",
+          "source": "Get evaluation run statistics",
           "message": "평가 실행 통계 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.short_desc": {
@@ -22612,7 +22612,7 @@
           "message": "실행 ID"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.display_name": {
-          "source": "Compute Evaluation Run Statistics",
+          "source": "Compute evaluation run statistics",
           "message": "평가 실행 통계 계산"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.short_desc": {
@@ -22848,7 +22848,7 @@
           "message": "std"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.display_name": {
-          "source": "Get Evaluation Run Record",
+          "source": "Get evaluation run record",
           "message": "평가 실행 레코드 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.short_desc": {
@@ -22868,7 +22868,7 @@
           "message": "레코드 ID"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.display_name": {
-          "source": "Search Evaluation Run Records",
+          "source": "Search evaluation run records",
           "message": "평가 실행 레코드 검색"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.short_desc": {
@@ -23192,7 +23192,7 @@
           "message": "페이지"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.display_name": {
-          "source": "Get Optimization",
+          "source": "Get optimization",
           "message": "최적화 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.short_desc": {
@@ -23208,7 +23208,7 @@
           "message": "최적화 ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.display_name": {
-          "source": "List Optimization Trials",
+          "source": "List optimization trials",
           "message": "최적화 시도 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.short_desc": {
@@ -23388,7 +23388,7 @@
           "message": "프롬프트 템플릿"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.display_name": {
-          "source": "Get Scorer",
+          "source": "Get scorer",
           "message": "채점기 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.short_desc": {
@@ -23404,7 +23404,7 @@
           "message": "채점기 슬러그"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.display_name": {
-          "source": "Update Scorer",
+          "source": "Update scorer",
           "message": "채점기 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.short_desc": {
@@ -23864,7 +23864,7 @@
           "message": "에이전트 버전"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Get Audio Session",
+          "source": "Get audio session",
           "message": "오디오 세션 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -23880,7 +23880,7 @@
           "message": "세션 ID"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Update Audio Session",
+          "source": "Update audio session",
           "message": "오디오 세션 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -24152,7 +24152,7 @@
           "message": "중단 허용"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.display_name": {
-          "source": "Stop Audio Session",
+          "source": "Stop audio session",
           "message": "오디오 세션 중지"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.short_desc": {
@@ -24584,7 +24584,7 @@
           "message": "환영 메시지"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.display_name": {
-          "source": "Get Audio Agent",
+          "source": "Get audio agent",
           "message": "음성 에이전트 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.short_desc": {
@@ -24612,7 +24612,7 @@
           "message": "버전으로 돌아가야 합니다. 최신 버전의 오류가 있습니다."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Update Audio Agent",
+          "source": "Update audio agent",
           "message": "음성 에이전트 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -24984,7 +24984,7 @@
           "message": "환영 메시지"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Delete Audio Agent",
+          "source": "Delete audio agent",
           "message": "음성 에이전트 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -25000,7 +25000,7 @@
           "message": "에이전트 ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Audio Agent Versions",
+          "source": "List audio agent versions",
           "message": "음성 에이전트 버전 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -25040,7 +25040,7 @@
           "message": "이전 페이지의 next_page_token으로 반환된 커서"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.display_name": {
-          "source": "List Audio Agent Sessions",
+          "source": "List audio agent sessions",
           "message": "음성 에이전트 세션 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.short_desc": {
@@ -25080,7 +25080,7 @@
           "message": "이전 페이지의 next_page_token으로 반환된 커서"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.display_name": {
-          "source": "Get Workflow Execution Trace",
+          "source": "Get workflow execution trace",
           "message": "워크플로 실행 추적 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.short_desc": {
@@ -25096,7 +25096,7 @@
           "message": "실행 ID"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.display_name": {
-          "source": "Get Workflow Execution Logs",
+          "source": "Get workflow execution logs",
           "message": "워크플로 실행 로그 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.short_desc": {
@@ -25204,7 +25204,7 @@
           "message": "반환할 수 있는 최대 레코드 수"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Get Workflow Schedule",
+          "source": "Get workflow schedule",
           "message": "워크플로 일정 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25220,7 +25220,7 @@
           "message": "스케줄 ID"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Update Workflow Schedule",
+          "source": "Update workflow schedule",
           "message": "워크플로 일정 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25484,7 +25484,7 @@
           "message": "IANA 시간대 이름, 예: ``US/Central``."
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.display_name": {
-          "source": "Pause Workflow Schedule",
+          "source": "Pause workflow schedule",
           "message": "워크플로 일정 일시 중지"
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.short_desc": {
@@ -25512,7 +25512,7 @@
           "message": "시간에 기록된 옵션 노트 휴식 또는 일정을 재설정할 때"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Resume Workflow Schedule",
+          "source": "Resume workflow schedule",
           "message": "워크플로 일정 재개"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25540,7 +25540,7 @@
           "message": "시간에 기록된 옵션 노트 휴식 또는 일정을 재설정할 때"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.display_name": {
-          "source": "Trigger Workflow Schedule",
+          "source": "Trigger workflow schedule",
           "message": "워크플로 일정 지금 실행"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.short_desc": {
@@ -25760,7 +25760,7 @@
           "message": "하드리드"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Workflow Deployment",
+          "source": "Update workflow deployment",
           "message": "워크플로 배포 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25924,7 +25924,7 @@
           "message": "복제본"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Workflow Deployment",
+          "source": "Delete workflow deployment",
           "message": "워크플로 배포 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25940,7 +25940,7 @@
           "message": "이름"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Stop Workflow Deployment",
+          "source": "Stop workflow deployment",
           "message": "워크플로 배포 중지"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25956,7 +25956,7 @@
           "message": "이름"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Start Workflow Deployment",
+          "source": "Start workflow deployment",
           "message": "워크플로 배포 시작"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -25972,7 +25972,7 @@
           "message": "이름"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Restart Workflow Deployment",
+          "source": "Restart workflow deployment",
           "message": "워크플로 배포 다시 시작"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25988,7 +25988,7 @@
           "message": "이름"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.display_name": {
-          "source": "List Workflow Deployment Workers",
+          "source": "List workflow deployment workers",
           "message": "워크플로 배포 워커 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.short_desc": {
@@ -26048,7 +26048,7 @@
           "message": "과거의 응답으로부터의 코스 `next_cursor`그리고 퇴원 `worker_status` 그 옆에 변함없는"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.display_name": {
-          "source": "Get Workflow Deployment Archive",
+          "source": "Get workflow deployment archive",
           "message": "워크플로 배포 아카이브 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.short_desc": {
@@ -26064,7 +26064,7 @@
           "message": "이름"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.display_name": {
-          "source": "Get Workflow Deployment Logs",
+          "source": "Get workflow deployment logs",
           "message": "워크플로 배포 로그 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.short_desc": {
@@ -26440,7 +26440,7 @@
           "message": "작업 흐름 ID 목록을 unarchive로"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.display_name": {
-          "source": "Add Workflow Tags",
+          "source": "Add workflow tags",
           "message": "워크플로 태그 추가"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.short_desc": {
@@ -26516,7 +26516,7 @@
           "message": "vespa"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.display_name": {
-          "source": "Update Ingestion Pipeline Run",
+          "source": "Update ingestion pipeline run",
           "message": "수집 파이프라인 실행 정보 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.short_desc": {
@@ -26720,7 +26720,7 @@
           "message": "웨스파 버전"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.display_name": {
-          "source": "Unregister RAG Deployment",
+          "source": "Unregister RAG deployment",
           "message": "RAG 배포 등록 취소"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.short_desc": {
@@ -26736,7 +26736,7 @@
           "message": "배포 ID"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.display_name": {
-          "source": "Update RAG Deployment Metrics",
+          "source": "Update RAG deployment metrics",
           "message": "RAG 배포 지표 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.short_desc": {
@@ -26996,7 +26996,7 @@
           "message": "Creator ID를 만드는 방법"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Get Search Index",
+          "source": "Get search index",
           "message": "검색 인덱스 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.short_desc": {
@@ -27012,7 +27012,7 @@
           "message": "인덱스 이름"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.display_name": {
-          "source": "Update Search Index Schema",
+          "source": "Update search index schema",
           "message": "검색 인덱스 스키마 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.short_desc": {
@@ -27040,7 +27040,7 @@
           "message": "문서 필드"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Delete Search Index",
+          "source": "Delete search index",
           "message": "검색 인덱스 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27056,7 +27056,7 @@
           "message": "인덱스 이름"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Ingest Search Index Documents",
+          "source": "Ingest search index documents",
           "message": "검색 인덱스 문서 수집"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27076,7 +27076,7 @@
           "message": "문서"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Search Index Documents",
+          "source": "Delete search index documents",
           "message": "검색 인덱스 문서 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27096,7 +27096,7 @@
           "message": "문서 ID"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Search Index Chunks",
+          "source": "Search index chunks",
           "message": "인덱스 청크 검색"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27488,7 +27488,7 @@
           "message": "무게"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Navigate Search Index Chunks",
+          "source": "Navigate search index chunks",
           "message": "검색 인덱스 청크 탐색"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27536,7 +27536,7 @@
           "message": "콘텐츠 유형"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.display_name": {
-          "source": "Read Search Index Chunks",
+          "source": "Read search index chunks",
           "message": "검색 인덱스 청크 읽기"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.short_desc": {
@@ -27572,7 +27572,7 @@
           "message": "콘텐츠 유형"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Find Text in Search Index",
+          "source": "Find text in search index",
           "message": "검색 인덱스의 텍스트 찾기"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27616,7 +27616,7 @@
           "message": "콘텐츠 유형"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.display_name": {
-          "source": "Get Search Index Chunk",
+          "source": "Get search index chunk",
           "message": "검색 인덱스 청크 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.short_desc": {
@@ -27636,7 +27636,7 @@
           "message": "청크 ID"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Get Search Index Summary",
+          "source": "Get search index summary",
           "message": "검색 인덱스 요약 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27692,7 +27692,7 @@
           "message": "인덱스 이름"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Set Search Index Summary",
+          "source": "Set search index summary",
           "message": "검색 인덱스 요약 설정"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27940,7 +27940,7 @@
           "message": "이벤트 출처 ID (webhook ID)에 따라 필터"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.display_name": {
-          "source": "Get Trigger",
+          "source": "Get trigger",
           "message": "트리거 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.short_desc": {
@@ -27956,7 +27956,7 @@
           "message": "트리거 ID"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.display_name": {
-          "source": "Delete Trigger",
+          "source": "Delete trigger",
           "message": "트리거 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.short_desc": {
@@ -27972,7 +27972,7 @@
           "message": "트리거 ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.display_name": {
-          "source": "List Trigger Events",
+          "source": "List trigger events",
           "message": "트리거 이벤트 목록 보기"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.short_desc": {
@@ -28240,7 +28240,7 @@
           "message": "이 작업에 대한 `workspace_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
+          "source": "Get service account",
           "message": "서비스 계정 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28264,7 +28264,7 @@
           "message": "이 작업에 대한 `service_account_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
+          "source": "Update service account",
           "message": "서비스 계정 업데이트"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28300,7 +28300,7 @@
           "message": "이 작업에 대한 `description` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
+          "source": "Delete service account",
           "message": "서비스 계정 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28324,7 +28324,7 @@
           "message": "이 작업에 대한 `service_account_id` 값."
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.display_name": {
-          "source": "Set Service Account Roles",
+          "source": "Set service account roles",
           "message": "서비스 계정 역할 설정"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.short_desc": {
@@ -28360,7 +28360,7 @@
           "message": "할당할 워크스페이스 역할 UUID입니다. 필수이며 비어 있으면 안 됩니다. 생략하거나 빈 목록이면 422가 반환됩니다. 역할로 부여되는 권한이 없도록 하려면 member를 명시적으로 선택하세요. 워크스페이스 전체 공유를 통해 여전히 접근 권한이 부여될 수 있습니다."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.display_name": {
-          "source": "List Service Account Roles",
+          "source": "List service account roles",
           "message": "서비스 계정 역할 목록"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.short_desc": {
@@ -28384,7 +28384,7 @@
           "message": "이 작업에 대한 `service_account_id` 값."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.display_name": {
-          "source": "Share Connector To Workspace",
+          "source": "Share connector to workspace",
           "message": "커넥터를 워크스페이스에 공유"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.short_desc": {
@@ -28408,7 +28408,7 @@
           "message": "이 작업에 대한 `connector_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Unshare Connector From Workspace",
+          "source": "Unshare connector from workspace",
           "message": "워크스페이스에서 커넥터 공유 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -28432,7 +28432,7 @@
           "message": "이 작업에 대한 `connector_id` 값."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Share Connector To Organization",
+          "source": "Share connector to organization",
           "message": "커넥터를 조직에 공유"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28456,7 +28456,7 @@
           "message": "이 작업에 대한 `connector_id` 값."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Unshare Connector From Organization",
+          "source": "Unshare connector from organization",
           "message": "조직에서 커넥터 공유 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.short_desc": {
@@ -28480,7 +28480,7 @@
           "message": "이 작업에 대한 `connector_id` 값."
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.display_name": {
-          "source": "Activate Connector For Organization",
+          "source": "Activate connector for organization",
           "message": "조직용 커넥터 활성화"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.short_desc": {
@@ -28520,7 +28520,7 @@
           "message": "조직"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.display_name": {
-          "source": "Activate Connector For Workspace",
+          "source": "Activate connector for workspace",
           "message": "워크스페이스용 커넥터 활성화"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.short_desc": {
@@ -28560,7 +28560,7 @@
           "message": "워크스페이스"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.display_name": {
-          "source": "Activate Connector For User",
+          "source": "Activate connector for user",
           "message": "사용자용 커넥터 활성화"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.short_desc": {
@@ -28600,7 +28600,7 @@
           "message": "사용자"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Deactivate Connector For Organization",
+          "source": "Deactivate connector for organization",
           "message": "조직용 커넥터 비활성화"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28640,7 +28640,7 @@
           "message": "조직"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.display_name": {
-          "source": "Deactivate Connector For Workspace",
+          "source": "Deactivate connector for workspace",
           "message": "워크스페이스용 커넥터 비활성화"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.short_desc": {
@@ -28680,7 +28680,7 @@
           "message": "워크스페이스"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.display_name": {
-          "source": "Deactivate Connector For User",
+          "source": "Deactivate connector for user",
           "message": "사용자용 커넥터 비활성화"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.short_desc": {
@@ -28720,7 +28720,7 @@
           "message": "사용자"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete All User Credentials For A Connector",
+          "source": "Delete all user credentials for a connector",
           "message": "커넥터의 모든 사용자 자격 증명 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -28744,7 +28744,7 @@
           "message": "이 작업에 대한 `connector_id_or_name` 값."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Create Workspace Credentials For A Connector",
+          "source": "Create workspace credentials for a connector",
           "message": "커넥터의 워크스페이스 자격 증명 생성"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -28888,7 +28888,7 @@
           "message": "쿼리 파라미터"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create User Credentials For A Connector",
+          "source": "Create user credentials for a connector",
           "message": "커넥터의 사용자 자격 증명 생성"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -29032,7 +29032,7 @@
           "message": "쿼리 파라미터"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Unharden Workflow Deployment",
+          "source": "Unharden workflow deployment",
           "message": "워크플로우 배포 강화 해제"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -29068,7 +29068,7 @@
           "message": "요청 범위를 한정할 워크스페이스 ID입니다. 기본값은 호출자의 컨텍스트입니다."
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.display_name": {
-          "source": "Generate Search Index Summary",
+          "source": "Generate search index summary",
           "message": "검색 인덱스 요약 생성"
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.short_desc": {
@@ -29440,7 +29440,7 @@
           "message": "전달 중복을 제거하는 데 사용되는 고유 이벤트 식별자의 패턴으로, {body.<path>} 및 {headers.<Header-Name>} 플레이스홀더를 사용합니다, 예: {body.id} 또는 {body.event_id}.{headers.X-Delivery-Id}. 기본값은 요청 본문의 해시입니다"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "웹훅 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -29464,7 +29464,7 @@
           "message": "이 작업에 대한 `webhook_id` 값."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "웹훅 삭제"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -29488,7 +29488,7 @@
           "message": "이 작업에 대한 `webhook_id` 값."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.display_name": {
-          "source": "Get Webhook Signing Secret",
+          "source": "Get webhook signing secret",
           "message": "웹훅 서명 시크릿 조회"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.short_desc": {
@@ -30456,7 +30456,7 @@
           "message": "대기 중인 조직 초대를 나열합니다. 조직 멤버, 초대 및 역할을 관리합니다. 관리자 API 키가 필요합니다.\n\n**공개 Preview:** 사용 가능한 기능 및 권한에 따라 다릅니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.display_name": {
-          "source": "Delete Invitation (Admin)",
+          "source": "Delete invitation (admin)",
           "message": "초대 삭제(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.short_desc": {
@@ -30480,7 +30480,7 @@
           "message": "조직 초대 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.display_name": {
-          "source": "Update User (Admin)",
+          "source": "Update user (admin)",
           "message": "사용자 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.short_desc": {
@@ -30576,7 +30576,7 @@
           "message": "멤버에게 할당할 제품 시트입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User (Admin)",
+          "source": "Delete user (admin)",
           "message": "사용자 삭제(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.short_desc": {
@@ -30600,7 +30600,7 @@
           "message": "사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.display_name": {
-          "source": "Get User (Admin)",
+          "source": "Get user (admin)",
           "message": "사용자 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.short_desc": {
@@ -30624,7 +30624,7 @@
           "message": "사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Deactivate User (Admin)",
+          "source": "Deactivate user (admin)",
           "message": "사용자 비활성화(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30648,7 +30648,7 @@
           "message": "사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Reactivate User (Admin)",
+          "source": "Reactivate user (admin)",
           "message": "사용자 재활성화(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30672,7 +30672,7 @@
           "message": "사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Workspaces (Admin)",
+          "source": "List user workspaces (admin)",
           "message": "사용자 워크스페이스 목록(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.short_desc": {
@@ -30864,7 +30864,7 @@
           "message": "워크스페이스 관리자 역할을 부여할 사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace (Admin)",
+          "source": "Update workspace (admin)",
           "message": "워크스페이스 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -30924,7 +30924,7 @@
           "message": "업데이트된 워크스페이스 아이콘입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.display_name": {
-          "source": "Archive Workspace (Admin)",
+          "source": "Archive workspace (admin)",
           "message": "워크스페이스 아카이브(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.short_desc": {
@@ -30948,7 +30948,7 @@
           "message": "워크스페이스 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Add Workspace Members (Admin)",
+          "source": "Add workspace members (admin)",
           "message": "워크스페이스 멤버 추가(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31096,7 +31096,7 @@
           "message": "워크스페이스 멤버의 사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "Add Or Update Workspace Members (Admin)",
+          "source": "Add or update workspace members (admin)",
           "message": "워크스페이스 멤버 추가 또는 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -31244,7 +31244,7 @@
           "message": "워크스페이스 멤버의 사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Remove Workspace Members (Admin)",
+          "source": "Remove workspace members (admin)",
           "message": "워크스페이스 멤버 제거(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31700,7 +31700,7 @@
           "message": "사용자 그룹의 선택적 설명입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.display_name": {
-          "source": "Get User Group (Admin)",
+          "source": "Get user group (admin)",
           "message": "사용자 그룹 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.short_desc": {
@@ -31724,7 +31724,7 @@
           "message": "사용자 그룹 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Update User Group (Admin)",
+          "source": "Update user group (admin)",
           "message": "사용자 그룹 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31772,7 +31772,7 @@
           "message": "업데이트된 사용자 그룹 설명입니다. 지우려면 빈 문자열을 전달하고, 변경하지 않으려면 필드를 생략하거나 null을 전달하세요."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Delete User Group (Admin)",
+          "source": "Delete user group (admin)",
           "message": "사용자 그룹 삭제(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31796,7 +31796,7 @@
           "message": "사용자 그룹 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.display_name": {
-          "source": "List User Group Members (Admin)",
+          "source": "List user group members (admin)",
           "message": "사용자 그룹 멤버 목록(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.short_desc": {
@@ -31844,7 +31844,7 @@
           "message": "페이지당 최대 결과 수입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Add User Group Members (Admin)",
+          "source": "Add user group members (admin)",
           "message": "사용자 그룹 멤버 추가(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31880,7 +31880,7 @@
           "message": "그룹에 추가할 사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Remove User Group Members (Admin)",
+          "source": "Remove user group members (admin)",
           "message": "사용자 그룹 멤버 제거(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31916,7 +31916,7 @@
           "message": "그룹에 추가할 사용자 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Group Workspaces (Admin)",
+          "source": "List user group workspaces (admin)",
           "message": "사용자 그룹 워크스페이스 목록(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.short_desc": {
@@ -31964,7 +31964,7 @@
           "message": "페이지당 최대 결과 수입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.display_name": {
-          "source": "Assign User Group To Workspace (Admin)",
+          "source": "Assign user group to workspace (admin)",
           "message": "사용자 그룹을 워크스페이스에 할당(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.short_desc": {
@@ -32036,7 +32036,7 @@
           "message": "이 작업에 대한 `workspace_uuid` 값."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.display_name": {
-          "source": "Update User Group Workspace Role (Admin)",
+          "source": "Update user group workspace role (admin)",
           "message": "사용자 그룹 워크스페이스 역할 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.short_desc": {
@@ -32108,7 +32108,7 @@
           "message": "지원 중단된 단일 역할 값입니다. 대신 'role_names'를 사용하세요."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Remove User Group From Workspace (Admin)",
+          "source": "Remove user group from workspace (admin)",
           "message": "워크스페이스에서 사용자 그룹 제거(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -32144,7 +32144,7 @@
           "message": "워크스페이스 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.display_name": {
-          "source": "Update User Group Organization Role (Admin)",
+          "source": "Update user group organization role (admin)",
           "message": "사용자 그룹 조직 역할 업데이트(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.short_desc": {
@@ -32288,7 +32288,7 @@
           "message": "API 키를 생성할 대상 사용자의 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key (Admin)",
+          "source": "Delete API key (admin)",
           "message": "API 키 삭제(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.short_desc": {
@@ -32408,7 +32408,7 @@
           "message": "SCIM 공급자에서 찾은 사용자를 조직에 추가합니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.display_name": {
-          "source": "Get SCIM Synchronization Run (Admin)",
+          "source": "Get SCIM synchronization run (admin)",
           "message": "SCIM 동기화 실행 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.short_desc": {

@@ -1420,7 +1420,7 @@
           "message": "FHIR `_revinclude` 検索パラメータにマップされた便利フィールド。逆インクルード値を繰り返す場合はリストを使用します"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
+          "source": "Search all Bundle",
           "message": "すべての Bundle の検索"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "楽観的排他制御のために `If-Match` ヘッダーで送信される ETag 値"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
+          "source": "Conditional update Bundle",
           "message": "条件付き更新 Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "FHIR `_revinclude` 検索パラメータにマップされた便利フィールド。逆インクルード値を繰り返す場合はリストを使用します"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
+          "source": "Search all Observation",
           "message": "すべての Observation の検索"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "楽観的排他制御のために `If-Match` ヘッダーで送信される ETag 値"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
+          "source": "Conditional update Observation",
           "message": "条件付き更新 Observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
@@ -5436,7 +5436,7 @@
           "message": "FHIR `_revinclude` 検索パラメータにマップされた便利フィールド。逆インクルード値を繰り返す場合はリストを使用します"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
+          "source": "Search all Patient",
           "message": "すべての Patient の検索"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
@@ -6344,7 +6344,7 @@
           "message": "楽観的排他制御のために `If-Match` ヘッダーで送信される ETag 値"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
+          "source": "Conditional update Patient",
           "message": "条件付き更新 Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {

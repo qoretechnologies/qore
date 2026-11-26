@@ -512,7 +512,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/models/{model}",
                 "operation_id": "get-model",
-                "display_name": "Get Model",
+                "display_name": "Get model",
                 "short_desc": "Inspect a model and its supported capabilities",
                 "desc": "Retrieve the capabilities, context size, tokenizer URL, and defaults for a selected model.",
                 "groups": (
@@ -860,7 +860,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/datasets/{id}",
                 "operation_id": "get-dataset",
-                "display_name": "Get Dataset",
+                "display_name": "Get dataset",
                 "short_desc": "Inspect dataset validation and download information",
                 "desc": "Retrieve dataset metadata, validation errors, and available download URLs.",
                 "groups": (
@@ -880,7 +880,7 @@ public class CohereManifest {
                 "method": "DELETE",
                 "path": "/v1/datasets/{id}",
                 "operation_id": "delete-dataset",
-                "display_name": "Delete Dataset",
+                "display_name": "Delete dataset",
                 "short_desc": "Remove a dataset from the account",
                 "desc": "Permanently delete the selected dataset. Download any needed input or output data before deleting it.",
                 "groups": (
@@ -987,7 +987,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v1/embed-jobs/{id}",
                 "operation_id": "get-embed-job",
-                "display_name": "Get Embedding Job",
+                "display_name": "Get embedding job",
                 "short_desc": "Inspect an embedding job and its output dataset",
                 "desc": "Retrieve the status of an embedding job and the dataset containing its results.",
                 "groups": (
@@ -1007,7 +1007,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v1/embed-jobs/{id}/cancel",
                 "operation_id": "cancel-embed-job",
-                "display_name": "Cancel Embedding Job",
+                "display_name": "Cancel embedding job",
                 "short_desc": "Cancel an unfinished embedding job",
                 "desc": "Request cancellation of an embedding job that is still running.",
                 "groups": (
@@ -1065,7 +1065,7 @@ public class CohereManifest {
                 "method": "GET",
                 "path": "/v2/batches/{id}",
                 "operation_id": "GetBatch",
-                "display_name": "Get Batch",
+                "display_name": "Get batch",
                 "short_desc": "Inspect batch progress and output data",
                 "desc": "Retrieve batch status, record counts, token usage, and the output dataset identifier.",
                 "groups": (
@@ -1085,7 +1085,7 @@ public class CohereManifest {
                 "method": "POST",
                 "path": "/v2/batches/{id}:cancel",
                 "operation_id": "CancelBatch",
-                "display_name": "Cancel Batch",
+                "display_name": "Cancel batch",
                 "short_desc": "Cancel an unfinished batch inference job",
                 "desc": "Request cancellation of a batch that is still running.",
                 "groups": (

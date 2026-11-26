@@ -431,7 +431,7 @@ module CustomerIoDataProvider {
             "action": "send-transactional-email",
             "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Transactional",
-            "display_name": "Send Transactional Email",
+            "display_name": "Send transactional email",
             "short_desc": "Send a transactional email",
             "desc": "Send a transactional email via Customer.io using a pre-defined transactional message template.",
             "action_code": DPAT_API,

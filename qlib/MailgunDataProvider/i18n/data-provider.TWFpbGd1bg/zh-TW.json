@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "傳送電子郵件"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "用於回覆的電子郵件地址"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "驗證電子郵件"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {

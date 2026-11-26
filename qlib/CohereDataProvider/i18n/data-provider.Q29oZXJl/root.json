@@ -1716,8 +1716,8 @@
           "message": "When provided, filters the list of models to only the default model to the endpoint. This parameter is only valid when `endpoint` is provided."
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Inspect a model and its supported capabilities",
@@ -2772,8 +2772,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
-          "message": "Get Dataset"
+          "source": "Get dataset",
+          "message": "Get dataset"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.short_desc": {
           "source": "Inspect dataset validation and download information",
@@ -2800,8 +2800,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
-          "message": "Delete Dataset"
+          "source": "Delete dataset",
+          "message": "Delete dataset"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
           "source": "Remove a dataset from the account",
@@ -3000,8 +3000,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.display_name": {
-          "source": "Get Embedding Job",
-          "message": "Get Embedding Job"
+          "source": "Get embedding job",
+          "message": "Get embedding job"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.short_desc": {
           "source": "Inspect an embedding job and its output dataset",
@@ -3036,8 +3036,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.display_name": {
-          "source": "Cancel Embedding Job",
-          "message": "Cancel Embedding Job"
+          "source": "Cancel embedding job",
+          "message": "Cancel embedding job"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.short_desc": {
           "source": "Cancel an unfinished embedding job",
@@ -3192,8 +3192,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
-          "message": "Get Batch"
+          "source": "Get batch",
+          "message": "Get batch"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Inspect batch progress and output data",
@@ -3228,8 +3228,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
-          "message": "Cancel Batch"
+          "source": "Cancel batch",
+          "message": "Cancel batch"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancel an unfinished batch inference job",

@@ -524,7 +524,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Get Balance Transaction",
+          "source": "Get balance transaction",
           "message": "取得餘額交易"
         },
         "app.U3RyaXBl.action.Z2V0LWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -644,7 +644,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Get Connected Account",
+          "source": "Get connected account",
           "message": "取得已連結帳戶"
         },
         "app.U3RyaXBl.action.Z2V0LWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -672,7 +672,7 @@
           "message": "指定回應中應展開哪些欄位。"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Update Connected Account",
+          "source": "Update connected account",
           "message": "更新已連結帳戶"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2416,7 +2416,7 @@
           "message": "使用者代理"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.display_name": {
-          "source": "Delete Connected Account",
+          "source": "Delete connected account",
           "message": "刪除已連結帳戶"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "指定回應中應展開哪些欄位。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.display_name": {
-          "source": "Create Login Link",
+          "source": "Create login link",
           "message": "建立登入連結"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWxvZ2luLWxpbms.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "指定回應中應展開哪些欄位。"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.display_name": {
-          "source": "List External Accounts",
+          "source": "List external accounts",
           "message": "列出外部帳戶"
         },
         "app.U3RyaXBl.action.bGlzdC1leHRlcm5hbC1hY2NvdW50cw.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.display_name": {
-          "source": "Create External Account",
+          "source": "Create external account",
           "message": "建立外部帳戶"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "指定回應中應展開哪些欄位。"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.display_name": {
-          "source": "List Account People",
+          "source": "List account people",
           "message": "列出帳戶人員"
         },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.display_name": {
-          "source": "Create Account Person",
+          "source": "Create account person",
           "message": "建立帳戶相關人員"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.short_desc": {
@@ -3664,7 +3664,7 @@
           "message": "僅傳回此轉帳群組的收費，上限為 100 筆。"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.display_name": {
-          "source": "Get Charge",
+          "source": "Get charge",
           "message": "取得收費"
         },
         "app.U3RyaXBl.action.Z2V0LWNoYXJnZQ.short_desc": {
@@ -4068,7 +4068,7 @@
           "message": "識別此交易為某個群組之一部分的字串。詳情請參閱[群組交易](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)。"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.display_name": {
-          "source": "Update Charge",
+          "source": "Update charge",
           "message": "更新扣款"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.short_desc": {
@@ -4348,7 +4348,7 @@
           "message": "提供與指定測試時鐘相關聯的客戶清單。若未設定此參數，回應將不會包含帶有測試時鐘的客戶。"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.U3RyaXBl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -5260,7 +5260,7 @@
           "message": "要附加至客戶的測試時鐘 ID。"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "reverse"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "刪除客戶"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -5848,7 +5848,7 @@
           "message": "客戶"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.display_name": {
-          "source": "List Customer Balance Transactions",
+          "source": "List customer balance transactions",
           "message": "列出客戶餘額交易"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1iYWxhbmNlLXRyYW5zYWN0aW9ucw.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.display_name": {
-          "source": "Create Customer Balance Transaction",
+          "source": "Create customer balance transaction",
           "message": "建立客戶餘額交易"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
@@ -6028,7 +6028,7 @@
           "message": "可附加至物件的一組[鍵值組](https://docs.stripe.com/api/metadata)。這對於以結構化格式儲存有關物件的其他資訊非常有用。個別索引鍵可透過傳送空值來取消設定。所有索引鍵可透過傳送空值給 `metadata` 來取消設定。"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.display_name": {
-          "source": "List Customer Sources",
+          "source": "List customer sources",
           "message": "列出客戶來源"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zb3VyY2Vz.short_desc": {
@@ -6104,7 +6104,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.display_name": {
-          "source": "Create Customer Source",
+          "source": "Create customer source",
           "message": "建立客戶付款來源"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "指定回應中應展開哪些欄位。"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Customer Subscriptions",
+          "source": "List customer subscriptions",
           "message": "列出客戶訂閱"
         },
         "app.U3RyaXBl.action.bGlzdC1jdXN0b21lci1zdWJzY3JpcHRpb25z.short_desc": {
@@ -6368,7 +6368,7 @@
           "message": "用於分頁的游標。`starting_after` 是一個物件 ID，用於定義您在清單中的位置。例如，如果您發起清單請求並收到 100 個物件（以 `obj_foo` 結尾），則後續呼叫可以包含 `starting_after=obj_foo`，以獲取清單的下一頁。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Customer Subscription",
+          "source": "Create customer subscription",
           "message": "建立客戶訂閱"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -7716,7 +7716,7 @@
           "message": "僅傳回由此訂閱 ID 所指定訂閱的發票。"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "取得發票"
         },
         "app.U3RyaXBl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -8768,7 +8768,7 @@
           "message": "目的地"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "更新發票"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "目的地"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "刪除發票"
         },
         "app.U3RyaXBl.action.ZGVsZXRlLWludm9pY2U.short_desc": {

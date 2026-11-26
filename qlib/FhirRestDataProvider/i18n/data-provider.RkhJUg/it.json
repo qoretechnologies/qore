@@ -1420,7 +1420,7 @@
           "message": "Campo pratico mappato sul parametro di ricerca FHIR `_revinclude`; utilizza un elenco per valori reverse include ripetuti"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
-          "source": "Search All Bundle",
+          "source": "Search all Bundle",
           "message": "Cerca tutti i Bundle"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Valore ETag inviato nell'intestazione `If-Match` per la concorrenza ottimistica"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
-          "source": "Conditional Update Bundle",
+          "source": "Conditional update Bundle",
           "message": "Aggiornamento condizionale Bundle"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "Campo pratico mappato sul parametro di ricerca FHIR `_revinclude`; utilizza un elenco per valori reverse include ripetuti"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
-          "source": "Search All Observation",
+          "source": "Search all Observation",
           "message": "Cerca tutte le Observation"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "Valore ETag inviato nell'intestazione `If-Match` per la concorrenza ottimistica"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
-          "source": "Conditional Update Observation",
+          "source": "Conditional update Observation",
           "message": "Aggiornamento condizionale Observation"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
@@ -5436,7 +5436,7 @@
           "message": "Campo pratico mappato sul parametro di ricerca FHIR `_revinclude`; utilizza un elenco per valori reverse include ripetuti"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
-          "source": "Search All Patient",
+          "source": "Search all Patient",
           "message": "Cerca tutti i Patient"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
@@ -6344,7 +6344,7 @@
           "message": "Valore ETag inviato nell'intestazione `If-Match` per la concorrenza ottimistica"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
-          "source": "Conditional Update Patient",
+          "source": "Conditional update Patient",
           "message": "Aggiornamento condizionale Patient"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {

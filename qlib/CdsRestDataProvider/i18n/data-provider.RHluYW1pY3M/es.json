@@ -460,7 +460,7 @@
           "message": "El nombre de la tabla de Dynamics, ej.: `account`"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
-          "source": "New or Updated Account",
+          "source": "New or updated account",
           "message": "Cuenta nueva o actualizada"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Se activa para cada cuenta creada en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
-          "source": "New or Updated Case",
+          "source": "New or updated case",
           "message": "Caso nuevo o actualizado"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Se activa para cada caso creado en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior.\n\nDataverse llama a esta tabla `incident`."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
-          "source": "New or Updated Contact",
+          "source": "New or updated contact",
           "message": "Contacto nuevo o actualizado"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Se activa para cada contacto creado en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
-          "source": "New or Updated Invoice",
+          "source": "New or updated invoice",
           "message": "Factura nueva o actualizada"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Se activa para cada factura creada en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
-          "source": "New or Updated Lead",
+          "source": "New or updated lead",
           "message": "Cliente potencial nuevo o actualizado"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Se activa para cada cliente potencial creado en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
-          "source": "New or Updated Opportunity",
+          "source": "New or updated opportunity",
           "message": "Oportunidad nueva o actualizada"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Se activa para cada oportunidad creada en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior."
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
-          "source": "New or Updated Order",
+          "source": "New or updated order",
           "message": "Pedido nuevo o actualizado"
         },
         "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Se activa para cada pedido creado en la organización y, si la condición es `updated`, de nuevo con cada cambio posterior.\n\nDataverse llama a esta tabla `salesorder`."
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
-          "source": "New or Updated Custom Entity",
+          "source": "New or updated custom entity",
           "message": "Entidad personalizada nueva o actualizada"
         },
         "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {

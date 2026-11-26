@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
-          "source": "Text to Speech",
+          "source": "Text to speech",
           "message": "Prevod textu na reč"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Verzia ID slovníka výslovnosti použiť"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
-          "source": "Speech to Speech",
+          "source": "Speech to speech",
           "message": "Reč na reč"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
@@ -996,7 +996,7 @@
           "message": "PCM 16-bit, 16kHz mono, little-endian – nižšia latencia"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
-          "source": "Text to Sound Effects",
+          "source": "Text to sound effects",
           "message": "Text na zvukové efekty"
         },
         "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
@@ -1056,7 +1056,7 @@
           "message": "Ak je `True`, vytvorí plynule sa opakujúci zvukový efekt"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
-          "source": "Audio Isolation",
+          "source": "Audio isolation",
           "message": "Izolácia zvuku"
         },
         "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Ukážkový text, ktorý bude hovorený vo vygenerovaných ukážkach hlasu"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
-          "source": "List Voices",
+          "source": "List voices",
           "message": "Zoznam hlasov"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Zoradiť zostupne"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "Získať hlas"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Jedinečný identifikátor hlasu na odstránenie"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Zoznam modelov"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Zoznam dostupných modelov umelej inteligencie ElevenLabs a ich schopností"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
-          "source": "List History",
+          "source": "List history",
           "message": "Zoznam histórie"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "ID položky histórie, za ktorou sa má začať stránkovanie"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Get History Item",
+          "source": "Get history item",
           "message": "Získať položku histórie"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "Jedinečný identifikátor položky histórie, ktorá sa má odstrániť"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
-          "source": "Get History Audio",
+          "source": "Get history audio",
           "message": "Získať zvuk z histórie"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Jedinečný identifikátor položky histórie, pre ktorú sa má získať zvuk"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
-          "source": "Create Dubbing",
+          "source": "Create dubbing",
           "message": "Vytvoriť dabing"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Ak je `True`, vulgarizmy v prepise budú cenzurované. **Poznámka**: toto je funkcia vo verzii beta"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
-          "source": "Get Dubbing Status",
+          "source": "Get dubbing status",
           "message": "Získať stav dabingu"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Jedinečný identifikátor dabingového projektu, ktorý sa má načítať"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
-          "source": "Get Dubbing Audio",
+          "source": "Get dubbing audio",
           "message": "Získať dabovaný zvuk"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "Jedinečný identifikátor dabingového projektu, ktorý sa má odstrániť"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
-          "source": "List Dubbing Projects",
+          "source": "List dubbing projects",
           "message": "Zoznam dabingových projektov"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Členovia pracovného priestoru môžu slovník iba prezerať"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
-          "source": "List Pronunciation Dictionaries",
+          "source": "List pronunciation dictionaries",
           "message": "Zoznam výslovnostných slovníkov"
         },
         "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Kurzor na stránkovanie na načítanie ďalšej stránky výsledkov"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Get Pronunciation Dictionary",
+          "source": "Get pronunciation dictionary",
           "message": "Získať výslovnostný slovník"
         },
         "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {

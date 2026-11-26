@@ -3532,7 +3532,7 @@
           "message": "每頁傳回的結果數上限"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "建立電子郵件驗證"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {

@@ -684,7 +684,7 @@
           "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Utwórz notatkę"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Wyświetla listę wszystkich tagów zdefiniowanych w obszarze roboczym.\n\nTa lista nie jest stronicowana: Intercom zwraca cały zestaw w jednej odpowiedzi."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
-          "source": "List Tags on Contact",
+          "source": "List tags on contact",
           "message": "Wyświetl tagi kontaktu"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
-          "source": "Add Tag to Contact",
+          "source": "Add tag to contact",
           "message": "Dodaj tag do kontaktu"
         },
         "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Unikalny identyfikator tagu nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Usuń tag z kontaktu"
         },
         "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "Jeśli ustawiono wartość true, odpowiedź będzie zawierać obiekt awatara administratora z adresem URL obrazu. Domyślnie false."
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Pobierz kontakt"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Przekaż `true`, aby uwzględnić w odpowiedzi historię scaleń kontaktu. Zwracana tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Przekaż `true`, aby uwzględnić w odpowiedzi historię scaleń kontaktu. Zwracana tylko dla kontaktów z rolą `user`."
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Usuń kontakt"
         },
         "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Pobierz konwersację"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "W przypadku ustawienia wartości true części konwersacji zostaną przetłumaczone na wykryty język konwersacji."
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
-          "source": "Get Company",
+          "source": "Get company",
           "message": "Pobierz firmę"
         },
         "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Unikalny identyfikator firmy nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
-          "source": "Update Company",
+          "source": "Update company",
           "message": "Zaktualizuj firmę"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Wartość przychodu generowanego przez firmę dla Twojej działalności. Pamiętaj, że wartości zmiennoprzecinkowe zostaną obcięte, tzn. dozwolone są tylko liczby całkowite, 155.98 zostanie obcięte do 155. Pamiętaj, że górny limit to 2**31-1, czyli 2147483647."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
-          "source": "Delete Company",
+          "source": "Delete company",
           "message": "Usuń firmę"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "Unikalny identyfikator firmy nadany przez Intercom"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
-          "source": "Get Article",
+          "source": "Get article",
           "message": "Pobierz artykuł"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "Unikalny identyfikator artykułu nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Update Article",
+          "source": "Update article",
           "message": "Zaktualizuj artykuł"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
@@ -4200,7 +4200,7 @@
           "message": "Znacznik czasu ISO 8601 planowanego wycofania publikacji artykułu w przyszłości. Ustawienie `null` anuluje oczekujący harmonogram wycofania publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Wartość jest odrzucana z błędem 400 `parameter_invalid`, jeśli artykuł nigdy nie był opublikowany. Wysłanie w tym samym żądaniu co `scheduled_publish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
-          "source": "Delete Article",
+          "source": "Delete article",
           "message": "Usuń artykuł"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
@@ -4224,7 +4224,7 @@
           "message": "Unikalny identyfikator artykułu nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Pobierz kolekcję"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
@@ -4248,7 +4248,7 @@
           "message": "Unikalny identyfikator kolekcji nadany przez Intercom."
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Pobierz tag"
         },
         "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
@@ -4272,7 +4272,7 @@
           "message": "Unikatowy identyfikator danego tagu"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Usuń tag"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
@@ -4416,7 +4416,7 @@
           "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
-          "source": "Reply to Conversation",
+          "source": "Reply to conversation",
           "message": "Odpowiedz na konwersację"
         },
         "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
@@ -4524,7 +4524,7 @@
           "message": "Dodaj odpowiedź bez powiadamiania kontaktu"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nowy kontakt"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Uruchamia się dla każdego kontaktu utworzonego w obszarze roboczym.\n\n`role` zawęża strumień do użytkowników (kontakt, który się zarejestrował) lub leadów (kontakt, który tego nie zrobił); jeśli pole pozostanie puste, zgłaszane są oba typy. Zdarzenie przekazuje rekord kontaktu zwracany przez Intercom.\n\nKontakt edytowany później **nie** uruchamia tego zdarzenia ponownie: strumień jest pozycjonowany według `created_at`."
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "New Conversation",
+          "source": "New conversation",
           "message": "Nowa konwersacja"
         },
         "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {

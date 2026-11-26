@@ -460,7 +460,7 @@
           "message": "ID numerico del collo da recuperare"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "Crea collo"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "ID numerico del reso da recuperare"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
+          "source": "Create return",
           "message": "Crea reso"
         },
         "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {

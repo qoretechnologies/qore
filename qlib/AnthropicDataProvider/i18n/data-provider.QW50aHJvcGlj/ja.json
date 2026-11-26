@@ -1396,7 +1396,7 @@
           "message": "設定されたコンテキストストア経由で会話コンテキストを読み込みおよび保存するために使用される不透明なキー。指定すると、以前のメッセージが自動的に先頭に追加されます"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "トークン数のカウント"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "拡張思考に使用する最大トークン数。`1024`以上、`max_tokens`未満である必要があります。思考モードが`enabled`の場合にのみ適用されます"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "モデルの取得"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "モデルの一意の識別子またはエイリアス（例: `claude-sonnet-4-6-20250514`）"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "モデルのリスト"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Nucleusサンプリングを使用します。Nucleusサンプリングでは、後続のトークンごとに確率の降順ですべての候補に対する累積分布を計算し、`top_p` で指定された特定の確率に達した時点で打ち切ります"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "メッセージバッチの取得"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "メッセージバッチの一意の識別子（例: `msgbatch_013Zva2CMbUFEYkeWyl6QV`）"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "メッセージバッチの一覧表示"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "ファイル名"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "ファイル一覧"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "このファイルIDの前のファイルを返します（後方ページネーション用カーソル）"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "ファイルの取得"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "ファイルの一意の識別子"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "ファイル内容の取得"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "スキルの動作に関する詳細な指示。これらは、スキルがトリガーされたときにClaudeが読み取る SKILL.md ファイルの本文を構成します"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "スキルの一覧表示"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "次の結果ページを取得するための、前のレスポンスの `next_page` フィールドからのページネーショントークン"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "スキルの取得"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

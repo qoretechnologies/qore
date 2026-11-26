@@ -351,7 +351,7 @@
           "message": "Перелічує всі індекси в проєкті, якому належить ключ API, разом із хостом, схемою та поточним станом кожного.\n\nЦе також найдешевший виклик, що доводить працездатність ключа — саме його використовує з'єднання для пінгу."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.display_name": {
-          "source": "Describe Index",
+          "source": "Describe index",
           "message": "Описати індекс"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXg.short_desc": {
@@ -1219,7 +1219,7 @@
           "message": "Параметри запису для моделі вкладень."
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.display_name": {
-          "source": "Configure Index",
+          "source": "Configure index",
           "message": "Налаштувати індекс"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.short_desc": {
@@ -1483,7 +1483,7 @@
           "message": "Читання обслуговується окремими вузлами, для передбачуваного навантаження. Вимагає `node_type` та `scaling` поряд із ним."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.display_name": {
-          "source": "Delete Index",
+          "source": "Delete index",
           "message": "Видалити індекс"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWluZGV4.short_desc": {
@@ -1543,7 +1543,7 @@
           "message": "Значення `pagination.next` з попередньої відповіді.  Відповідь без `pagination` є останньою сторінкою."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.display_name": {
-          "source": "List Index Backups",
+          "source": "List index backups",
           "message": "Перелічити резервні копії індексу"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleC1iYWNrdXBz.short_desc": {
@@ -1603,7 +1603,7 @@
           "message": "Значення `pagination.next` з попередньої відповіді.  Відповідь без `pagination` є останньою сторінкою."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.display_name": {
-          "source": "Create Backup",
+          "source": "Create backup",
           "message": "Створити резервну копію"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cA.short_desc": {
@@ -1651,7 +1651,7 @@
           "message": "Опис резервної копії."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.display_name": {
-          "source": "Describe Backup",
+          "source": "Describe backup",
           "message": "Описати резервну копію"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3Vw.short_desc": {
@@ -1675,7 +1675,7 @@
           "message": "Ідентифікатор резервної копії, яку слід описати."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.display_name": {
-          "source": "Delete Backup",
+          "source": "Delete backup",
           "message": "Видалити резервну копію"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cA.short_desc": {
@@ -1699,7 +1699,7 @@
           "message": "Ідентифікатор резервної копії, яку слід видалити."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.display_name": {
-          "source": "Create Index from Backup",
+          "source": "Create index from backup",
           "message": "Створити індекс із резервної копії"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.short_desc": {
@@ -1915,7 +1915,7 @@
           "message": "Читання обслуговується окремими вузлами, для передбачуваного навантаження. Вимагає `node_type` та `scaling` поряд із ним."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.display_name": {
-          "source": "List Backup Schedules",
+          "source": "List backup schedules",
           "message": "Перелічити розклади резервного копіювання"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGVz.short_desc": {
@@ -1963,7 +1963,7 @@
           "message": "Значення `pagination.next` з попередньої відповіді.  Відповідь без `pagination` є останньою сторінкою."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Create Backup Schedule",
+          "source": "Create backup schedule",
           "message": "Створити розклад резервного копіювання"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2091,7 +2091,7 @@
           "message": "Кількість днів зберігання кожного резервного копіювання, створеного цим графіком. Має бути не менше 1 і не більше максимальної кількості, встановленої сервісом; значення поза цим діапазоном відхиляється з `400`."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.display_name": {
-          "source": "Describe Backup Schedule",
+          "source": "Describe backup schedule",
           "message": "Описати розклад резервного копіювання"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtYmFja3VwLXNjaGVkdWxl.short_desc": {
@@ -2115,7 +2115,7 @@
           "message": "Ідентифікатор розкладу резервного копіювання, який повертає дія **Перелічити розклади резервного копіювання** для індексу, якому він належить."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Update Backup Schedule",
+          "source": "Update backup schedule",
           "message": "Оновити розклад резервного копіювання"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2211,7 +2211,7 @@
           "message": "Кількість днів зберігання кожного резервного копіювання, створеного цим графіком. Має бути не менше 1 і не більше максимальної кількості, встановленої сервісом; значення поза цим діапазоном відхиляється з `400`."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.display_name": {
-          "source": "Delete Backup Schedule",
+          "source": "Delete backup schedule",
           "message": "Видалити розклад резервного копіювання"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWJhY2t1cC1zY2hlZHVsZQ.short_desc": {
@@ -2235,7 +2235,7 @@
           "message": "Ідентифікатор розкладу резервного копіювання, який повертає дія **Перелічити розклади резервного копіювання** для індексу, якому він належить."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.display_name": {
-          "source": "List Backup Schedule History",
+          "source": "List backup schedule history",
           "message": "Перелічити історію розкладу резервного копіювання"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXAtc2NoZWR1bGUtaGlzdG9yeQ.short_desc": {
@@ -2319,7 +2319,7 @@
           "message": "Значення `pagination.next` з попередньої відповіді.  Відповідь без `pagination` є останньою сторінкою."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.display_name": {
-          "source": "Describe Restore Job",
+          "source": "Describe restore job",
           "message": "Описати завдання відновлення"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtcmVzdG9yZS1qb2I.short_desc": {
@@ -2391,7 +2391,7 @@
           "message": "Назва індексу, який слід використати як джерело для колекції."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.display_name": {
-          "source": "Describe Collection",
+          "source": "Describe collection",
           "message": "Описати колекцію"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtY29sbGVjdGlvbg.short_desc": {
@@ -2415,7 +2415,7 @@
           "message": "Назва колекції, яку слід описати."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "Видалити колекцію"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -3279,7 +3279,7 @@
           "message": "Мапа імен полів метаданих та їхніх конфігурацій. Ім’я поля має бути дійсним іменем метаданих. Ім’я поля має бути унікальним. Максимальна кількість оголошених полів — 50.\nІмена полів не можуть починатися з `$`, що вводить оператор фільтра. При створенні індексу імена, що починаються з `_`, також відхиляються (зарезервовані для внутрішнього використання)."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.display_name": {
-          "source": "Describe Namespace",
+          "source": "Describe namespace",
           "message": "Описати простір імен"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbmFtZXNwYWNl.short_desc": {
@@ -3315,7 +3315,7 @@
           "message": "Простір імен, у якому виконується робота.  Використовуйте `__default__` для простору імен, до якого звертаються запити, коли не називають жодного."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Delete Namespace",
+          "source": "Delete namespace",
           "message": "Видалити простір імен"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3351,7 +3351,7 @@
           "message": "Простір імен, у якому виконується робота.  Використовуйте `__default__` для простору імен, до якого звертаються запити, коли не називають жодного."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.display_name": {
-          "source": "Upsert Text",
+          "source": "Upsert text",
           "message": "Записати текст"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXJlY29yZHM.short_desc": {
@@ -3411,7 +3411,7 @@
           "message": "Унікальний ідентифікатор запису для оновлення. Сервіс також приймає `id` як псевдонім, який ця схема не моделює."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.display_name": {
-          "source": "Search with Text",
+          "source": "Search with text",
           "message": "Пошук за текстом"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.short_desc": {
@@ -3671,7 +3671,7 @@
           "message": "Список термінів, які повинні бути присутні в тексті кожного результату пошуку на основі вказаної стратегії."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.display_name": {
-          "source": "Upsert Documents",
+          "source": "Upsert documents",
           "message": "Записати документи"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LWRvY3VtZW50cw.short_desc": {
@@ -3731,7 +3731,7 @@
           "message": "Унікальний ідентифікатор документа."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "Пошук документів"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.short_desc": {
@@ -3943,7 +3943,7 @@
           "message": "Які поля документа повертати для кожного збігу.  Порожнє значення повертає всі поля, як і `[\"*\"]`."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.display_name": {
-          "source": "Fetch Documents",
+          "source": "Fetch documents",
           "message": "Отримати документи"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtZG9jdW1lbnRz.short_desc": {
@@ -4039,7 +4039,7 @@
           "message": "Токен пагінації з попередньої відповіді.  Дійсний лише разом із **Фільтром метаданих**."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "Оновити документи"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.short_desc": {
@@ -4147,7 +4147,7 @@
           "message": "Поля, які слід вилучити з кожного документа, що відповідає фільтру.  Дійсне лише з **Фільтром метаданих**."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "Видалити документи"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLWRvY3VtZW50cw.short_desc": {
@@ -4219,7 +4219,7 @@
           "message": "Якщо `true`, видаляє всі документи в просторі імен. Взаємно виключається з `ids` і `filter`. Значення `false` трактується так, ніби поле пропущено."
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.display_name": {
-          "source": "List Documents",
+          "source": "List documents",
           "message": "Перелічити документи"
         },
         "app.UGluZWNvbmU.action.bGlzdC1kb2N1bWVudHM.short_desc": {
@@ -4427,7 +4427,7 @@
           "message": "Зупинити весь імпорт на першому записі, що не вдалося"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.display_name": {
-          "source": "Describe Import",
+          "source": "Describe import",
           "message": "Описати імпорт"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW1wb3J0.short_desc": {
@@ -4463,7 +4463,7 @@
           "message": "Унікальний ідентифікатор операції імпорту."
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.display_name": {
-          "source": "Cancel Import",
+          "source": "Cancel import",
           "message": "Скасувати імпорт"
         },
         "app.UGluZWNvbmU.action.Y2FuY2VsLWltcG9ydA.short_desc": {
@@ -4723,7 +4723,7 @@
           "message": "Переважно нульові вектори, індексовані за термінами, для зіставлення у стилі ключових слів."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.display_name": {
-          "source": "Describe Model",
+          "source": "Describe model",
           "message": "Описати модель"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtbW9kZWw.short_desc": {

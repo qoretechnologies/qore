@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "Lister les classificateurs"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -380,7 +380,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
-          "source": "Get Classifier",
+          "source": "Get classifier",
           "message": "Récupérer le classificateur"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
@@ -432,7 +432,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Supprimer le classificateur"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
-          "source": "Start Classification",
+          "source": "Start classification",
           "message": "Démarrer la classification"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
@@ -608,7 +608,7 @@
           "message": "Numéros de pages basés sur 1 à analyser. Ex. \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
-          "source": "Copy Classifier",
+          "source": "Copy classifier",
           "message": "Copier le classificateur"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
-          "source": "Get Classification Result",
+          "source": "Get classification result",
           "message": "Obtenez le résultat de la classification"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
@@ -772,7 +772,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
-          "source": "Authorize Classifier Copy",
+          "source": "Authorize classifier copy",
           "message": "Autoriser la copie du classificateur"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
@@ -836,7 +836,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
-          "source": "Build Classifier",
+          "source": "Build classifier",
           "message": "Entraîner le classificateur"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
@@ -924,7 +924,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Lister les modèles"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -964,7 +964,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
-          "source": "Start Analysis",
+          "source": "Start analysis",
           "message": "Démarrer l’analyse"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Illustrations"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
-          "source": "Start Batch Analysis",
+          "source": "Start batch analysis",
           "message": "Démarrer l’analyse par lots"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Illustrations"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtenir le modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Supprimer le modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
-          "source": "Copy Model",
+          "source": "Copy model",
           "message": "Copier le modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
-          "source": "List Batch Results",
+          "source": "List batch results",
           "message": "Lister les résultats par lots"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Get Batch Result",
+          "source": "Get batch result",
           "message": "Récupérer le résultat du lot"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
-          "source": "Delete Batch Result",
+          "source": "Delete batch result",
           "message": "Supprimer le résultat du lot"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Get Analysis Result",
+          "source": "Get analysis result",
           "message": "Obtenez le résultat de l’analyse"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
-          "source": "Delete Analysis Result",
+          "source": "Delete analysis result",
           "message": "Supprimer le résultat de l’analyse"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
-          "source": "Download Figure",
+          "source": "Download figure",
           "message": "Télécharger l’illustration"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
-          "source": "Download Searchable PDF",
+          "source": "Download searchable PDF",
           "message": "Télécharger un PDF consultable"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
-          "source": "Authorize Model Copy",
+          "source": "Authorize model copy",
           "message": "Autoriser la copie du modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
-          "source": "Build Model",
+          "source": "Build model",
           "message": "Entraîner le modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
-          "source": "Compose Model",
+          "source": "Compose model",
           "message": "Composer le modèle"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
-          "source": "Get Resource Information",
+          "source": "Get resource information",
           "message": "Obtenez des informations sur les ressources"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
+          "source": "List operations",
           "message": "Lister les opérations"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
@@ -2460,7 +2460,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
+          "source": "Get operation",
           "message": "Récupérer l’opération"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "Un identifiant de chaîne opaque, globalement unique, généré par le client, pour la requête."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
-          "source": "Start Analysis from Bytes",
+          "source": "Start analysis from bytes",
           "message": "Démarrer l’analyse à partir d’octets"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Illustrations"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
-          "source": "Start Classification from Bytes",
+          "source": "Start classification from bytes",
           "message": "Démarrer la classification à partir d’octets"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "Numéros de pages basés sur 1 à analyser. Ex. \"1-3,5,7-9\""
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
-          "source": "Analyze Document",
+          "source": "Analyze document",
           "message": "Analyser le document"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {

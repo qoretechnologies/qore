@@ -84,7 +84,7 @@ module FirecrawlDataProvider {
             "path": "/scrape",
             "action": "scrape",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Scrape a Web Page",
+            "display_name": "Scrape a web page",
             "short_desc": "Scrape a single web page and return its content",
             "desc": "Scrapes a single web page at the given URL and returns its content "
                 "in the requested formats (markdown, HTML, links, images, etc.).\n\n"
@@ -121,7 +121,7 @@ module FirecrawlDataProvider {
             "path": "/batch-scrape",
             "action": "batch-scrape",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Batch Scrape Web Pages",
+            "display_name": "Batch scrape web pages",
             "short_desc": "Scrape multiple web pages in batch",
             "desc": "Scrapes multiple web pages in batch and returns their content. "
                 "Supports the same scrape options as the single scrape action.\n\n"
@@ -172,7 +172,7 @@ module FirecrawlDataProvider {
             "path": "/get-batch-scrape-status",
             "action": "get-batch-scrape-status",
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "Get Batch Scrape Status",
+            "display_name": "Get batch scrape status",
             "short_desc": "Get the status and results of a batch scrape job",
             "desc": "Gets the current status and results of a batch scrape job by its ID.",
             "action_code": DPAT_API,
@@ -198,7 +198,7 @@ module FirecrawlDataProvider {
             "path": "/crawl",
             "action": "crawl",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Crawl a Website",
+            "display_name": "Crawl a website",
             "short_desc": "Crawl a website and return scraped data for all pages",
             "desc": "Crawls a website starting from the given URL and returns scraped "
                 "data for all discovered pages.\n\n"
@@ -230,7 +230,7 @@ module FirecrawlDataProvider {
             "path": "/get-crawl-status",
             "action": "get-crawl-status",
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "Get Crawl Status",
+            "display_name": "Get crawl status",
             "short_desc": "Get the status and results of a crawl job",
             "desc": "Gets the current status and results of a crawl job by its ID.",
             "action_code": DPAT_API,
@@ -276,7 +276,7 @@ module FirecrawlDataProvider {
             "path": "/map",
             "action": "map",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Map a Website",
+            "display_name": "Map a website",
             "short_desc": "Discover all URLs on a website without scraping content",
             "desc": "Maps a website to discover all URLs without scraping page content. "
                 "Returns a list of discovered links.\n\n"
@@ -307,7 +307,7 @@ module FirecrawlDataProvider {
             "path": "/search",
             "action": "search",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Search the Web",
+            "display_name": "Search the web",
             "short_desc": "Search the web and return scraped results",
             "desc": "Searches the web for the given query and returns scraped results "
                 "for matching pages.\n\n"
@@ -348,7 +348,7 @@ module FirecrawlDataProvider {
             "path": "/extract",
             "action": "extract",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Extract Structured Data",
+            "display_name": "Extract structured data",
             "short_desc": "Extract structured data from web pages using AI",
             "desc": "Extracts structured data from one or more web pages using AI.\n\n"
                 "Provide a natural language prompt and/or a JSON Schema to guide the "
@@ -378,7 +378,7 @@ module FirecrawlDataProvider {
             "path": "/get-extract-status",
             "action": "get-extract-status",
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "Get Extraction Status",
+            "display_name": "Get extraction status",
             "short_desc": "Get the status and results of an extraction job",
             "desc": "Gets the current status and results of an extraction job by its ID.",
             "action_code": DPAT_API,
@@ -404,7 +404,7 @@ module FirecrawlDataProvider {
             "path": "/agent",
             "action": "agent",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Run AI Agent",
+            "display_name": "Run AI agent",
             "short_desc": "Use an AI agent to find and extract data from the web",
             "desc": "Uses an AI agent to find and extract data from the web based on a "
                 "natural language prompt.\n\n"
@@ -455,7 +455,7 @@ module FirecrawlDataProvider {
             "path": "/get-agent-status",
             "action": "get-agent-status",
             "billing": <DataProviderBillingInfo>{"model": "included"},
-            "display_name": "Get Agent Status",
+            "display_name": "Get agent status",
             "short_desc": "Get the status and results of an agent job",
             "desc": "Gets the current status and results of an agent job by its ID.",
             "action_code": DPAT_API,
@@ -481,7 +481,7 @@ module FirecrawlDataProvider {
             "path": "/parse",
             "action": "parse",
             "billing": <DataProviderBillingInfo>{"unit": "credit"},
-            "display_name": "Parse a Document",
+            "display_name": "Parse a document",
             "short_desc": "Upload a document and convert it to LLM-ready data",
             "desc": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) "
                 "up to 50 MB and converts it to clean, LLM-ready content in the requested "

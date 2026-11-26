@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
-          "message": "List Buckets"
+          "source": "List buckets",
+          "message": "List buckets"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
           "source": "List the buckets in the project",
@@ -388,8 +388,8 @@
           "message": "The `next_page_token` from a previous call, to retrieve the following page"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
-          "source": "Get Bucket",
-          "message": "Get Bucket"
+          "source": "Get bucket",
+          "message": "Get bucket"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
           "source": "Get a bucket's metadata",
@@ -412,8 +412,8 @@
           "message": "The name of the bucket whose metadata should be retrieved"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
-          "message": "List Objects"
+          "source": "List objects",
+          "message": "List objects"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
           "source": "List the objects in a bucket",
@@ -532,8 +532,8 @@
           "message": "The `next_page_token` from a previous call, to retrieve the following page"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Object Metadata",
-          "message": "Get Object Metadata"
+          "source": "Get object metadata",
+          "message": "Get object metadata"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
           "source": "Get an object's metadata without its content",
@@ -580,8 +580,8 @@
           "message": "The content generation to retrieve; when omitted the live version is used"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Update Object Metadata",
-          "message": "Update Object Metadata"
+          "source": "Update object metadata",
+          "message": "Update object metadata"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
           "source": "Update an object's metadata without rewriting it",

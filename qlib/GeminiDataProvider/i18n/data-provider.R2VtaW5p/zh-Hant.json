@@ -808,7 +808,7 @@
           "message": "用於檢索增強生成 (RAG) 的檔案搜尋存放區名稱。模型將搜尋該存放區的文件，以相關內容做為回覆的依據"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "簡易對話"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "用於檢索增強生成 (RAG) 的檔案搜尋存放區名稱。模型將搜尋該存放區的文件，以相關內容做為回覆的依據"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "嵌入內容"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "模型產生的內容"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "批次嵌入"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

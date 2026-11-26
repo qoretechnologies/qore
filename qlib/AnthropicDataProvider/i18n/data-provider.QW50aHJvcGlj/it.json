@@ -1396,7 +1396,7 @@
           "message": "Una chiave opaca utilizzata per caricare e salvare il contesto della conversazione tramite l'archivio del contesto configurato. Se fornita, i messaggi precedenti vengono anteposti automaticamente"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Conta token"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Il numero massimo di token da utilizzare per il pensiero esteso. Deve essere almeno `1024` e inferiore a `max_tokens`. Applicabile solo quando la modalità di pensiero è `enabled`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Recupera modello"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "L'identificatore univoco o l'alias del modello (es. `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Elenca modelli"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Usa il campionamento nucleus. Nel campionamento nucleus, viene calcolata la distribuzione cumulativa su tutte le opzioni per ogni token successivo in ordine decrescente di probabilità e interrotta una volta raggiunta una probabilità specifica indicata da `top_p`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "Recupera batch di messaggi"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "L'identificatore univoco per il batch di messaggi (ad es. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "Elenca batch di messaggi"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Il nome del file"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Elenca file"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Restituisce i file precedenti a questo ID file (cursore per la paginazione all'indietro)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Recupera file"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "L'identificatore univoco del file"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "Recupera contenuto del file"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "Istruzioni dettagliate per il comportamento della skill. Queste formano il corpo del file SKILL.md letto da Claude quando la skill viene attivata"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "Elenca competenze"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Token di paginazione dal campo `next_page` di una risposta precedente per recuperare la pagina successiva di risultati"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Ottieni competenza"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

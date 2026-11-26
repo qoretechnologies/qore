@@ -3532,7 +3532,7 @@
           "message": "Maximálny počet výsledkov, ktoré sa majú vrátiť na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "Vytvoriť overenie e-mailu"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {

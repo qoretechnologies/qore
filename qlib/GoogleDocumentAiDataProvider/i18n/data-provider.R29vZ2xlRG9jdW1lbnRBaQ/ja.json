@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.display_name": {
-          "source": "List Locations",
+          "source": "List locations",
           "message": "ロケーションの一覧表示"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
@@ -400,7 +400,7 @@
           "message": "応答の `next_page_token` フィールドから受信したページ トークン。そのページ トークンを送信して、後続のページを受信します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.display_name": {
-          "source": "Get Location",
+          "source": "Get location",
           "message": "ロケーションを取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWxvY2F0aW9u.short_desc": {
@@ -412,7 +412,7 @@
           "message": "接続の場所に関する情報を読み取ります。\n\n場所に関する情報を取得します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.display_name": {
-          "source": "List Processor Types",
+          "source": "List processor types",
           "message": "プロセッサタイプのリスト"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdHlwZXM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "結果の次のページを取得するために使用されます。リストの最後にある場合は空です。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.display_name": {
-          "source": "Get Processor Type",
+          "source": "Get processor type",
           "message": "プロセッサタイプの取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci10eXBl.short_desc": {
@@ -472,7 +472,7 @@
           "message": "選択したプロセッサ タイプの識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.display_name": {
-          "source": "List Processors",
+          "source": "List processors",
           "message": "プロセッサーのリストを表示"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3Jz.short_desc": {
@@ -508,7 +508,7 @@
           "message": "プロセッサを作成時間順に並べて返します。ページ トークンは次のプロセッサを指します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.display_name": {
-          "source": "Get Processor",
+          "source": "Get processor",
           "message": "プロセッサーの取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvcg.short_desc": {
@@ -532,7 +532,7 @@
           "message": "選択したプロセッサ ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Create Processor",
+          "source": "Create processor",
           "message": "プロセッサーの作成"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXByb2Nlc3Nvcg.short_desc": {
@@ -604,7 +604,7 @@
           "message": "プロセッサーのタイプ (`OCR_PROCESSOR`、`INVOICE_PROCESSOR` など)。プロセッサ タイプのリストを取得するには、「FetchProcessorTypes」を参照してください。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Delete Processor",
+          "source": "Delete processor",
           "message": "プロセッサの削除"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvcg.short_desc": {
@@ -628,7 +628,7 @@
           "message": "選択したプロセッサ ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.display_name": {
-          "source": "Enable Processor",
+          "source": "Enable processor",
           "message": "プロセッサーを有効にする"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZW5hYmxlLXByb2Nlc3Nvcg.short_desc": {
@@ -652,7 +652,7 @@
           "message": "選択したプロセッサ ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.display_name": {
-          "source": "Disable Processor",
+          "source": "Disable processor",
           "message": "プロセッサーを無効にする"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGlzYWJsZS1wcm9jZXNzb3I.short_desc": {
@@ -676,7 +676,7 @@
           "message": "選択したプロセッサ ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.display_name": {
-          "source": "Set Default Version",
+          "source": "Set default version",
           "message": "デフォルトのバージョンを設定する"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c2V0LWRlZmF1bHQtdmVyc2lvbg.short_desc": {
@@ -712,7 +712,7 @@
           "message": "デフォルトとして使用する子 ProcessorVersion のリソース名。形式: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.display_name": {
-          "source": "Start Batch Processing",
+          "source": "Start batch processing",
           "message": "バッチ処理の開始"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtYmF0Y2gtcHJvY2Vzc2luZw.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "プロパティの値の型への参照。このタイプは、`Entity.base_types` フィールドと同じ規則に従います。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.display_name": {
-          "source": "Start Version Batch Processing",
+          "source": "Start version batch processing",
           "message": "バージョンバッチ処理の開始"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.c3RhcnQtdmVyc2lvbi1iYXRjaC1wcm9jZXNzaW5n.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "プロパティの値の型への参照。このタイプは、`Entity.base_types` フィールドと同じ規則に従います。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.display_name": {
-          "source": "List Processor Versions",
+          "source": "List processor versions",
           "message": "プロセッサーのバージョンをリストする"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1wcm9jZXNzb3ItdmVyc2lvbnM.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "プロセッサのバージョンを作成時間順に並べ替えて返します。ページ トークンは、次のプロセッサ バージョンを指します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Get Processor Version",
+          "source": "Get processor version",
           "message": "プロセッサーのバージョンを取得する"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "選択したプロセッサのバージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Delete Processor Version",
+          "source": "Delete processor version",
           "message": "プロセッサーのバージョンの削除"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "選択したプロセッサのバージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Train Processor Version",
+          "source": "Train processor version",
           "message": "トレインプロセッサのバージョン"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "識別子。プロセッサーのバージョンのリソース名。形式: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
-          "source": "Deploy Processor Version",
+          "source": "Deploy processor version",
           "message": "プロセッサーのバージョンの導入"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "選択したプロセッサのバージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Undeploy Processor Version",
+          "source": "Undeploy processor version",
           "message": "プロセッサーのバージョンのデプロイを解除する"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dW5kZXBsb3ktcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "選択したプロセッサのバージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Evaluate Processor Version",
+          "source": "Evaluate processor version",
           "message": "プロセッサーのバージョンを評価する"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZXZhbHVhdGUtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "指定された Cloud Storage `gcs_prefix` に一致するドキュメントのセット。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.display_name": {
-          "source": "List Evaluations",
+          "source": "List evaluations",
           "message": "評価の一覧"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1ldmFsdWF0aW9ucw.short_desc": {
@@ -2344,7 +2344,7 @@
           "message": "以前の `ListEvaluations` 呼び出しから受信したページ トークン。これを指定して後続のページを取得します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "評価取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "選択した評価 ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
-          "source": "List Operations",
+          "source": "List operations",
           "message": "操作を一覧表示"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "`true` に設定すると、到達可能な処理は通常どおり返され、到達不能な処理は ListOperationsResponse.unreachable フィールドに返されます。複数のコレクションを横断して取得する場合にのみ `true` を指定できます。たとえば `parent` を `\"projects/example/locations/-\"` に設定する場合です。このフィールドは既定ではサポートされていません。サービスまたは製品のドキュメントに明示的な対応の記載がない限り、設定すると `UNIMPLEMENTED` エラーになります。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
-          "source": "Get Operation",
+          "source": "Get operation",
           "message": "操作を取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "選択した操作 ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.display_name": {
-          "source": "Cancel Operation",
+          "source": "Cancel operation",
           "message": "操作のキャンセル"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y2FuY2VsLW9wZXJhdGlvbg.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "選択した操作 ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.display_name": {
-          "source": "List Schemas",
+          "source": "List schemas",
           "message": "スキーマのリスト"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWFz.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "作成時間順にソートされたスキーマ グループを返します。ページ トークンは次のスキーマを指します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.display_name": {
-          "source": "Get Schema",
+          "source": "Get schema",
           "message": "スキーマの取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYQ.short_desc": {
@@ -2560,7 +2560,7 @@
           "message": "選択したスキーマ ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.display_name": {
-          "source": "Create Schema",
+          "source": "Create schema",
           "message": "スキーマの作成"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "識別子。スキーマのリソース名。形式: `projects/{project}/locations/{location}/schemas/{schema}`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.display_name": {
-          "source": "Update Schema",
+          "source": "Update schema",
           "message": "スキーマの更新"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYQ.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "リソースに適用する更新マスク。 **注:** 次のフィールドのみを更新できます: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.display_name": {
-          "source": "Delete Schema",
+          "source": "Delete schema",
           "message": "スキーマの削除"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "true に設定すると、このスキーマの子リソースも削除されます。 (それ以外の場合、リクエストはスキーマに子リソースがない場合にのみ機能します。)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.display_name": {
-          "source": "List Schema Versions",
+          "source": "List schema versions",
           "message": "スキーマのバージョンをリストする"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.bGlzdC1zY2hlbWEtdmVyc2lvbnM.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "作成時間順にソートされた SchemaVersion を返します。ページ トークンは次の SchemaVersion を指します。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Get Schema Version",
+          "source": "Get schema version",
           "message": "スキーマバージョンの取得"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2V0LXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "選択したスキーマ バージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Create Schema Version",
+          "source": "Create schema version",
           "message": "スキーマバージョンの作成"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Y3JlYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "スキーマのメタデータ。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Update Schema Version",
+          "source": "Update schema version",
           "message": "スキーマのバージョンを更新する"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dXBkYXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "リソースに適用する更新マスク。 **注:** 次のフィールドのみを更新できます: - `display_name` - `labels`"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.display_name": {
-          "source": "Delete Schema Version",
+          "source": "Delete schema version",
           "message": "スキーマバージョンの削除"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVsZXRlLXNjaGVtYS12ZXJzaW9u.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "選択したスキーマ バージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.display_name": {
-          "source": "Generate Schema Version",
+          "source": "Generate schema version",
           "message": "スキーマバージョンの生成"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.Z2VuZXJhdGUtc2NoZW1hLXZlcnNpb24.short_desc": {
@@ -6184,7 +6184,7 @@
           "message": "コンテンツの性質と形式を示す IANA MIME タイプ (RFC6838)。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.display_name": {
-          "source": "Update Dataset (Beta)",
+          "source": "Update dataset (beta)",
           "message": "データセットの更新 (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldA.short_desc": {
@@ -6256,7 +6256,7 @@
           "message": "更新マスクはリソースに適用されます。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Get Dataset Schema (Beta)",
+          "source": "Get dataset schema (beta)",
           "message": "データセット スキーマの取得 (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1zY2hlbWE.short_desc": {
@@ -6292,7 +6292,7 @@
           "message": "設定すると、スキーマの表示可能なフィールドのみが返されます。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.display_name": {
-          "source": "Update Dataset Schema (Beta)",
+          "source": "Update dataset schema (beta)",
           "message": "データセット スキーマの更新 (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS11cGRhdGUtZGF0YXNldC1zY2hlbWE.short_desc": {
@@ -6640,7 +6640,7 @@
           "message": "更新マスクはリソースに適用されます。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.display_name": {
-          "source": "Get Dataset Document (Beta)",
+          "source": "Get dataset document (beta)",
           "message": "データセット ドキュメントの取得 (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1nZXQtZGF0YXNldC1kb2N1bWVudA.short_desc": {
@@ -6804,7 +6804,7 @@
           "message": "設定すると、ここにリストされているフィールドのみが返されます。それ以外の場合は、デフォルトですべてのフィールドが返されます。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.display_name": {
-          "source": "List Dataset Documents (Beta)",
+          "source": "List dataset documents (beta)",
           "message": "データセット ドキュメントのリスト (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1saXN0LWRhdGFzZXQtZG9jdW1lbnRz.short_desc": {
@@ -6888,7 +6888,7 @@
           "message": "指定されている場合、`page_token` から始まるスキップする結果の数。 https://google.aip.dev/158#skipping-results. 負ではない整数である必要があります。負の値は拒否されます。これはスキップするページ数ではないことに注意してください。この値によりカーソルが結果の末尾を超えて移動する場合、ListDocumentsResponse.document_metadata および ListDocumentsResponse.next_page_token は空になります。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Import Dataset Documents (Beta)",
+          "source": "Import dataset documents (beta)",
           "message": "データセット ドキュメントのインポート (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
@@ -7028,7 +7028,7 @@
           "message": "設定されている場合、このバッチでインポートされるドキュメントのタイプが決定されます。これを使用すると、指定されたタイプの単一エンティティを使用してドキュメントに自動ラベルを付けることができます。このフィールドは、分類子プロセッサまたはスプリッタ プロセッサでのみ使用できます。このフィールドを指定することは、`entities` および `auto_labeling_config` と相互に排他的です。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Dataset Documents (Beta)",
+          "source": "Delete dataset documents (beta)",
           "message": "データセット ドキュメントの削除 (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1kZWxldGUtZGF0YXNldC1kb2N1bWVudHM.short_desc": {
@@ -7124,7 +7124,7 @@
           "message": "管理されていないデータセット内のドキュメント ID。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.display_name": {
-          "source": "Import Processor Version (Beta)",
+          "source": "Import processor version (beta)",
           "message": "インポート プロセッサのバージョン (ベータ版)"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.YmV0YS1pbXBvcnQtcHJvY2Vzc29yLXZlcnNpb24.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "選択したプロセッサのバージョン ID の識別子または完全なリソース名。"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.display_name": {
-          "source": "Wait for Operation",
+          "source": "Wait for operation",
           "message": "処理の完了を待機"
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.d2FpdC1mb3Itb3BlcmF0aW9u.short_desc": {

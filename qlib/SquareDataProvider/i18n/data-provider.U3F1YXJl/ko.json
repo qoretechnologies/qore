@@ -740,7 +740,7 @@
           "message": "외부 참조"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
+          "source": "Create paid order",
           "message": "결제 완료된 주문 생성"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
@@ -980,7 +980,7 @@
           "message": "주문의 현재 버전(낙관적 동시성 제어용)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
+          "source": "Create a payment",
           "message": "결제 생성"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "`True`(기본값)인 경우 결제가 즉시 완료됩니다. `False`인 경우 나중에 complete-payment를 통해 완료해야 합니다."
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
+          "source": "Complete payment",
           "message": "결제 완료"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {

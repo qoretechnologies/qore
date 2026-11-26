@@ -1596,7 +1596,7 @@
           "message": "재사용하거나 삭제할 저장된 분류기를 찾습니다. **서비스 가용성:** Jina는 2026년 9월 7일 검증 중에 이 엔드포인트에 대해 HTTP 500을 반환했습니다. 분류기 ID는 여전히 직접 제공될 수 있습니다."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "분류기 삭제"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "제거할 저장된 분류기."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "모델 목록 조회"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "임베딩 또는 재순위 모델을 선택하기 전에 모델 기능을 비교하세요. 카탈로그는 공개되어 있습니다. 연결 핑을 사용하여 API 키를 확인하세요."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "모델 가져오기"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "`true`(기본값)인 경우, 임베딩은 단위 길이로 L2-정규화됩니다."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "배치 상태 가져오기"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "검사하거나 취소할 임베딩 배치."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "배치 취소"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "반환할 최근 배치 최대 개수."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "웹 페이지 또는 문서 읽기"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "바로가기"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "웹 검색"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {

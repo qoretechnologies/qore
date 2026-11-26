@@ -852,7 +852,7 @@
           "message": "Identyfikator wiadomości do trwałego usunięcia; zdarzenia watch przekazują tę wartość jako `message_id`"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "Wyślij wiadomość"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {

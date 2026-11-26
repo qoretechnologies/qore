@@ -1316,7 +1316,7 @@
           "message": "削除されたワークフローのみを返します"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "ワークフローを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "別の環境へエクスポートしても保たれる安定した識別子です。生成された ID は保たれません。\n\n未設定の場合は `name` から導出され、いったん設定すると変更できません。63 文字まで。小文字、数字、ハイフンが使え、先頭・末尾・連続したハイフンは使えません。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "ワークフローを更新"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "無効"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.display_name": {
-          "source": "Delete Workflow",
+          "source": "Delete workflow",
           "message": "ワークフローを削除"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "削除するワークフロー"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.display_name": {
-          "source": "Run Workflow",
+          "source": "Run workflow",
           "message": "ワークフローを実行"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "却下"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.display_name": {
-          "source": "Get Job",
+          "source": "Get job",
           "message": "ジョブを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "返すジョブ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.display_name": {
-          "source": "Get Job Details",
+          "source": "Get job details",
           "message": "ジョブの詳細を取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "詳細を取得するジョブ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.display_name": {
-          "source": "Get Job Failed Files",
+          "source": "Get job failed files",
           "message": "ジョブの失敗ファイルを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "報告対象のジョブ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.display_name": {
-          "source": "Download Job Output",
+          "source": "Download job output",
           "message": "ジョブの出力をダウンロード"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "ファイルを生成した処理ノード。既定ではワークフローの最後のノード、つまり出力を書き込むノードです。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.display_name": {
-          "source": "Cancel Job",
+          "source": "Cancel job",
           "message": "ジョブをキャンセル"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source Connector",
+          "source": "Get source connector",
           "message": "ソースコネクタを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "別の環境へエクスポートしても保たれる安定した識別子です。生成された ID は保たれません。\n\n未設定の場合は `name` から導出され、いったん設定すると変更できません。63 文字まで。小文字、数字、ハイフンが使え、先頭・末尾・連続したハイフンは使えません。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source Connector",
+          "source": "Update source connector",
           "message": "ソースコネクタを更新"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Sasトークン"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source Connector",
+          "source": "Delete source connector",
           "message": "ソースコネクタを削除"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "削除するコネクタ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.display_name": {
-          "source": "Check Source Connector",
+          "source": "Check source connector",
           "message": "ソースコネクタを検査"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "検査するコネクタ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.display_name": {
-          "source": "Get Source Connector Check",
+          "source": "Get source connector check",
           "message": "ソースコネクタの検査結果を取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination Connector",
+          "source": "Get destination connector",
           "message": "宛先コネクタを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "別の環境へエクスポートしても保たれる安定した識別子です。生成された ID は保たれません。\n\n未設定の場合は `name` から導出され、いったん設定すると変更できません。63 文字まで。小文字、数字、ハイフンが使え、先頭・末尾・連続したハイフンは使えません。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination Connector",
+          "source": "Update destination connector",
           "message": "宛先コネクタを更新"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Sasトークン"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination Connector",
+          "source": "Delete destination connector",
           "message": "宛先コネクタを削除"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5328,7 +5328,7 @@
           "message": "削除するコネクタ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.display_name": {
-          "source": "Check Destination Connector",
+          "source": "Check destination connector",
           "message": "宛先コネクタを検査"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.short_desc": {
@@ -5348,7 +5348,7 @@
           "message": "検査するコネクタ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.display_name": {
-          "source": "Get Destination Connector Check",
+          "source": "Get destination connector check",
           "message": "宛先コネクタの検査結果を取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.short_desc": {
@@ -5404,7 +5404,7 @@
           "message": "有効"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Get Notification Channel",
+          "source": "Get notification channel",
           "message": "通知チャネルを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5608,7 +5608,7 @@
           "message": "購読するイベントタイプ"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Update Notification Channel",
+          "source": "Update notification channel",
           "message": "通知チャネルを更新"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5780,7 +5780,7 @@
           "message": "返信先メールアドレス"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Delete Notification Channel",
+          "source": "Delete notification channel",
           "message": "通知チャネルを削除"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5800,7 +5800,7 @@
           "message": "削除するチャネル"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Verify Notification Channel",
+          "source": "Verify notification channel",
           "message": "通知チャネルを確認"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "ワークフローテンプレートを一覧表示します。Unstructured があらかじめ用意した処理連鎖で、ノードを手作業で記述する代わりにこれを元にワークフローを構築できます。"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.display_name": {
-          "source": "Get Workflow Template",
+          "source": "Get workflow template",
           "message": "ワークフローテンプレートを取得"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.short_desc": {

@@ -808,7 +808,7 @@
           "message": "検索拡張生成（RAG）に使用するファイル検索ストアの名前。モデルはストアのドキュメントを検索し、関連するコンテンツに基づいて応答を作成します"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "シンプルチャット"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "検索拡張生成（RAG）に使用するファイル検索ストアの名前。モデルはストアのドキュメントを検索し、関連するコンテンツに基づいて応答を作成します"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "コンテンツの埋め込み"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "モデルからのコンテンツ"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "バッチ埋め込み"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

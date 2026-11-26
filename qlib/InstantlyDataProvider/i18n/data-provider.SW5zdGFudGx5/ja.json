@@ -3532,7 +3532,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.display_name": {
-          "source": "Create Email Verification",
+          "source": "Create email verification",
           "message": "メール検証の作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWVtYWlsLXZlcmlmaWNhdGlvbg.short_desc": {

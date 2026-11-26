@@ -1108,7 +1108,7 @@
           "message": "代表您終端使用者的唯一識別碼，用於濫用監控"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "簡易對話"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "不截斷；若上下文超出限制則傳回錯誤"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "取得回覆"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

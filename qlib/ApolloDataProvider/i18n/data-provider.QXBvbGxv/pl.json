@@ -964,7 +964,7 @@
           "message": "Identyfikator transakcji"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
-          "source": "Enrich Person",
+          "source": "Enrich person",
           "message": "Wzbogać osobę"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Adres URL profilu LinkedIn osoby"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
-          "source": "Bulk Enrich People",
+          "source": "Bulk enrich people",
           "message": "Masowe wzbogacanie osób"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "Lista obiektów szczegółów osób, z których każdy zawiera pola takie jak `email`, `first_name`, `last_name`, `organization_name`, `domain`"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Enrich Organization",
+          "source": "Enrich organization",
           "message": "Wzbogać organizację"
         },
         "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Domena organizacji do wzbogacenia"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
-          "source": "Bulk Enrich Organizations",
+          "source": "Bulk enrich organizations",
           "message": "Masowe wzbogacanie organizacji"
         },
         "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "Lista domen organizacji do wzbogacenia"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
-          "source": "Search People",
+          "source": "Search people",
           "message": "Szukaj osób"
         },
         "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {

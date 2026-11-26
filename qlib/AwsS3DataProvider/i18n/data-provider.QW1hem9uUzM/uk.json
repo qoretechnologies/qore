@@ -1408,7 +1408,7 @@
           "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Створити попередньо підписану URL-адресу"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

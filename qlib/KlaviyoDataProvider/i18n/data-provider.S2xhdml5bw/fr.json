@@ -524,7 +524,7 @@
           "message": "Curseur pour la page suivante : transmettez la valeur de `links.next` de la réponse précédente.\n\nIl est opaque et ne doit pas être construit manuellement ; laissez-le non défini pour lire la première page."
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
-          "source": "Get Profile",
+          "source": "Get profile",
           "message": "Obtenir le profil"
         },
         "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Adresse IP"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Update Profile",
+          "source": "Update profile",
           "message": "Mettre à jour le profil"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Obtenir la liste"
         },
         "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Blocs calculés à inclure sur chaque profil, que Klaviyo omet par défaut car ils sont coûteux à générer :\n\n- `subscriptions` : l'état de consentement du profil par canal\n- `predictive_analytics` : la valeur vie client prédite et la probabilité d'attrition selon Klaviyo"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
-          "source": "Update List",
+          "source": "Update list",
           "message": "Mettre à jour la liste"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "single_opt_in"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Supprimer la liste"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Nombre d'enregistrements à renvoyer sur une page.\n\nKlaviyo plafonne cette valeur par point de terminaison et rejette une valeur supérieure au lieu de la tronquer ; le maximum est indiqué dans la description de l'argument lui-même."
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Obtenir le segment"
         },
         "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "Indique si le segment est marqué comme favori dans Klaviyo"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Update Segment",
+          "source": "Update segment",
           "message": "Mettre à jour le segment"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
@@ -7660,7 +7660,7 @@
           "message": "Définir sur false pour désactiver le segment. Lors de la désactivation, cet attribut doit être le seul présent dans le corps de la requête. La désactivation ne peut pas être combinée avec d'autres mises à jour. Marquer un segment comme inactif aura un impact sur les campagnes, les flux, les synchronisations publicitaires, les formulaires, le routage du centre d'assistance et les autres fonctionnalités qui y font référence. Définir sur true pour réactiver un segment désactivé."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
-          "source": "Delete Segment",
+          "source": "Delete segment",
           "message": "Supprimer le segment"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
@@ -7800,7 +7800,7 @@
           "message": "Nombre d'enregistrements à renvoyer sur une page.\n\nKlaviyo plafonne cette valeur par point de terminaison et rejette une valeur supérieure au lieu de la tronquer ; le maximum est indiqué dans la description de l'argument lui-même."
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "Obtenir l'étiquette"
         },
         "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
@@ -7880,7 +7880,7 @@
           "message": "groupe-tag"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "Mettre à jour le tag"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
@@ -7916,7 +7916,7 @@
           "message": "Le nom de l'étiquette"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "Supprimer l'étiquette"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
@@ -8088,7 +8088,7 @@
           "message": "Curseur pour la page suivante : transmettez la valeur de `links.next` de la réponse précédente.\n\nIl est opaque et ne doit pas être construit manuellement ; laissez-le non défini pour lire la première page."
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Obtenir la campagne"
         },
         "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
@@ -9208,7 +9208,7 @@
           "message": "Une liste de paramètres de suivi personnalisés. Si une liste vide est fournie et que add_tracking_params est vrai, utilise les valeurs par défaut de l'entreprise."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Update Campaign",
+          "source": "Update campaign",
           "message": "Mettre à jour la campagne"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
@@ -9736,7 +9736,7 @@
           "message": "Une liste de paramètres de suivi personnalisés. Si une liste vide est fournie et que add_tracking_params est vrai, utilise les valeurs par défaut de l'entreprise."
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "Supprimer la campagne"
         },
         "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Restreindre la liste aux événements correspondants, dans la syntaxe de filtre de Klaviyo.\n\n`equals(metric_id,\"…\")` et `equals(profile_id,\"…\")` sélectionnent une métrique ou un profil, et `datetime` et `timestamp` acceptent les quatre comparaisons d'intervalles (par exemple `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`). Les prédicats sont séparés par des virgules et signifient **et** ; Klaviyo n'a pas de `or` ici."
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Obtenir un événement"
         },
         "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
@@ -9940,7 +9940,7 @@
           "message": "Curseur pour la page suivante : transmettez la valeur de `links.next` de la réponse précédente.\n\nIl est opaque et ne doit pas être construit manuellement ; laissez-le non défini pour lire la première page."
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
-          "source": "Get Metric",
+          "source": "Get metric",
           "message": "Obtenir la métrique"
         },
         "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "Le segment duquel retirer la balise"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Créer un événement"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "Vos propres propriétés à enregistrer avec l'événement, sous forme de paires nom/valeur"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
-          "source": "Subscribe Profile",
+          "source": "Subscribe profile",
           "message": "Abonner le profil"
         },
         "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "Abonner le profil **via cette liste**, ce qui l'ajoute à la liste et applique son processus de double opt-in le cas échéant.\n\nSans cela, le consentement est enregistré directement sur le profil et aucune confirmation n'est envoyée."
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
-          "source": "Unsubscribe Profile",
+          "source": "Unsubscribe profile",
           "message": "Désabonner le profil"
         },
         "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "Types de messages SMS pour lesquels révoquer le consentement.\n\nN'a de sens qu'avec `phoneNumber` ; la valeur par défaut est marketing."
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
-          "source": "New Profile",
+          "source": "New profile",
           "message": "Nouveau profil"
         },
         "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "Se déclenche pour chaque profil créé dans le compte.\n\nL'événement contient le profil avec ses attributs en plus de son identité, ce qui correspond au même format que celui renvoyé par **Get Profile** et **List Profiles**.\n\nUn profil modifié ultérieurement ne déclenche **pas** cette action à nouveau : le flux est positionné par `created`."
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
-          "source": "New Event",
+          "source": "New event",
           "message": "Nouvel événement"
         },
         "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "Se déclenche pour chaque événement enregistré par rapport à la métrique sélectionnée.\n\n`metric` est obligatoire et désigne la métrique par son **ID** : un flux de tous les événements du compte serait trop volumineux pour être utilisable, et un flux de travail réagissant à « Placed Order » ne souhaite pas recevoir « Viewed Product ».\n\nL'événement contient l'enregistrement de l'événement avec ses attributs en plus de son identité. Le flux est positionné par `datetime`, qui correspond au moment où l'événement s'est produit plutôt qu'au moment où Klaviyo l'a reçu."
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to List",
+          "source": "Profile added to list",
           "message": "Profil ajouté à la liste"
         },
         "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "Se déclenche pour chaque profil ajouté à la liste sélectionnée.\n\nLe flux est positionné par `joined_group_at`, donc ceci se déclenche lorsque le profil **rejoint la liste** plutôt que lors de la création du profil lui-même : un profil existant depuis un an déclenche cette action dès son ajout.\n\nL'événement contient le profil avec ses attributs en plus de son identité."
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
-          "source": "Profile Added to Segment",
+          "source": "Profile added to segment",
           "message": "Profil ajouté au segment"
         },
         "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {

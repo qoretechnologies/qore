@@ -592,7 +592,7 @@
           "message": "ZIP+4-Überprüfung (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "Adresse abrufen"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "ZIP+4-Überprüfung (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Paket abrufen"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Name des Transportdienstleisters (z. B. `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Sendung abrufen"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "ID einer zuvor gekauften Sendung, die erstattet werden soll"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "Versandetikett abrufen"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "Name des Versanddienstleisters (z. B. `USPS`, `FedEx`); EasyPost erkennt ihn bei Auslassung automatisch"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "Tracker abrufen"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Zu löschender Webhook"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Ereignisse auflisten"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {

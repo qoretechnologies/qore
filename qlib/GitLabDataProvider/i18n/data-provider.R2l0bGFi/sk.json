@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "Zoznam vetiev"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Názov vetvy, od ktorej sa má začať stránkovanie"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.display_name": {
-          "source": "Create Branch",
+          "source": "Create branch",
           "message": "Vytvoriť vetvu"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Vytvoriť vetvu z SHA commitu alebo existujúcej vetvy"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "Získať vetvu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Názov vetvy"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Delete Branch",
+          "source": "Delete branch",
           "message": "Odstrániť vetvu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Názov vetvy"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.display_name": {
-          "source": "Delete Merged Branches",
+          "source": "Delete merged branches",
           "message": "Odstrániť zlúčené vetvy"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Projekt, s ktorým táto akcia pracuje, zadaný ako jeho číselné ID alebo ako jeho cesta (`group/project`).\n\nZadajte cestu tak, ako je uvedená; prenos ju zakóduje (escape) do jedného segmentu cesty, ktorý GitLab očakáva. Ručne zakódovaná cesta by sa zakódovala druhýkrát a nevyriešila by sa.\n\nKaždá ďalšia možnosť vymedzená projektom – vetvy, problémy, členovia, premenné – sa načítava z tohto projektu, takže jej zmena ich načíta znova."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "Vypísať commity"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Záznam, od ktorého začať stránkovanie pomocou keysetu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "Získať commit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Zahrnúť štatistiky commitu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "Vypísať komentáre ku commitu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu GitLabu `100`.\n\nCelkový počet a nasledujúca stránka sú uvádzané v **hlavičkách odpovede** `X-Total`, `X-Page` a `X-Next-Page`, nie v tele, takže stránkovanie znamená vyžiadanie ďalšej stránky, kým sa nevráti menej ako `per_page` záznamov."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "Komentovať commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "starý"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.display_name": {
-          "source": "List Deploy Keys",
+          "source": "List deploy keys",
           "message": "Zoznam kľúčov nasadenia"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu GitLabu `100`.\n\nCelkový počet a nasledujúca stránka sú uvádzané v **hlavičkách odpovede** `X-Total`, `X-Page` a `X-Next-Page`, nie v tele, takže stránkovanie znamená vyžiadanie ďalšej stránky, kým sa nevráti menej ako `per_page` záznamov."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.display_name": {
-          "source": "Add Deploy Key",
+          "source": "Add deploy key",
           "message": "Pridať deploy kľúč"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Dátum vypršania platnosti SSH kľúča vo formáte ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Get Deploy Key",
+          "source": "Get deploy key",
           "message": "Získať kľúč nasadenia"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "ID kľúča nasadenia"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Update Deploy Key",
+          "source": "Update deploy key",
           "message": "Aktualizovať deploy kľúč"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Môže deploy kľúč odosielať zmeny (push) do repozitára projektu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Delete Deploy Key",
+          "source": "Delete deploy key",
           "message": "Odstrániť nasadzovací kľúč"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "ID kľúča nasadenia"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.display_name": {
-          "source": "Enable Deploy Key",
+          "source": "Enable deploy key",
           "message": "Povoliť deploy kľúč"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "prerušit"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Get Group",
+          "source": "Get group",
           "message": "Získať skupinu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Filtrovať pomocou vlastných atribútov"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Update Group",
+          "source": "Update group",
           "message": "Aktualizovať skupinu"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -4332,7 +4332,7 @@
           "message": "Ak je hodnota true, zaznamená explicitný súhlas menného priestoru pre smerovanie Code Review založené na DAP"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Delete Group",
+          "source": "Delete group",
           "message": "Odstrániť skupinu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.short_desc": {
@@ -5084,7 +5084,7 @@
           "message": "Vráti problémy z nearchivovaných projektov"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.display_name": {
-          "source": "List Project Issues",
+          "source": "List project issues",
           "message": "Zoznam problémov projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.short_desc": {
@@ -5824,7 +5824,7 @@
           "message": "Kurzor na získanie ďalšej sady záznamov"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "Vytvoriť požiadavku"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.short_desc": {
@@ -6156,7 +6156,7 @@
           "message": "IID epicu, s ktorým sa má issue priradiť (zastarané)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "Získať úlohu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6192,7 +6192,7 @@
           "message": "Hodnota **IID** problému: číslo relatívne k projektu zobrazené vo webovom rozhraní a zapísané ako `#42`.\n\nNejde o celoinštančné `id`, podľa ktorého filtruje globálny zoznam problémov; ide o dve rôzne čísla pre ten istý problém."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "Aktualizovať problém"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6524,7 +6524,7 @@
           "message": "Vytvorené"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Delete Issue",
+          "source": "Delete issue",
           "message": "Odstrániť úlohu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6560,7 +6560,7 @@
           "message": "Hodnota **IID** problému: číslo relatívne k projektu zobrazené vo webovom rozhraní a zapísané ako `#42`.\n\nNejde o celoinštančné `id`, podľa ktorého filtruje globálny zoznam problémov; ide o dve rôzne čísla pre ten istý problém."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.display_name": {
-          "source": "Get Issue Time Stats",
+          "source": "Get issue time stats",
           "message": "Získať štatistiky času problému"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.short_desc": {
@@ -6596,7 +6596,7 @@
           "message": "Hodnota **IID** problému: číslo relatívne k projektu zobrazené vo webovom rozhraní a zapísané ako `#42`.\n\nNejde o celoinštančné `id`, podľa ktorého filtruje globálny zoznam problémov; ide o dve rôzne čísla pre ten istý problém."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.display_name": {
-          "source": "List Milestones",
+          "source": "List milestones",
           "message": "Zoznam míľnikov"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "Filtruje iba audítorov"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.display_name": {
-          "source": "List Project Users",
+          "source": "List project users",
           "message": "Zoznam používateľov projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.short_desc": {
@@ -7188,7 +7188,7 @@
           "message": "Filtrovať používateľov so zadanými ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.display_name": {
-          "source": "List Project Members",
+          "source": "List project members",
           "message": "Vypísať členov projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.short_desc": {
@@ -7296,7 +7296,7 @@
           "message": "Zobraziť iba členov s prepojenou identitou SAML"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.display_name": {
-          "source": "Add Project Member",
+          "source": "Add project member",
           "message": "Pridať člena projektu"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.short_desc": {
@@ -7376,7 +7376,7 @@
           "message": "Zdroj, ktorý spustil proces vytvorenia člena"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Get Project Member",
+          "source": "Get project member",
           "message": "Získať člena projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7412,7 +7412,7 @@
           "message": "ID používateľa člena"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Update Project Member",
+          "source": "Update project member",
           "message": "Aktualizovať člena projektu"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "ID roly člena, ktorá sa má aktualizovať"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Remove Project Member",
+          "source": "Remove project member",
           "message": "Odstrániť člena projektu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7544,7 +7544,7 @@
           "message": "Ak je `true`, člen si ponechá všetky priame členstvá v podskupinách alebo projektoch."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.display_name": {
-          "source": "List Group Members",
+          "source": "List group members",
           "message": "Zoznam členov skupiny"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.short_desc": {
@@ -7652,7 +7652,7 @@
           "message": "Zobraziť iba členov s prepojenou identitou SAML"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.display_name": {
-          "source": "Add Group Member",
+          "source": "Add group member",
           "message": "Pridať člena skupiny"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.short_desc": {
@@ -7732,7 +7732,7 @@
           "message": "Zdroj, ktorý spustil proces vytvorenia člena"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Get Group Member",
+          "source": "Get group member",
           "message": "Získať člena skupiny"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7768,7 +7768,7 @@
           "message": "ID používateľa člena"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Update Group Member",
+          "source": "Update group member",
           "message": "Aktualizovať člena skupiny"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7840,7 +7840,7 @@
           "message": "ID roly člena, ktorá sa má aktualizovať"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Remove Group Member",
+          "source": "Remove group member",
           "message": "Odstrániť člena skupiny"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7900,7 +7900,7 @@
           "message": "Ak je `true`, odstráni člena z akýchkoľvek úloh alebo mergových požiadaviek v skupine."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.display_name": {
-          "source": "List Merge Requests",
+          "source": "List merge requests",
           "message": "Vypísať požiadavky na zlúčenie"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "Vráti požiadavku so zadaným `iid`."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.display_name": {
-          "source": "Create Merge Request",
+          "source": "Create merge request",
           "message": "Vytvoriť merge request"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.short_desc": {
@@ -8900,7 +8900,7 @@
           "message": "ID pravidla"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Get Merge Request",
+          "source": "Get merge request",
           "message": "Získať požiadavku na zlúčenie"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -8972,7 +8972,7 @@
           "message": "Ak je `true`, odpoveď obsahuje informáciu, či prebieha operácia rebase."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Update Merge Request",
+          "source": "Update merge request",
           "message": "Aktualizovať merge request"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "ID pravidla"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Delete Merge Request",
+          "source": "Delete merge request",
           "message": "Odstrániť merge request"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "Hodnota **IID** požiadavky na zlúčenie: číslo relatívne k projektu zobrazené vo webovom rozhraní a zapísané ako `!7`, nie celoinštančné `id`."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.display_name": {
-          "source": "Approve Merge Request",
+          "source": "Approve merge request",
           "message": "Schváliť požiadavku na zlúčenie"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.short_desc": {
@@ -9380,7 +9380,7 @@
           "message": "Heslo aktuálneho používateľa, ak je projekt nastavený na vyžadovanie explicitného overenia pri schválení"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.display_name": {
-          "source": "Unapprove Merge Request",
+          "source": "Unapprove merge request",
           "message": "Zrušiť schválenie požiadavky na zlúčenie"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.short_desc": {
@@ -11640,7 +11640,7 @@
           "message": "ID projektu šablóny, z ktorej sa má projekt vytvoriť"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Získať projekt"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -11712,7 +11712,7 @@
           "message": "Filtrovať pomocou vlastných atribútov"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Aktualizovať projekt"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13740,7 +13740,7 @@
           "message": "dap_powered"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "Odstrániť projekt"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13836,7 +13836,7 @@
           "message": "ID organizácie pre témy"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.display_name": {
-          "source": "List Project Variables",
+          "source": "List project variables",
           "message": "Zoznam premenných projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.short_desc": {
@@ -13884,7 +13884,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu GitLabu `100`.\n\nCelkový počet a nasledujúca stránka sú uvádzané v **hlavičkách odpovede** `X-Total`, `X-Page` a `X-Next-Page`, nie v tele, takže stránkovanie znamená vyžiadanie ďalšej stránky, kým sa nevráti menej ako `per_page` záznamov."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "Create Project Variable",
+          "source": "Create project variable",
           "message": "Vytvoriť premennú projektu"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "Či sa premenná expanduje"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Get Project Variable",
+          "source": "Get project variable",
           "message": "Získať premennú projektu"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "Dostupné filtre: [environment_scope]. Príklad: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Update Project Variable",
+          "source": "Update project variable",
           "message": "Aktualizovať premennú projektu"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14236,7 +14236,7 @@
           "message": "Popis premennej"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Delete Project Variable",
+          "source": "Delete project variable",
           "message": "Odstrániť premennú projektu"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14296,7 +14296,7 @@
           "message": "Dostupné filtre: [environment_scope]. Príklad: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "List Group Variables",
+          "source": "List group variables",
           "message": "Zoznam premenných skupiny"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14344,7 +14344,7 @@
           "message": "Koľko záznamov sa má vrátiť v jednej požiadavke, maximálne do limitu GitLabu `100`.\n\nCelkový počet a nasledujúca stránka sú uvádzané v **hlavičkách odpovede** `X-Total`, `X-Page` a `X-Next-Page`, nie v tele, takže stránkovanie znamená vyžiadanie ďalšej stránky, kým sa nevráti menej ako `per_page` záznamov."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.display_name": {
-          "source": "Create Group Variable",
+          "source": "Create group variable",
           "message": "Vytvoriť skupinovú premennú"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.short_desc": {
@@ -14484,7 +14484,7 @@
           "message": "Či sa premenná expanduje"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Get Group Variable",
+          "source": "Get group variable",
           "message": "Získať premennú skupiny"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14520,7 +14520,7 @@
           "message": "Kľúč premennej"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Update Group Variable",
+          "source": "Update group variable",
           "message": "Aktualizovať premennú skupiny"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14648,7 +14648,7 @@
           "message": "Popis premennej"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Delete Group Variable",
+          "source": "Delete group variable",
           "message": "Odstrániť skupinovú premennú"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14684,7 +14684,7 @@
           "message": "Kľúč premennej"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.display_name": {
-          "source": "List Wiki Pages",
+          "source": "List wiki pages",
           "message": "Zoznam wiki stránok"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.short_desc": {
@@ -14720,7 +14720,7 @@
           "message": "Zahrnúť obsah stránok"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.display_name": {
-          "source": "Create Wiki Page",
+          "source": "Create wiki page",
           "message": "Vytvoriť wiki stránku"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.short_desc": {
@@ -14820,7 +14820,7 @@
           "message": "Názov predhovoru wiki stránky"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Get Wiki Page",
+          "source": "Get wiki page",
           "message": "Získať wiki stránku"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14880,7 +14880,7 @@
           "message": "Vykresliť obsah do HTML"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Update Wiki Page",
+          "source": "Update wiki page",
           "message": "Aktualizovať wiki stránku"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14992,7 +14992,7 @@
           "message": "Názov predhovoru wiki stránky"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Delete Wiki Page",
+          "source": "Delete wiki page",
           "message": "Odstrániť wiki stránku"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -15148,7 +15148,7 @@
           "message": "Tabuľka, s ktorou sa má pracovať: `projects`, `groups`, `issues`, `merge-requests`, `branches`, `commit-comments`, `project-members`, `group-members`, `project-variables`, `group-variables`, `deploy-keys` alebo `wikis`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
-          "source": "Create Commit",
+          "source": "Create commit",
           "message": "Vytvoriť commit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.short_desc": {
@@ -15404,7 +15404,7 @@
           "message": "Prepísať cieľovú vetvu novým commitom na základe `start_branch` alebo `start_sha`.\n\n**Týmto sa zahodí všetko, čo bolo v cieľovej vetve**, takže toto je jediná možnosť, pri ktorej môže dôjsť k strate práce"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.display_name": {
-          "source": "Get Project ID by URL",
+          "source": "Get project ID by URL",
           "message": "Získať ID projektu podľa URL"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.short_desc": {
@@ -15428,7 +15428,7 @@
           "message": "URL adresa projektu, skopírovaná z prehliadača.\n\nFunguje akákoľvek URL adresa **v rámci** projektu, nielen jeho hlavná stránka: `https://gitlab.com/group/project`, `https://gitlab.com/group/project/-/issues/17` a `https://gitlab.com/group/project.git` identifikujú rovnaký projekt."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "Nový commit"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -15440,7 +15440,7 @@
           "message": "Spúšťa sa pre každý nový commit v sledovanom projekte.\n\nObmedzte ho na jednu vetvu alebo značku pomocou `ref_name`, na commity ovplyvňujúce jeden súbor alebo adresár pomocou `path`, alebo na jedného autora pomocou `author`. Udalosť nesie záznam o commite, ktorý vráti GitLab, vrátane jeho správy, autora a webovej adresy URL."
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "Nový komentár k commitu"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {
@@ -15452,7 +15452,7 @@
           "message": "Spúšťa sa pre každý nový komentár k jednému commitu.\n\nCommit je povinnou voľbou, takže sa sledujú komentáre k danému commitu, nie každý komentár v projekte. Udalosť nesie poznámku, jej pozíciu v diff (ak existuje) a jej autora."
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "Nová úloha"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.short_desc": {
@@ -15464,7 +15464,7 @@
           "message": "Spúšťa sa pre každý nový issue v sledovanom projekte.\n\nUdalosť nesie záznam o issue, ktorý vráti GitLab, vrátane jej IID, názvu, štítkov, priradených osôb a webovej adresy URL. Neskôr upravený issue túto udalosť znovu nespustí; hlási iba vytvorenie."
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.display_name": {
-          "source": "New Merge Request",
+          "source": "New merge request",
           "message": "Nová požiadavka na zlúčenie"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.short_desc": {

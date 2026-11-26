@@ -1396,8 +1396,8 @@
           "message": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
-          "message": "Count Tokens"
+          "source": "Count tokens",
+          "message": "Count tokens"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
           "source": "Count the number of tokens in a message without creating it",
@@ -1664,8 +1664,8 @@
           "message": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
-          "message": "Get Model"
+          "source": "Get model",
+          "message": "Get model"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
           "source": "Get details for a specific model by ID or alias",
@@ -1688,8 +1688,8 @@
           "message": "The unique identifier or alias for the model (e.g. `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List all available Anthropic models",
@@ -2624,8 +2624,8 @@
           "message": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
-          "message": "Get Message Batch"
+          "source": "Get message batch",
+          "message": "Get message batch"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
           "source": "Get the status and details of a message batch",
@@ -2648,8 +2648,8 @@
           "message": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
-          "message": "List Message Batches"
+          "source": "List message batches",
+          "message": "List message batches"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
           "source": "List all message batches in the workspace",
@@ -2864,8 +2864,8 @@
           "message": "The filename"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
-          "message": "List Files"
+          "source": "List files",
+          "message": "List files"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
           "source": "List all uploaded files in the workspace (Beta)",
@@ -2912,8 +2912,8 @@
           "message": "Return files before this file ID (cursor for backward pagination)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get metadata for a specific file (Beta)",
@@ -2936,8 +2936,8 @@
           "message": "The unique identifier for the file"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
-          "message": "Get File Content"
+          "source": "Get file content",
+          "message": "Get file content"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
           "source": "Download the content of a file (Beta)",
@@ -3044,8 +3044,8 @@
           "message": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
-          "message": "List Skills"
+          "source": "List skills",
+          "message": "List skills"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
           "source": "List available skills (Beta)",
@@ -3108,8 +3108,8 @@
           "message": "Pagination token from a previous response's `next_page` field for retrieving the next page of results"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
-          "message": "Get Skill"
+          "source": "Get skill",
+          "message": "Get skill"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {
           "source": "Get details for a specific skill (Beta)",

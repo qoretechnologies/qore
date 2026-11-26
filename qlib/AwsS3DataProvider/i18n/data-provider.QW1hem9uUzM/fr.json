@@ -1408,7 +1408,7 @@
           "message": "Données d'archivage à long terme récupérées en quelques heures ; la classe de stockage la plus économique"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Créer une URL présignée"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

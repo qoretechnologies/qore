@@ -740,7 +740,7 @@
           "message": "外部參考"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
-          "source": "Create Paid Order",
+          "source": "Create paid order",
           "message": "建立已付款訂單"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
@@ -980,7 +980,7 @@
           "message": "訂單的目前版本（用於開放式並行控制）"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create a Payment",
+          "source": "Create a payment",
           "message": "建立付款"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "若為 `True`（預設），付款會立即完成。若為 `False`，則必須稍後透過 complete-payment 完成。"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
-          "source": "Complete Payment",
+          "source": "Complete payment",
           "message": "完成付款"
         },
         "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {

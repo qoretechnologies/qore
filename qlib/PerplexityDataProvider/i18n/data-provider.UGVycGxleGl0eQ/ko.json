@@ -2476,7 +2476,7 @@
           "message": "응답에 선호하는 언어를 지정하는 ISO 639-1 언어 코드"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
-          "source": "Web Search",
+          "source": "Web search",
           "message": "웹 검색"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {

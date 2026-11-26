@@ -388,8 +388,8 @@
           "message": "A list of one or more evaluation job Amazon Resource Names (ARNs) you want to delete."
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Cancel Automated Reasoning Policy Build Workflow",
-          "message": "Cancel Automated Reasoning Policy Build Workflow"
+          "source": "Cancel automated reasoning policy build workflow",
+          "message": "Cancel automated reasoning policy build workflow"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
           "source": "Cancels a running Automated Reasoning policy build workflow.",
@@ -952,8 +952,8 @@
           "message": "Value for the tag."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Create Automated Reasoning Policy Test Case",
-          "message": "Create Automated Reasoning Policy Test Case"
+          "source": "Create automated reasoning policy test case",
+          "message": "Create automated reasoning policy test case"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
           "source": "Creates a test for an Automated Reasoning policy.",
@@ -1064,8 +1064,8 @@
           "message": "The minimum confidence level for logic validation. Content that meets the threshold is considered a high-confidence finding that can be validated."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Create Automated Reasoning Policy Version",
-          "message": "Create Automated Reasoning Policy Version"
+          "source": "Create automated reasoning policy version",
+          "message": "Create automated reasoning policy version"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
           "source": "Creates a new version of an existing Automated Reasoning policy.",
@@ -4500,8 +4500,8 @@
           "message": "A unique, case-sensitive identifier to ensure that the API request completes no more than once. If this token matches a previous request, Amazon Bedrock ignores the request, but does not return an error. For more information, see [Ensuring idempotency](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html) in the *Amazon S3 User Guide*."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.display_name": {
-          "source": "Create Guardrail Version",
-          "message": "Create Guardrail Version"
+          "source": "Create guardrail version",
+          "message": "Create guardrail version"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.short_desc": {
           "source": "Creates a version of the guardrail.",
@@ -6412,8 +6412,8 @@
           "message": "Value for the tag."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Delete Automated Reasoning Policy",
-          "message": "Delete Automated Reasoning Policy"
+          "source": "Delete automated reasoning policy",
+          "message": "Delete automated reasoning policy"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
           "source": "Deletes an Automated Reasoning policy or policy version.",
@@ -6448,8 +6448,8 @@
           "message": "Specifies whether to force delete the automated reasoning policy even if it has active resources. When `false`, Amazon Bedrock validates if all artifacts have been deleted (e.g. policy version, test case, test result) for a policy before deletion. When `true`, Amazon Bedrock will delete the policy and all its artifacts without validation. Default is `false`."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Delete Automated Reasoning Policy Build Workflow",
-          "message": "Delete Automated Reasoning Policy Build Workflow"
+          "source": "Delete automated reasoning policy build workflow",
+          "message": "Delete automated reasoning policy build workflow"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
           "source": "Run the Delete Automated Reasoning Policy Build Workflow operation.",
@@ -6496,8 +6496,8 @@
           "message": "The timestamp when the build workflow was last updated. This is used for optimistic concurrency control to prevent accidental deletion of workflows that have been modified."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Delete Automated Reasoning Policy Test Case",
-          "message": "Delete Automated Reasoning Policy Test Case"
+          "source": "Delete automated reasoning policy test case",
+          "message": "Delete automated reasoning policy test case"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
           "source": "Deletes an Automated Reasoning policy test.",
@@ -6544,8 +6544,8 @@
           "message": "The timestamp when the test was last updated. This is used as a concurrency token to prevent conflicting modifications."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Delete Custom Model",
-          "message": "Delete Custom Model"
+          "source": "Delete custom model",
+          "message": "Delete custom model"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.short_desc": {
           "source": "Deletes a custom model that you created earlier.",
@@ -6568,8 +6568,8 @@
           "message": "Name of the model to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Delete Custom Model Deployment",
-          "message": "Delete Custom Model Deployment"
+          "source": "Delete custom model deployment",
+          "message": "Delete custom model deployment"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
           "source": "Deletes a custom model deployment.",
@@ -6592,8 +6592,8 @@
           "message": "The Amazon Resource Name (ARN) or name of the custom model deployment to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Delete Enforced Guardrail Configuration",
-          "message": "Delete Enforced Guardrail Configuration"
+          "source": "Delete enforced guardrail configuration",
+          "message": "Delete enforced guardrail configuration"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.short_desc": {
           "source": "Deletes the account-level enforced guardrail configuration.",
@@ -6640,8 +6640,8 @@
           "message": "Model Id of the model access to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Delete Guardrail",
-          "message": "Delete Guardrail"
+          "source": "Delete guardrail",
+          "message": "Delete guardrail"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.short_desc": {
           "source": "Deletes a guardrail.",
@@ -6676,8 +6676,8 @@
           "message": "The version of the guardrail."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Delete Imported Model",
-          "message": "Delete Imported Model"
+          "source": "Delete imported model",
+          "message": "Delete imported model"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.short_desc": {
           "source": "Deletes a custom model that you imported earlier.",
@@ -6700,8 +6700,8 @@
           "message": "Name of the imported model to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Delete Inference Profile",
-          "message": "Delete Inference Profile"
+          "source": "Delete inference profile",
+          "message": "Delete inference profile"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.short_desc": {
           "source": "Deletes an application inference profile.",
@@ -6724,8 +6724,8 @@
           "message": "The Amazon Resource Name (ARN) or ID of the application inference profile to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Delete Marketplace Model Endpoint",
-          "message": "Delete Marketplace Model Endpoint"
+          "source": "Delete marketplace model endpoint",
+          "message": "Delete marketplace model endpoint"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
           "source": "Deletes an endpoint for a model from Amazon Bedrock Marketplace.",
@@ -6760,8 +6760,8 @@
           "message": "Delete the invocation logging."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Delete Prompt Router",
-          "message": "Delete Prompt Router"
+          "source": "Delete prompt router",
+          "message": "Delete prompt router"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.short_desc": {
           "source": "Deletes a specified prompt router.",
@@ -6784,8 +6784,8 @@
           "message": "The Amazon Resource Name (ARN) of the prompt router to delete."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Delete Provisioned Model Throughput",
-          "message": "Delete Provisioned Model Throughput"
+          "source": "Delete provisioned model throughput",
+          "message": "Delete provisioned model throughput"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
           "source": "Deletes a Provisioned Throughput.",
@@ -6808,8 +6808,8 @@
           "message": "The Amazon Resource Name (ARN) or name of the Provisioned Throughput."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Delete Resource Policy",
-          "message": "Delete Resource Policy"
+          "source": "Delete resource policy",
+          "message": "Delete resource policy"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.short_desc": {
           "source": "Deletes a previously created Bedrock resource policy.",
@@ -6832,8 +6832,8 @@
           "message": "The ARN of the Bedrock resource to which this resource policy applies."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.display_name": {
-          "source": "Deregister Marketplace Model Endpoint",
-          "message": "Deregister Marketplace Model Endpoint"
+          "source": "Deregister marketplace model endpoint",
+          "message": "Deregister marketplace model endpoint"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.short_desc": {
           "source": "Deregisters an endpoint for a model from Amazon Bedrock Marketplace.",
@@ -6856,8 +6856,8 @@
           "message": "The Amazon Resource Name (ARN) of the endpoint you want to deregister."
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Export Automated Reasoning Policy Version",
-          "message": "Export Automated Reasoning Policy Version"
+          "source": "Export automated reasoning policy version",
+          "message": "Export automated reasoning policy version"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
           "source": "Exports the policy definition for an Automated Reasoning policy version.",
@@ -6892,8 +6892,8 @@
           "message": "Returns the account-wide data retention mode for Amazon Bedrock."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Advanced Prompt Optimization Job",
-          "message": "Get Advanced Prompt Optimization Job"
+          "source": "Get advanced prompt optimization job",
+          "message": "Get advanced prompt optimization job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.short_desc": {
           "source": "Gets information about an advanced prompt optimization job.",
@@ -6916,8 +6916,8 @@
           "message": "The ARN or ID of the advanced prompt optimization job.: The ARN or ID of an advanced prompt optimization job."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Get Automated Reasoning Policy",
-          "message": "Get Automated Reasoning Policy"
+          "source": "Get automated reasoning policy",
+          "message": "Get automated reasoning policy"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
           "source": "Retrieves details about an Automated Reasoning policy or policy version.",
@@ -6940,8 +6940,8 @@
           "message": "The Amazon Resource Name (ARN) of the Automated Reasoning policy to retrieve. Can be either the unversioned ARN for the draft policy or an ARN for a specific policy version."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Get Automated Reasoning Policy Annotations",
-          "message": "Get Automated Reasoning Policy Annotations"
+          "source": "Get automated reasoning policy annotations",
+          "message": "Get automated reasoning policy annotations"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
           "source": "Run the Get Automated Reasoning Policy Annotations operation.",
@@ -6976,8 +6976,8 @@
           "message": "The unique identifier of the build workflow whose annotations you want to retrieve."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow",
-          "message": "Get Automated Reasoning Policy Build Workflow"
+          "source": "Get automated reasoning policy build workflow",
+          "message": "Get automated reasoning policy build workflow"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
           "source": "Run the Get Automated Reasoning Policy Build Workflow operation.",
@@ -7012,8 +7012,8 @@
           "message": "The unique identifier of the build workflow to retrieve."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow Result Assets",
-          "message": "Get Automated Reasoning Policy Build Workflow Result Assets"
+          "source": "Get automated reasoning policy build workflow result assets",
+          "message": "Get automated reasoning policy build workflow result assets"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.short_desc": {
           "source": "Run the Get Automated Reasoning Policy Build Workflow Result Assets operation.",
@@ -7104,8 +7104,8 @@
           "message": "The unique identifier of the specific asset to retrieve when multiple assets of the same type exist. This is required when retrieving SOURCE_DOCUMENT assets, as multiple source documents may have been used in the workflow. The asset ID can be obtained from the asset manifest."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.display_name": {
-          "source": "Get Automated Reasoning Policy Next Scenario",
-          "message": "Get Automated Reasoning Policy Next Scenario"
+          "source": "Get automated reasoning policy next scenario",
+          "message": "Get automated reasoning policy next scenario"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.short_desc": {
           "source": "Retrieves the next test scenario for validating an Automated Reasoning policy.",
@@ -7140,8 +7140,8 @@
           "message": "The unique identifier of the build workflow associated with the test scenarios."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Get Automated Reasoning Policy Test Case",
-          "message": "Get Automated Reasoning Policy Test Case"
+          "source": "Get automated reasoning policy test case",
+          "message": "Get automated reasoning policy test case"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
           "source": "Retrieves details about a specific Automated Reasoning policy test.",
@@ -7176,8 +7176,8 @@
           "message": "The unique identifier of the test to retrieve."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.display_name": {
-          "source": "Get Automated Reasoning Policy Test Result",
-          "message": "Get Automated Reasoning Policy Test Result"
+          "source": "Get automated reasoning policy test result",
+          "message": "Get automated reasoning policy test result"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.short_desc": {
           "source": "Retrieves the test result for a specific Automated Reasoning policy test.",
@@ -7224,8 +7224,8 @@
           "message": "The unique identifier of the test for which to retrieve results."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Get Custom Model",
-          "message": "Get Custom Model"
+          "source": "Get custom model",
+          "message": "Get custom model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.short_desc": {
           "source": "Run the Get Custom Model operation.",
@@ -7248,8 +7248,8 @@
           "message": "Name or Amazon Resource Name (ARN) of the custom model."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Get Custom Model Deployment",
-          "message": "Get Custom Model Deployment"
+          "source": "Get custom model deployment",
+          "message": "Get custom model deployment"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
           "source": "Run the Get Custom Model Deployment operation.",
@@ -7272,8 +7272,8 @@
           "message": "The Amazon Resource Name (ARN) or name of the custom model deployment to retrieve information about."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
-          "message": "Get Evaluation Job"
+          "source": "Get evaluation job",
+          "message": "Get evaluation job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
           "source": "Gets information about an evaluation job, such as the status of the job.",
@@ -7296,8 +7296,8 @@
           "message": "The Amazon Resource Name (ARN) of the evaluation job you want get information on."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.display_name": {
-          "source": "Get Foundation Model",
-          "message": "Get Foundation Model"
+          "source": "Get foundation model",
+          "message": "Get foundation model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.short_desc": {
           "source": "Get details about a Amazon Bedrock foundation model.",
@@ -7320,8 +7320,8 @@
           "message": "The model identifier."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.display_name": {
-          "source": "Get Foundation Model Availability",
-          "message": "Get Foundation Model Availability"
+          "source": "Get foundation model availability",
+          "message": "Get foundation model availability"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Get information about the Foundation model availability.",
@@ -7344,8 +7344,8 @@
           "message": "The model Id of the foundation model."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.display_name": {
-          "source": "Get Guardrail",
-          "message": "Get Guardrail"
+          "source": "Get guardrail",
+          "message": "Get guardrail"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.short_desc": {
           "source": "Gets details about a guardrail.",
@@ -7380,8 +7380,8 @@
           "message": "The version of the guardrail for which to get details. If you don't specify a version, the response returns details for the `DRAFT` version."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Get Imported Model",
-          "message": "Get Imported Model"
+          "source": "Get imported model",
+          "message": "Get imported model"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.short_desc": {
           "source": "Gets properties associated with a customized model you imported.",
@@ -7404,8 +7404,8 @@
           "message": "Name or Amazon Resource Name (ARN) of the imported model."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Get Inference Profile",
-          "message": "Get Inference Profile"
+          "source": "Get inference profile",
+          "message": "Get inference profile"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.short_desc": {
           "source": "Gets information about an inference profile.",
@@ -7428,8 +7428,8 @@
           "message": "The ID or Amazon Resource Name (ARN) of the inference profile."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Get Marketplace Model Endpoint",
-          "message": "Get Marketplace Model Endpoint"
+          "source": "Get marketplace model endpoint",
+          "message": "Get marketplace model endpoint"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
           "source": "Run the Get Marketplace Model Endpoint operation.",
@@ -7452,8 +7452,8 @@
           "message": "The Amazon Resource Name (ARN) of the endpoint you want to get information about."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.display_name": {
-          "source": "Get Model Copy Job",
-          "message": "Get Model Copy Job"
+          "source": "Get model copy job",
+          "message": "Get model copy job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.short_desc": {
           "source": "Retrieves information about a model copy job.",
@@ -7476,8 +7476,8 @@
           "message": "The Amazon Resource Name (ARN) of the model copy job."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Model Customization Job",
-          "message": "Get Model Customization Job"
+          "source": "Get model customization job",
+          "message": "Get model customization job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.short_desc": {
           "source": "Run the Get Model Customization Job operation.",
@@ -7500,8 +7500,8 @@
           "message": "Identifier for the customization job."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.display_name": {
-          "source": "Get Model Import Job",
-          "message": "Get Model Import Job"
+          "source": "Get model import job",
+          "message": "Get model import job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.short_desc": {
           "source": "Run the Get Model Import Job operation.",
@@ -7524,8 +7524,8 @@
           "message": "The identifier of the import job."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.display_name": {
-          "source": "Get Model Invocation Job",
-          "message": "Get Model Invocation Job"
+          "source": "Get model invocation job",
+          "message": "Get model invocation job"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.short_desc": {
           "source": "Gets details about a batch inference job.",
@@ -7560,8 +7560,8 @@
           "message": "Get the current configuration values for model invocation logging."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Get Prompt Router",
-          "message": "Get Prompt Router"
+          "source": "Get prompt router",
+          "message": "Get prompt router"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.short_desc": {
           "source": "Retrieves details about a prompt router.",
@@ -7584,8 +7584,8 @@
           "message": "The prompt router's ARN"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Get Provisioned Model Throughput",
-          "message": "Get Provisioned Model Throughput"
+          "source": "Get provisioned model throughput",
+          "message": "Get provisioned model throughput"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
           "source": "Returns details for a Provisioned Throughput.",
@@ -7608,8 +7608,8 @@
           "message": "The Amazon Resource Name (ARN) or name of the Provisioned Throughput."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Get Resource Policy",
-          "message": "Get Resource Policy"
+          "source": "Get resource policy",
+          "message": "Get resource policy"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.short_desc": {
           "source": "Gets the resource policy document for a Bedrock resource",
@@ -7764,8 +7764,8 @@
           "message": "The maximum number of policies to return in a single call."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.display_name": {
-          "source": "List Automated Reasoning Policy Build Workflows",
-          "message": "List Automated Reasoning Policy Build Workflows"
+          "source": "List automated reasoning policy build workflows",
+          "message": "List automated reasoning policy build workflows"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.short_desc": {
           "source": "Run the List Automated Reasoning Policy Build Workflows operation.",
@@ -7812,8 +7812,8 @@
           "message": "The maximum number of build workflows to return in a single response. Valid range is 1-100."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.display_name": {
-          "source": "List Automated Reasoning Policy Test Cases",
-          "message": "List Automated Reasoning Policy Test Cases"
+          "source": "List automated reasoning policy test cases",
+          "message": "List automated reasoning policy test cases"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.short_desc": {
           "source": "Lists tests for an Automated Reasoning policy.",
@@ -7860,8 +7860,8 @@
           "message": "The maximum number of tests to return in a single call."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.display_name": {
-          "source": "List Automated Reasoning Policy Test Results",
-          "message": "List Automated Reasoning Policy Test Results"
+          "source": "List automated reasoning policy test results",
+          "message": "List automated reasoning policy test results"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.short_desc": {
           "source": "Run the List Automated Reasoning Policy Test Results operation.",
@@ -8420,8 +8420,8 @@
           "message": "Descending"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.display_name": {
-          "source": "List Foundation Model Agreement Offers",
-          "message": "List Foundation Model Agreement Offers"
+          "source": "List foundation model agreement offers",
+          "message": "List foundation model agreement offers"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.short_desc": {
           "source": "Get the offers associated with the specified model.",
@@ -10052,8 +10052,8 @@
           "message": "Put customer profile Request."
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.display_name": {
-          "source": "Register Marketplace Model Endpoint",
-          "message": "Register Marketplace Model Endpoint"
+          "source": "Register marketplace model endpoint",
+          "message": "Register marketplace model endpoint"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.short_desc": {
           "source": "Run the Register Marketplace Model Endpoint operation.",
@@ -10088,8 +10088,8 @@
           "message": "The ARN of the model from Amazon Bedrock Marketplace that is deployed on the endpoint."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.display_name": {
-          "source": "Start Automated Reasoning Policy Build Workflow",
-          "message": "Start Automated Reasoning Policy Build Workflow"
+          "source": "Start automated reasoning policy build workflow",
+          "message": "Start automated reasoning policy build workflow"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.short_desc": {
           "source": "Starts a new build workflow for an Automated Reasoning policy.",
@@ -11108,8 +11108,8 @@
           "message": "A unique, case-sensitive identifier to ensure that the operation completes no more than once. If this token matches a previous request, Amazon Bedrock ignores the request but doesn't return an error."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.display_name": {
-          "source": "Start Automated Reasoning Policy Test Workflow",
-          "message": "Start Automated Reasoning Policy Test Workflow"
+          "source": "Start automated reasoning policy test workflow",
+          "message": "Start automated reasoning policy test workflow"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.short_desc": {
           "source": "Initiates a test workflow to validate Automated Reasoning policy tests.",
@@ -11168,8 +11168,8 @@
           "message": "A unique, case-sensitive identifier to ensure that the operation completes no more than one time. If this token matches a previous request, Amazon Bedrock ignores the request but doesn't return an error."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Advanced Prompt Optimization Job",
-          "message": "Stop Advanced Prompt Optimization Job"
+          "source": "Stop advanced prompt optimization job",
+          "message": "Stop advanced prompt optimization job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.short_desc": {
           "source": "Stops an advanced prompt optimization job that is in progress.",
@@ -11192,8 +11192,8 @@
           "message": "The ARN or ID of the advanced prompt optimization job to stop.: The ARN or ID of an advanced prompt optimization job."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.display_name": {
-          "source": "Stop Evaluation Job",
-          "message": "Stop Evaluation Job"
+          "source": "Stop evaluation job",
+          "message": "Stop evaluation job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.short_desc": {
           "source": "Stops an evaluation job that is current being created or running.",
@@ -11216,8 +11216,8 @@
           "message": "The Amazon Resource Name (ARN) of the evaluation job you want to stop."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Customization Job",
-          "message": "Stop Model Customization Job"
+          "source": "Stop model customization job",
+          "message": "Stop model customization job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.short_desc": {
           "source": "Stops an active model customization job.",
@@ -11240,8 +11240,8 @@
           "message": "Job identifier of the job to stop."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Invocation Job",
-          "message": "Stop Model Invocation Job"
+          "source": "Stop model invocation job",
+          "message": "Stop model invocation job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.short_desc": {
           "source": "Stops a batch inference job.",
@@ -11360,8 +11360,8 @@
           "message": "Tag keys of the tags to remove from the resource."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Update Automated Reasoning Policy",
-          "message": "Update Automated Reasoning Policy"
+          "source": "Update automated reasoning policy",
+          "message": "Update automated reasoning policy"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
           "source": "Run the Update Automated Reasoning Policy operation.",
@@ -11600,8 +11600,8 @@
           "message": "The updated description for the Automated Reasoning policy."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Update Automated Reasoning Policy Annotations",
-          "message": "Update Automated Reasoning Policy Annotations"
+          "source": "Update automated reasoning policy annotations",
+          "message": "Update automated reasoning policy annotations"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
           "source": "Updates the annotations for an Automated Reasoning policy build workflow.",
@@ -12260,8 +12260,8 @@
           "message": "The hash value of the annotation set that you're updating. This is used for optimistic concurrency control to prevent conflicting updates."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Update Automated Reasoning Policy Test Case",
-          "message": "Update Automated Reasoning Policy Test Case"
+          "source": "Update automated reasoning policy test case",
+          "message": "Update automated reasoning policy test case"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
           "source": "Updates an existing Automated Reasoning policy test.",
@@ -12396,8 +12396,8 @@
           "message": "A unique, case-sensitive identifier to ensure that the operation completes no more than one time. If this token matches a previous request, Amazon Bedrock ignores the request, but does not return an error."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Update Custom Model Deployment",
-          "message": "Update Custom Model Deployment"
+          "source": "Update custom model deployment",
+          "message": "Update custom model deployment"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
           "source": "Updates a custom model deployment with a new custom model.",
@@ -12432,8 +12432,8 @@
           "message": "ARN of the new custom model to deploy. This replaces the currently deployed model."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Update Guardrail",
-          "message": "Update Guardrail"
+          "source": "Update guardrail",
+          "message": "Update guardrail"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.short_desc": {
           "source": "Updates a guardrail with the values you specify.",
@@ -13664,8 +13664,8 @@
           "message": "The ARN of the KMS key with which to encrypt the guardrail."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Update Marketplace Model Endpoint",
-          "message": "Update Marketplace Model Endpoint"
+          "source": "Update marketplace model endpoint",
+          "message": "Update marketplace model endpoint"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
           "source": "Run the Update Marketplace Model Endpoint operation.",
@@ -13808,8 +13808,8 @@
           "message": "A unique, case-sensitive identifier that you provide to ensure the idempotency of the request. This token is listed as not required because Amazon Web Services SDKs automatically generate it for you and set this parameter. If you're not using the Amazon Web Services SDK or the CLI, you must provide this token or the action will fail."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Update Provisioned Model Throughput",
-          "message": "Update Provisioned Model Throughput"
+          "source": "Update provisioned model throughput",
+          "message": "Update provisioned model throughput"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
           "source": "Updates the name or associated model for a Provisioned Throughput.",
@@ -13856,8 +13856,8 @@
           "message": "The Amazon Resource Name (ARN) of the new model to associate with this Provisioned Throughput. You can't specify this field if this Provisioned Throughput is associated with a base model.\n\nIf this Provisioned Throughput is associated with a custom model, you can specify one of the following options:\n\n- The base model from which the custom model was customized.\n\n- Another custom model that was customized from the same base model as the custom model."
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.display_name": {
-          "source": "Apply Guardrail",
-          "message": "Apply Guardrail"
+          "source": "Apply guardrail",
+          "message": "Apply guardrail"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.short_desc": {
           "source": "The action to apply a guardrail.",
@@ -16152,8 +16152,8 @@
           "message": "json_schema"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
-          "message": "Count Tokens"
+          "source": "Count tokens",
+          "message": "Count tokens"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.short_desc": {
           "source": "Returns the token count for a given inference request.",
@@ -17976,8 +17976,8 @@
           "message": "CachePoint to include in the tool configuration."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.display_name": {
-          "source": "Get Async Invoke",
-          "message": "Get Async Invoke"
+          "source": "Get async invoke",
+          "message": "Get async invoke"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.short_desc": {
           "source": "Retrieve information about an asynchronous invocation.",
@@ -18348,8 +18348,8 @@
           "message": "VEHICLE_IDENTIFICATION_NUMBER"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.display_name": {
-          "source": "Invoke Model",
-          "message": "Invoke Model"
+          "source": "Invoke model",
+          "message": "Invoke model"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.short_desc": {
           "source": "Run the Invoke Model operation.",
@@ -18788,8 +18788,8 @@
           "message": "The tag's value."
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
-          "message": "Embed Text"
+          "source": "Embed text",
+          "message": "Embed text"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {
           "source": "Generate text embeddings via a Bedrock embedding model",

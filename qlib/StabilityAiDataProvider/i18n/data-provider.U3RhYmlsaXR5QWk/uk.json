@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.display_name": {
-          "source": "Generate Ultra Image",
+          "source": "Generate Ultra image",
           "message": "Створіть зображення Ultra"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.display_name": {
-          "source": "Generate Core Image",
+          "source": "Generate Core image",
           "message": "Створіть зображення Core"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.display_name": {
-          "source": "Generate SD3.5 Image",
+          "source": "Generate SD3.5 image",
           "message": "Створіть зображення SD3.5"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.display_name": {
-          "source": "Upscale Image Quickly",
+          "source": "Upscale image quickly",
           "message": "Швидко підвищити роздільність зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.display_name": {
-          "source": "Upscale Image Conservatively",
+          "source": "Upscale image conservatively",
           "message": "Підвищити роздільність зі збереженням вигляду"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.display_name": {
-          "source": "Start Creative Upscale",
+          "source": "Start creative upscale",
           "message": "Почати творче підвищення роздільності"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "Текстура плитки"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.display_name": {
-          "source": "Get Creative Upscale Result",
+          "source": "Get creative upscale result",
           "message": "Отримати результат творчого підвищення роздільності"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.display_name": {
-          "source": "Erase Object",
+          "source": "Erase object",
           "message": "Видалити об'єкт"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.display_name": {
-          "source": "Inpaint Image",
+          "source": "Inpaint image",
           "message": "Замінити замасковану область зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.display_name": {
-          "source": "Extend Image",
+          "source": "Extend image",
           "message": "Розширити зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "Пошук і заміна"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.display_name": {
-          "source": "Search and Recolor",
+          "source": "Search and recolor",
           "message": "Пошук і перефарбування"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.short_desc": {
@@ -3912,7 +3912,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.display_name": {
-          "source": "Remove Background",
+          "source": "Remove background",
           "message": "Видалити фон"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.display_name": {
-          "source": "Start Background and Lighting Edit",
+          "source": "Start background and lighting edit",
           "message": "Запустіть редагування фону та освітлення"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "WebP"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.display_name": {
-          "source": "Get Image Job Result",
+          "source": "Get image job result",
           "message": "Отримайте зображення результату роботи"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.short_desc": {
@@ -4704,7 +4704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.display_name": {
-          "source": "Generate from Sketch",
+          "source": "Generate from sketch",
           "message": "Створити з ескізу"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.display_name": {
-          "source": "Generate with Image Structure",
+          "source": "Generate with image structure",
           "message": "Створення за допомогою структури зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.short_desc": {
@@ -5336,7 +5336,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.display_name": {
-          "source": "Generate with Style Guide",
+          "source": "Generate with style guide",
           "message": "Створити за допомогою посібника зі стилю"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.display_name": {
-          "source": "Transfer Image Style",
+          "source": "Transfer image style",
           "message": "Передача стилю зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.short_desc": {
@@ -6092,7 +6092,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.display_name": {
-          "source": "Generate Fast 3D Model",
+          "source": "Generate Fast 3D model",
           "message": "Швидке створення 3D-моделі"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.short_desc": {
@@ -6308,7 +6308,7 @@
           "message": "Якщо вказати, результат матиме приблизно таку кількість вершин (і, отже, менше граней) у спрощеній сітці.\n\nВстановлення цього значення на -1 (значення за замовчуванням) означає, що обмеження не встановлено."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.display_name": {
-          "source": "Generate Point Aware 3D Model",
+          "source": "Generate Point Aware 3D model",
           "message": "Створити модель за допомогою Point Aware 3D"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.display_name": {
-          "source": "Start Audio 3 Generation",
+          "source": "Start Audio 3 generation",
           "message": "Почати генерацію за допомогою Audio 3"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.short_desc": {
@@ -7364,7 +7364,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.display_name": {
-          "source": "Start Audio 3 Transformation",
+          "source": "Start Audio 3 transformation",
           "message": "Почати перетворення звуку за допомогою Audio 3"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.display_name": {
-          "source": "Start Audio 3 Inpainting",
+          "source": "Start Audio 3 inpainting",
           "message": "Почати заміну фрагмента за допомогою Audio 3"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.display_name": {
-          "source": "Get Audio Job Result",
+          "source": "Get audio job result",
           "message": "Отримайте результат аудіо завдання"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.short_desc": {
@@ -7964,7 +7964,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Отримати обліковий запис"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -7976,7 +7976,7 @@
           "message": "Прочитайте дані облікового запису та доступні організації."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "Перевірити залишок кредитів"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -7988,7 +7988,7 @@
           "message": "Перевірте кредитний баланс вибраної організації."
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.display_name": {
-          "source": "List Legacy Engines",
+          "source": "List legacy engines",
           "message": "Переглянути попередні моделі генерації"
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "Перелічіть застарілі системи обробки зображень, доступні для цього облікового запису."
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.display_name": {
-          "source": "Generate Legacy Image",
+          "source": "Generate legacy image",
           "message": "Створити застаріле зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "Необроблені медіа"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.display_name": {
-          "source": "Transform Legacy Image",
+          "source": "Transform legacy image",
           "message": "Трансформуйте застаріле зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.short_desc": {
@@ -8716,7 +8716,7 @@
           "message": "Необроблені медіа"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.display_name": {
-          "source": "Mask Legacy Image",
+          "source": "Mask legacy image",
           "message": "Застаріле зображення маски"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "Необроблені медіа"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.display_name": {
-          "source": "Wait for Image Job",
+          "source": "Wait for image job",
           "message": "Дочекатися завершення завдання зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "Затримка опитування; принаймні десять секунд у виробництві."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.display_name": {
-          "source": "Wait for Creative Upscale",
+          "source": "Wait for creative upscale",
           "message": "Дочекатися творчого підвищення роздільності"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Затримка опитування; принаймні десять секунд у виробництві."
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.display_name": {
-          "source": "Wait for Audio Job",
+          "source": "Wait for audio job",
           "message": "Дочекатися завершення звукового завдання"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "Затримка опитування; принаймні десять секунд у виробництві."
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "Згенерувати зображення"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {

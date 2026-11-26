@@ -724,7 +724,7 @@
           "message": "La página se creará en el nivel raíz del espacio (fuera del árbol de la página principal del espacio). Si es true, no se podrá suministrar un valor para el parámetro del cuerpo `parentId`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.display_name": {
-          "source": "Get Page",
+          "source": "Get page",
           "message": "Obtener página"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Incluye los elementos secundarios directos de la página, según se define en el objeto `ChildrenResponse`."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.display_name": {
-          "source": "Update Page",
+          "source": "Update page",
           "message": "Actualizar página"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "ID de cuenta del propietario de la página.\n\nEsto permite transferir la propiedad de la página a otro usuario."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.display_name": {
-          "source": "Rename Page",
+          "source": "Rename page",
           "message": "Cambiar nombre de página"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZVRpdGxl.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "borrador"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.display_name": {
-          "source": "Delete Page",
+          "source": "Delete page",
           "message": "Eliminar página"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlUGFnZQ.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Si se intenta eliminar una página que es un borrador."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.display_name": {
-          "source": "List Pages in Space",
+          "source": "List pages in space",
           "message": "Listar páginas en el espacio"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "root"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.display_name": {
-          "source": "List Pages for Label",
+          "source": "List pages for label",
           "message": "Listar páginas para la etiqueta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Fecha de creación de la entrada de blog en el formato \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.display_name": {
-          "source": "Get Blog Post",
+          "source": "Get blog post",
           "message": "Obtener publicación de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Incluye los colaboradores de la entrada de blog."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Update Blog Post",
+          "source": "Update blog post",
           "message": "Actualizar entrada de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Fecha de creación de la entrada de blog en el formato \"yyyy-MM-ddTHH:mm:ss.SSSZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Delete Blog Post",
+          "source": "Delete blog post",
           "message": "Eliminar entrada de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRlQmxvZ1Bvc3Q.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Al intentar eliminar una entrada de blog que es un borrador."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.display_name": {
-          "source": "List Blog Posts in Space",
+          "source": "List blog posts in space",
           "message": "Listar entradas de blog en el espacio"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "El cursor de paginación: tome el argumento de consulta `cursor` de la URL `_links.next` en la respuesta anterior y páselo aquí.\n\nEs opaco y no debe construirse manualmente."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.display_name": {
-          "source": "List Blog Posts for Label",
+          "source": "List blog posts for label",
           "message": "Listar entradas de blog para la etiqueta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.short_desc": {
@@ -2804,7 +2804,7 @@
           "message": "Indica si se debe obtener o no el icono del espacio."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.display_name": {
-          "source": "Get Space",
+          "source": "Get space",
           "message": "Obtener espacio"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "Filtra por el final del intervalo de fecha y hora de la tarea según la fecha de finalización (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Obtener tarea"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Actualizar tarea"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "La tabla con la que trabajar: `pages`, `blogposts`, `tasks`, `spaces`, `labels` o `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.display_name": {
-          "source": "New Page",
+          "source": "New page",
           "message": "Nueva página"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X3BhZ2U.short_desc": {
@@ -3708,7 +3708,7 @@
           "message": "Se activa para cada página nueva, en todo el sitio o en un espacio.\n\nEl evento incluye el registro de la página que devuelve Confluence: su ID, título, espacio, autor y estado. Si una página se edita más adelante, no volverá a activar este evento; solo informa de la creación."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.display_name": {
-          "source": "New Blog Post",
+          "source": "New blog post",
           "message": "Nueva entrada de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2Jsb2dwb3N0.short_desc": {
@@ -3720,7 +3720,7 @@
           "message": "Se activa para cada nueva entrada de blog, en todo el sitio o en un espacio.\n\nEl evento incluye el registro de la entrada de blog que devuelve Confluence: su ID, título, espacio, autor y estado."
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.display_name": {
-          "source": "New Attachment",
+          "source": "New attachment",
           "message": "Nuevo archivo adjunto"
         },
         "app.Q29uZmx1ZW5jZQ.action.bmV3X2F0dGFjaG1lbnQ.short_desc": {

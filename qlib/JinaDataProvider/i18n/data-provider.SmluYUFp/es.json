@@ -1596,7 +1596,7 @@
           "message": "Encontrar clasificadores guardados para reutilizar o eliminar. **Disponibilidad del servicio:** Jina devolvió HTTP 500 para este endpoint durante la verificación el 7 de septiembre de 2026; los ID de clasificador aún se pueden proporcionar directamente."
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
-          "source": "Delete Classifier",
+          "source": "Delete classifier",
           "message": "Eliminar clasificador"
         },
         "app.SmluYUFp.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "El clasificador guardado a eliminar."
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Listar modelos"
         },
         "app.SmluYUFp.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "Compare las capacidades del modelo antes de elegir un modelo de embedding o reranking. El catálogo es público; use el ping de conexión para verificar su clave de API."
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtener modelo"
         },
         "app.SmluYUFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Si es `true` (predeterminado), los embeddings se normalizan L2 a longitud unitaria."
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch Status",
+          "source": "Get batch status",
           "message": "Obtener estado del lote"
         },
         "app.SmluYUFp.action.Z2V0LWJhdGNo.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "El lote de incrustación a inspeccionar o cancelar."
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Cancelar lote"
         },
         "app.SmluYUFp.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "Número máximo de lotes recientes a devolver."
         },
         "app.SmluYUFp.action.cmVhZC11cmw.display_name": {
-          "source": "Read Web Page or Document",
+          "source": "Read web page or document",
           "message": "Leer página web o documento"
         },
         "app.SmluYUFp.action.cmVhZC11cmw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Atajo"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.display_name": {
-          "source": "Search the Web",
+          "source": "Search the web",
           "message": "Buscar en la web"
         },
         "app.SmluYUFp.action.c2VhcmNoLXdlYg.short_desc": {

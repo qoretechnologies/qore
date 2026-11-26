@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Lister les buckets"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Le `next_page_token` d'un appel précédent, pour récupérer la page suivante"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
-          "source": "Get Bucket",
+          "source": "Get bucket",
           "message": "Obtenir le bucket"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Le nom du bucket dont les métadonnées doivent être récupérées"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Lister les objets"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Le `next_page_token` d'un appel précédent, pour récupérer la page suivante"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Object Metadata",
+          "source": "Get object metadata",
           "message": "Obtenir les métadonnées de l'objet"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "La génération de contenu à récupérer ; si omise, la version active est utilisée"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Update Object Metadata",
+          "source": "Update object metadata",
           "message": "Mettre à jour les métadonnées de l'objet"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {

@@ -102,7 +102,7 @@ module AzureDocumentIntelligenceDataProvider {
                 "path": "/analyze-document",
                 "action": "analyze-document",
                 "billing": <DataProviderBillingInfo>{"unit": "page"},
-                "display_name": "Analyze Document",
+                "display_name": "Analyze document",
                 "short_desc": "Run a Document Intelligence model over a document (async)",
                 "desc": "Submits a document to a Document Intelligence model and "
                     "waits for the analysis to complete. Returns extracted text, fields, tables, "

@@ -376,7 +376,7 @@
           "message": "Il valore di `model` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Ottieni Modello"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Il valore di `model_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Elimina Modello"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Il valore di `metadata` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Ottieni Conversazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "ID della conversazione da cui recuperare i metadati."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
+          "source": "Delete conversation",
           "message": "Elimina Conversazione"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "ID della conversazione da cui recuperare i metadati."
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Append Conversation",
+          "source": "Append conversation",
           "message": "Aggiungi Conversazione"
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "ID chiamata strumento"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Conversation History",
+          "source": "Get conversation history",
           "message": "Ottieni Cronologia Conversazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "ID della conversazione da cui recuperare le voci."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.display_name": {
-          "source": "Get Conversation Messages",
+          "source": "Get conversation messages",
           "message": "Ottieni Messaggi Conversazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "ID della conversazione da cui recuperare i messaggi."
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.display_name": {
-          "source": "Restart Conversation",
+          "source": "Restart conversation",
           "message": "Riavvia Conversazione"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Il valore di `metadata` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Agent",
+          "source": "Get agent",
           "message": "Ottieni Agente"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "Il valore di `agent_version` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Agent",
+          "source": "Update agent",
           "message": "Aggiorna agente"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "Il valore di `version_message` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Agent",
+          "source": "Delete agent",
           "message": "Elimina Assistente"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "Cursor opaco dal token di pagina successiva della risposta precedente. Quando impostato, i risultati partono dal cursor in avanti."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Update Agent Version",
+          "source": "Update agent version",
           "message": "Aggiorna versione agente"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.short_desc": {
@@ -4772,7 +4772,7 @@
           "message": "Il valore di `version` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Agent Versions",
+          "source": "List agent versions",
           "message": "Elenca versioni degli agenti"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Numero di versioni per pagina"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Get Agent Version",
+          "source": "Get agent version",
           "message": "Ottieni Versione Agente"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Il valore di `version` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.display_name": {
-          "source": "Set Agent Alias",
+          "source": "Set agent alias",
           "message": "Imposta Alias dell'Agent"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Il valore di `version` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.display_name": {
-          "source": "List Agent Aliases",
+          "source": "List agent aliases",
           "message": "Elenca alias degli agenti"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Il valore di `agent_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.display_name": {
-          "source": "Delete Agent Alias",
+          "source": "Delete agent alias",
           "message": "Elimina Alias Assistente"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.short_desc": {
@@ -5316,7 +5316,7 @@
           "message": "Il valore di `mimetypes` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Ottieni File"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.short_desc": {
@@ -5340,7 +5340,7 @@
           "message": "Il valore di `file_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Elimina File"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -5364,7 +5364,7 @@
           "message": "Il valore di `file_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Scarica File"
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -5388,7 +5388,7 @@
           "message": "Il valore di `file_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.display_name": {
-          "source": "Get File URL",
+          "source": "Get file URL",
           "message": "Ottieni URL File"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.short_desc": {
@@ -5420,7 +5420,7 @@
           "message": "Numero di ore prima che l'URL diventi invalido"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Update Fine Tuned Model",
+          "source": "Update fine tuned model",
           "message": "Aggiorna modello fine-tuned"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "Il valore di `description` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.display_name": {
-          "source": "Archive Fine Tuned Model",
+          "source": "Archive fine tuned model",
           "message": "Archivia Modello Fine Tuned"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "Il valore di `model_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Unarchive Fine Tuned Model",
+          "source": "Unarchive fine tuned model",
           "message": "Estrai modello fine-tuned"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5808,7 +5808,7 @@
           "message": "Il timeout in ore per il lavoro di inferenza batch."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.display_name": {
-          "source": "Get Batch Job",
+          "source": "Get batch job",
           "message": "Ottieni Job Batch"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Il valore di `inline` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.display_name": {
-          "source": "Cancel Batch Job",
+          "source": "Cancel batch job",
           "message": "Annulla Job Batch"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Nome file originale per la rilevazione dell'estensione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "Ottieni Voce"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Il valore di `voice_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.display_name": {
-          "source": "Update Voice",
+          "source": "Update voice",
           "message": "Aggiorna voce"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.short_desc": {
@@ -8576,7 +8576,7 @@
           "message": "Il valore di `tags` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "Elimina Voce"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -8600,7 +8600,7 @@
           "message": "Il valore di `voice_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.display_name": {
-          "source": "Get Voice Sample",
+          "source": "Get voice sample",
           "message": "Ottieni Campione Voce"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.short_desc": {
@@ -8684,7 +8684,7 @@
           "message": "Il valore di `chunk_size` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.display_name": {
-          "source": "Get Library",
+          "source": "Get library",
           "message": "Ottieni Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.short_desc": {
@@ -8708,7 +8708,7 @@
           "message": "Il valore di `library_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.display_name": {
-          "source": "Delete Library",
+          "source": "Delete library",
           "message": "Elimina Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.short_desc": {
@@ -8732,7 +8732,7 @@
           "message": "Il valore di `library_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.display_name": {
-          "source": "Update Library",
+          "source": "Update library",
           "message": "Aggiorna libreria"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.short_desc": {
@@ -8780,7 +8780,7 @@
           "message": "Il valore di `description` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.display_name": {
-          "source": "List Library Documents",
+          "source": "List library documents",
           "message": "Elenca documenti della libreria"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.short_desc": {
@@ -8876,7 +8876,7 @@
           "message": "Il valore di `sort_order` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Upload Library Document",
+          "source": "Upload library document",
           "message": "Carica documento libreria"
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "Il nome del file"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Get Library Document",
+          "source": "Get library document",
           "message": "Ottieni Documento Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9068,7 +9068,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Update Library Document",
+          "source": "Update library document",
           "message": "Aggiorna documento libreria"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9128,7 +9128,7 @@
           "message": "Il valore di `attributes` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Delete Library Document",
+          "source": "Delete library document",
           "message": "Elimina Documento della Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9164,7 +9164,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.display_name": {
-          "source": "Get Library Document Text",
+          "source": "Get library document text",
           "message": "Ottieni Testo Documento Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.short_desc": {
@@ -9200,7 +9200,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.display_name": {
-          "source": "Get Library Document Status",
+          "source": "Get library document status",
           "message": "Ottieni Stato Documento Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.short_desc": {
@@ -9236,7 +9236,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.display_name": {
-          "source": "Get Library Document URL",
+          "source": "Get library document URL",
           "message": "Ottieni URL Documento Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.display_name": {
-          "source": "Get Library Document Text URL",
+          "source": "Get library document text URL",
           "message": "Ottieni URL Testo Documento Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Reprocess Library Document",
+          "source": "Reprocess library document",
           "message": "Riprocessa il documento della libreria"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9344,7 +9344,7 @@
           "message": "Il valore di `document_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.display_name": {
-          "source": "List Library Access",
+          "source": "List library access",
           "message": "Elenca accessi alle librerie"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.short_desc": {
@@ -9368,7 +9368,7 @@
           "message": "Il valore di `library_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Set Library Access",
+          "source": "Set library access",
           "message": "Imposta Accesso alla Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9452,7 +9452,7 @@
           "message": "Spazio Lavoro"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Delete Library Access",
+          "source": "Delete library access",
           "message": "Elimina Accesso alla Biblioteca"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9600,7 +9600,7 @@
           "message": "Il valore di `q` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Ottieni Dataset"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -9624,7 +9624,7 @@
           "message": "Il valore di `dataset_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Elimina Dataset"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -9648,7 +9648,7 @@
           "message": "Il valore di `dataset_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Aggiorna dataset"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -9696,7 +9696,7 @@
           "message": "Il valore di `description` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.display_name": {
-          "source": "List Dataset Records",
+          "source": "List dataset records",
           "message": "Elenca record del dataset"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.short_desc": {
@@ -9744,7 +9744,7 @@
           "message": "Il valore di `page` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Add Dataset Record",
+          "source": "Add dataset record",
           "message": "Aggiungi Registrazione Dataset"
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -9792,7 +9792,7 @@
           "message": "Il valore di `properties` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.display_name": {
-          "source": "Import Dataset From File",
+          "source": "Import dataset from file",
           "message": "Importa Dataset da File"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "Il valore di `file_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.display_name": {
-          "source": "Import Dataset From Playground",
+          "source": "Import dataset from playground",
           "message": "Importa Dataset da Playground"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "Il valore di `conversation_ids` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.display_name": {
-          "source": "Import Dataset From Dataset",
+          "source": "Import dataset from dataset",
           "message": "Importa Dataset da Dataset"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "Il valore di `dataset_record_ids` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.display_name": {
-          "source": "Export Dataset JSONl",
+          "source": "Export dataset JSONl",
           "message": "Esporta Dataset JSONl"
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.short_desc": {
@@ -9924,7 +9924,7 @@
           "message": "Il valore di `dataset_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.display_name": {
-          "source": "Get Dataset Task",
+          "source": "Get dataset task",
           "message": "Ottieni Task Dataset"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.short_desc": {
@@ -9960,7 +9960,7 @@
           "message": "Il valore di `task_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.display_name": {
-          "source": "List Dataset Tasks",
+          "source": "List dataset tasks",
           "message": "Elenca attività del dataset"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.short_desc": {
@@ -10008,7 +10008,7 @@
           "message": "Il valore di `page` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Get Dataset Record",
+          "source": "Get dataset record",
           "message": "Ottieni Record Dataset"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "Il valore di `dataset_record_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Delete Dataset Record",
+          "source": "Delete dataset record",
           "message": "Elimina Record del Dataset"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10080,7 +10080,7 @@
           "message": "Il valore di `dataset_record_ids` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.display_name": {
-          "source": "Update Dataset Record Payload",
+          "source": "Update dataset record payload",
           "message": "Aggiorna payload record dataset"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.short_desc": {
@@ -10116,7 +10116,7 @@
           "message": "Il valore di `payload` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.display_name": {
-          "source": "Update Dataset Record Properties",
+          "source": "Update dataset record properties",
           "message": "Aggiorna proprietà record dataset"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.short_desc": {
@@ -10152,7 +10152,7 @@
           "message": "Il valore di `properties` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Get Workflow Execution",
+          "source": "Get workflow execution",
           "message": "Ottieni Esecuzione Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10176,7 +10176,7 @@
           "message": "Il valore di `execution_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Execution History",
+          "source": "Get workflow execution history",
           "message": "Ottieni Cronologia Esecuzione Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.short_desc": {
@@ -10212,7 +10212,7 @@
           "message": "Il valore di `decode_payloads` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Signal Workflow Execution",
+          "source": "Signal workflow execution",
           "message": "Segnala Esecuzione del Flusso di Lavoro"
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "Parziale cifrato"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.display_name": {
-          "source": "Query Workflow Execution",
+          "source": "Query workflow execution",
           "message": "Esecuzione Workflow di Query"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.short_desc": {
@@ -10404,7 +10404,7 @@
           "message": "Parziale cifrato"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Terminate Workflow Execution",
+          "source": "Terminate workflow execution",
           "message": "Termina Esecuzione del Flusso di Lavoro"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10452,7 +10452,7 @@
           "message": "Elenco di ID di esecuzione da processare"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Cancel Workflow Execution",
+          "source": "Cancel workflow execution",
           "message": "Annulla Esecuzione Flusso di Lavoro"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10500,7 +10500,7 @@
           "message": "Elenco di ID di esecuzione da processare"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.display_name": {
-          "source": "Reset Workflow",
+          "source": "Reset workflow",
           "message": "Ripristina Workflow"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.short_desc": {
@@ -10572,7 +10572,7 @@
           "message": "Escludere gli aggiornamenti avvenuti dopo il punto di reset"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Update Workflow Execution",
+          "source": "Update workflow execution",
           "message": "Aggiorna esecuzione workflow"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10668,7 +10668,7 @@
           "message": "Parziale cifrato"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.display_name": {
-          "source": "Get Workflow Execution Trace Otel",
+          "source": "Get workflow execution trace OTel",
           "message": "Ottieni Traccia Esecuzione Workflow OTel"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.short_desc": {
@@ -10692,7 +10692,7 @@
           "message": "Il valore di `execution_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.display_name": {
-          "source": "Get Workflow Execution Trace Summary",
+          "source": "Get workflow execution trace summary",
           "message": "Ottieni Riassunto Traccia Esecuzione Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.short_desc": {
@@ -10716,7 +10716,7 @@
           "message": "Il valore di `execution_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.display_name": {
-          "source": "Get Workflow Execution Trace Events",
+          "source": "Get workflow execution trace events",
           "message": "Ottieni Eventi Traccia Esecuzione Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.short_desc": {
@@ -10764,7 +10764,7 @@
           "message": "Il valore di `include_internal_events` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.display_name": {
-          "source": "Get Workflow Metrics",
+          "source": "Get workflow metrics",
           "message": "Ottieni Metriche Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.short_desc": {
@@ -10912,7 +10912,7 @@
           "message": "Token per la pagina successiva dei risultati"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.display_name": {
-          "source": "Get Workflow Run",
+          "source": "Get workflow run",
           "message": "Ottieni esecuzione di workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.short_desc": {
@@ -10936,7 +10936,7 @@
           "message": "Il valore di `run_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Run History",
+          "source": "Get workflow run history",
           "message": "Ottieni cronologia esecuzioni di workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.short_desc": {
@@ -11316,7 +11316,7 @@
           "message": "Nome del deployment a cui indirizzare questo calendario"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.display_name": {
-          "source": "Unschedule Workflow",
+          "source": "Unschedule workflow",
           "message": "Rimuovi programmazione workflow"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.short_desc": {
@@ -11448,7 +11448,7 @@
           "message": "Il valore di `workflow_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Workflow Deployment",
+          "source": "Get workflow deployment",
           "message": "Ottieni Deploy Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -11600,7 +11600,7 @@
           "message": "Il cursore per la paginazione"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.display_name": {
-          "source": "Execute Workflow",
+          "source": "Execute workflow",
           "message": "Esegui Workflow"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.short_desc": {
@@ -11704,7 +11704,7 @@
           "message": "Nome del deployment a cui indirizzare questa esecuzione"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.display_name": {
-          "source": "Execute Workflow Registration",
+          "source": "Execute workflow registration",
           "message": "Esegui Registrazione Workflow"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.short_desc": {
@@ -11808,7 +11808,7 @@
           "message": "Nome del deployment a cui indirizzare questa esecuzione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "Ottieni Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -11832,7 +11832,7 @@
           "message": "Il valore di `workflow_identifier` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "Aggiorna workflow"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "Rendere il workflow disponibile nell'assistente chat"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.display_name": {
-          "source": "Get Workflow Registration",
+          "source": "Get workflow registration",
           "message": "Ottieni Registrazione Workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.short_desc": {
@@ -11940,7 +11940,7 @@
           "message": "Includere le versioni condivise dei workflow"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.display_name": {
-          "source": "Archive Workflow",
+          "source": "Archive workflow",
           "message": "Archivia Flusso di Lavoro"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.short_desc": {
@@ -11964,7 +11964,7 @@
           "message": "Il valore di `workflow_identifier` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.display_name": {
-          "source": "Unarchive Workflow",
+          "source": "Unarchive workflow",
           "message": "Estrai workflow"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.short_desc": {
@@ -12132,7 +12132,7 @@
           "message": "Il valore di `page_size` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.display_name": {
-          "source": "Get Connector Auth URL",
+          "source": "Get connector auth URL",
           "message": "Ottieni URL Autenticazione Connettore"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.short_desc": {
@@ -12180,7 +12180,7 @@
           "message": "Il valore di `credentials_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.display_name": {
-          "source": "Call Connector Tool",
+          "source": "Call connector tool",
           "message": "Chiamata Strumento Connettore"
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.short_desc": {
@@ -12240,7 +12240,7 @@
           "message": "Il valore di `credentials_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.display_name": {
-          "source": "List Connector Tools",
+          "source": "List connector tools",
           "message": "Elenca strumenti dei connettori"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.short_desc": {
@@ -12312,7 +12312,7 @@
           "message": "Il valore di `credentials_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.display_name": {
-          "source": "Get Connector Authentication Methods",
+          "source": "Get connector authentication methods",
           "message": "Ottieni Metodi Autenticazione Connettore"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.short_desc": {
@@ -12336,7 +12336,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Organization Credentials For A Connector",
+          "source": "List organization credentials for a connector",
           "message": "Elenca credenziali organizzative per un connettore"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "Il valore di `fetch_default` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Organization Credentials For A Connector",
+          "source": "Create or update organization credentials for a connector",
           "message": "Crea o Aggiorna Credenziali dell'Organizzazione per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12464,7 +12464,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Workspace Credentials For A Connector",
+          "source": "List workspace credentials for a connector",
           "message": "Elenca credenziali dello workspace per un connettore"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12524,7 +12524,7 @@
           "message": "Il valore di `fetch_default` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Workspace Credentials For A Connector",
+          "source": "Create or update workspace credentials for a connector",
           "message": "Crea o Aggiorna Credenziali dello Spazio di Lavoro per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12592,7 +12592,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "List User Credentials For A Connector",
+          "source": "List user credentials for a connector",
           "message": "Elenca credenziali utente per un connettore"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12652,7 +12652,7 @@
           "message": "Il valore di `fetch_default` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Create Or Update User Credentials For A Connector",
+          "source": "Create or update user credentials for a connector",
           "message": "Crea o Aggiorna Credenziali Utente per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Organization Credentials For A Connector",
+          "source": "Delete organization credentials for a connector",
           "message": "Elimina Credenziali Organizzative per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12756,7 +12756,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Workspace Credentials For A Connector",
+          "source": "Delete workspace credentials for a connector",
           "message": "Elimina Credenziali dello Spazio di Lavoro per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Delete User Credentials For A Connector",
+          "source": "Delete user credentials for a connector",
           "message": "Elimina Credenziali Utente per un Connettore"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12828,7 +12828,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.display_name": {
-          "source": "Get Connector",
+          "source": "Get connector",
           "message": "Ottieni Connettore"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Update Connector",
+          "source": "Update connector",
           "message": "Aggiorna connettore"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -12932,7 +12932,7 @@
           "message": "Nuovo URL server per il tuo connettore mcp."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete Connector",
+          "source": "Delete connector",
           "message": "Elimina Connettore"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -15968,7 +15968,7 @@
           "message": "Elenca i campi a cui possono fare riferimento le espressioni di ricerca dei log, con le relative etichette e tipi. Ispeziona l'attività AI e valuta la qualità delle risposte.\n\n**Anteprima pubblica:** La disponibilità dipende dal tuo account e dalle autorizzazioni."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Log Field Options",
+          "source": "List log field options",
           "message": "Elenca opzioni dei campi dei log"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
@@ -16228,7 +16228,7 @@
           "message": "Elenca i campi a cui possono fare riferimento le espressioni di ricerca e le aggregazioni delle tracce, con le relative etichette e tipi. Ispeziona l'attività AI e valuta la qualità delle risposte.\n\n**Anteprima pubblica:** La disponibilità dipende dal tuo account e dalle autorizzazioni."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
-          "source": "List Trace Field Options",
+          "source": "List trace field options",
           "message": "Elenca opzioni dei campi delle tracce"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
@@ -16276,7 +16276,7 @@
           "message": "La fine dell'intervallo di tempo."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
-          "source": "Get Trace",
+          "source": "Get trace",
           "message": "Ottieni traccia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
@@ -16300,7 +16300,7 @@
           "message": "L'ID esadecimale a 32 cifre della traccia."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
-          "source": "List Trace Spans",
+          "source": "List trace spans",
           "message": "Elenca span della traccia"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
@@ -16364,7 +16364,7 @@
           "message": "Il `cursor` restituito con la pagina precedente; omettilo per la prima pagina."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
-          "source": "Get Trace Span",
+          "source": "Get trace span",
           "message": "Ottieni span della traccia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
@@ -16628,7 +16628,7 @@
           "message": "Elenca i campi a cui possono fare riferimento le espressioni di ricerca e le aggregazioni degli span, con le relative etichette e tipi. Ispeziona l'attività AI e valuta la qualità delle risposte.\n\n**Anteprima pubblica:** La disponibilità dipende dal tuo account e dalle autorizzazioni."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
-          "source": "List Span Field Options",
+          "source": "List span field options",
           "message": "Elenca opzioni dei campi degli span"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
@@ -16932,7 +16932,7 @@
           "message": "Elenca i campi a cui possono fare riferimento le espressioni di ricerca e le aggregazioni delle valutazioni degli span, con le relative etichette e tipi. Ispeziona l'attività AI e valuta la qualità delle risposte.\n\n**Anteprima pubblica:** La disponibilità dipende dal tuo account e dalle autorizzazioni."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Span Evaluation Field Options",
+          "source": "List span evaluation field options",
           "message": "Elenca opzioni dei campi delle valutazioni degli span"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
@@ -17124,7 +17124,7 @@
           "message": "Abilitata"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
-          "source": "Get Pipeline",
+          "source": "Get pipeline",
           "message": "Ottieni pipeline"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
@@ -17148,7 +17148,7 @@
           "message": "L'ID della pipeline di valutazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
-          "source": "Update Pipeline",
+          "source": "Update pipeline",
           "message": "Aggiorna pipeline"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
@@ -17236,7 +17236,7 @@
           "message": "Abilitata"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
-          "source": "Delete Pipeline",
+          "source": "Delete pipeline",
           "message": "Elimina pipeline"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
@@ -17256,7 +17256,7 @@
           "message": "L'ID della pipeline di valutazione."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
-          "source": "List Pipeline Result Fields",
+          "source": "List pipeline result fields",
           "message": "Elenca campi dei risultati della pipeline"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
@@ -17336,7 +17336,7 @@
           "message": "Il `cursor` restituito con la pagina precedente; omettilo per la prima pagina."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
-          "source": "Import Dataset From Spans",
+          "source": "Import dataset from spans",
           "message": "Importa dataset dagli span"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
@@ -17468,7 +17468,7 @@
           "message": "Gli slug delle configurazioni della pipeline di cui cercare i risultati, come elencati in `pipeline_configs` di una pipeline; è richiesto almeno uno."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.display_name": {
-          "source": "Delete Batch Job",
+          "source": "Delete batch job",
           "message": "Elimina processo batch"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.short_desc": {
@@ -18416,7 +18416,7 @@
           "message": "ID dell’agente da utilizzare per questa risposta."
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.display_name": {
-          "source": "Patch Library",
+          "source": "Patch library",
           "message": "Aggiorna libreria (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.short_desc": {
@@ -18440,7 +18440,7 @@
           "message": "Descrizione"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.display_name": {
-          "source": "Patch Library Document",
+          "source": "Patch library document",
           "message": "Aggiorna documento libreria (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.short_desc": {
@@ -21004,7 +21004,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "Ottieni prompt"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.short_desc": {
@@ -21032,7 +21032,7 @@
           "message": "Campi"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.display_name": {
-          "source": "Delete Prompt",
+          "source": "Delete prompt",
           "message": "Elimina prompt"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.short_desc": {
@@ -21048,7 +21048,7 @@
           "message": "ID prompt"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.display_name": {
-          "source": "Update Prompt",
+          "source": "Update prompt",
           "message": "Aggiorna prompt"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.short_desc": {
@@ -21128,7 +21128,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.display_name": {
-          "source": "List Prompt Versions",
+          "source": "List prompt versions",
           "message": "Elenca versioni del prompt"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.short_desc": {
@@ -21144,7 +21144,7 @@
           "message": "ID prompt"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Create Prompt Version",
+          "source": "Create prompt version",
           "message": "Crea versione del prompt"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21232,7 +21232,7 @@
           "message": "Alias che puntano a questa versione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Get Prompt Version",
+          "source": "Get prompt version",
           "message": "Ottieni versione del prompt"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21256,7 +21256,7 @@
           "message": "Campi"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Update Prompt Version",
+          "source": "Update prompt version",
           "message": "Aggiorna versione del prompt"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21556,7 +21556,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Ottieni competenza"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.short_desc": {
@@ -21584,7 +21584,7 @@
           "message": "Campi"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.display_name": {
-          "source": "Delete Skill",
+          "source": "Delete skill",
           "message": "Elimina competenza"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.short_desc": {
@@ -21600,7 +21600,7 @@
           "message": "ID competenza"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.display_name": {
-          "source": "Update Skill",
+          "source": "Update skill",
           "message": "Aggiorna competenza"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.short_desc": {
@@ -21656,7 +21656,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.display_name": {
-          "source": "List Skill Versions",
+          "source": "List skill versions",
           "message": "Elenca versioni della competenza"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.short_desc": {
@@ -21672,7 +21672,7 @@
           "message": "ID competenza"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Create Skill Version",
+          "source": "Create skill version",
           "message": "Crea versione della competenza"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21760,7 +21760,7 @@
           "message": "Alias che puntano a questa versione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Get Skill Version",
+          "source": "Get skill version",
           "message": "Ottieni versione della competenza"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.short_desc": {
@@ -21784,7 +21784,7 @@
           "message": "Campi"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Update Skill Version",
+          "source": "Update skill version",
           "message": "Aggiorna versione della competenza"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21864,7 +21864,7 @@
           "message": "Pagina"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.display_name": {
-          "source": "Get Observability Project",
+          "source": "Get observability project",
           "message": "Recuperare il progetto di osservabilità"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.short_desc": {
@@ -21880,7 +21880,7 @@
           "message": "Identificatore breve del progetto"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.display_name": {
-          "source": "List Project Evaluations",
+          "source": "List project evaluations",
           "message": "Elencare le valutazioni del progetto"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.short_desc": {
@@ -21904,7 +21904,7 @@
           "message": "Pagina"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Recuperare la valutazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -21920,7 +21920,7 @@
           "message": "Identificatore breve della valutazione"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.display_name": {
-          "source": "Search Evaluation Runs",
+          "source": "Search evaluation runs",
           "message": "Cercare nelle esecuzioni di valutazione"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.short_desc": {
@@ -22580,7 +22580,7 @@
           "message": "Pagina"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
+          "source": "Get evaluation run",
           "message": "Recuperare l’esecuzione di valutazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -22596,7 +22596,7 @@
           "message": "ID Esecuzione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Evaluation Run Statistics",
+          "source": "Get evaluation run statistics",
           "message": "Recuperare le statistiche dell’esecuzione di valutazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.short_desc": {
@@ -22612,7 +22612,7 @@
           "message": "ID Esecuzione"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.display_name": {
-          "source": "Compute Evaluation Run Statistics",
+          "source": "Compute evaluation run statistics",
           "message": "Calcolare le statistiche dell’esecuzione di valutazione"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.short_desc": {
@@ -22848,7 +22848,7 @@
           "message": "std"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.display_name": {
-          "source": "Get Evaluation Run Record",
+          "source": "Get evaluation run record",
           "message": "Recuperare il record dell’esecuzione di valutazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.short_desc": {
@@ -22868,7 +22868,7 @@
           "message": "ID del record"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.display_name": {
-          "source": "Search Evaluation Run Records",
+          "source": "Search evaluation run records",
           "message": "Cercare nei record dell’esecuzione di valutazione"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.short_desc": {
@@ -23192,7 +23192,7 @@
           "message": "Pagina"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.display_name": {
-          "source": "Get Optimization",
+          "source": "Get optimization",
           "message": "Recuperare l’ottimizzazione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.short_desc": {
@@ -23208,7 +23208,7 @@
           "message": "Ottimizzazione ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.display_name": {
-          "source": "List Optimization Trials",
+          "source": "List optimization trials",
           "message": "Elencare le prove di ottimizzazione"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.short_desc": {
@@ -23388,7 +23388,7 @@
           "message": "Modello di prompt"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.display_name": {
-          "source": "Get Scorer",
+          "source": "Get scorer",
           "message": "Recuperare la funzione di punteggio"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.short_desc": {
@@ -23404,7 +23404,7 @@
           "message": "Identificatore breve della funzione di punteggio"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.display_name": {
-          "source": "Update Scorer",
+          "source": "Update scorer",
           "message": "Aggiornare la funzione di punteggio"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.short_desc": {
@@ -23864,7 +23864,7 @@
           "message": "Versione dell'Agente"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Get Audio Session",
+          "source": "Get audio session",
           "message": "Recuperare la sessione audio"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -23880,7 +23880,7 @@
           "message": "ID sessione"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Update Audio Session",
+          "source": "Update audio session",
           "message": "Aggiornare la sessione audio"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -24152,7 +24152,7 @@
           "message": "Permesso di interruzioni"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.display_name": {
-          "source": "Stop Audio Session",
+          "source": "Stop audio session",
           "message": "Arrestare la sessione audio"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.short_desc": {
@@ -24584,7 +24584,7 @@
           "message": "Messaggio di benvenuto"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.display_name": {
-          "source": "Get Audio Agent",
+          "source": "Get audio agent",
           "message": "Recuperare l’agente vocale"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.short_desc": {
@@ -24612,7 +24612,7 @@
           "message": "Versione di ritorno. Defatti alla versione più recente."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Update Audio Agent",
+          "source": "Update audio agent",
           "message": "Aggiornare l’agente vocale"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -24984,7 +24984,7 @@
           "message": "Messaggio di benvenuto"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Delete Audio Agent",
+          "source": "Delete audio agent",
           "message": "Eliminare l’agente vocale"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -25000,7 +25000,7 @@
           "message": "ID dell'Agente"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Audio Agent Versions",
+          "source": "List audio agent versions",
           "message": "Elencare le versioni dell’agente vocale"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -25040,7 +25040,7 @@
           "message": "Cursore restituito dalla pagina precedente in next_page_token"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.display_name": {
-          "source": "List Audio Agent Sessions",
+          "source": "List audio agent sessions",
           "message": "Elencare le sessioni dell’agente vocale"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.short_desc": {
@@ -25080,7 +25080,7 @@
           "message": "Cursore restituito dalla pagina precedente in next_page_token"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.display_name": {
-          "source": "Get Workflow Execution Trace",
+          "source": "Get workflow execution trace",
           "message": "Recuperare la traccia di esecuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.short_desc": {
@@ -25096,7 +25096,7 @@
           "message": "ID Esecuzione"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.display_name": {
-          "source": "Get Workflow Execution Logs",
+          "source": "Get workflow execution logs",
           "message": "Recuperare i log di esecuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.short_desc": {
@@ -25204,7 +25204,7 @@
           "message": "Numero massimo di registrazioni da restituire"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Get Workflow Schedule",
+          "source": "Get workflow schedule",
           "message": "Recuperare la pianificazione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25220,7 +25220,7 @@
           "message": "ID Programmazione"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Update Workflow Schedule",
+          "source": "Update workflow schedule",
           "message": "Aggiornare la pianificazione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25484,7 +25484,7 @@
           "message": "Nome del fuso orario IANA, ad esempio ``US/Central``."
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.display_name": {
-          "source": "Pause Workflow Schedule",
+          "source": "Pause workflow schedule",
           "message": "Sospendere la pianificazione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.short_desc": {
@@ -25512,7 +25512,7 @@
           "message": "Nota opzionale registrata in Temporale al momento della pausa o della ripresa di un calendario"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Resume Workflow Schedule",
+          "source": "Resume workflow schedule",
           "message": "Riprendere la pianificazione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25540,7 +25540,7 @@
           "message": "Nota opzionale registrata in Temporale al momento della pausa o della ripresa di un calendario"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.display_name": {
-          "source": "Trigger Workflow Schedule",
+          "source": "Trigger workflow schedule",
           "message": "Attivare la pianificazione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.short_desc": {
@@ -25760,7 +25760,7 @@
           "message": "di Hardened"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Workflow Deployment",
+          "source": "Update workflow deployment",
           "message": "Aggiornare la distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25924,7 +25924,7 @@
           "message": "Repliche"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Workflow Deployment",
+          "source": "Delete workflow deployment",
           "message": "Eliminare la distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25940,7 +25940,7 @@
           "message": "Nome"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Stop Workflow Deployment",
+          "source": "Stop workflow deployment",
           "message": "Arrestare la distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25956,7 +25956,7 @@
           "message": "Nome"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Start Workflow Deployment",
+          "source": "Start workflow deployment",
           "message": "Avviare la distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -25972,7 +25972,7 @@
           "message": "Nome"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Restart Workflow Deployment",
+          "source": "Restart workflow deployment",
           "message": "Riavviare la distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25988,7 +25988,7 @@
           "message": "Nome"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.display_name": {
-          "source": "List Workflow Deployment Workers",
+          "source": "List workflow deployment workers",
           "message": "Elencare i worker della distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.short_desc": {
@@ -26048,7 +26048,7 @@
           "message": "Corso di una risposta precedente `next_cursor`e il Il ritorno `worker_status` Immutabile accanto a lui."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.display_name": {
-          "source": "Get Workflow Deployment Archive",
+          "source": "Get workflow deployment archive",
           "message": "Recuperare l’archivio della distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.short_desc": {
@@ -26064,7 +26064,7 @@
           "message": "Nome"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.display_name": {
-          "source": "Get Workflow Deployment Logs",
+          "source": "Get workflow deployment logs",
           "message": "Recuperare i log della distribuzione del flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.short_desc": {
@@ -26440,7 +26440,7 @@
           "message": "Elenco di ID del flusso di lavoro per non archiviare"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.display_name": {
-          "source": "Add Workflow Tags",
+          "source": "Add workflow tags",
           "message": "Aggiungere tag al flusso di lavoro"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.short_desc": {
@@ -26516,7 +26516,7 @@
           "message": "vespa"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.display_name": {
-          "source": "Update Ingestion Pipeline Run",
+          "source": "Update ingestion pipeline run",
           "message": "Aggiornare l’esecuzione della pipeline di acquisizione"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.short_desc": {
@@ -26720,7 +26720,7 @@
           "message": "Versione Vespa"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.display_name": {
-          "source": "Unregister RAG Deployment",
+          "source": "Unregister RAG deployment",
           "message": "Annullare la registrazione della distribuzione RAG"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.short_desc": {
@@ -26736,7 +26736,7 @@
           "message": "ID Distribuzione"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.display_name": {
-          "source": "Update RAG Deployment Metrics",
+          "source": "Update RAG deployment metrics",
           "message": "Aggiornare le metriche della distribuzione RAG"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.short_desc": {
@@ -26996,7 +26996,7 @@
           "message": "Creator ID per match"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Get Search Index",
+          "source": "Get search index",
           "message": "Recuperare l’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.short_desc": {
@@ -27012,7 +27012,7 @@
           "message": "Nome indice"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.display_name": {
-          "source": "Update Search Index Schema",
+          "source": "Update search index schema",
           "message": "Aggiornare lo schema dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.short_desc": {
@@ -27040,7 +27040,7 @@
           "message": "I campi di documenti"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Delete Search Index",
+          "source": "Delete search index",
           "message": "Eliminare l’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27056,7 +27056,7 @@
           "message": "Nome indice"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Ingest Search Index Documents",
+          "source": "Ingest search index documents",
           "message": "Importare i documenti dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27076,7 +27076,7 @@
           "message": "Documenti"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Search Index Documents",
+          "source": "Delete search index documents",
           "message": "Eliminare i documenti dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27096,7 +27096,7 @@
           "message": "ID documento"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Search Index Chunks",
+          "source": "Search index chunks",
           "message": "Cercare nei frammenti dell’indice"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27488,7 +27488,7 @@
           "message": "Il peso"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Navigate Search Index Chunks",
+          "source": "Navigate search index chunks",
           "message": "Esplorare i frammenti dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27536,7 +27536,7 @@
           "message": "Tipo di contenuto"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.display_name": {
-          "source": "Read Search Index Chunks",
+          "source": "Read search index chunks",
           "message": "Leggere i frammenti dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.short_desc": {
@@ -27572,7 +27572,7 @@
           "message": "Tipo di contenuto"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Find Text in Search Index",
+          "source": "Find text in search index",
           "message": "Trovare testo nell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27616,7 +27616,7 @@
           "message": "Tipo di contenuto"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.display_name": {
-          "source": "Get Search Index Chunk",
+          "source": "Get search index chunk",
           "message": "Recuperare il frammento dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.short_desc": {
@@ -27636,7 +27636,7 @@
           "message": "ID del blocco"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Get Search Index Summary",
+          "source": "Get search index summary",
           "message": "Recuperare il riepilogo dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27692,7 +27692,7 @@
           "message": "Nome indice"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Set Search Index Summary",
+          "source": "Set search index summary",
           "message": "Impostare il riepilogo dell’indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27940,7 +27940,7 @@
           "message": "Filtro per ID fonte di evento (webhook id)"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.display_name": {
-          "source": "Get Trigger",
+          "source": "Get trigger",
           "message": "Recuperare il trigger"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.short_desc": {
@@ -27956,7 +27956,7 @@
           "message": "Il Trigger ID"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.display_name": {
-          "source": "Delete Trigger",
+          "source": "Delete trigger",
           "message": "Eliminare il trigger"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.short_desc": {
@@ -27972,7 +27972,7 @@
           "message": "Il Trigger ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.display_name": {
-          "source": "List Trigger Events",
+          "source": "List trigger events",
           "message": "Elencare gli eventi del trigger"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.short_desc": {
@@ -28240,7 +28240,7 @@
           "message": "Il valore di `workspace_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
+          "source": "Get service account",
           "message": "Ottieni account di servizio"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28264,7 +28264,7 @@
           "message": "Il valore di `service_account_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
+          "source": "Update service account",
           "message": "Aggiorna account di servizio"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28300,7 +28300,7 @@
           "message": "Il valore di `description` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
+          "source": "Delete service account",
           "message": "Elimina account di servizio"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28324,7 +28324,7 @@
           "message": "Il valore di `service_account_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.display_name": {
-          "source": "Set Service Account Roles",
+          "source": "Set service account roles",
           "message": "Imposta ruoli dell'account di servizio"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.short_desc": {
@@ -28360,7 +28360,7 @@
           "message": "UUID dei ruoli del workspace da assegnare. Obbligatorio e non vuoto; gli elenchi omessi o vuoti restituiscono 422. Selezionare esplicitamente member per non concedere autorizzazioni tramite ruolo; la condivisione a livello di workspace può comunque concedere l'accesso."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.display_name": {
-          "source": "List Service Account Roles",
+          "source": "List service account roles",
           "message": "Elenca ruoli dell'account di servizio"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.short_desc": {
@@ -28384,7 +28384,7 @@
           "message": "Il valore di `service_account_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.display_name": {
-          "source": "Share Connector To Workspace",
+          "source": "Share connector to workspace",
           "message": "Condividi connettore con il workspace"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.short_desc": {
@@ -28408,7 +28408,7 @@
           "message": "Il valore di `connector_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Unshare Connector From Workspace",
+          "source": "Unshare connector from workspace",
           "message": "Annulla condivisione del connettore con il workspace"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -28432,7 +28432,7 @@
           "message": "Il valore di `connector_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Share Connector To Organization",
+          "source": "Share connector to organization",
           "message": "Condividi connettore con l'organizzazione"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28456,7 +28456,7 @@
           "message": "Il valore di `connector_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Unshare Connector From Organization",
+          "source": "Unshare connector from organization",
           "message": "Annulla condivisione del connettore con l'organizzazione"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.short_desc": {
@@ -28480,7 +28480,7 @@
           "message": "Il valore di `connector_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.display_name": {
-          "source": "Activate Connector For Organization",
+          "source": "Activate connector for organization",
           "message": "Attiva connettore per l'organizzazione"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.short_desc": {
@@ -28520,7 +28520,7 @@
           "message": "organizzazione"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.display_name": {
-          "source": "Activate Connector For Workspace",
+          "source": "Activate connector for workspace",
           "message": "Attiva connettore per il workspace"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.short_desc": {
@@ -28560,7 +28560,7 @@
           "message": "workspace"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.display_name": {
-          "source": "Activate Connector For User",
+          "source": "Activate connector for user",
           "message": "Attiva connettore per l'utente"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.short_desc": {
@@ -28600,7 +28600,7 @@
           "message": "utente"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Deactivate Connector For Organization",
+          "source": "Deactivate connector for organization",
           "message": "Disattiva connettore per l'organizzazione"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28640,7 +28640,7 @@
           "message": "organizzazione"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.display_name": {
-          "source": "Deactivate Connector For Workspace",
+          "source": "Deactivate connector for workspace",
           "message": "Disattiva connettore per il workspace"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.short_desc": {
@@ -28680,7 +28680,7 @@
           "message": "workspace"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.display_name": {
-          "source": "Deactivate Connector For User",
+          "source": "Deactivate connector for user",
           "message": "Disattiva connettore per l'utente"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.short_desc": {
@@ -28720,7 +28720,7 @@
           "message": "utente"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete All User Credentials For A Connector",
+          "source": "Delete all user credentials for a connector",
           "message": "Elimina tutte le credenziali utente di un connettore"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -28744,7 +28744,7 @@
           "message": "Il valore di `connector_id_or_name` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Create Workspace Credentials For A Connector",
+          "source": "Create workspace credentials for a connector",
           "message": "Crea credenziali del workspace per un connettore"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -28888,7 +28888,7 @@
           "message": "Parametri di query"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create User Credentials For A Connector",
+          "source": "Create user credentials for a connector",
           "message": "Crea credenziali utente per un connettore"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -29032,7 +29032,7 @@
           "message": "Parametri di query"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Unharden Workflow Deployment",
+          "source": "Unharden workflow deployment",
           "message": "Annulla protezione avanzata del deployment del workflow"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -29068,7 +29068,7 @@
           "message": "ID del workspace a cui limitare la richiesta. Per impostazione predefinita, il contesto del chiamante."
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.display_name": {
-          "source": "Generate Search Index Summary",
+          "source": "Generate search index summary",
           "message": "Genera riepilogo dell'indice di ricerca"
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.short_desc": {
@@ -29440,7 +29440,7 @@
           "message": "Pattern per un identificatore univoco dell'evento usato per deduplicare le consegne, con i segnaposto {body.<path>} e {headers.<Header-Name>}, ad es. {body.id} o {body.event_id}.{headers.X-Delivery-Id}. Per impostazione predefinita, un hash del corpo della richiesta"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Ottieni webhook"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -29464,7 +29464,7 @@
           "message": "Il valore di `webhook_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Elimina webhook"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -29488,7 +29488,7 @@
           "message": "Il valore di `webhook_id` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.display_name": {
-          "source": "Get Webhook Signing Secret",
+          "source": "Get webhook signing secret",
           "message": "Ottieni segreto di firma del webhook"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.short_desc": {
@@ -30456,7 +30456,7 @@
           "message": "Elencare gli inviti in sospeso dell'organizzazione. Gestire membri, inviti e ruoli dell'organizzazione. Richiede una chiave API di amministratore.\n\n**Anteprima pubblica:** La disponibilità dipende dal tuo account e dalle autorizzazioni."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.display_name": {
-          "source": "Delete Invitation (Admin)",
+          "source": "Delete invitation (admin)",
           "message": "Elimina invito (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.short_desc": {
@@ -30480,7 +30480,7 @@
           "message": "ID dell'invito dell'organizzazione."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.display_name": {
-          "source": "Update User (Admin)",
+          "source": "Update user (admin)",
           "message": "Aggiorna utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.short_desc": {
@@ -30576,7 +30576,7 @@
           "message": "Licenze di prodotto da assegnare al membro."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User (Admin)",
+          "source": "Delete user (admin)",
           "message": "Elimina utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.short_desc": {
@@ -30600,7 +30600,7 @@
           "message": "ID utente."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.display_name": {
-          "source": "Get User (Admin)",
+          "source": "Get user (admin)",
           "message": "Ottieni utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.short_desc": {
@@ -30624,7 +30624,7 @@
           "message": "ID utente."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Deactivate User (Admin)",
+          "source": "Deactivate user (admin)",
           "message": "Disattiva utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30648,7 +30648,7 @@
           "message": "ID utente."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Reactivate User (Admin)",
+          "source": "Reactivate user (admin)",
           "message": "Riattiva utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30672,7 +30672,7 @@
           "message": "ID utente."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Workspaces (Admin)",
+          "source": "List user workspaces (admin)",
           "message": "Elenca workspace dell'utente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.short_desc": {
@@ -30864,7 +30864,7 @@
           "message": "ID dell'utente a cui concedere il ruolo di amministratore del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace (Admin)",
+          "source": "Update workspace (admin)",
           "message": "Aggiorna workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -30924,7 +30924,7 @@
           "message": "Icona aggiornata del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.display_name": {
-          "source": "Archive Workspace (Admin)",
+          "source": "Archive workspace (admin)",
           "message": "Archivia workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.short_desc": {
@@ -30948,7 +30948,7 @@
           "message": "ID del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Add Workspace Members (Admin)",
+          "source": "Add workspace members (admin)",
           "message": "Aggiungi membri al workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31096,7 +31096,7 @@
           "message": "ID utente del membro del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "Add Or Update Workspace Members (Admin)",
+          "source": "Add or update workspace members (admin)",
           "message": "Aggiungi o aggiorna membri del workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -31244,7 +31244,7 @@
           "message": "ID utente del membro del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Remove Workspace Members (Admin)",
+          "source": "Remove workspace members (admin)",
           "message": "Rimuovi membri dal workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31700,7 +31700,7 @@
           "message": "Descrizione facoltativa del gruppo di utenti."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.display_name": {
-          "source": "Get User Group (Admin)",
+          "source": "Get user group (admin)",
           "message": "Ottieni gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.short_desc": {
@@ -31724,7 +31724,7 @@
           "message": "ID del gruppo di utenti."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Update User Group (Admin)",
+          "source": "Update user group (admin)",
           "message": "Aggiorna gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31772,7 +31772,7 @@
           "message": "Descrizione aggiornata del gruppo di utenti. Passare una stringa vuota per cancellarla; omettere il campo o passare null per lasciarla invariata."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Delete User Group (Admin)",
+          "source": "Delete user group (admin)",
           "message": "Elimina gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31796,7 +31796,7 @@
           "message": "ID del gruppo di utenti."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.display_name": {
-          "source": "List User Group Members (Admin)",
+          "source": "List user group members (admin)",
           "message": "Elenca membri del gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.short_desc": {
@@ -31844,7 +31844,7 @@
           "message": "Numero massimo di risultati per pagina."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Add User Group Members (Admin)",
+          "source": "Add user group members (admin)",
           "message": "Aggiungi membri al gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31880,7 +31880,7 @@
           "message": "ID degli utenti da aggiungere al gruppo."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Remove User Group Members (Admin)",
+          "source": "Remove user group members (admin)",
           "message": "Rimuovi membri dal gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31916,7 +31916,7 @@
           "message": "ID degli utenti da aggiungere al gruppo."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Group Workspaces (Admin)",
+          "source": "List user group workspaces (admin)",
           "message": "Elenca workspace del gruppo di utenti (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.short_desc": {
@@ -31964,7 +31964,7 @@
           "message": "Numero massimo di risultati per pagina."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.display_name": {
-          "source": "Assign User Group To Workspace (Admin)",
+          "source": "Assign user group to workspace (admin)",
           "message": "Assegna gruppo di utenti a un workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.short_desc": {
@@ -32036,7 +32036,7 @@
           "message": "Il valore di `workspace_uuid` per questa operazione."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.display_name": {
-          "source": "Update User Group Workspace Role (Admin)",
+          "source": "Update user group workspace role (admin)",
           "message": "Aggiorna ruolo del gruppo di utenti nel workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.short_desc": {
@@ -32108,7 +32108,7 @@
           "message": "Valore di ruolo singolo obsoleto. Usare invece 'role_names'."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Remove User Group From Workspace (Admin)",
+          "source": "Remove user group from workspace (admin)",
           "message": "Rimuovi gruppo di utenti dal workspace (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -32144,7 +32144,7 @@
           "message": "ID del workspace."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.display_name": {
-          "source": "Update User Group Organization Role (Admin)",
+          "source": "Update user group organization role (admin)",
           "message": "Aggiorna ruolo del gruppo di utenti nell'organizzazione (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.short_desc": {
@@ -32288,7 +32288,7 @@
           "message": "ID dell'utente per cui viene creata la chiave API."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key (Admin)",
+          "source": "Delete API key (admin)",
           "message": "Elimina chiave API (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.short_desc": {
@@ -32408,7 +32408,7 @@
           "message": "Aggiungere all'organizzazione gli utenti trovati nel provider SCIM."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.display_name": {
-          "source": "Get SCIM Synchronization Run (Admin)",
+          "source": "Get SCIM synchronization run (admin)",
           "message": "Ottieni esecuzione della sincronizzazione SCIM (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.short_desc": {

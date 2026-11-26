@@ -1860,7 +1860,7 @@
           "message": "Si es `True`, la etiqueta se generará de forma asíncrona. El valor predeterminado es `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
-          "source": "Get Shipping Label",
+          "source": "Get shipping label",
           "message": "Obtener etiqueta de envío"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {

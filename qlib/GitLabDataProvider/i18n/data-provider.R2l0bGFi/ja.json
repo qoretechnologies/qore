@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.display_name": {
-          "source": "List Branches",
+          "source": "List branches",
           "message": "ブランチの一覧取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "ページネーションを開始するブランチの名前"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.display_name": {
-          "source": "Create Branch",
+          "source": "Create branch",
           "message": "ブランチを作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlCcmFuY2hlcw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "コミットSHAまたは既存のブランチからブランチを作成"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Get Branch",
+          "source": "Get branch",
           "message": "ブランチの取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -532,7 +532,7 @@
           "message": "ブランチの名前"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.display_name": {
-          "source": "Delete Branch",
+          "source": "Delete branch",
           "message": "ブランチを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUJyYW5jaGVzQnJhbmNo.short_desc": {
@@ -568,7 +568,7 @@
           "message": "ブランチの名前"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.display_name": {
-          "source": "Delete Merged Branches",
+          "source": "Delete merged branches",
           "message": "マージ済みブランチを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeU1lcmdlZEJyYW5jaGVz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "このアクションが対象とするプロジェクト。数値IDまたはパス（`group/project`）として指定します。\n\nパスはそのまま入力してください。トランスポート層によってGitLabが想定する単一のパスセグメントにエスケープされます。手動でエスケープされたパスは二重にエスケープされ、解決されません。\n\nプロジェクトをスコープとするその他のすべてのオプション（ブランチ、イシュー、メンバー、変数など）はこのプロジェクトから一覧表示されるため、プロジェクトを変更すると再読み込みされます。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.display_name": {
-          "source": "List Commits",
+          "source": "List commits",
           "message": "コミット一覧の取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHM.short_desc": {
@@ -812,7 +812,7 @@
           "message": "キーセットページネーションを開始するレコード"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.display_name": {
-          "source": "Get Commit",
+          "source": "Get commit",
           "message": "コミットを取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGE.short_desc": {
@@ -860,7 +860,7 @@
           "message": "コミット統計情報を含める"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.display_name": {
-          "source": "List Commit Comments",
+          "source": "List commit comments",
           "message": "コミットコメントの一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkUmVwb3NpdG9yeUNvbW1pdHNTaGFDb21tZW50cw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "1回のリクエストで返すレコード数（GitLabの上限である `100` まで）。\n\n合計および次のページは、ボディではなく `X-Total`、`X-Page`、`X-Next-Page` の**レスポンスヘッダー**で報告されるため、ページネーションは返されるレコード数が `per_page` 件未満になるまで次のページを要求することを意味します。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.display_name": {
-          "source": "Comment on Commit",
+          "source": "Comment on commit",
           "message": "コミットにコメント"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRzU2hhQ29tbWVudHM.short_desc": {
@@ -1012,7 +1012,7 @@
           "message": "old"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.display_name": {
-          "source": "List Deploy Keys",
+          "source": "List deploy keys",
           "message": "デプロイキーの一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "1回のリクエストで返すレコード数（GitLabの上限である `100` まで）。\n\n合計および次のページは、ボディではなく `X-Total`、`X-Page`、`X-Next-Page` の**レスポンスヘッダー**で報告されるため、ページネーションは返されるレコード数が `per_page` 件未満になるまで次のページを要求することを意味します。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.display_name": {
-          "source": "Add Deploy Key",
+          "source": "Add deploy key",
           "message": "デプロイキーを追加"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXM.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "ISO 8601 形式（YYYY-MM-DDTHH:MM:SSZ）の SSH キーの有効期限"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Get Deploy Key",
+          "source": "Get deploy key",
           "message": "デプロイキーの取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "デプロイキーのID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Update Deploy Key",
+          "source": "Update deploy key",
           "message": "デプロイキーの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "デプロイキーがプロジェクトのリポジトリにプッシュできるかどうか"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.display_name": {
-          "source": "Delete Deploy Key",
+          "source": "Delete deploy key",
           "message": "デプロイキーを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkRGVwbG95S2V5c0tleUlk.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "デプロイキーのID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.display_name": {
-          "source": "Enable Deploy Key",
+          "source": "Enable deploy key",
           "message": "デプロイキーを有効化"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZERlcGxveUtleXNLZXlJZEVuYWJsZQ.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "中断"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Get Group",
+          "source": "Get group",
           "message": "グループを取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "カスタム属性でフィルター"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Update Group",
+          "source": "Update group",
           "message": "グループを更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.short_desc": {
@@ -4332,7 +4332,7 @@
           "message": "trueの場合、DAPベースのコードレビュールーティングに対する明示的な名前空間の同意を記録します"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.display_name": {
-          "source": "Delete Group",
+          "source": "Delete group",
           "message": "グループを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZA.short_desc": {
@@ -5084,7 +5084,7 @@
           "message": "アーカイブされていないプロジェクトのイシューを返します"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.display_name": {
-          "source": "List Project Issues",
+          "source": "List project issues",
           "message": "プロジェクトの課題一覧"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.short_desc": {
@@ -5824,7 +5824,7 @@
           "message": "次のレコードセットを取得するためのカーソル"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "課題を作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.short_desc": {
@@ -6156,7 +6156,7 @@
           "message": "イシューに関連付けるエピックのIID（非推奨）"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "課題の取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6192,7 +6192,7 @@
           "message": "イシューの**IID**。Web UIに表示され、`#42`のように表記されるプロジェクト相対の番号です。\n\nこれはグローバルなイシュー一覧でフィルターとして使用されるインスタンス全体の`id`とは異なり、同じイシューに対する別の番号です。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "課題の更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6524,7 +6524,7 @@
           "message": "作成日時"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.display_name": {
-          "source": "Delete Issue",
+          "source": "Delete issue",
           "message": "課題の削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.short_desc": {
@@ -6560,7 +6560,7 @@
           "message": "イシューの**IID**。Web UIに表示され、`#42`のように表記されるプロジェクト相対の番号です。\n\nこれはグローバルなイシュー一覧でフィルターとして使用されるインスタンス全体の`id`とは異なり、同じイシューに対する別の番号です。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.display_name": {
-          "source": "Get Issue Time Stats",
+          "source": "Get issue time stats",
           "message": "イシューの時間統計の取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWRUaW1lU3RhdHM.short_desc": {
@@ -6596,7 +6596,7 @@
           "message": "イシューの**IID**。Web UIに表示され、`#42`のように表記されるプロジェクト相対の番号です。\n\nこれはグローバルなイシュー一覧でフィルターとして使用されるインスタンス全体の`id`とは異なり、同じイシューに対する別の番号です。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.display_name": {
-          "source": "List Milestones",
+          "source": "List milestones",
           "message": "マイルストーンの一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWlsZXN0b25lcw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "監査者ユーザーのみをフィルタリングします"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.display_name": {
-          "source": "List Project Users",
+          "source": "List project users",
           "message": "プロジェクトユーザーを一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVXNlcnM.short_desc": {
@@ -7188,7 +7188,7 @@
           "message": "指定したIDのユーザーを除外"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.display_name": {
-          "source": "List Project Members",
+          "source": "List project members",
           "message": "プロジェクトメンバーの一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.short_desc": {
@@ -7296,7 +7296,7 @@
           "message": "リンクされたSAML IDを持つメンバーのみを一覧表示"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.display_name": {
-          "source": "Add Project Member",
+          "source": "Add project member",
           "message": "プロジェクトメンバーを追加"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lbWJlcnM.short_desc": {
@@ -7376,7 +7376,7 @@
           "message": "メンバー作成プロセスをトリガーしたソース"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Get Project Member",
+          "source": "Get project member",
           "message": "プロジェクトメンバーの取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7412,7 +7412,7 @@
           "message": "メンバーのユーザーID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Update Project Member",
+          "source": "Update project member",
           "message": "プロジェクトメンバーの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "更新するメンバーロールのID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.display_name": {
-          "source": "Remove Project Member",
+          "source": "Remove project member",
           "message": "プロジェクトメンバーを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.short_desc": {
@@ -7544,7 +7544,7 @@
           "message": "`true`の場合、メンバーはサブグループまたはプロジェクトにおける直接のメンバーシップを保持します。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.display_name": {
-          "source": "List Group Members",
+          "source": "List group members",
           "message": "グループメンバーを一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.short_desc": {
@@ -7652,7 +7652,7 @@
           "message": "リンクされたSAML IDを持つメンバーのみを一覧表示"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.display_name": {
-          "source": "Add Group Member",
+          "source": "Add group member",
           "message": "グループメンバーの追加"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRNZW1iZXJz.short_desc": {
@@ -7732,7 +7732,7 @@
           "message": "メンバー作成プロセスをトリガーしたソース"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Get Group Member",
+          "source": "Get group member",
           "message": "グループメンバーを取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7768,7 +7768,7 @@
           "message": "メンバーのユーザーID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Update Group Member",
+          "source": "Update group member",
           "message": "グループメンバーの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7840,7 +7840,7 @@
           "message": "更新するメンバーロールのID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.display_name": {
-          "source": "Remove Group Member",
+          "source": "Remove group member",
           "message": "グループメンバーを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.short_desc": {
@@ -7900,7 +7900,7 @@
           "message": "`true` の場合、メンバーをグループ内の任意のイシューまたはマージリクエストから割り当て解除します。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.display_name": {
-          "source": "List Merge Requests",
+          "source": "List merge requests",
           "message": "マージリクエストの一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "指定した `iid` を持つリクエストを返します。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.display_name": {
-          "source": "Create Merge Request",
+          "source": "Create merge request",
           "message": "マージリクエストを作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.short_desc": {
@@ -8900,7 +8900,7 @@
           "message": "ルールのID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Get Merge Request",
+          "source": "Get merge request",
           "message": "マージリクエストの取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -8972,7 +8972,7 @@
           "message": "`true` の場合、レスポンスにリベース操作が進行中かどうかが含まれます。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Update Merge Request",
+          "source": "Update merge request",
           "message": "マージリクエストの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "ルールのID"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.display_name": {
-          "source": "Delete Merge Request",
+          "source": "Delete merge request",
           "message": "マージリクエストを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "マージリクエストの **IID**: Web UI に表示され `!7` と表記されるプロジェクト相対の番号です。インスタンス全体の `id` ではありません。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.display_name": {
-          "source": "Approve Merge Request",
+          "source": "Approve merge request",
           "message": "マージリクエストを承認"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRBcHByb3Zl.short_desc": {
@@ -9380,7 +9380,7 @@
           "message": "承認時に明示的な認証を要求するようプロジェクトが設定されている場合の現在のユーザーのパスワード"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.display_name": {
-          "source": "Unapprove Merge Request",
+          "source": "Unapprove merge request",
           "message": "マージリクエストの承認を取り消し"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHNNZXJnZVJlcXVlc3RJaWRVbmFwcHJvdmU.short_desc": {
@@ -11640,7 +11640,7 @@
           "message": "プロジェクトを作成するテンプレートのプロジェクトID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "プロジェクトの取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -11712,7 +11712,7 @@
           "message": "カスタム属性でフィルター"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "プロジェクトの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13740,7 +13740,7 @@
           "message": "dap_powered"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "プロジェクトの削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lk.short_desc": {
@@ -13836,7 +13836,7 @@
           "message": "トピックの組織ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.display_name": {
-          "source": "List Project Variables",
+          "source": "List project variables",
           "message": "プロジェクト変数を一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVz.short_desc": {
@@ -13884,7 +13884,7 @@
           "message": "1回のリクエストで返すレコード数（GitLabの上限である `100` まで）。\n\n合計および次のページは、ボディではなく `X-Total`、`X-Page`、`X-Next-Page` の**レスポンスヘッダー**で報告されるため、ページネーションは返されるレコード数が `per_page` 件未満になるまで次のページを要求することを意味します。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "Create Project Variable",
+          "source": "Create project variable",
           "message": "プロジェクト変数の作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14024,7 +14024,7 @@
           "message": "変数が展開されるかどうか"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Get Project Variable",
+          "source": "Get project variable",
           "message": "プロジェクト変数を取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14084,7 +14084,7 @@
           "message": "利用可能なフィルター: [environment_scope]。例: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Update Project Variable",
+          "source": "Update project variable",
           "message": "プロジェクト変数の更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14236,7 +14236,7 @@
           "message": "変数の説明"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.display_name": {
-          "source": "Delete Project Variable",
+          "source": "Delete project variable",
           "message": "プロジェクト変数を削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkVmFyaWFibGVzS2V5.short_desc": {
@@ -14296,7 +14296,7 @@
           "message": "利用可能なフィルター: [environment_scope]。例: filter[environment_scope]=production"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.display_name": {
-          "source": "List Group Variables",
+          "source": "List group variables",
           "message": "グループ変数を一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlcw.short_desc": {
@@ -14344,7 +14344,7 @@
           "message": "1回のリクエストで返すレコード数（GitLabの上限である `100` まで）。\n\n合計および次のページは、ボディではなく `X-Total`、`X-Page`、`X-Next-Page` の**レスポンスヘッダー**で報告されるため、ページネーションは返されるレコード数が `per_page` 件未満になるまで次のページを要求することを意味します。"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.display_name": {
-          "source": "Create Group Variable",
+          "source": "Create group variable",
           "message": "グループ変数の作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.short_desc": {
@@ -14484,7 +14484,7 @@
           "message": "変数が展開されるかどうか"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Get Group Variable",
+          "source": "Get group variable",
           "message": "グループ変数を取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14520,7 +14520,7 @@
           "message": "変数のキー"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Update Group Variable",
+          "source": "Update group variable",
           "message": "グループ変数の更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14648,7 +14648,7 @@
           "message": "変数の説明"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.display_name": {
-          "source": "Delete Group Variable",
+          "source": "Delete group variable",
           "message": "グループ変数を削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRHcm91cHNJZFZhcmlhYmxlc0tleQ.short_desc": {
@@ -14684,7 +14684,7 @@
           "message": "変数のキー"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.display_name": {
-          "source": "List Wiki Pages",
+          "source": "List wiki pages",
           "message": "Wikiページを一覧表示"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXM.short_desc": {
@@ -14720,7 +14720,7 @@
           "message": "ページのコンテンツを含める"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.display_name": {
-          "source": "Create Wiki Page",
+          "source": "Create wiki page",
           "message": "Wikiページの作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFdpa2lz.short_desc": {
@@ -14820,7 +14820,7 @@
           "message": "Wikiページのフロントマターのタイトル"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Get Wiki Page",
+          "source": "Get wiki page",
           "message": "Wikiページを取得"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14880,7 +14880,7 @@
           "message": "コンテンツを HTML として描画します"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Update Wiki Page",
+          "source": "Update wiki page",
           "message": "Wikiページの更新"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -14992,7 +14992,7 @@
           "message": "Wikiページのフロントマターのタイトル"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.display_name": {
-          "source": "Delete Wiki Page",
+          "source": "Delete wiki page",
           "message": "Wikiページを削除"
         },
         "app.R2l0bGFi.action.ZGVsZXRlQXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.short_desc": {
@@ -15148,7 +15148,7 @@
           "message": "操作対象のテーブル: `projects`、`groups`、`issues`、`merge-requests`、`branches`、`commit-comments`、`project-members`、`group-members`、`project-variables`、`group-variables`、`deploy-keys` または `wikis`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.display_name": {
-          "source": "Create Commit",
+          "source": "Create commit",
           "message": "コミットの作成"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFJlcG9zaXRvcnlDb21taXRz.short_desc": {
@@ -15404,7 +15404,7 @@
           "message": "`start_branch`または`start_sha`に基づく新しいコミットでターゲットブランチを上書きします。\n\n**これによりターゲットブランチにあった内容が破棄されるため**、作業内容が失われる可能性があるオプションです"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.display_name": {
-          "source": "Get Project ID by URL",
+          "source": "Get project ID by URL",
           "message": "URLからプロジェクトIDを取得"
         },
         "app.R2l0bGFi.action.Z2V0X3Byb2plY3RfaWRfYnlfdXJs.short_desc": {
@@ -15428,7 +15428,7 @@
           "message": "ブラウザからコピーされたプロジェクトのURL。\n\nトップページだけでなく、プロジェクト**内**の任意のURLが機能します: `https://gitlab.com/group/project`、`https://gitlab.com/group/project/-/issues/17`、`https://gitlab.com/group/project.git`はすべて同じプロジェクトを識別します。"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.display_name": {
-          "source": "New Commit",
+          "source": "New commit",
           "message": "新規コミット"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdA.short_desc": {
@@ -15440,7 +15440,7 @@
           "message": "監視対象プロジェクトで新しいコミットが行われるたびにトリガーされます。\n\n`ref_name`で特定のブランチまたはタグに制限したり、`path`で特定のファイルまたはディレクトリを変更するコミットに制限したり、`author`で特定の作成者に制限したりできます。イベントには、メッセージ、作成者、Web URLなど、GitLabが返すコミットレコードが含まれます。"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.display_name": {
-          "source": "New Commit Comment",
+          "source": "New commit comment",
           "message": "新規コミットコメント"
         },
         "app.R2l0bGFi.action.bmV3X2NvbW1pdF9jb21tZW50.short_desc": {
@@ -15452,7 +15452,7 @@
           "message": "1つのコミットに対する新しいコメントごとにトリガーされます。\n\nコミットは必須オプションであるため、プロジェクト内のすべてのコメントではなく、そのコミットに対するコメントを監視します。イベントには、ノート、diff内の位置（存在する場合）、および作成者が含まれます。"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.display_name": {
-          "source": "New Issue",
+          "source": "New issue",
           "message": "新規課題"
         },
         "app.R2l0bGFi.action.bmV3X2lzc3Vl.short_desc": {
@@ -15464,7 +15464,7 @@
           "message": "監視対象プロジェクトで新しいIssueが作成されるたびにトリガーされます。\n\nイベントには、IID、タイトル、ラベル、担当者、Web URLなど、GitLabが返すIssueレコードが含まれます。後から編集されたIssueは再度このイベントをトリガーしません。作成時のみレポートします。"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.display_name": {
-          "source": "New Merge Request",
+          "source": "New merge request",
           "message": "新規マージリクエスト"
         },
         "app.R2l0bGFi.action.bmV3X21lcmdlX3JlcXVlc3Q.short_desc": {

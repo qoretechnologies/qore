@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Listar buckets"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -388,7 +388,7 @@
           "message": "El `next_page_token` de una llamada anterior, para recuperar la página siguiente"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
-          "source": "Get Bucket",
+          "source": "Get bucket",
           "message": "Obtener bucket"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "El nombre del bucket cuyos metadatos se deben recuperar"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Listar objetos"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "El `next_page_token` de una llamada anterior, para recuperar la página siguiente"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Get Object Metadata",
+          "source": "Get object metadata",
           "message": "Obtener metadatos del objeto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
@@ -580,7 +580,7 @@
           "message": "La generación de contenido que se recuperará; cuando se omite, se utiliza la versión activa"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
-          "source": "Update Object Metadata",
+          "source": "Update object metadata",
           "message": "Actualizar metadatos del objeto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {

@@ -592,7 +592,7 @@
           "message": "Weryfikacja kodu ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
-          "source": "Get Address",
+          "source": "Get address",
           "message": "Pobierz adres"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Weryfikacja kodu ZIP+4 (USPS)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Pobierz paczkę"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Nazwa przewoźnika (np. `USPS`, `UPS`, `FedEx`)"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Pobierz przesyłkę"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "ID wcześniej zakupionej przesyłki do zwrotu"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
-          "source": "Get Shipment Label",
+          "source": "Get shipment label",
           "message": "Pobierz etykietę przesyłki"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
@@ -4016,7 +4016,7 @@
           "message": "Nazwa przewoźnika (np. `USPS`, `FedEx`); w przypadku pominięcia EasyPost wykrywa automatycznie"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
-          "source": "Get Tracker",
+          "source": "Get tracker",
           "message": "Pobierz tracker"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Webhook do usunięcia"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Wyświetl wydarzenia"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {

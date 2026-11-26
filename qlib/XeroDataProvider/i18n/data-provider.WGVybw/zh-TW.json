@@ -8244,7 +8244,7 @@
           "message": "允許建立發票，即使一或多個明細行項目包含追蹤庫存且發票數量會導致可用數量變為負數"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "尋找發票歷史記錄"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "發票的唯一識別碼"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "新增備註至發票"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "值為 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "透過電子郵件寄送發票"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "分配折讓單"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "尋找任務"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "建立任務"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "要操作的資料表：`invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects` 或 `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "尋找員工"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "列出組織薪資單中的員工。\n\n**使用哪個薪資 API 取決於連線的 `payroll_region`**，因為 Xero 沒有單一的薪資 API：澳洲位於 `payroll.xro/1.0`，紐西蘭和英國則位於 `payroll.xro/2.0`。未設定地區的連線會回報此情況而不是猜測地區。\n\n各地區包裝結果的方式不同 - 澳洲使用 `{Employees: [...]}`，其他兩個地區使用 `{employees: [...], pagination}` - 而此動作在兩種情況下都會以純清單形式傳回員工。\n\n此模組所取代的應用程式曾透過會計 API 讀取員工資料，但員工資料並不存在於該處，因此從未傳回任何內容。"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "建立員工"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "在組織的薪資單中建立員工。\n\n`Employees` 為清單，即使只有一位員工亦然。澳洲的薪資 API 直接接受清單；紐西蘭與英國的 API 每次呼叫僅接受一位員工，因此多位員工的清單會一次傳送一位並收集結果。\n\n**使用哪個薪資 API 取決於連線的 `payroll_region`。** 員工所需的欄位因地區而異 - 英國員工有國民保險號碼 (National Insurance number)，而紐西蘭員工有 IRD 號碼 - 因此此動作會按原樣傳遞員工資料，而不是為所有地區宣告單一格式。"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "新增聯絡人"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "在組織中建立或變更每個聯絡人時觸發。\n\nXero 依據 `UpdatedDateUTC` 定位聯絡人，且不提供「建立時間晚於」的篩選條件，因此稍後編輯聯絡人會再次觸發此事件。此事件會攜帶 Xero 傳回的聯絡人記錄。"
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "新增帳單"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "在每筆帳單建立或變更時觸發。\n\n帳單是類型為 `ACCPAY` 的發票，這也是此事件所套用的篩選條件；銷售發票 (`ACCREC`) 則不會觸發此事件。此事件會攜帶 Xero 傳回的發票記錄。"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "新增貸項通知單"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "在每筆貸項通知單建立或變更時觸發。\n\n此事件會攜帶 Xero 傳回的貸項通知單記錄。此模組所取代的應用程式會輪詢貸項通知單，但未匯出任何列出或讀取貸項通知單的方法；**Find Credit Notes** 的存在是為了讓此事件有對應動作。"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "新增銀行交易"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "在每筆銀行交易建立或變更時觸發 - 針對銀行帳戶支出或收取的款項。\n\n此事件會攜帶 Xero 傳回的銀行交易記錄。"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "新付款"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "在針對發票或貸項通知單建立或變更每筆付款時觸發。\n\n此事件會攜帶 Xero 傳回的付款記錄。"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "新增採購單"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "在每筆採購單建立或變更時觸發。\n\n此事件會攜帶 Xero 傳回的採購單記錄。"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "新增員工"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {

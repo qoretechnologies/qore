@@ -412,7 +412,7 @@
           "message": "계정과 연결된 모든 조직을 나열합니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "프로젝트 가져오기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "프로젝트 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "프로젝트 업데이트"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -520,7 +520,7 @@
           "message": "고객 관리 암호화 키(CMEK)를 사용하여 암호화를 강제할지 여부입니다. CMEK 암호화를 사용 설정한 후에는 사용 중지할 수 없습니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Get Organization",
+          "source": "Get organization",
           "message": "조직 가져오기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
@@ -544,7 +544,7 @@
           "message": "조직 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Delete Organization",
+          "source": "Delete organization",
           "message": "조직 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -568,7 +568,7 @@
           "message": "조직 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Update Organization",
+          "source": "Update organization",
           "message": "조직 업데이트"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -604,7 +604,7 @@
           "message": "조직의 새 이름입니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.display_name": {
-          "source": "List Project API Keys",
+          "source": "List project API keys",
           "message": "프로젝트 API 키 나열"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0LWFwaS1rZXlz.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Project ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.display_name": {
-          "source": "Create API Key",
+          "source": "Create API key",
           "message": "API 키 생성"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWFwaS1rZXk.short_desc": {
@@ -700,7 +700,7 @@
           "message": "데이터 플레인 뷰어"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.display_name": {
-          "source": "Get API Key",
+          "source": "Get API key",
           "message": "API 키 받기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWFwaS1rZXk.short_desc": {
@@ -724,7 +724,7 @@
           "message": "API 키 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key",
+          "source": "Delete API key",
           "message": "API 키 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWFwaS1rZXk.short_desc": {
@@ -748,7 +748,7 @@
           "message": "API 키 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.display_name": {
-          "source": "Update API Key",
+          "source": "Update API key",
           "message": "API 키 업데이트"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLWFwaS1rZXk.short_desc": {
@@ -868,7 +868,7 @@
           "message": "이전 응답의 `pagination.next`에 있는 커서입니다. 동일한 쿼리 컨텍스트(경로 매개변수, 필터 및 `limit`)와 함께 재사용되어야 합니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "사용자 가져오기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXVzZXI.short_desc": {
@@ -892,7 +892,7 @@
           "message": "사용자 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User",
+          "source": "Delete user",
           "message": "사용자 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "데이터 플레인 뷰어"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.display_name": {
-          "source": "Get Invite",
+          "source": "Get invite",
           "message": "초대받기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LWludml0ZQ.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "초대 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.display_name": {
-          "source": "Delete Invite",
+          "source": "Delete invite",
           "message": "초대 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLWludml0ZQ.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "초대 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.display_name": {
-          "source": "Resend Invite",
+          "source": "Resend invite",
           "message": "초대 다시 보내기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cmVzZW5kLWludml0ZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "데이터 플레인 뷰어"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
+          "source": "Get service account",
           "message": "서비스 계정 받기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "서비스 계정의 고유 식별자입니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
+          "source": "Delete service account",
           "message": "서비스 계정 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "서비스 계정의 고유 식별자입니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
+          "source": "Update service account",
           "message": "서비스 계정 업데이트"
         },
         "app.UGluZWNvbmVBZG1pbg.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "서비스 계정의 새 이름입니다. 생략하면 이름이 변경되지 않습니다."
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.display_name": {
-          "source": "Rotate Service Account Secret",
+          "source": "Rotate service account secret",
           "message": "서비스 계정 비밀번호 순환"
         },
         "app.UGluZWNvbmVBZG1pbg.action.cm90YXRlLXNlcnZpY2UtYWNjb3VudC1zZWNyZXQ.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "데이터 플레인 뷰어"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.display_name": {
-          "source": "Get Role Binding",
+          "source": "Get role binding",
           "message": "역할 바인딩 가져오기"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Z2V0LXJvbGUtYmluZGluZw.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "역할 결합 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Delete Role Binding",
+          "source": "Delete role binding",
           "message": "역할 바인딩 삭제"
         },
         "app.UGluZWNvbmVBZG1pbg.action.ZGVsZXRlLXJvbGUtYmluZGluZw.short_desc": {

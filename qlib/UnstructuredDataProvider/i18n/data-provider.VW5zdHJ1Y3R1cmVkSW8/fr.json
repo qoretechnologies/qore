@@ -1316,7 +1316,7 @@
           "message": "Ne renvoyer que les workflows qui ont été supprimés"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "Obtenir un workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Un identifiant stable qui survit à un export vers un autre environnement, ce que l'ID généré ne fait pas.\n\nDérivé de `name` s'il n'est pas renseigné, et immuable une fois défini.  Jusqu'à 63 caractères : minuscules, chiffres et traits d'union, sans trait d'union initial, final ni répété."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "Mettre à jour un workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Inactif"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.display_name": {
-          "source": "Delete Workflow",
+          "source": "Delete workflow",
           "message": "Supprimer un workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXdvcmtmbG93.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "Le workflow à supprimer"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.display_name": {
-          "source": "Run Workflow",
+          "source": "Run workflow",
           "message": "Exécuter un workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cnVuLXdvcmtmbG93.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Rejetée"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.display_name": {
-          "source": "Get Job",
+          "source": "Get job",
           "message": "Obtenir une tâche"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "La tâche à renvoyer"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.display_name": {
-          "source": "Get Job Details",
+          "source": "Get job details",
           "message": "Obtenir le détail d'une tâche"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1kZXRhaWxz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "La tâche à décrire"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.display_name": {
-          "source": "Get Job Failed Files",
+          "source": "Get job failed files",
           "message": "Obtenir les fichiers en échec"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWpvYi1mYWlsZWQtZmlsZXM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "La tâche à examiner"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.display_name": {
-          "source": "Download Job Output",
+          "source": "Download job output",
           "message": "Télécharger la sortie d'une tâche"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZG93bmxvYWQtam9iLW91dHB1dA.short_desc": {
@@ -1868,7 +1868,7 @@
           "message": "Le nœud de traitement qui a produit le fichier.  Par défaut, le dernier nœud du workflow, celui qui écrit la sortie."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.display_name": {
-          "source": "Cancel Job",
+          "source": "Cancel job",
           "message": "Annuler une tâche"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2FuY2VsLWpvYg.short_desc": {
@@ -2024,7 +2024,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.display_name": {
-          "source": "Get Source Connector",
+          "source": "Get source connector",
           "message": "Obtenir un connecteur source"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZQ.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "Un identifiant stable qui survit à un export vers un autre environnement, ce que l'ID généré ne fait pas.\n\nDérivé de `name` s'il n'est pas renseigné, et immuable une fois défini.  Jusqu'à 63 caractères : minuscules, chiffres et traits d'union, sans trait d'union initial, final ni répété."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.display_name": {
-          "source": "Update Source Connector",
+          "source": "Update source connector",
           "message": "Mettre à jour un connecteur source"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "Jeton Sas"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
-          "source": "Delete Source Connector",
+          "source": "Delete source connector",
           "message": "Supprimer un connecteur source"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "Le connecteur à supprimer"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.display_name": {
-          "source": "Check Source Connector",
+          "source": "Check source connector",
           "message": "Vérifier un connecteur source"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stc291cmNl.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Le connecteur à vérifier"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.display_name": {
-          "source": "Get Source Connector Check",
+          "source": "Get source connector check",
           "message": "Obtenir la vérification d'un connecteur source"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXNvdXJjZS1jaGVjaw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Azure Blob Storage"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
-          "source": "Get Destination Connector",
+          "source": "Get destination connector",
           "message": "Obtenir un connecteur de destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Un identifiant stable qui survit à un export vers un autre environnement, ce que l'ID généré ne fait pas.\n\nDérivé de `name` s'il n'est pas renseigné, et immuable une fois défini.  Jusqu'à 63 caractères : minuscules, chiffres et traits d'union, sans trait d'union initial, final ni répété."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Update Destination Connector",
+          "source": "Update destination connector",
           "message": "Mettre à jour un connecteur de destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Jeton Sas"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Delete Destination Connector",
+          "source": "Delete destination connector",
           "message": "Supprimer un connecteur de destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
@@ -5328,7 +5328,7 @@
           "message": "Le connecteur à supprimer"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.display_name": {
-          "source": "Check Destination Connector",
+          "source": "Check destination connector",
           "message": "Vérifier un connecteur de destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y2hlY2stZGVzdGluYXRpb24.short_desc": {
@@ -5348,7 +5348,7 @@
           "message": "Le connecteur à vérifier"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.display_name": {
-          "source": "Get Destination Connector Check",
+          "source": "Get destination connector check",
           "message": "Obtenir la vérification d'un connecteur de destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWRlc3RpbmF0aW9uLWNoZWNr.short_desc": {
@@ -5404,7 +5404,7 @@
           "message": "Activé"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Get Notification Channel",
+          "source": "Get notification channel",
           "message": "Obtenir un canal de notification"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5608,7 +5608,7 @@
           "message": "Types d'événements auxquels s'abonner"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Update Notification Channel",
+          "source": "Update notification channel",
           "message": "Mettre à jour un canal de notification"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5780,7 +5780,7 @@
           "message": "Adresse email de réponse"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Delete Notification Channel",
+          "source": "Delete notification channel",
           "message": "Supprimer un canal de notification"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5800,7 +5800,7 @@
           "message": "Le canal à supprimer"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Verify Notification Channel",
+          "source": "Verify notification channel",
           "message": "Vérifier un canal de notification"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dmVyaWZ5LW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Liste les modèles de workflow : les chaînes de traitement toutes faites d'Unstructured, à partir desquelles un workflow peut être construit plutôt que d'en décrire les nœuds à la main."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.display_name": {
-          "source": "Get Workflow Template",
+          "source": "Get workflow template",
           "message": "Obtenir un modèle de workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LXRlbXBsYXRl.short_desc": {

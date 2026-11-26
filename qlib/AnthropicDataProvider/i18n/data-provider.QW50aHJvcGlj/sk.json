@@ -1396,7 +1396,7 @@
           "message": "Nepriehľadný kľúč používaný na načítanie a ukladanie kontextu konverzácie prostredníctvom nakonfigurovaného úložiska kontextu. Ak je zadaný, predchádzajúce správy sa automaticky pridajú na začiatok"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Spočítať tokeny"
         },
         "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Maximálny počet tokenov, ktoré sa majú použiť na rozšírené uvažovanie. Musí byť aspoň `1024` a menej ako `max_tokens`. Platí len vtedy, keď je režim uvažovania `enabled`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Jedinečný identifikátor alebo alias modelu (napr. `claude-sonnet-4-6-20250514`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Zoznam modelov"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Použiť nucleus vzorkovanie. Pri nucleus vzorkovaní vypočítame kumulatívne rozdelenie cez všetky možnosti pre každý nasledujúci token v klesajúcom poradí pravdepodobnosti a orežeme ho, keď dosiahne konkrétnu pravdepodobnosť určenú pomocou `top_p`"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Message Batch",
+          "source": "Get message batch",
           "message": "Získať dávku správ"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Jedinečný identifikátor dávky správ (napr. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Message Batches",
+          "source": "List message batches",
           "message": "Zoznam dávok správ"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Názov súboru"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Zoznam súborov"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "Vrátiť súbory pred týmto ID súboru (kurzor pre stránkovanie dozadu)"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získať súbor"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Jedinečný identifikátor súboru"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
-          "source": "Get File Content",
+          "source": "Get file content",
           "message": "Získať obsah súboru"
         },
         "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "Podrobné pokyny pre správanie zručnosti. Tieto tvoria telo súboru SKILL.md, ktorý Claude číta pri spustení zručnosti"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
-          "source": "List Skills",
+          "source": "List skills",
           "message": "Zoznam zručností"
         },
         "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Token stránkovania z poľa `next_page` predchádzajúcej odpovede na načítanie ďalšej stránky výsledkov"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Získať zručnosť"
         },
         "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
-          "source": "Send Email",
+          "source": "Send email",
           "message": "メールの送信"
         },
         "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
@@ -496,7 +496,7 @@
           "message": "返信用メールアドレス"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
-          "source": "Validate Email",
+          "source": "Validate email",
           "message": "メールアドレスを検証"
         },
         "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {

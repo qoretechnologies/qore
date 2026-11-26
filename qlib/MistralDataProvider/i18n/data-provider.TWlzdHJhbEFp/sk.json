@@ -376,7 +376,7 @@
           "message": "Hodnota pre parametra `model` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Získať model"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW1vZGVs.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Hodnota pre parametra `model_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Zmazať model"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -1556,7 +1556,7 @@
           "message": "Hodnota pre parametra `metadata` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Získať rozhovor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "ID konverzácie, z ktorej sa získavajú metadáta."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
+          "source": "Delete conversation",
           "message": "Zmazať konverzáciu"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "ID konverzácie, z ktorej sa získavajú metadáta."
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Append Conversation",
+          "source": "Append conversation",
           "message": "Pridať Hovor"
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "ID volania nástroja"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Conversation History",
+          "source": "Get conversation history",
           "message": "Získať históriu rozhovoru"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1oaXN0b3J5.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "ID konverzácie, z ktorej sa získavajú záznamy."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.display_name": {
-          "source": "Get Conversation Messages",
+          "source": "Get conversation messages",
           "message": "Získať správy rozhovoru"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbnZlcnNhdGlvbi1tZXNzYWdlcw.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "ID konverzácie, z ktorej sa získavajú správy."
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.display_name": {
-          "source": "Restart Conversation",
+          "source": "Restart conversation",
           "message": "Obnovenie rozhovoru"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Hodnota pre parametra `metadata` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.display_name": {
-          "source": "Get Agent",
+          "source": "Get agent",
           "message": "Získať Agent"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "Hodnota pre túto operáciu pre `agent_version`."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.display_name": {
-          "source": "Update Agent",
+          "source": "Update agent",
           "message": "Upraviť agenta"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "Hodnota pre `version_message` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.display_name": {
-          "source": "Delete Agent",
+          "source": "Delete agent",
           "message": "Zmazať agenta"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "Nepriehľadný kurzor z tokenu ďalšej stránky z predchádzajúcej odpovedi. Ak je nastavený, výsledky sa zobraziú od kurzoru napred."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Update Agent Version",
+          "source": "Update agent version",
           "message": "Upraviť verziu agenta"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWFnZW50LXZlcnNpb24.short_desc": {
@@ -4772,7 +4772,7 @@
           "message": "Hodnota pre `version` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Agent Versions",
+          "source": "List agent versions",
           "message": "Zoznam verzií agentov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -4820,7 +4820,7 @@
           "message": "Počet verzií na stránku"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.display_name": {
-          "source": "Get Agent Version",
+          "source": "Get agent version",
           "message": "Získať Verziu Agenta"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWFnZW50LXZlcnNpb24.short_desc": {
@@ -4856,7 +4856,7 @@
           "message": "Hodnota pre `version` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.display_name": {
-          "source": "Set Agent Alias",
+          "source": "Set agent alias",
           "message": "Zmeni Alias Agentu"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWFnZW50LWFsaWFz.short_desc": {
@@ -4904,7 +4904,7 @@
           "message": "Hodnota pre `version` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.display_name": {
-          "source": "List Agent Aliases",
+          "source": "List agent aliases",
           "message": "Zoznam aliasov agentov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hZ2VudC1hbGlhc2Vz.short_desc": {
@@ -4928,7 +4928,7 @@
           "message": "Hodnota pre túto operáciu pre `agent_id`."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.display_name": {
-          "source": "Delete Agent Alias",
+          "source": "Delete agent alias",
           "message": "Zmazať alias agenta"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFnZW50LWFsaWFz.short_desc": {
@@ -5316,7 +5316,7 @@
           "message": "Hodnota pre parametra `mimetypes` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Získať súbor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGU.short_desc": {
@@ -5340,7 +5340,7 @@
           "message": "Hodnota pre parametra `file_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Zmazať súbor"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -5364,7 +5364,7 @@
           "message": "Hodnota pre parametra `file_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Stiahnuť súbor"
         },
         "app.TWlzdHJhbEFp.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -5388,7 +5388,7 @@
           "message": "Hodnota pre parametra `file_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.display_name": {
-          "source": "Get File URL",
+          "source": "Get file URL",
           "message": "Získať URL súboru"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWZpbGUtdXJs.short_desc": {
@@ -5420,7 +5420,7 @@
           "message": "Počet hodín predtým, kým sa URL stane neplatným"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Update Fine Tuned Model",
+          "source": "Update fine tuned model",
           "message": "Upraviť upravený model"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "Hodnota pre parametra `description` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.display_name": {
-          "source": "Archive Fine Tuned Model",
+          "source": "Archive fine tuned model",
           "message": "Archivovať Upravený Model"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS1maW5lLXR1bmVkLW1vZGVs.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "Hodnota pre parametra `model_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.display_name": {
-          "source": "Unarchive Fine Tuned Model",
+          "source": "Unarchive fine tuned model",
           "message": "Odarchivovať upravený model"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLWZpbmUtdHVuZWQtbW9kZWw.short_desc": {
@@ -5808,7 +5808,7 @@
           "message": "Časový limit v hodinách pre úlohu batch inferencie."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.display_name": {
-          "source": "Get Batch Job",
+          "source": "Get batch job",
           "message": "Získať Batch úlohu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWJhdGNoLWpvYg.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Hodnota pre parametra `inline` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.display_name": {
-          "source": "Cancel Batch Job",
+          "source": "Cancel batch job",
           "message": "Zrušiť Batch Úlohu"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLWJhdGNoLWpvYg.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Pôvodný názov súboru pre detekciu rozšírenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.display_name": {
-          "source": "Get Voice",
+          "source": "Get voice",
           "message": "Získať hlas"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNl.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Hodnota pre `voice_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.display_name": {
-          "source": "Update Voice",
+          "source": "Update voice",
           "message": "Upraviť hlas"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXZvaWNl.short_desc": {
@@ -8576,7 +8576,7 @@
           "message": "Hodnota pre `tags` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "Zmazať hlas"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -8600,7 +8600,7 @@
           "message": "Hodnota pre `voice_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.display_name": {
-          "source": "Get Voice Sample",
+          "source": "Get voice sample",
           "message": "Získať vzorku hlasu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXZvaWNlLXNhbXBsZQ.short_desc": {
@@ -8684,7 +8684,7 @@
           "message": "Hodnota pre parametra `chunk_size` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.display_name": {
-          "source": "Get Library",
+          "source": "Get library",
           "message": "Získať knižnicu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnk.short_desc": {
@@ -8708,7 +8708,7 @@
           "message": "Hodnota pre parametra `library_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.display_name": {
-          "source": "Delete Library",
+          "source": "Delete library",
           "message": "Zmazať knižnicu"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnk.short_desc": {
@@ -8732,7 +8732,7 @@
           "message": "Hodnota pre parametra `library_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.display_name": {
-          "source": "Update Library",
+          "source": "Update library",
           "message": "Upraviť knižnicu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnk.short_desc": {
@@ -8780,7 +8780,7 @@
           "message": "Hodnota pre parametra `description` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.display_name": {
-          "source": "List Library Documents",
+          "source": "List library documents",
           "message": "Zoznam dokumentov v knižnici"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWRvY3VtZW50cw.short_desc": {
@@ -8876,7 +8876,7 @@
           "message": "Hodnota pre `sort_order` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Upload Library Document",
+          "source": "Upload library document",
           "message": "Nahrať dokument do knižnice"
         },
         "app.TWlzdHJhbEFp.action.dXBsb2FkLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9032,7 +9032,7 @@
           "message": "Názov súboru"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Get Library Document",
+          "source": "Get library document",
           "message": "Získať dokument knižnice"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9068,7 +9068,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Update Library Document",
+          "source": "Update library document",
           "message": "Upraviť dokument v knižnici"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9128,7 +9128,7 @@
           "message": "Hodnota pre parametra `attributes` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Delete Library Document",
+          "source": "Delete library document",
           "message": "Zmazať dokument v knižnici"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9164,7 +9164,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.display_name": {
-          "source": "Get Library Document Text",
+          "source": "Get library document text",
           "message": "Získať text dokumentu knižnice"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dA.short_desc": {
@@ -9200,7 +9200,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.display_name": {
-          "source": "Get Library Document Status",
+          "source": "Get library document status",
           "message": "Získať štát dokumentu knižnice"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtc3RhdHVz.short_desc": {
@@ -9236,7 +9236,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.display_name": {
-          "source": "Get Library Document URL",
+          "source": "Get library document URL",
           "message": "Získať URL dokumentu z knižnice"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdXJs.short_desc": {
@@ -9272,7 +9272,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.display_name": {
-          "source": "Get Library Document Text URL",
+          "source": "Get library document text URL",
           "message": "Získať URL textu dokumentu knižnice"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWxpYnJhcnktZG9jdW1lbnQtdGV4dC11cmw.short_desc": {
@@ -9308,7 +9308,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
-          "source": "Reprocess Library Document",
+          "source": "Reprocess library document",
           "message": "Opätovne spracovať dokument knižnice"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
@@ -9344,7 +9344,7 @@
           "message": "Hodnota pre parametra `document_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.display_name": {
-          "source": "List Library Access",
+          "source": "List library access",
           "message": "Zoznam prístupu k knižnici"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1saWJyYXJ5LWFjY2Vzcw.short_desc": {
@@ -9368,7 +9368,7 @@
           "message": "Hodnota pre parametra `library_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Set Library Access",
+          "source": "Set library access",
           "message": "Nastavi Prístup k Knižnici"
         },
         "app.TWlzdHJhbEFp.action.c2V0LWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9452,7 +9452,7 @@
           "message": "Prácovné prostredie"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.display_name": {
-          "source": "Delete Library Access",
+          "source": "Delete library access",
           "message": "Zmazať prístup k knižnici"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWxpYnJhcnktYWNjZXNz.short_desc": {
@@ -9600,7 +9600,7 @@
           "message": "Hodnota pre `q` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.display_name": {
-          "source": "Get Dataset",
+          "source": "Get dataset",
           "message": "Získať súbor dát"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQ.short_desc": {
@@ -9624,7 +9624,7 @@
           "message": "Hodnota pre parametra `dataset_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Zmazať zoznam dát"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -9648,7 +9648,7 @@
           "message": "Hodnota pre parametra `dataset_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Upraviť súbor s dátami"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -9696,7 +9696,7 @@
           "message": "Hodnota pre parametra `description` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.display_name": {
-          "source": "List Dataset Records",
+          "source": "List dataset records",
           "message": "Zoznam záznamov dátovej sady"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXJlY29yZHM.short_desc": {
@@ -9744,7 +9744,7 @@
           "message": "Hodnota pre parametra `page` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Add Dataset Record",
+          "source": "Add dataset record",
           "message": "Pridať záznam v dátovej sadzie"
         },
         "app.TWlzdHJhbEFp.action.YWRkLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -9792,7 +9792,7 @@
           "message": "Hodnota pre parametra `properties` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.display_name": {
-          "source": "Import Dataset From File",
+          "source": "Import dataset from file",
           "message": "Importovať súbor z súboru"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1maWxl.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "Hodnota pre parametra `file_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.display_name": {
-          "source": "Import Dataset From Playground",
+          "source": "Import dataset from playground",
           "message": "Importovať súbor z Playgroundu"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1wbGF5Z3JvdW5k.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "Hodnota pre parametra `conversation_ids` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.display_name": {
-          "source": "Import Dataset From Dataset",
+          "source": "Import dataset from dataset",
           "message": "Importovať súbor z súboru"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1kYXRhc2V0.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "Hodnota pre parametra `dataset_record_ids` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.display_name": {
-          "source": "Export Dataset JSONl",
+          "source": "Export dataset JSONl",
           "message": "Export Dataset JSONl"
         },
         "app.TWlzdHJhbEFp.action.ZXhwb3J0LWRhdGFzZXQtanNvbmw.short_desc": {
@@ -9924,7 +9924,7 @@
           "message": "Hodnota pre parametra `dataset_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.display_name": {
-          "source": "Get Dataset Task",
+          "source": "Get dataset task",
           "message": "Získať úlohu súboru dát"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtdGFzaw.short_desc": {
@@ -9960,7 +9960,7 @@
           "message": "Hodnota pre `task_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.display_name": {
-          "source": "List Dataset Tasks",
+          "source": "List dataset tasks",
           "message": "Zoznam úloh dátovej sady"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1kYXRhc2V0LXRhc2tz.short_desc": {
@@ -10008,7 +10008,7 @@
           "message": "Hodnota pre parametra `page` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Get Dataset Record",
+          "source": "Get dataset record",
           "message": "Získať záznam súboru dát"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "Hodnota pre parametra `dataset_record_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.display_name": {
-          "source": "Delete Dataset Record",
+          "source": "Delete dataset record",
           "message": "Zmazať záznam zoznamu dát"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWRhdGFzZXQtcmVjb3Jk.short_desc": {
@@ -10080,7 +10080,7 @@
           "message": "Hodnota pre parametra `dataset_record_ids` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.display_name": {
-          "source": "Update Dataset Record Payload",
+          "source": "Update dataset record payload",
           "message": "Upraviť zložku záznamu súboru s dátami"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXBheWxvYWQ.short_desc": {
@@ -10116,7 +10116,7 @@
           "message": "Hodnota pre parametra `payload` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.display_name": {
-          "source": "Update Dataset Record Properties",
+          "source": "Update dataset record properties",
           "message": "Upraviť vlastnosti záznamu súboru s dátami"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWRhdGFzZXQtcmVjb3JkLXByb3BlcnRpZXM.short_desc": {
@@ -10152,7 +10152,7 @@
           "message": "Hodnota pre parametra `properties` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Get Workflow Execution",
+          "source": "Get workflow execution",
           "message": "Získať spustenie workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10176,7 +10176,7 @@
           "message": "Hodnota pre parametra `execution_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Execution History",
+          "source": "Get workflow execution history",
           "message": "Získať históriu spustenia workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1oaXN0b3J5.short_desc": {
@@ -10212,7 +10212,7 @@
           "message": "Hodnota pre parametra `decode_payloads` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Signal Workflow Execution",
+          "source": "Signal workflow execution",
           "message": "Označ Workflow Exekúciu"
         },
         "app.TWlzdHJhbEFp.action.c2lnbmFsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "Šifrovaná časť"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.display_name": {
-          "source": "Query Workflow Execution",
+          "source": "Query workflow execution",
           "message": "Spustenie vykonania workflow"
         },
         "app.TWlzdHJhbEFp.action.cXVlcnktd29ya2Zsb3ctZXhlY3V0aW9u.short_desc": {
@@ -10404,7 +10404,7 @@
           "message": "Šifrovaná časť"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Terminate Workflow Execution",
+          "source": "Terminate workflow execution",
           "message": "Ukončiť Exekúciu Workflowu"
         },
         "app.TWlzdHJhbEFp.action.dGVybWluYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10452,7 +10452,7 @@
           "message": "Zoznam ID výkonov na spracovanie"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Cancel Workflow Execution",
+          "source": "Cancel workflow execution",
           "message": "Zrušiť Priebeh Výkonu"
         },
         "app.TWlzdHJhbEFp.action.Y2FuY2VsLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10500,7 +10500,7 @@
           "message": "Zoznam ID výkonov na spracovanie"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.display_name": {
-          "source": "Reset Workflow",
+          "source": "Reset workflow",
           "message": "Reset workflow"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.short_desc": {
@@ -10572,7 +10572,7 @@
           "message": "Či vymazať aktualizácie, ktoré sa stali po bodovom resetovaní"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.display_name": {
-          "source": "Update Workflow Execution",
+          "source": "Update workflow execution",
           "message": "Upraviť vykonávanie workflow"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWV4ZWN1dGlvbg.short_desc": {
@@ -10668,7 +10668,7 @@
           "message": "Šifrovaná časť"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.display_name": {
-          "source": "Get Workflow Execution Trace Otel",
+          "source": "Get workflow execution trace OTel",
           "message": "Získať stopu vykonania workflowu Otel"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1vdGVs.short_desc": {
@@ -10692,7 +10692,7 @@
           "message": "Hodnota pre parametra `execution_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.display_name": {
-          "source": "Get Workflow Execution Trace Summary",
+          "source": "Get workflow execution trace summary",
           "message": "Získať shrnutie stopy vykonania workflowu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1zdW1tYXJ5.short_desc": {
@@ -10716,7 +10716,7 @@
           "message": "Hodnota pre parametra `execution_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.display_name": {
-          "source": "Get Workflow Execution Trace Events",
+          "source": "Get workflow execution trace events",
           "message": "Získať udalosti stopových bodov spustenia workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZS1ldmVudHM.short_desc": {
@@ -10764,7 +10764,7 @@
           "message": "Hodnota pre parametra `include_internal_events` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.display_name": {
-          "source": "Get Workflow Metrics",
+          "source": "Get workflow metrics",
           "message": "Získať metriky workflowu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LW1ldHJpY3M.short_desc": {
@@ -10912,7 +10912,7 @@
           "message": "Token pre ďalšiu stránku výsledkov"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.display_name": {
-          "source": "Get Workflow Run",
+          "source": "Get workflow run",
           "message": "Získať spracovanie workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bg.short_desc": {
@@ -10936,7 +10936,7 @@
           "message": "Hodnota pre `run_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.display_name": {
-          "source": "Get Workflow Run History",
+          "source": "Get workflow run history",
           "message": "Získať históriu spracovania workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJ1bi1oaXN0b3J5.short_desc": {
@@ -11316,7 +11316,7 @@
           "message": "Názov nasadenia, kam sa má plán odoslať"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.display_name": {
-          "source": "Unschedule Workflow",
+          "source": "Unschedule workflow",
           "message": "Odplánovať workflow"
         },
         "app.TWlzdHJhbEFp.action.dW5zY2hlZHVsZS13b3JrZmxvdw.short_desc": {
@@ -11448,7 +11448,7 @@
           "message": "Hodnota pre `workflow_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Get Workflow Deployment",
+          "source": "Get workflow deployment",
           "message": "Získať nasadenie workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -11600,7 +11600,7 @@
           "message": "Kursor pre stránkovanie"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.display_name": {
-          "source": "Execute Workflow",
+          "source": "Execute workflow",
           "message": "Spustiť Workflow"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdw.short_desc": {
@@ -11704,7 +11704,7 @@
           "message": "Názov nasadenia, kam sa má vykonanie odoslať"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.display_name": {
-          "source": "Execute Workflow Registration",
+          "source": "Execute workflow registration",
           "message": "Spustiť Workflow Registráciu"
         },
         "app.TWlzdHJhbEFp.action.ZXhlY3V0ZS13b3JrZmxvdy1yZWdpc3RyYXRpb24.short_desc": {
@@ -11808,7 +11808,7 @@
           "message": "Názov nasadenia, kam sa má vykonanie odoslať"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.display_name": {
-          "source": "Get Workflow",
+          "source": "Get workflow",
           "message": "Získať workflow"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93.short_desc": {
@@ -11832,7 +11832,7 @@
           "message": "Hodnota pre `workflow_identifier` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.display_name": {
-          "source": "Update Workflow",
+          "source": "Update workflow",
           "message": "Upraviť workflow"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93.short_desc": {
@@ -11892,7 +11892,7 @@
           "message": "Či urobíť workflow dostupný v chat asistente"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.display_name": {
-          "source": "Get Workflow Registration",
+          "source": "Get workflow registration",
           "message": "Získať registráciu workflowu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXJlZ2lzdHJhdGlvbg.short_desc": {
@@ -11940,7 +11940,7 @@
           "message": "Či zahrnúť sdílené verzie workflow"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.display_name": {
-          "source": "Archive Workflow",
+          "source": "Archive workflow",
           "message": "Archivovať Priebeh"
         },
         "app.TWlzdHJhbEFp.action.YXJjaGl2ZS13b3JrZmxvdw.short_desc": {
@@ -11964,7 +11964,7 @@
           "message": "Hodnota pre `workflow_identifier` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.display_name": {
-          "source": "Unarchive Workflow",
+          "source": "Unarchive workflow",
           "message": "Odarchivovať workflow"
         },
         "app.TWlzdHJhbEFp.action.dW5hcmNoaXZlLXdvcmtmbG93.short_desc": {
@@ -12132,7 +12132,7 @@
           "message": "Hodnota pre parametra `page_size` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.display_name": {
-          "source": "Get Connector Auth URL",
+          "source": "Get connector auth URL",
           "message": "Získať URL autentizácie spojenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoLXVybA.short_desc": {
@@ -12180,7 +12180,7 @@
           "message": "Hodnota pre parametra `credentials_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.display_name": {
-          "source": "Call Connector Tool",
+          "source": "Call connector tool",
           "message": "Volajte Nástroj Spojov"
         },
         "app.TWlzdHJhbEFp.action.Y2FsbC1jb25uZWN0b3ItdG9vbA.short_desc": {
@@ -12240,7 +12240,7 @@
           "message": "Hodnota pre parametra `credentials_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.display_name": {
-          "source": "List Connector Tools",
+          "source": "List connector tools",
           "message": "Zoznam spojovacích nástrojov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3ItdG9vbHM.short_desc": {
@@ -12312,7 +12312,7 @@
           "message": "Hodnota pre parametra `credentials_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.display_name": {
-          "source": "Get Connector Authentication Methods",
+          "source": "Get connector authentication methods",
           "message": "Získať metódy autentizácie spojenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvci1hdXRoZW50aWNhdGlvbi1tZXRob2Rz.short_desc": {
@@ -12336,7 +12336,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Organization Credentials For A Connector",
+          "source": "List organization credentials for a connector",
           "message": "Zoznam organizačných kvalifikácií pre spojenie"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12396,7 +12396,7 @@
           "message": "Hodnota pre parametra `fetch_default` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Organization Credentials For A Connector",
+          "source": "Create or update organization credentials for a connector",
           "message": "Vytvoriť alebo Aktualizovať Prístupové Údaje Organizácie pre Spojovacu Súčasť"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS1vcmdhbml6YXRpb24tY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12464,7 +12464,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "List Workspace Credentials For A Connector",
+          "source": "List workspace credentials for a connector",
           "message": "Zoznam kvalifikácií pracovného prostredia pre spojenie"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12524,7 +12524,7 @@
           "message": "Hodnota pre parametra `fetch_default` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create Or Update Workspace Credentials For A Connector",
+          "source": "Create or update workspace credentials for a connector",
           "message": "Vytvoriť alebo Aktualizovať Prístupové Údaje Prácovnej Siene pre Spojovacu Súčasť"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS13b3Jrc3BhY2UtY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12592,7 +12592,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "List User Credentials For A Connector",
+          "source": "List user credentials for a connector",
           "message": "Zoznam užívateľských kvalifikácií pre spojenie"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12652,7 +12652,7 @@
           "message": "Hodnota pre parametra `fetch_default` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Create Or Update User Credentials For A Connector",
+          "source": "Create or update user credentials for a connector",
           "message": "Vytvoriť alebo Aktualizovať Prístupové Údaje Užívateľa pre Spojovacu Súčasť"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLW9yLXVwZGF0ZS11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -12720,7 +12720,7 @@
           "message": "OAuth"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Organization Credentials For A Connector",
+          "source": "Delete organization credentials for a connector",
           "message": "Zmazať prístupové údaje organizácie pre spojovateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLW9yZ2FuaXphdGlvbi1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12756,7 +12756,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Delete Workspace Credentials For A Connector",
+          "source": "Delete workspace credentials for a connector",
           "message": "Zmazať pracovné prostriedky pre autentizáciu pre spojovateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -12792,7 +12792,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Delete User Credentials For A Connector",
+          "source": "Delete user credentials for a connector",
           "message": "Zmazať prístupové údaje užívateľa pre spojovateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -12828,7 +12828,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.display_name": {
-          "source": "Get Connector",
+          "source": "Get connector",
           "message": "Získať spojenie"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWNvbm5lY3Rvcg.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Update Connector",
+          "source": "Update connector",
           "message": "Upraviť spojenie"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -12932,7 +12932,7 @@
           "message": "Nová URL adresa servera pre váš MCP spojovateľ."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete Connector",
+          "source": "Delete connector",
           "message": "Zmazať spojovateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWNvbm5lY3Rvcg.short_desc": {
@@ -15968,7 +15968,7 @@
           "message": "Zobrazí zoznam polí, na ktoré sa môžu odkazovať vyhľadávacie výrazy logov, s ich označeniami a typmi. Prehliadajte činnosť AI a vyhodnocujte kvalitu odpovedí.\n\n**Verejná ukážka:** Dostupnosť závisí od vášho účtu a oprávnení."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Log Field Options",
+          "source": "List log field options",
           "message": "Zoznam možností polí logov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
@@ -16228,7 +16228,7 @@
           "message": "Zobrazí zoznam polí, na ktoré sa môžu odkazovať vyhľadávacie výrazy a agregácie trasovaní, s ich označeniami a typmi. Prehliadajte činnosť AI a vyhodnocujte kvalitu odpovedí.\n\n**Verejná ukážka:** Dostupnosť závisí od vášho účtu a oprávnení."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
-          "source": "List Trace Field Options",
+          "source": "List trace field options",
           "message": "Zoznam možností polí trasovaní"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
@@ -16276,7 +16276,7 @@
           "message": "Koniec časového rozsahu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
-          "source": "Get Trace",
+          "source": "Get trace",
           "message": "Získať trasovanie"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
@@ -16300,7 +16300,7 @@
           "message": "32-miestne hexadecimálne ID trasovania."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
-          "source": "List Trace Spans",
+          "source": "List trace spans",
           "message": "Zoznam spanov trasovania"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
@@ -16364,7 +16364,7 @@
           "message": "`cursor` vrátený s predchádzajúcou stránkou; pri prvej stránke ho vynechajte."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
-          "source": "Get Trace Span",
+          "source": "Get trace span",
           "message": "Získať span trasovania"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
@@ -16628,7 +16628,7 @@
           "message": "Zobrazí zoznam polí, na ktoré sa môžu odkazovať vyhľadávacie výrazy a agregácie spanov, s ich označeniami a typmi. Prehliadajte činnosť AI a vyhodnocujte kvalitu odpovedí.\n\n**Verejná ukážka:** Dostupnosť závisí od vášho účtu a oprávnení."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
-          "source": "List Span Field Options",
+          "source": "List span field options",
           "message": "Zoznam možností polí spanov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
@@ -16932,7 +16932,7 @@
           "message": "Zobrazí zoznam polí, na ktoré sa môžu odkazovať vyhľadávacie výrazy a agregácie vyhodnotení spanov, s ich označeniami a typmi. Prehliadajte činnosť AI a vyhodnocujte kvalitu odpovedí.\n\n**Verejná ukážka:** Dostupnosť závisí od vášho účtu a oprávnení."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
-          "source": "List Span Evaluation Field Options",
+          "source": "List span evaluation field options",
           "message": "Zoznam možností polí vyhodnotení spanov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
@@ -17124,7 +17124,7 @@
           "message": "Povolené"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
-          "source": "Get Pipeline",
+          "source": "Get pipeline",
           "message": "Získať pipeline"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
@@ -17148,7 +17148,7 @@
           "message": "ID pipelinu vyhodnocovania."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
-          "source": "Update Pipeline",
+          "source": "Update pipeline",
           "message": "Aktualizovať pipeline"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
@@ -17236,7 +17236,7 @@
           "message": "Povolené"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
-          "source": "Delete Pipeline",
+          "source": "Delete pipeline",
           "message": "Zmazať pipeline"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
@@ -17256,7 +17256,7 @@
           "message": "ID pipelinu vyhodnocovania."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
-          "source": "List Pipeline Result Fields",
+          "source": "List pipeline result fields",
           "message": "Zoznam polí výsledkov pipelinu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
@@ -17336,7 +17336,7 @@
           "message": "`cursor` vrátený s predchádzajúcou stránkou; pri prvej stránke ho vynechajte."
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
-          "source": "Import Dataset From Spans",
+          "source": "Import dataset from spans",
           "message": "Importovať dátovú sadu zo spanov"
         },
         "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
@@ -17468,7 +17468,7 @@
           "message": "Slugy konfigurácií pipelinov, ktorých výsledky sa majú vyhľadať, ako sú uvedené v `pipeline_configs` pipelinu; vyžaduje sa aspoň jeden."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.display_name": {
-          "source": "Delete Batch Job",
+          "source": "Delete batch job",
           "message": "Odstrániť dávkovú úlohu"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWJhdGNoLWpvYg.short_desc": {
@@ -18416,7 +18416,7 @@
           "message": "ID agenta na vygenerovanie odpovede."
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.display_name": {
-          "source": "Patch Library",
+          "source": "Patch library",
           "message": "Upraviť knižnicu (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeQ.short_desc": {
@@ -18440,7 +18440,7 @@
           "message": "Popis"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.display_name": {
-          "source": "Patch Library Document",
+          "source": "Patch library document",
           "message": "Upraviť dokument v knižnici (PATCH)"
         },
         "app.TWlzdHJhbEFp.action.cGF0Y2gtbGlicmFyeS1kb2N1bWVudA.short_desc": {
@@ -21004,7 +21004,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "Získať výzvu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdA.short_desc": {
@@ -21032,7 +21032,7 @@
           "message": "Polia"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.display_name": {
-          "source": "Delete Prompt",
+          "source": "Delete prompt",
           "message": "Odstrániť prompt"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXByb21wdA.short_desc": {
@@ -21048,7 +21048,7 @@
           "message": "ID výzvy"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.display_name": {
-          "source": "Update Prompt",
+          "source": "Update prompt",
           "message": "Aktualizovať prompt"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdA.short_desc": {
@@ -21128,7 +21128,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.display_name": {
-          "source": "List Prompt Versions",
+          "source": "List prompt versions",
           "message": "Vypísať verzie promptu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9tcHQtdmVyc2lvbnM.short_desc": {
@@ -21144,7 +21144,7 @@
           "message": "ID výzvy"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Create Prompt Version",
+          "source": "Create prompt version",
           "message": "Vytvoriť verziu promptu"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21232,7 +21232,7 @@
           "message": "Aliasy odkazujúce na túto verziu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Get Prompt Version",
+          "source": "Get prompt version",
           "message": "Načítať verziu promptu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21256,7 +21256,7 @@
           "message": "Polia"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.display_name": {
-          "source": "Update Prompt Version",
+          "source": "Update prompt version",
           "message": "Aktualizovať verziu promptu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXByb21wdC12ZXJzaW9u.short_desc": {
@@ -21556,7 +21556,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.display_name": {
-          "source": "Get Skill",
+          "source": "Get skill",
           "message": "Získať zručnosť"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxs.short_desc": {
@@ -21584,7 +21584,7 @@
           "message": "Polia"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.display_name": {
-          "source": "Delete Skill",
+          "source": "Delete skill",
           "message": "Odstrániť zručnosť"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNraWxs.short_desc": {
@@ -21600,7 +21600,7 @@
           "message": "ID zručnosti"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.display_name": {
-          "source": "Update Skill",
+          "source": "Update skill",
           "message": "Aktualizovať zručnosť"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxs.short_desc": {
@@ -21656,7 +21656,7 @@
           "message": "Editor"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.display_name": {
-          "source": "List Skill Versions",
+          "source": "List skill versions",
           "message": "Vypísať verzie zručnosti"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1za2lsbC12ZXJzaW9ucw.short_desc": {
@@ -21672,7 +21672,7 @@
           "message": "ID zručnosti"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Create Skill Version",
+          "source": "Create skill version",
           "message": "Vytvoriť verziu zručnosti"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21760,7 +21760,7 @@
           "message": "Aliasy odkazujúce na túto verziu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Get Skill Version",
+          "source": "Get skill version",
           "message": "Načítať verziu zručnosti"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNraWxsLXZlcnNpb24.short_desc": {
@@ -21784,7 +21784,7 @@
           "message": "Polia"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.display_name": {
-          "source": "Update Skill Version",
+          "source": "Update skill version",
           "message": "Aktualizovať verziu zručnosti"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNraWxsLXZlcnNpb24.short_desc": {
@@ -21864,7 +21864,7 @@
           "message": "Stránka"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.display_name": {
-          "source": "Get Observability Project",
+          "source": "Get observability project",
           "message": "Načítať projekt observability"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9ic2VydmFiaWxpdHktcHJvamVjdA.short_desc": {
@@ -21880,7 +21880,7 @@
           "message": "Krátky identifikátor projektu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.display_name": {
-          "source": "List Project Evaluations",
+          "source": "List project evaluations",
           "message": "Zobraziť hodnotenia projektu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1wcm9qZWN0LWV2YWx1YXRpb25z.short_desc": {
@@ -21904,7 +21904,7 @@
           "message": "Stránka"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Načítať hodnotenie"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -21920,7 +21920,7 @@
           "message": "Krátky identifikátor hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.display_name": {
-          "source": "Search Evaluation Runs",
+          "source": "Search evaluation runs",
           "message": "Prehľadať behy hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVucw.short_desc": {
@@ -22580,7 +22580,7 @@
           "message": "Stránka"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
+          "source": "Get evaluation run",
           "message": "Načítať beh hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -22596,7 +22596,7 @@
           "message": "ID spustenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.display_name": {
-          "source": "Get Evaluation Run Statistics",
+          "source": "Get evaluation run statistics",
           "message": "Načítať štatistiky behu hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXN0YXRpc3RpY3M.short_desc": {
@@ -22612,7 +22612,7 @@
           "message": "ID spustenia"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.display_name": {
-          "source": "Compute Evaluation Run Statistics",
+          "source": "Compute evaluation run statistics",
           "message": "Vypočítať štatistiky behu hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.Y29tcHV0ZS1ldmFsdWF0aW9uLXJ1bi1zdGF0aXN0aWNz.short_desc": {
@@ -22848,7 +22848,7 @@
           "message": "std"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.display_name": {
-          "source": "Get Evaluation Run Record",
+          "source": "Get evaluation run record",
           "message": "Načítať záznam behu hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWV2YWx1YXRpb24tcnVuLXJlY29yZA.short_desc": {
@@ -22868,7 +22868,7 @@
           "message": "ID záznamu"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.display_name": {
-          "source": "Search Evaluation Run Records",
+          "source": "Search evaluation run records",
           "message": "Prehľadať záznamy behu hodnotenia"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWV2YWx1YXRpb24tcnVuLXJlY29yZHM.short_desc": {
@@ -23192,7 +23192,7 @@
           "message": "Stránka"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.display_name": {
-          "source": "Get Optimization",
+          "source": "Get optimization",
           "message": "Načítať optimalizáciu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LW9wdGltaXphdGlvbg.short_desc": {
@@ -23208,7 +23208,7 @@
           "message": "Optimalizácia ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.display_name": {
-          "source": "List Optimization Trials",
+          "source": "List optimization trials",
           "message": "Zobraziť pokusy optimalizácie"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1vcHRpbWl6YXRpb24tdHJpYWxz.short_desc": {
@@ -23388,7 +23388,7 @@
           "message": "Šablóna promptu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.display_name": {
-          "source": "Get Scorer",
+          "source": "Get scorer",
           "message": "Načítať hodnotiacu funkciu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNjb3Jlcg.short_desc": {
@@ -23404,7 +23404,7 @@
           "message": "Krátky identifikátor hodnotiacej funkcie"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.display_name": {
-          "source": "Update Scorer",
+          "source": "Update scorer",
           "message": "Aktualizovať hodnotiacu funkciu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNjb3Jlcg.short_desc": {
@@ -23864,7 +23864,7 @@
           "message": "Verzia Agentu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Get Audio Session",
+          "source": "Get audio session",
           "message": "Načítať zvukovú reláciu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -23880,7 +23880,7 @@
           "message": "ID sedenia"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.display_name": {
-          "source": "Update Audio Session",
+          "source": "Update audio session",
           "message": "Aktualizovať zvukovú reláciu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLXNlc3Npb24.short_desc": {
@@ -24152,7 +24152,7 @@
           "message": "Povoliť prerušenia"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.display_name": {
-          "source": "Stop Audio Session",
+          "source": "Stop audio session",
           "message": "Zastaviť zvukovú reláciu"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC1hdWRpby1zZXNzaW9u.short_desc": {
@@ -24584,7 +24584,7 @@
           "message": "Vítané posolstvo"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.display_name": {
-          "source": "Get Audio Agent",
+          "source": "Get audio agent",
           "message": "Načítať hlasového agenta"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LWF1ZGlvLWFnZW50.short_desc": {
@@ -24612,7 +24612,7 @@
           "message": "Verzia na návrat. Chyby v najnovšej verzii."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Update Audio Agent",
+          "source": "Update audio agent",
           "message": "Aktualizovať hlasového agenta"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -24984,7 +24984,7 @@
           "message": "Vítané posolstvo"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.display_name": {
-          "source": "Delete Audio Agent",
+          "source": "Delete audio agent",
           "message": "Odstrániť hlasového agenta"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWF1ZGlvLWFnZW50.short_desc": {
@@ -25000,7 +25000,7 @@
           "message": "ID Agentu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.display_name": {
-          "source": "List Audio Agent Versions",
+          "source": "List audio agent versions",
           "message": "Zobraziť verzie hlasového agenta"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC12ZXJzaW9ucw.short_desc": {
@@ -25040,7 +25040,7 @@
           "message": "Kurzor vrátený predchádzajúcou stránkou v poli next_page_token"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.display_name": {
-          "source": "List Audio Agent Sessions",
+          "source": "List audio agent sessions",
           "message": "Zobraziť relácie hlasového agenta"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1hdWRpby1hZ2VudC1zZXNzaW9ucw.short_desc": {
@@ -25080,7 +25080,7 @@
           "message": "Kurzor vrátený predchádzajúcou stránkou v poli next_page_token"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.display_name": {
-          "source": "Get Workflow Execution Trace",
+          "source": "Get workflow execution trace",
           "message": "Načítať trasu vykonania pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi10cmFjZQ.short_desc": {
@@ -25096,7 +25096,7 @@
           "message": "ID spustenia"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.display_name": {
-          "source": "Get Workflow Execution Logs",
+          "source": "Get workflow execution logs",
           "message": "Načítať protokoly vykonania pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV4ZWN1dGlvbi1sb2dz.short_desc": {
@@ -25204,7 +25204,7 @@
           "message": "Maximálny počet záznamov na vrátenie"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Get Workflow Schedule",
+          "source": "Get workflow schedule",
           "message": "Načítať plán pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25220,7 +25220,7 @@
           "message": "ID Plánu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Update Workflow Schedule",
+          "source": "Update workflow schedule",
           "message": "Aktualizovať plán pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25484,7 +25484,7 @@
           "message": "Názov časového pásma IANA, napr. ``US/Central``."
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.display_name": {
-          "source": "Pause Workflow Schedule",
+          "source": "Pause workflow schedule",
           "message": "Pozastaviť plán pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.cGF1c2Utd29ya2Zsb3ctc2NoZWR1bGU.short_desc": {
@@ -25512,7 +25512,7 @@
           "message": "Voliteľné poznámky zaznamenané v časovom čase pri prestávke alebo obnovení harmonogramu"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.display_name": {
-          "source": "Resume Workflow Schedule",
+          "source": "Resume workflow schedule",
           "message": "Obnoviť plán pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.cmVzdW1lLXdvcmtmbG93LXNjaGVkdWxl.short_desc": {
@@ -25540,7 +25540,7 @@
           "message": "Voliteľné poznámky zaznamenané v časovom čase pri prestávke alebo obnovení harmonogramu"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.display_name": {
-          "source": "Trigger Workflow Schedule",
+          "source": "Trigger workflow schedule",
           "message": "Spustiť plán pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.dHJpZ2dlci13b3JrZmxvdy1zY2hlZHVsZQ.short_desc": {
@@ -25760,7 +25760,7 @@
           "message": "Hardenedová"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Update Workflow Deployment",
+          "source": "Update workflow deployment",
           "message": "Aktualizovať nasadenie pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25924,7 +25924,7 @@
           "message": "Repliky"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.display_name": {
-          "source": "Delete Workflow Deployment",
+          "source": "Delete workflow deployment",
           "message": "Odstrániť nasadenie pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdvcmtmbG93LWRlcGxveW1lbnQ.short_desc": {
@@ -25940,7 +25940,7 @@
           "message": "Názov"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Stop Workflow Deployment",
+          "source": "Stop workflow deployment",
           "message": "Zastaviť nasadenie pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.c3RvcC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25956,7 +25956,7 @@
           "message": "Názov"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Start Workflow Deployment",
+          "source": "Start workflow deployment",
           "message": "Spustiť nasadenie pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.c3RhcnQtd29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -25972,7 +25972,7 @@
           "message": "Názov"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.display_name": {
-          "source": "Restart Workflow Deployment",
+          "source": "Restart workflow deployment",
           "message": "Reštartovať nasadenie pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC13b3JrZmxvdy1kZXBsb3ltZW50.short_desc": {
@@ -25988,7 +25988,7 @@
           "message": "Názov"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.display_name": {
-          "source": "List Workflow Deployment Workers",
+          "source": "List workflow deployment workers",
           "message": "Zobraziť pracovné procesy nasadenia"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50LXdvcmtlcnM.short_desc": {
@@ -26048,7 +26048,7 @@
           "message": "Cursor z predchádzajúcej odpovede `next_cursor`→ Cestovanie `worker_status` Nezmenené vedľa neho."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.display_name": {
-          "source": "Get Workflow Deployment Archive",
+          "source": "Get workflow deployment archive",
           "message": "Načítať archív nasadenia pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtYXJjaGl2ZQ.short_desc": {
@@ -26064,7 +26064,7 @@
           "message": "Názov"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.display_name": {
-          "source": "Get Workflow Deployment Logs",
+          "source": "Get workflow deployment logs",
           "message": "Načítať protokoly nasadenia pracovného postupu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQtbG9ncw.short_desc": {
@@ -26440,7 +26440,7 @@
           "message": "Zoznam identifikátorov pracovného toku na unarchive"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.display_name": {
-          "source": "Add Workflow Tags",
+          "source": "Add workflow tags",
           "message": "Pridať štítky k pracovnému postupu"
         },
         "app.TWlzdHJhbEFp.action.YWRkLXdvcmtmbG93LXRhZ3M.short_desc": {
@@ -26516,7 +26516,7 @@
           "message": "vespa"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.display_name": {
-          "source": "Update Ingestion Pipeline Run",
+          "source": "Update ingestion pipeline run",
           "message": "Aktualizovať beh procesu príjmu dát"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWluZ2VzdGlvbi1waXBlbGluZS1ydW4.short_desc": {
@@ -26720,7 +26720,7 @@
           "message": "Vespa verzia"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.display_name": {
-          "source": "Unregister RAG Deployment",
+          "source": "Unregister RAG deployment",
           "message": "Zrušiť registráciu nasadenie RAG"
         },
         "app.TWlzdHJhbEFp.action.dW5yZWdpc3Rlci1yYWctZGVwbG95bWVudA.short_desc": {
@@ -26736,7 +26736,7 @@
           "message": "ID nasadenia"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.display_name": {
-          "source": "Update RAG Deployment Metrics",
+          "source": "Update RAG deployment metrics",
           "message": "Aktualizovať metriky nasadenia RAG"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXJhZy1kZXBsb3ltZW50LW1ldHJpY3M.short_desc": {
@@ -26996,7 +26996,7 @@
           "message": "Creator ID na zhodu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Get Search Index",
+          "source": "Get search index",
           "message": "Načítať vyhľadávací index"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleA.short_desc": {
@@ -27012,7 +27012,7 @@
           "message": "Názov indexu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.display_name": {
-          "source": "Update Search Index Schema",
+          "source": "Update search index schema",
           "message": "Aktualizovať schému vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlYXJjaC1pbmRleC1zY2hlbWE.short_desc": {
@@ -27040,7 +27040,7 @@
           "message": "dokumentárne pole"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Delete Search Index",
+          "source": "Delete search index",
           "message": "Odstrániť vyhľadávací index"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27056,7 +27056,7 @@
           "message": "Názov indexu"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Ingest Search Index Documents",
+          "source": "Ingest search index documents",
           "message": "Importovať dokumenty vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.aW5nZXN0LXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27076,7 +27076,7 @@
           "message": "Dokumenty"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.display_name": {
-          "source": "Delete Search Index Documents",
+          "source": "Delete search index documents",
           "message": "Odstrániť dokumenty vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlYXJjaC1pbmRleC1kb2N1bWVudHM.short_desc": {
@@ -27096,7 +27096,7 @@
           "message": "ID dokumentov"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Search Index Chunks",
+          "source": "Search index chunks",
           "message": "Prehľadať úseky v indexe"
         },
         "app.TWlzdHJhbEFp.action.c2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27488,7 +27488,7 @@
           "message": "váhy"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.display_name": {
-          "source": "Navigate Search Index Chunks",
+          "source": "Navigate search index chunks",
           "message": "Prechádzať úseky vo vyhľadávacom indexe"
         },
         "app.TWlzdHJhbEFp.action.bmF2aWdhdGUtc2VhcmNoLWluZGV4LWNodW5rcw.short_desc": {
@@ -27536,7 +27536,7 @@
           "message": "Typ obsahu"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.display_name": {
-          "source": "Read Search Index Chunks",
+          "source": "Read search index chunks",
           "message": "Prečítať úseky vo vyhľadávacom indexe"
         },
         "app.TWlzdHJhbEFp.action.cmVhZC1zZWFyY2gtaW5kZXgtY2h1bmtz.short_desc": {
@@ -27572,7 +27572,7 @@
           "message": "Typ obsahu"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.display_name": {
-          "source": "Find Text in Search Index",
+          "source": "Find text in search index",
           "message": "Vyhľadať text vo vyhľadávacom indexe"
         },
         "app.TWlzdHJhbEFp.action.ZmluZC10ZXh0LWluLXNlYXJjaC1pbmRleA.short_desc": {
@@ -27616,7 +27616,7 @@
           "message": "Typ obsahu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.display_name": {
-          "source": "Get Search Index Chunk",
+          "source": "Get search index chunk",
           "message": "Načítať úsek vo vyhľadávacom indexe"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1jaHVuaw.short_desc": {
@@ -27636,7 +27636,7 @@
           "message": "ID bloku"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Get Search Index Summary",
+          "source": "Get search index summary",
           "message": "Načítať súhrn vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27692,7 +27692,7 @@
           "message": "Názov indexu"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.display_name": {
-          "source": "Set Search Index Summary",
+          "source": "Set search index summary",
           "message": "Nastaviť súhrn vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlYXJjaC1pbmRleC1zdW1tYXJ5.short_desc": {
@@ -27940,7 +27940,7 @@
           "message": "Filter podľa ID zdroja udalostí (webhook id)"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.display_name": {
-          "source": "Get Trigger",
+          "source": "Get trigger",
           "message": "Načítať spúšťač"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXRyaWdnZXI.short_desc": {
@@ -27956,7 +27956,7 @@
           "message": "Trigger ID"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.display_name": {
-          "source": "Delete Trigger",
+          "source": "Delete trigger",
           "message": "Odstrániť spúšťač"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXRyaWdnZXI.short_desc": {
@@ -27972,7 +27972,7 @@
           "message": "Trigger ID"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.display_name": {
-          "source": "List Trigger Events",
+          "source": "List trigger events",
           "message": "Zobraziť udalosti spúšťača"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC10cmlnZ2VyLWV2ZW50cw.short_desc": {
@@ -28240,7 +28240,7 @@
           "message": "Hodnota pre parametra `workspace_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Get Service Account",
+          "source": "Get service account",
           "message": "Získať servisný účet"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28264,7 +28264,7 @@
           "message": "Hodnota pre parametra `service_account_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Update Service Account",
+          "source": "Update service account",
           "message": "Aktualizovať servisný účet"
         },
         "app.TWlzdHJhbEFp.action.dXBkYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28300,7 +28300,7 @@
           "message": "Hodnota pre parametra `description` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Delete Service Account",
+          "source": "Delete service account",
           "message": "Zmazať servisný účet"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -28324,7 +28324,7 @@
           "message": "Hodnota pre parametra `service_account_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.display_name": {
-          "source": "Set Service Account Roles",
+          "source": "Set service account roles",
           "message": "Nastaviť roly servisného účtu"
         },
         "app.TWlzdHJhbEFp.action.c2V0LXNlcnZpY2UtYWNjb3VudC1yb2xlcw.short_desc": {
@@ -28360,7 +28360,7 @@
           "message": "UUID rolí pracovného priestoru, ktoré sa majú priradiť. Povinné a neprázdne; vynechané alebo prázdne zoznamy vrátia 422. Ak nechcete žiadne oprávnenia udelené rolou, výslovne vyberte member; prístup môže byť napriek tomu udelený zdieľaním v rámci celého pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.display_name": {
-          "source": "List Service Account Roles",
+          "source": "List service account roles",
           "message": "Zoznam rolí servisného účtu"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1zZXJ2aWNlLWFjY291bnQtcm9sZXM.short_desc": {
@@ -28384,7 +28384,7 @@
           "message": "Hodnota pre parametra `service_account_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.display_name": {
-          "source": "Share Connector To Workspace",
+          "source": "Share connector to workspace",
           "message": "Zdieľať konektor do pracovného priestoru"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLXdvcmtzcGFjZQ.short_desc": {
@@ -28408,7 +28408,7 @@
           "message": "Hodnota pre parametra `connector_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Unshare Connector From Workspace",
+          "source": "Unshare connector from workspace",
           "message": "Zrušiť zdieľanie konektora z pracovného priestoru"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -28432,7 +28432,7 @@
           "message": "Hodnota pre parametra `connector_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Share Connector To Organization",
+          "source": "Share connector to organization",
           "message": "Zdieľať konektor do organizácie"
         },
         "app.TWlzdHJhbEFp.action.c2hhcmUtY29ubmVjdG9yLXRvLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28456,7 +28456,7 @@
           "message": "Hodnota pre parametra `connector_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Unshare Connector From Organization",
+          "source": "Unshare connector from organization",
           "message": "Zrušiť zdieľanie konektora z organizácie"
         },
         "app.TWlzdHJhbEFp.action.dW5zaGFyZS1jb25uZWN0b3ItZnJvbS1vcmdhbml6YXRpb24.short_desc": {
@@ -28480,7 +28480,7 @@
           "message": "Hodnota pre parametra `connector_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.display_name": {
-          "source": "Activate Connector For Organization",
+          "source": "Activate connector for organization",
           "message": "Aktivovať konektor pre organizáciu"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci1vcmdhbml6YXRpb24.short_desc": {
@@ -28520,7 +28520,7 @@
           "message": "organizácia"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.display_name": {
-          "source": "Activate Connector For Workspace",
+          "source": "Activate connector for workspace",
           "message": "Aktivovať konektor pre pracovný priestor"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci13b3Jrc3BhY2U.short_desc": {
@@ -28560,7 +28560,7 @@
           "message": "pracovný priestor"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.display_name": {
-          "source": "Activate Connector For User",
+          "source": "Activate connector for user",
           "message": "Aktivovať konektor pre používateľa"
         },
         "app.TWlzdHJhbEFp.action.YWN0aXZhdGUtY29ubmVjdG9yLWZvci11c2Vy.short_desc": {
@@ -28600,7 +28600,7 @@
           "message": "používateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.display_name": {
-          "source": "Deactivate Connector For Organization",
+          "source": "Deactivate connector for organization",
           "message": "Deaktivovať konektor pre organizáciu"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLW9yZ2FuaXphdGlvbg.short_desc": {
@@ -28640,7 +28640,7 @@
           "message": "organizácia"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.display_name": {
-          "source": "Deactivate Connector For Workspace",
+          "source": "Deactivate connector for workspace",
           "message": "Deaktivovať konektor pre pracovný priestor"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXdvcmtzcGFjZQ.short_desc": {
@@ -28680,7 +28680,7 @@
           "message": "pracovný priestor"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.display_name": {
-          "source": "Deactivate Connector For User",
+          "source": "Deactivate connector for user",
           "message": "Deaktivovať konektor pre používateľa"
         },
         "app.TWlzdHJhbEFp.action.ZGVhY3RpdmF0ZS1jb25uZWN0b3ItZm9yLXVzZXI.short_desc": {
@@ -28720,7 +28720,7 @@
           "message": "používateľ"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.display_name": {
-          "source": "Delete All User Credentials For A Connector",
+          "source": "Delete all user credentials for a connector",
           "message": "Zmazať všetky používateľské prístupové údaje pre konektor"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLWFsbC11c2VyLWNyZWRlbnRpYWxzLWZvci1hLWNvbm5lY3Rvcg.short_desc": {
@@ -28744,7 +28744,7 @@
           "message": "Hodnota pre parametra `connector_id_or_name` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.display_name": {
-          "source": "Create Workspace Credentials For A Connector",
+          "source": "Create workspace credentials for a connector",
           "message": "Vytvoriť prístupové údaje pracovného priestoru pre konektor"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXdvcmtzcGFjZS1jcmVkZW50aWFscy1mb3ItYS1jb25uZWN0b3I.short_desc": {
@@ -28888,7 +28888,7 @@
           "message": "Parametre dopytu"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.display_name": {
-          "source": "Create User Credentials For A Connector",
+          "source": "Create user credentials for a connector",
           "message": "Vytvoriť používateľské prístupové údaje pre konektor"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLXVzZXItY3JlZGVudGlhbHMtZm9yLWEtY29ubmVjdG9y.short_desc": {
@@ -29032,7 +29032,7 @@
           "message": "Parametre dopytu"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.display_name": {
-          "source": "Unharden Workflow Deployment",
+          "source": "Unharden workflow deployment",
           "message": "Zrušiť zabezpečenie nasadenia workflowu"
         },
         "app.TWlzdHJhbEFp.action.dW5oYXJkZW4td29ya2Zsb3ctZGVwbG95bWVudA.short_desc": {
@@ -29068,7 +29068,7 @@
           "message": "ID pracovného priestoru, na ktorý sa obmedzí požiadavka. Predvolene kontext volajúceho."
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.display_name": {
-          "source": "Generate Search Index Summary",
+          "source": "Generate search index summary",
           "message": "Vygenerovať súhrn vyhľadávacieho indexu"
         },
         "app.TWlzdHJhbEFp.action.Z2VuZXJhdGUtc2VhcmNoLWluZGV4LXN1bW1hcnk.short_desc": {
@@ -29440,7 +29440,7 @@
           "message": "Vzor pre jedinečný identifikátor udalosti používaný na odstránenie duplicitných doručení, so zástupnými symbolmi {body.<path>} a {headers.<Header-Name>}, napr. {body.id} alebo {body.event_id}.{headers.X-Delivery-Id}. Predvolene haš tela požiadavky"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Získať webhook"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -29464,7 +29464,7 @@
           "message": "Hodnota pre parametra `webhook_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Zmazať webhook"
         },
         "app.TWlzdHJhbEFp.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -29488,7 +29488,7 @@
           "message": "Hodnota pre parametra `webhook_id` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.display_name": {
-          "source": "Get Webhook Signing Secret",
+          "source": "Get webhook signing secret",
           "message": "Získať podpisový tajný kľúč webhooku"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdlYmhvb2stc2lnbmluZy1zZWNyZXQ.short_desc": {
@@ -30456,7 +30456,7 @@
           "message": "Zoznam čakajúcich pozvánok do organizácie. Spravujte členov organizácie, pozvánky a roly. Vyžaduje administrátorský kľúč API.\n\n**Verejná ukážka:** Dostupnosť závisí od vášho účtu a oprávnení."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.display_name": {
-          "source": "Delete Invitation (Admin)",
+          "source": "Delete invitation (admin)",
           "message": "Zmazať pozvánku (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWludml0YXRpb24.short_desc": {
@@ -30480,7 +30480,7 @@
           "message": "ID pozvánky do organizácie."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.display_name": {
-          "source": "Update User (Admin)",
+          "source": "Update user (admin)",
           "message": "Aktualizovať používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXI.short_desc": {
@@ -30576,7 +30576,7 @@
           "message": "Licenčné miesta produktov, ktoré sa majú priradiť členovi."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.display_name": {
-          "source": "Delete User (Admin)",
+          "source": "Delete user (admin)",
           "message": "Zmazať používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXI.short_desc": {
@@ -30600,7 +30600,7 @@
           "message": "ID používateľa."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.display_name": {
-          "source": "Get User (Admin)",
+          "source": "Get user (admin)",
           "message": "Získať používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXI.short_desc": {
@@ -30624,7 +30624,7 @@
           "message": "ID používateľa."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Deactivate User (Admin)",
+          "source": "Deactivate user (admin)",
           "message": "Deaktivovať používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30648,7 +30648,7 @@
           "message": "ID používateľa."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.display_name": {
-          "source": "Reactivate User (Admin)",
+          "source": "Reactivate user (admin)",
           "message": "Znova aktivovať používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVhY3RpdmF0ZS11c2Vy.short_desc": {
@@ -30672,7 +30672,7 @@
           "message": "ID používateľa."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Workspaces (Admin)",
+          "source": "List user workspaces (admin)",
           "message": "Zoznam pracovných priestorov používateľa (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLXdvcmtzcGFjZXM.short_desc": {
@@ -30864,7 +30864,7 @@
           "message": "ID používateľa, ktorému sa má udeliť rola správcu pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace (Admin)",
+          "source": "Update workspace (admin)",
           "message": "Aktualizovať pracovný priestor (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -30924,7 +30924,7 @@
           "message": "Aktualizovaná ikona pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.display_name": {
-          "source": "Archive Workspace (Admin)",
+          "source": "Archive workspace (admin)",
           "message": "Archivovať pracovný priestor (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXJjaGl2ZS13b3Jrc3BhY2U.short_desc": {
@@ -30948,7 +30948,7 @@
           "message": "ID pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Add Workspace Members (Admin)",
+          "source": "Add workspace members (admin)",
           "message": "Pridať členov pracovného priestoru (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31096,7 +31096,7 @@
           "message": "ID používateľa člena pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "Add Or Update Workspace Members (Admin)",
+          "source": "Add or update workspace members (admin)",
           "message": "Pridať alebo aktualizovať členov pracovného priestoru (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLW9yLXVwZGF0ZS13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -31244,7 +31244,7 @@
           "message": "ID používateľa člena pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.display_name": {
-          "source": "Remove Workspace Members (Admin)",
+          "source": "Remove workspace members (admin)",
           "message": "Odstrániť členov pracovného priestoru (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXdvcmtzcGFjZS1tZW1iZXJz.short_desc": {
@@ -31700,7 +31700,7 @@
           "message": "Voliteľný popis skupiny používateľov."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.display_name": {
-          "source": "Get User Group (Admin)",
+          "source": "Get user group (admin)",
           "message": "Získať skupinu používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXVzZXItZ3JvdXA.short_desc": {
@@ -31724,7 +31724,7 @@
           "message": "ID skupiny používateľov."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Update User Group (Admin)",
+          "source": "Update user group (admin)",
           "message": "Aktualizovať skupinu používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31772,7 +31772,7 @@
           "message": "Aktualizovaný popis skupiny používateľov. Na vymazanie zadajte prázdny reťazec; ak ho chcete ponechať bez zmeny, pole vynechajte alebo zadajte null."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Delete User Group (Admin)",
+          "source": "Delete user group (admin)",
           "message": "Zmazať skupinu používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -31796,7 +31796,7 @@
           "message": "ID skupiny používateľov."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.display_name": {
-          "source": "List User Group Members (Admin)",
+          "source": "List user group members (admin)",
           "message": "Zoznam členov skupiny používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLW1lbWJlcnM.short_desc": {
@@ -31844,7 +31844,7 @@
           "message": "Maximálny počet výsledkov na stránku."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Add User Group Members (Admin)",
+          "source": "Add user group members (admin)",
           "message": "Pridať členov skupiny používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYWRkLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31880,7 +31880,7 @@
           "message": "ID používateľov, ktorí sa majú pridať do skupiny."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "Remove User Group Members (Admin)",
+          "source": "Remove user group members (admin)",
           "message": "Odstrániť členov skupiny používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -31916,7 +31916,7 @@
           "message": "ID používateľov, ktorí sa majú pridať do skupiny."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.display_name": {
-          "source": "List User Group Workspaces (Admin)",
+          "source": "List user group workspaces (admin)",
           "message": "Zoznam pracovných priestorov skupiny používateľov (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3VwLXdvcmtzcGFjZXM.short_desc": {
@@ -31964,7 +31964,7 @@
           "message": "Maximálny počet výsledkov na stránku."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.display_name": {
-          "source": "Assign User Group To Workspace (Admin)",
+          "source": "Assign user group to workspace (admin)",
           "message": "Priradiť skupinu používateľov k pracovnému priestoru (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tYXNzaWduLXVzZXItZ3JvdXAtdG8td29ya3NwYWNl.short_desc": {
@@ -32036,7 +32036,7 @@
           "message": "Hodnota pre parametra `workspace_uuid` pre túto operáciu."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.display_name": {
-          "source": "Update User Group Workspace Role (Admin)",
+          "source": "Update user group workspace role (admin)",
           "message": "Aktualizovať rolu skupiny používateľov v pracovnom priestore (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtd29ya3NwYWNlLXJvbGU.short_desc": {
@@ -32108,7 +32108,7 @@
           "message": "Zastaraná hodnota jednej roly. Použite namiesto toho 'role_names'."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.display_name": {
-          "source": "Remove User Group From Workspace (Admin)",
+          "source": "Remove user group from workspace (admin)",
           "message": "Odstrániť skupinu používateľov z pracovného priestoru (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcmVtb3ZlLXVzZXItZ3JvdXAtZnJvbS13b3Jrc3BhY2U.short_desc": {
@@ -32144,7 +32144,7 @@
           "message": "ID pracovného priestoru."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.display_name": {
-          "source": "Update User Group Organization Role (Admin)",
+          "source": "Update user group organization role (admin)",
           "message": "Aktualizovať rolu skupiny používateľov v organizácii (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXVzZXItZ3JvdXAtb3JnYW5pemF0aW9uLXJvbGU.short_desc": {
@@ -32288,7 +32288,7 @@
           "message": "ID používateľa, pre ktorého sa kľúč API vytvára."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.display_name": {
-          "source": "Delete API Key (Admin)",
+          "source": "Delete API key (admin)",
           "message": "Zmazať kľúč API (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZGVsZXRlLWFwaS1rZXk.short_desc": {
@@ -32408,7 +32408,7 @@
           "message": "Pridať do organizácie používateľov nájdených u poskytovateľa SCIM."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.display_name": {
-          "source": "Get SCIM Synchronization Run (Admin)",
+          "source": "Get SCIM synchronization run (admin)",
           "message": "Získať beh synchronizácie SCIM (správca)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNjaW0tc3luYy1ydW4.short_desc": {

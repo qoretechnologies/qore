@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
-          "source": "List Sites",
+          "source": "List sites",
           "message": "Elenca siti"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Un termine per la ricerca nei titoli e negli URL dei siti. Se omesso, vengono restituiti il sito radice del tenant e i relativi subsiti"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
-          "source": "Get Site",
+          "source": "Get site",
           "message": "Ottieni sito"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Il sito SharePoint a cui fare riferimento. Usa l'azione `list-sites` per scoprire i siti disponibili; il sito radice del tenant è sempre disponibile"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
-          "source": "List Document Libraries",
+          "source": "List document libraries",
           "message": "Elenca raccolte documenti"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Il sito SharePoint a cui fare riferimento. Usa l'azione `list-sites` per scoprire i siti disponibili; il sito radice del tenant è sempre disponibile"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
-          "source": "Get Document Library Info",
+          "source": "Get document library info",
           "message": "Ottieni informazioni sulla raccolta documenti"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
@@ -448,7 +448,7 @@
           "message": "La raccolta documenti a cui fare riferimento. Usa l'azione `list-drives` per elencare le raccolte in un sito"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
-          "source": "Search Documents",
+          "source": "Search documents",
           "message": "Cerca documenti"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Criterio di ordinamento per i risultati (ad es. `name asc`, `size desc`)"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Document",
+          "source": "Get document",
           "message": "Ottieni documento"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Il percorso dell'elemento relativo alla radice dell'unità (ad es. `/Documents/file.txt`). Fornisci `id` o `path`"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Crea cartella"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -700,7 +700,7 @@
           "message": "Interrompi la richiesta con un errore"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload Document",
+          "source": "Upload document",
           "message": "Carica documento"
         },
         "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -880,7 +880,7 @@
           "message": "L'ID della cartella principale. Se omesso, il file viene caricato nella radice dell'unità"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
-          "source": "Create Upload Session",
+          "source": "Create upload session",
           "message": "Crea sessione di caricamento"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Interrompi la richiesta con un errore"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download Document",
+          "source": "Download document",
           "message": "Scarica documento"
         },
         "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "L'identificatore univoco del file da scaricare"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Document",
+          "source": "Delete document",
           "message": "Elimina documento"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "L'identificatore univoco dell'elemento da eliminare"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Document",
+          "source": "Update document",
           "message": "Aggiorna documento"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "L'ID della cartella di destinazione in cui spostare l'elemento. Impostalo per spostare un elemento in una cartella diversa"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
-          "source": "Copy Document",
+          "source": "Copy document",
           "message": "Copia documento"
         },
         "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Interrompi la richiesta con un errore"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
-          "source": "Create Sharing Link",
+          "source": "Create sharing link",
           "message": "Crea collegamento di condivisione"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "La data e l'ora di scadenza del collegamento di condivisione"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "Elenca liste"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Includi elenchi il cui modello è `documentLibrary`"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
-          "source": "Get List",
+          "source": "Get list",
           "message": "Ottieni elenco"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "L'elenco a cui fare riferimento. Usa l'azione `list-lists` per visualizzare gli elenchi in un sito"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "Crea lista"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Le colonne con cui creare l'elenco, sotto forma di elenco di oggetti Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition), ad esempio `{\"name\": \"Amount\", \"number\": {}}`. Se omesso, l'elenco viene creato solo con la colonna predefinita `Title`"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
-          "source": "Delete List",
+          "source": "Delete list",
           "message": "Elimina lista"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "L'elenco a cui fare riferimento. Usa l'azione `list-lists` per visualizzare gli elenchi in un sito"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
-          "source": "List Columns",
+          "source": "List columns",
           "message": "Elenca colonne"
         },
         "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "Restituisce solo le colonne scrivibili; SharePoint mantiene molte colonne di sola lettura che una chiamata di creazione o aggiornamento rifiuterebbe"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
-          "source": "Search List Items",
+          "source": "Search list items",
           "message": "Cerca elementi elenco"
         },
         "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Interrompi dopo questo numero totale di elementi, su tutte le pagine"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
-          "source": "Get List Item",
+          "source": "Get list item",
           "message": "Ottieni elemento elenco"
         },
         "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "L'elemento dell'elenco da indirizzare"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Create List Item",
+          "source": "Create list item",
           "message": "Crea elemento elenco"
         },
         "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "I valori da impostare per le colonne dell'elemento, indicizzati per nome interno della colonna. Dopo aver selezionato un sito e un elenco, le singole colonne vengono proposte con i rispettivi tipi; l'azione `columns` le elenca"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Update List Item",
+          "source": "Update list item",
           "message": "Aggiorna elemento elenco"
         },
         "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "I valori da impostare per le colonne dell'elemento, indicizzati per nome interno della colonna. Dopo aver selezionato un sito e un elenco, le singole colonne vengono proposte con i rispettivi tipi; l'azione `columns` le elenca"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
-          "source": "Delete List Item",
+          "source": "Delete list item",
           "message": "Elimina elemento elenco"
         },
         "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {

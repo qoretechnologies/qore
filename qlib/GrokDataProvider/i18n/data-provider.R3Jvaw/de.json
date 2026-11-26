@@ -1108,7 +1108,7 @@
           "message": "Eine eindeutige Kennung, die Ihren Endbenutzer zur Missbrauchsüberwachung darstellt"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Einfacher Chat"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "Nicht abschneiden; Fehler zurückgeben, wenn der Kontext das Limit überschreitet"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Antwort abrufen"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

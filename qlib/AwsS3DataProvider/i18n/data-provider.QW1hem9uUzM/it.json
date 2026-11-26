@@ -1408,7 +1408,7 @@
           "message": "Dati di archivio a lungo termine recuperati in ore; la classe di archiviazione a costo più basso"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Crea URL pre-firmato"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

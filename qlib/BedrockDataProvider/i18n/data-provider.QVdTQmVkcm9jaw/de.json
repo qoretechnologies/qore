@@ -388,7 +388,7 @@
           "message": "Eine Liste von einem oder mehreren Bewertungsauftrag-Amazon Resource Names (ARNs), die Sie löschen möchten."
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Cancel Automated Reasoning Policy Build Workflow",
+          "source": "Cancel automated reasoning policy build workflow",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Build-Workflow abbrechen"
         },
         "app.QVdTQmVkcm9jaw.action.Y2FuY2VsLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Wert für das Tag."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Create Automated Reasoning Policy Test Case",
+          "source": "Create automated reasoning policy test case",
           "message": "Automatisierte Reasoning Policy Test Case erstellen"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Die minimale Konfidenzstufe für die Logikvalidierung. Inhalt, der die Schwelle erfüllt, wird als hochkonfidentes Ergebnis betrachtet, das validiert werden kann."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Create Automated Reasoning Policy Version",
+          "source": "Create automated reasoning policy version",
           "message": "Automatisierte Reasoning Policy Version erstellen"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -3412,7 +3412,7 @@
           "message": "Eine eindeutige, groß-/kleinschreibungssensitive Kennung, um sicherzustellen, dass die API-Anfrage nicht mehr als einmal abgeschlossen wird. Wenn dieser Token einem früheren Request entspricht, ignoriert Amazon Bedrock die Anfrage, gibt aber keinen Fehler zurück. Weitere Informationen finden Sie unter [Ensuring idempotency](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html) im *Amazon S3 Benutzerhandbuch*."
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.display_name": {
-          "source": "Create Guardrail Version",
+          "source": "Create guardrail version",
           "message": "Guardrail-Version erstellen"
         },
         "app.QVdTQmVkcm9jaw.action.Y3JlYXRlLWd1YXJkcmFpbC12ZXJzaW9u.short_desc": {
@@ -4936,7 +4936,7 @@
           "message": "Wert für das Tag."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Delete Automated Reasoning Policy",
+          "source": "Delete automated reasoning policy",
           "message": "Löschen Sie eine automatische Schlussfolgerungsrichtlinie"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -4972,7 +4972,7 @@
           "message": "Gibt an, ob die automatisierte Reasoning-Richtlinie auch dann gelöscht werden soll, wenn sie aktive Ressourcen hat. Wenn `false`, validiert Amazon Bedrock, ob alle Artefakte (z.B. Richtlinienversion, Testfall, Testergebnis) für eine Richtlinie vor der Löschung gelöscht wurden. Wenn `true`, löscht Amazon Bedrock die Richtlinie und alle ihre Artefakte ohne Validierung. Standardmäßig ist `false`."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Delete Automated Reasoning Policy Build Workflow",
+          "source": "Delete automated reasoning policy build workflow",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Build-Workflow löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Der Zeitstempel, wann der Build-Workflow zuletzt aktualisiert wurde. Dies wird für optimistische Konsistenzkontrolle verwendet, um versehentliches Löschen von Workflows zu verhindern, die modifiziert wurden."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Delete Automated Reasoning Policy Test Case",
+          "source": "Delete automated reasoning policy test case",
           "message": "Automatisierte Reasoning Policy Test Case löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5068,7 +5068,7 @@
           "message": "Der Zeitpunkt, zu dem der Test zuletzt aktualisiert wurde. Dies wird als Konsistenztoken verwendet, um widersprüchliche Änderungen zu verhindern."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Delete Custom Model",
+          "source": "Delete custom model",
           "message": "Benutzerdefiniertes Modell löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5092,7 +5092,7 @@
           "message": "Name des zu löschenden Modells."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Delete Custom Model Deployment",
+          "source": "Delete custom model deployment",
           "message": "Benutzerdefinierte Modell-Bereitstellung löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5116,7 +5116,7 @@
           "message": "Die Amazon Resource Name (ARN) oder der Name der benutzerdefinierten Modellbereitstellung, die gelöscht werden soll."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.display_name": {
-          "source": "Delete Enforced Guardrail Configuration",
+          "source": "Delete enforced guardrail configuration",
           "message": "Löschen Sie die Enforced Guardrail-Konfiguration"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWVuZm9yY2VkLWd1YXJkcmFpbC1jb25maWd1cmF0aW9u.short_desc": {
@@ -5164,7 +5164,7 @@
           "message": "Modell-ID des zu löschenden Modellzugriffs."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Delete Guardrail",
+          "source": "Delete guardrail",
           "message": "Schutzvorkehrung löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWd1YXJkcmFpbA.short_desc": {
@@ -5200,7 +5200,7 @@
           "message": "Die Version der Leitplanke."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Delete Imported Model",
+          "source": "Delete imported model",
           "message": "Importiertes Modell löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5224,7 +5224,7 @@
           "message": "Name des zu löschenden importierten Modells."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Delete Inference Profile",
+          "source": "Delete inference profile",
           "message": "Inferenzprofil löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5248,7 +5248,7 @@
           "message": "Die Amazon Resource Name (ARN) oder ID des Anwendungs-Inferenzprofils, das gelöscht werden soll."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Delete Marketplace Model Endpoint",
+          "source": "Delete marketplace model endpoint",
           "message": "Löschen Sie einen Marktplatz-Modell-Endpunkt"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5284,7 +5284,7 @@
           "message": "Die Aufrufprotokollierung löschen."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Delete Prompt Router",
+          "source": "Delete prompt router",
           "message": "Prompt Router löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb21wdC1yb3V0ZXI.short_desc": {
@@ -5308,7 +5308,7 @@
           "message": "Der Amazon Resource Name (ARN) des Prompt-Routers, der gelöscht werden soll."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Delete Provisioned Model Throughput",
+          "source": "Delete provisioned model throughput",
           "message": "Löschen Sie einen bereitgestellten Modelldurchsatz"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -5332,7 +5332,7 @@
           "message": "Die Amazon Resource Name (ARN) oder der Name des bereitgestellten Durchsatzes."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Delete Resource Policy",
+          "source": "Delete resource policy",
           "message": "Ressourcenrichtlinie löschen"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVsZXRlLXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -5356,7 +5356,7 @@
           "message": "Die ARN der Bedrock-Ressource, auf die diese Ressourcenrichtlinie angewendet wird."
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.display_name": {
-          "source": "Deregister Marketplace Model Endpoint",
+          "source": "Deregister marketplace model endpoint",
           "message": "Registrieren Sie den Marktplatz-Modell-Endpunkt ab"
         },
         "app.QVdTQmVkcm9jaw.action.ZGVyZWdpc3Rlci1tYXJrZXRwbGFjZS1tb2RlbC1lbmRwb2ludA.short_desc": {
@@ -5380,7 +5380,7 @@
           "message": "Die Amazon Resource Name (ARN) des Endpunkts, den Sie abmelden möchten."
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.display_name": {
-          "source": "Export Automated Reasoning Policy Version",
+          "source": "Export automated reasoning policy version",
           "message": "Exportierte automatisierte Reasoning Policy Version"
         },
         "app.QVdTQmVkcm9jaw.action.ZXhwb3J0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXZlcnNpb24.short_desc": {
@@ -5416,7 +5416,7 @@
           "message": "Gibt den kontoweiten Datenbehaltungsmodus für Amazon Bedrock zurück."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Advanced Prompt Optimization Job",
+          "source": "Get advanced prompt optimization job",
           "message": "Erweiterte Prompt-Optimierungsaufgabe abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFkdmFuY2VkLXByb21wdC1vcHRpbWl6YXRpb24tam9i.short_desc": {
@@ -5440,7 +5440,7 @@
           "message": "Die ARN oder ID des fortgeschrittenen Prompt-Optimierungsjobs.: Die ARN oder ID eines fortgeschrittenen Prompt-Optimierungsjobs."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Get Automated Reasoning Policy",
+          "source": "Get automated reasoning policy",
           "message": "Automatisiertes Schlussfolgerungs-Richtlinie abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -5464,7 +5464,7 @@
           "message": "Die Amazon Resource Name (ARN) der automatisierten Reasoning-Richtlinie, die abgerufen werden soll. Kann entweder die unversierte ARN für die Entwurfsrichtlinie oder eine ARN für eine bestimmte Richtlinienversion sein."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Get Automated Reasoning Policy Annotations",
+          "source": "Get automated reasoning policy annotations",
           "message": "Automatisierte Reasoning Policy Anmerkungen abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -5500,7 +5500,7 @@
           "message": "Die eindeutige Kennung des Build-Workflows, dessen Annotations Sie abrufen möchten."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow",
+          "source": "Get automated reasoning policy build workflow",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Build-Workflow abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93.short_desc": {
@@ -5536,7 +5536,7 @@
           "message": "Die eindeutige Kennung des Build-Workflows, den Sie abrufen möchten."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.display_name": {
-          "source": "Get Automated Reasoning Policy Build Workflow Result Assets",
+          "source": "Get automated reasoning policy build workflow result assets",
           "message": "Abrufen von Assets des automatisierten Schlussfolgerungsrichtlinien-Build-Workflows"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWJ1aWxkLXdvcmtmbG93LXJlc3VsdC1hc3NldHM.short_desc": {
@@ -5628,7 +5628,7 @@
           "message": "Die eindeutige Kennung des spezifischen Assets, der abgerufen werden soll, wenn mehrere Assets desselben Typs existieren. Dies ist erforderlich, wenn SOURCE_DOCUMENT-Assets abgerufen werden, da möglicherweise mehrere Quelldokumente im Workflow verwendet wurden. Die Asset-ID kann aus dem Asset-Manifest abgerufen werden."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.display_name": {
-          "source": "Get Automated Reasoning Policy Next Scenario",
+          "source": "Get automated reasoning policy next scenario",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Nächstes Szenario abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LW5leHQtc2NlbmFyaW8.short_desc": {
@@ -5664,7 +5664,7 @@
           "message": "Die eindeutige Kennung des Build-Workflows, der mit den Test-Szenarien verbunden ist."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Get Automated Reasoning Policy Test Case",
+          "source": "Get automated reasoning policy test case",
           "message": "Automatisiertes Reasoning Policy Test Case abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Die eindeutige Kennung des zu abrufenden Tests."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.display_name": {
-          "source": "Get Automated Reasoning Policy Test Result",
+          "source": "Get automated reasoning policy test result",
           "message": "Automatisierte Reasoning Policy Testergebnis abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtcmVzdWx0.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "Die eindeutige Kennung des Tests, für den Ergebnisse abgerufen werden sollen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.display_name": {
-          "source": "Get Custom Model",
+          "source": "Get custom model",
           "message": "Benutzerdefiniertes Modell abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbA.short_desc": {
@@ -5772,7 +5772,7 @@
           "message": "Name oder Amazon Resource Name (ARN) des benutzerdefinierten Modells."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Get Custom Model Deployment",
+          "source": "Get custom model deployment",
           "message": "Benutzerdefiniertes Modell-Bereitstellung abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -5796,7 +5796,7 @@
           "message": "Die Amazon Resource Name (ARN) oder der Name der benutzerdefinierten Modellbereitstellung, für die Informationen abgerufen werden sollen."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.display_name": {
-          "source": "Get Evaluation Job",
+          "source": "Get evaluation job",
           "message": "Auswertungsauftrag abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWV2YWx1YXRpb24tam9i.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "Die Amazon Resource Name (ARN) des Bewertungsauftrags, über den Sie Informationen erhalten möchten"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.display_name": {
-          "source": "Get Foundation Model",
+          "source": "Get foundation model",
           "message": "Grundmodell Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWw.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Der Modellidentifikator."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.display_name": {
-          "source": "Get Foundation Model Availability",
+          "source": "Get foundation model availability",
           "message": "Holen Sie sich die Verfügbarkeit des Grundmodells"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWZvdW5kYXRpb24tbW9kZWwtYXZhaWxhYmlsaXR5.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "Die Modell-ID des Foundation-Modells."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.display_name": {
-          "source": "Get Guardrail",
+          "source": "Get guardrail",
           "message": "Guardrail abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWd1YXJkcmFpbA.short_desc": {
@@ -5904,7 +5904,7 @@
           "message": "Die Version der Leitplanke, für die Details abgerufen werden sollen. Wenn Sie keine Version angeben, werden die Details für die `DRAFT`-Version zurückgegeben."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.display_name": {
-          "source": "Get Imported Model",
+          "source": "Get imported model",
           "message": "Importiertes Modell Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWltcG9ydGVkLW1vZGVs.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "Name oder Amazon Resource Name (ARN) des importierten Modells."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.display_name": {
-          "source": "Get Inference Profile",
+          "source": "Get inference profile",
           "message": "Inferenzprofil Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWluZmVyZW5jZS1wcm9maWxl.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "Die ID oder Amazon Resource Name (ARN) des Inferenzprofils."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Get Marketplace Model Endpoint",
+          "source": "Get marketplace model endpoint",
           "message": "Marktplatz-Modell-Endpunkt abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "Die Amazon Resource Name (ARN) des Endpunkts, über den Sie Informationen erhalten möchten."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.display_name": {
-          "source": "Get Model Copy Job",
+          "source": "Get model copy job",
           "message": "Modell-Kopierauftrag Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWNvcHktam9i.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "Der Amazon Resource Name (ARN) des Modellkopie-Jobs."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.display_name": {
-          "source": "Get Model Customization Job",
+          "source": "Get model customization job",
           "message": "Modell-Anpassungsauftrag abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWN1c3RvbWl6YXRpb24tam9i.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Kennung für den Anpassungsauftrag."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.display_name": {
-          "source": "Get Model Import Job",
+          "source": "Get model import job",
           "message": "Modellimportauftrag Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWltcG9ydC1qb2I.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "Die Kennung des Importauftrags."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.display_name": {
-          "source": "Get Model Invocation Job",
+          "source": "Get model invocation job",
           "message": "Modell-Invokationsauftrag Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LW1vZGVsLWludm9jYXRpb24tam9i.short_desc": {
@@ -6084,7 +6084,7 @@
           "message": "Holen Sie die aktuellen Konfigurationswerte für das Modellaufrufprotokoll ab."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.display_name": {
-          "source": "Get Prompt Router",
+          "source": "Get prompt router",
           "message": "Prompt Router Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb21wdC1yb3V0ZXI.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "Der ARN des Prompt Routers"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Get Provisioned Model Throughput",
+          "source": "Get provisioned model throughput",
           "message": "Holen Sie sich den bereitgestellten Modelldurchsatz"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -6132,7 +6132,7 @@
           "message": "Die Amazon Resource Name (ARN) oder der Name des bereitgestellten Durchsatzes."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.display_name": {
-          "source": "Get Resource Policy",
+          "source": "Get resource policy",
           "message": "Ressourcenrichtlinie Abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LXJlc291cmNlLXBvbGljeQ.short_desc": {
@@ -6288,7 +6288,7 @@
           "message": "Die maximale Anzahl von Richtlinien, die in einem einzigen Aufruf zurückgegeben werden."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.display_name": {
-          "source": "List Automated Reasoning Policy Build Workflows",
+          "source": "List automated reasoning policy build workflows",
           "message": "Liste der automatisierten Schlussfolgerungsrichtlinien-Build-Workflows"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS1idWlsZC13b3JrZmxvd3M.short_desc": {
@@ -6336,7 +6336,7 @@
           "message": "Die maximale Anzahl der Build-Workflows, die in einer einzigen Antwort zurückgegeben werden sollen. Gültiger Bereich ist 1-100."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.display_name": {
-          "source": "List Automated Reasoning Policy Test Cases",
+          "source": "List automated reasoning policy test cases",
           "message": "Automatisierte Reasoning Policy Test Cases auflisten"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LWNhc2Vz.short_desc": {
@@ -6384,7 +6384,7 @@
           "message": "Die maximale Anzahl der Tests, die in einem einzelnen Aufruf zurückgegeben werden sollen."
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.display_name": {
-          "source": "List Automated Reasoning Policy Test Results",
+          "source": "List automated reasoning policy test results",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Testergebnisse auflisten"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1hdXRvbWF0ZWQtcmVhc29uaW5nLXBvbGljeS10ZXN0LXJlc3VsdHM.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Absteigend"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.display_name": {
-          "source": "List Foundation Model Agreement Offers",
+          "source": "List foundation model agreement offers",
           "message": "Angebote für die Grundlagemodellvereinbarung"
         },
         "app.QVdTQmVkcm9jaw.action.bGlzdC1mb3VuZGF0aW9uLW1vZGVsLWFncmVlbWVudC1vZmZlcnM.short_desc": {
@@ -8452,7 +8452,7 @@
           "message": "Kundenprofil-Anfrage setzen."
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.display_name": {
-          "source": "Register Marketplace Model Endpoint",
+          "source": "Register marketplace model endpoint",
           "message": "Registrieren Sie einen Marktplatz-Modell-Endpunkt"
         },
         "app.QVdTQmVkcm9jaw.action.cmVnaXN0ZXItbWFya2V0cGxhY2UtbW9kZWwtZW5kcG9pbnQ.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "Die ARN des Modells aus dem Amazon Bedrock Marketplace, das auf dem Endpunkt bereitgestellt ist."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.display_name": {
-          "source": "Start Automated Reasoning Policy Build Workflow",
+          "source": "Start automated reasoning policy build workflow",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Build-Workflow starten"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktYnVpbGQtd29ya2Zsb3c.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "Eine eindeutige, groß-/kleinschreibungssensitive Kennung, um sicherzustellen, dass die Operation nicht mehr als einmal abgeschlossen wird. Wenn dieser Token einem früheren Request entspricht, ignoriert Amazon Bedrock den Request, gibt aber keinen Fehler zurück."
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.display_name": {
-          "source": "Start Automated Reasoning Policy Test Workflow",
+          "source": "Start automated reasoning policy test workflow",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Test-Workflow starten"
         },
         "app.QVdTQmVkcm9jaw.action.c3RhcnQtYXV0b21hdGVkLXJlYXNvbmluZy1wb2xpY3ktdGVzdC13b3JrZmxvdw.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "Eine eindeutige, groß-/kleinschreibungssensitive Kennung, um sicherzustellen, dass die Operation nicht mehr als ein Mal abgeschlossen wird. Wenn dieser Token einem früheren Request entspricht, ignoriert Amazon Bedrock den Request, gibt aber keinen Fehler zurück."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Advanced Prompt Optimization Job",
+          "source": "Stop advanced prompt optimization job",
           "message": "Beenden des Advanced Prompt Optimization Job"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1hZHZhbmNlZC1wcm9tcHQtb3B0aW1pemF0aW9uLWpvYg.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "Der ARN oder ID des fortgeschrittenen Prompt-Optimierungsjobs, den Sie beenden möchten.: Der ARN oder ID eines fortgeschrittenen Prompt-Optimierungsjobs."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.display_name": {
-          "source": "Stop Evaluation Job",
+          "source": "Stop evaluation job",
           "message": "Bewertungsauftrag stoppen"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1ldmFsdWF0aW9uLWpvYg.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "Die Amazon Resource Name (ARN) des Bewertungsauftrags, den Sie beenden möchten."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Customization Job",
+          "source": "Stop model customization job",
           "message": "Modell-Anpassungsauftrag stoppen"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1jdXN0b21pemF0aW9uLWpvYg.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Auftragskennung des Auftrags zum Beenden."
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.display_name": {
-          "source": "Stop Model Invocation Job",
+          "source": "Stop model invocation job",
           "message": "Modell-Aufruf-Job stoppen"
         },
         "app.QVdTQmVkcm9jaw.action.c3RvcC1tb2RlbC1pbnZvY2F0aW9uLWpvYg.short_desc": {
@@ -9292,7 +9292,7 @@
           "message": "Tag-Schlüssel der Tags, die von der Ressource entfernt werden sollen."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.display_name": {
-          "source": "Update Automated Reasoning Policy",
+          "source": "Update automated reasoning policy",
           "message": "Aktualisieren Sie die automatische Schlussfolgerungsrichtlinie"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5.short_desc": {
@@ -9532,7 +9532,7 @@
           "message": "Die aktualisierte Beschreibung für die automatisierte Schlussfolgerungsrichtlinie."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.display_name": {
-          "source": "Update Automated Reasoning Policy Annotations",
+          "source": "Update automated reasoning policy annotations",
           "message": "Automatisierte Schlussfolgerungsrichtlinien-Anmerkungen aktualisieren"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LWFubm90YXRpb25z.short_desc": {
@@ -9808,7 +9808,7 @@
           "message": "Der Hashwert des Aktualisierungssatzes der Anmerkung, den Sie aktualisieren. Dies wird für die optimistische Konsistenzkontrolle verwendet, um widersprüchliche Aktualisierungen zu verhindern."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.display_name": {
-          "source": "Update Automated Reasoning Policy Test Case",
+          "source": "Update automated reasoning policy test case",
           "message": "Automatisiertes Schlussfolgerungsrichtlinien-Testfall aktualisieren"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWF1dG9tYXRlZC1yZWFzb25pbmctcG9saWN5LXRlc3QtY2FzZQ.short_desc": {
@@ -9944,7 +9944,7 @@
           "message": "Eine eindeutige, groß-/kleinschreibungssensitive Kennung, um sicherzustellen, dass die API-Anfrage nicht mehr als ein Mal abgeschlossen wird. Wenn dieser Token einem früheren Request entspricht, ignoriert Amazon Bedrock den Request, gibt aber keinen Fehler zurück."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.display_name": {
-          "source": "Update Custom Model Deployment",
+          "source": "Update custom model deployment",
           "message": "Benutzerdefinierte Modell-Bereitstellung aktualisieren"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWN1c3RvbS1tb2RlbC1kZXBsb3ltZW50.short_desc": {
@@ -9980,7 +9980,7 @@
           "message": "ARN des neuen zu implementierenden benutzerdefinierten Modells. Dies ersetzt das derzeit implementierte Modell."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.display_name": {
-          "source": "Update Guardrail",
+          "source": "Update guardrail",
           "message": "Schutzvorkehrung aktualisieren"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLWd1YXJkcmFpbA.short_desc": {
@@ -11172,7 +11172,7 @@
           "message": "Die ARN des KMS-Schlüssels, mit dem der Guardrail verschlüsselt wird."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.display_name": {
-          "source": "Update Marketplace Model Endpoint",
+          "source": "Update marketplace model endpoint",
           "message": "Aktualisieren Sie den Marktplatz-Modell-Endpunkt"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLW1hcmtldHBsYWNlLW1vZGVsLWVuZHBvaW50.short_desc": {
@@ -11232,7 +11232,7 @@
           "message": "Eine eindeutige, groß-/kleinschreibungssensitive Kennung, die Sie bereitstellen, um die Idempotenz der Anfrage sicherzustellen. Dieser Token wird als nicht erforderlich aufgeführt, da Amazon Web Services SDKs ihn automatisch generieren und diesen Parameter setzen. Wenn Sie nicht das Amazon Web Services SDK oder die CLI verwenden, müssen Sie diesen Token bereitstellen, oder die Aktion wird fehlschlagen."
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.display_name": {
-          "source": "Update Provisioned Model Throughput",
+          "source": "Update provisioned model throughput",
           "message": "Aktualisieren Sie den bereitgestellten Modelldurchsatz"
         },
         "app.QVdTQmVkcm9jaw.action.dXBkYXRlLXByb3Zpc2lvbmVkLW1vZGVsLXRocm91Z2hwdXQ.short_desc": {
@@ -11280,7 +11280,7 @@
           "message": "Der Amazon Resource Name (ARN) des neuen Modells, das mit diesem bereitgestellten Durchsatz verknüpft werden soll. Sie können dieses Feld nicht angeben, wenn dieser bereitgestellte Durchsatz mit einem Basismodell verknüpft ist.\n\nWenn dieser bereitgestellte Durchsatz mit einem benutzerdefinierten Modell verknüpft ist, können Sie eine der folgenden Optionen angeben:\n\n- Das Basismodell, von dem das benutzerdefinierte Modell abgeleitet wurde.\n\n- Ein anderes benutzerdefiniertes Modell, das von demselben Basismodell wie das benutzerdefinierte Modell abgeleitet wurde."
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.display_name": {
-          "source": "Apply Guardrail",
+          "source": "Apply guardrail",
           "message": "Guardrail anwenden"
         },
         "app.QVdTQmVkcm9jaw.action.YXBwbHktZ3VhcmRyYWls.short_desc": {
@@ -12532,7 +12532,7 @@
           "message": "Eine JSON-Schema-Struktur, der die Ausgabe des Modells entsprechen muss."
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Token zählen"
         },
         "app.QVdTQmVkcm9jaw.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -13348,7 +13348,7 @@
           "message": "CachePoint, der in die Tool-Konfiguration aufgenommen werden soll."
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.display_name": {
-          "source": "Get Async Invoke",
+          "source": "Get async invoke",
           "message": "Asynchrone Aufforderung abrufen"
         },
         "app.QVdTQmVkcm9jaw.action.Z2V0LWFzeW5jLWludm9rZQ.short_desc": {
@@ -13684,7 +13684,7 @@
           "message": "VEHICLE_IDENTIFICATION_NUMBER"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.display_name": {
-          "source": "Invoke Model",
+          "source": "Invoke model",
           "message": "Modell aufrufen"
         },
         "app.QVdTQmVkcm9jaw.action.aW52b2tlLW1vZGVs.short_desc": {
@@ -14088,7 +14088,7 @@
           "message": "Der Wert des Tags."
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Text einbetten"
         },
         "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {

@@ -860,7 +860,7 @@
           "message": "Eine eindeutige Kennung für Ihren Endbenutzer, die OpenAI dabei helfen kann, Missbrauch zu überwachen und zu erkennen"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Einfacher Chat"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Satz von 16 Schlüssel-Wert-Paaren, die an ein Objekt angehängt werden können. Dies kann nützlich sein, um zusätzliche Informationen über das Objekt in einem strukturierten Format zu speichern und Objekte über die API oder das Dashboard abzufragen. Schlüssel sind Zeichenfolgen mit einer maximalen Länge von 64 Zeichen; Werte sind Zeichenfolgen mit einer maximalen Länge von 512 Zeichen"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get a Conversation",
+          "source": "Get a conversation",
           "message": "Konversation abrufen"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6944,7 +6944,7 @@
           "message": "Die ID der Konversation"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Konversationselemente auflisten"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -7420,7 +7420,7 @@
           "message": "Zusätzliche Felder, die in die Antwort aufgenommen werden sollen.\n\nSiehe die Dokumentation zum [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) für die unterstützten Werte"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get a Conversation Item",
+          "source": "Get a conversation item",
           "message": "Konversationselement abrufen"
         },
         "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7528,7 +7528,7 @@
           "message": "Die ID der abzurufenden Antwort"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Antwort-Eingabeelemente auflisten"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {

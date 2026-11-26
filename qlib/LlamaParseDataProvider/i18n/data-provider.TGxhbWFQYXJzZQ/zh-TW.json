@@ -2344,7 +2344,7 @@
           "message": "納入在此時間戳記當時或之前建立的項目（含當時）"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhcnNlLWpvYg.display_name": {
-          "source": "Get Parse Job",
+          "source": "Get parse job",
           "message": "取得解析工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhcnNlLWpvYg.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXBhcnNlLWpvYg.display_name": {
-          "source": "Cancel Parse Job",
+          "source": "Cancel parse job",
           "message": "取消解析工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXBhcnNlLWpvYg.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "取得檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGU.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "刪除檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGUtY29udGVudC11cmw.display_name": {
-          "source": "Get File Download URL",
+          "source": "Get file download URL",
           "message": "取得檔案下載網址"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWZpbGUtY29udGVudC11cmw.short_desc": {
@@ -2824,7 +2824,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXM.display_name": {
-          "source": "List Page Figures",
+          "source": "List page figures",
           "message": "列出頁面圖片"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXM.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXMtZm9yLXBhZ2U.display_name": {
-          "source": "List Figures on a Page",
+          "source": "List figures on a page",
           "message": "列出單頁的圖片"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLWZpZ3VyZXMtZm9yLXBhZ2U.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLXNjcmVlbnNob3Rz.display_name": {
-          "source": "List Page Screenshots",
+          "source": "List page screenshots",
           "message": "列出頁面截圖"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1wYWdlLXNjcmVlbnNob3Rz.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhZ2Utc2NyZWVuc2hvdA.display_name": {
-          "source": "Get Page Screenshot",
+          "source": "Get page screenshot",
           "message": "取得頁面截圖"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXBhZ2Utc2NyZWVuc2hvdA.short_desc": {
@@ -3568,7 +3568,7 @@
           "message": "納入在此時間戳記當時或之前建立的項目（含當時）"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWV4dHJhY3Qtam9i.display_name": {
-          "source": "Get Extraction Job",
+          "source": "Get extraction job",
           "message": "取得擷取工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWV4dHJhY3Qtam9i.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWV4dHJhY3Qtam9i.display_name": {
-          "source": "Cancel Extraction Job",
+          "source": "Cancel extraction job",
           "message": "取消擷取工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWV4dHJhY3Qtam9i.short_desc": {
@@ -3668,7 +3668,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWV4dHJhY3Qtam9i.display_name": {
-          "source": "Delete Extraction Job",
+          "source": "Delete extraction job",
           "message": "刪除擷取工作"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWV4dHJhY3Qtam9i.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "納入在此時間戳記當時或之前建立的項目（含當時）"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNsYXNzaWZ5LWpvYg.display_name": {
-          "source": "Get Classification Job",
+          "source": "Get classification job",
           "message": "取得分類工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNsYXNzaWZ5LWpvYg.short_desc": {
@@ -4272,7 +4272,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWNsYXNzaWZ5LWpvYg.display_name": {
-          "source": "Cancel Classification Job",
+          "source": "Cancel classification job",
           "message": "取消分類工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWNsYXNzaWZ5LWpvYg.short_desc": {
@@ -4700,7 +4700,7 @@
           "message": "納入在此時間戳記當時或之前建立的項目（含當時）"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXNwbGl0LWpvYg.display_name": {
-          "source": "Get Split Job",
+          "source": "Get split job",
           "message": "取得分割工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXNwbGl0LWpvYg.short_desc": {
@@ -4744,7 +4744,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXNwbGl0LWpvYg.display_name": {
-          "source": "Cancel Split Job",
+          "source": "Cancel split job",
           "message": "取消分割工作"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLXNwbGl0LWpvYg.short_desc": {
@@ -4788,7 +4788,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLXNwbGl0LWpvYg.display_name": {
-          "source": "Delete Split Job",
+          "source": "Delete split job",
           "message": "刪除分割工作"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLXNwbGl0LWpvYg.short_desc": {
@@ -5120,7 +5120,7 @@
           "message": "僅返回針對此目錄的批次"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "取得批次"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWJhdGNo.short_desc": {
@@ -5180,7 +5180,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "取消批次"
         },
         "app.TGxhbWFQYXJzZQ.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -7796,7 +7796,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Get Configuration",
+          "source": "Get configuration",
           "message": "取得設定"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -7840,7 +7840,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Update Configuration",
+          "source": "Update configuration",
           "message": "更新設定"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -10300,7 +10300,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Delete Configuration",
+          "source": "Delete configuration",
           "message": "刪除設定"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -10548,7 +10548,7 @@
           "message": "上一次回應的 next_page_token"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeQ.display_name": {
-          "source": "Get Directory",
+          "source": "Get directory",
           "message": "取得目錄"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeQ.short_desc": {
@@ -10592,7 +10592,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeQ.display_name": {
-          "source": "Update Directory",
+          "source": "Update directory",
           "message": "更新目錄"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeQ.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeQ.display_name": {
-          "source": "Delete Directory",
+          "source": "Delete directory",
           "message": "刪除目錄"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeQ.short_desc": {
@@ -10704,7 +10704,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.YWRkLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Add File to Directory",
+          "source": "Add file to directory",
           "message": "將檔案加入目錄"
         },
         "app.TGxhbWFQYXJzZQ.action.YWRkLWRpcmVjdG9yeS1maWxl.short_desc": {
@@ -10796,7 +10796,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3RvcnktZmlsZXM.display_name": {
-          "source": "List Files in a Directory",
+          "source": "List files in a directory",
           "message": "列出目錄中的檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3RvcnktZmlsZXM.short_desc": {
@@ -10940,7 +10940,7 @@
           "message": "納入在此時間戳記當時或之前更新的項目（含當時）"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Get a File in a Directory",
+          "source": "Get a file in a directory",
           "message": "取得目錄中的檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LWRpcmVjdG9yeS1maWxl.short_desc": {
@@ -11004,7 +11004,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Update a File in a Directory",
+          "source": "Update a file in a directory",
           "message": "更新目錄中的檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWRpcmVjdG9yeS1maWxl.short_desc": {
@@ -11104,7 +11104,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxl.display_name": {
-          "source": "Remove a File from a Directory",
+          "source": "Remove a file from a directory",
           "message": "從目錄移除檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxl.short_desc": {
@@ -11156,7 +11156,7 @@
           "message": "要作業的組織。未設定時會使用 API 金鑰所屬的組織。"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxlcw.display_name": {
-          "source": "Remove Files from a Directory",
+          "source": "Remove files from a directory",
           "message": "從目錄移除多個檔案"
         },
         "app.TGxhbWFQYXJzZQ.action.ZGVsZXRlLWRpcmVjdG9yeS1maWxlcw.short_desc": {
@@ -11256,7 +11256,7 @@
           "message": "上一次回應的 next_page_token"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "取得專案"
         },
         "app.TGxhbWFQYXJzZQ.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -11448,7 +11448,7 @@
           "message": "要上傳到的專案。未設定時會使用 API 金鑰所屬的專案。"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.display_name": {
-          "source": "Parse Document and Wait",
+          "source": "Parse document and wait",
           "message": "解析文件並等待"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {

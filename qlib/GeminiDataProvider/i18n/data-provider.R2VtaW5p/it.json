@@ -808,7 +808,7 @@
           "message": "Il nome di un file search store da utilizzare per la retrieval-augmented generation (RAG). Il modello cercherà nei documenti dello store per basare la sua risposta su contenuti pertinenti"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat semplice"
         },
         "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Il nome di un file search store da utilizzare per la retrieval-augmented generation (RAG). Il modello cercherà nei documenti dello store per basare la sua risposta su contenuti pertinenti"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
-          "source": "Embed Content",
+          "source": "Embed content",
           "message": "Embed Content"
         },
         "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "Contenuto dal modello"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
-          "source": "Batch Embed",
+          "source": "Batch embed",
           "message": "Batch Embed"
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {

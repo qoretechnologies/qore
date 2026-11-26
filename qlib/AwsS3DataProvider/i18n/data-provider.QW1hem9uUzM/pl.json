@@ -1408,7 +1408,7 @@
           "message": "Długoterminowe dane archiwalne pobierane w ciągu kilku godzin; klasa pamięci masowej o najniższym koszcie"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
-          "source": "Create Presigned URL",
+          "source": "Create presigned URL",
           "message": "Utwórz wstępnie podpisany adres URL"
         },
         "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {

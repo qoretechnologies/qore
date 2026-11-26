@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.display_name": {
-          "source": "Generate Ultra Image",
+          "source": "Generate Ultra image",
           "message": "產生 Ultra 影像"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtdWx0cmE.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.display_name": {
-          "source": "Generate Core Image",
+          "source": "Generate Core image",
           "message": "產生 Core 影像"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtY29yZQ.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.display_name": {
-          "source": "Generate SD3.5 Image",
+          "source": "Generate SD3.5 image",
           "message": "產生 SD3.5 影像"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtc2Qz.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.display_name": {
-          "source": "Upscale Image Quickly",
+          "source": "Upscale image quickly",
           "message": "快速提高影像解析度"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1mYXN0.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.display_name": {
-          "source": "Upscale Image Conservatively",
+          "source": "Upscale image conservatively",
           "message": "保留原貌並提高影像解析度"
         },
         "app.U3RhYmlsaXR5QWk.action.dXBzY2FsZS1jb25zZXJ2YXRpdmU.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.display_name": {
-          "source": "Start Creative Upscale",
+          "source": "Start creative upscale",
           "message": "開始創意解析度提升"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtY3JlYXRpdmUtdXBzY2FsZQ.short_desc": {
@@ -2068,7 +2068,7 @@
           "message": "平鋪紋理"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.display_name": {
-          "source": "Get Creative Upscale Result",
+          "source": "Get creative upscale result",
           "message": "取得創意解析度提升結果"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LXVwc2NhbGUtcmVzdWx0.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.display_name": {
-          "source": "Erase Object",
+          "source": "Erase object",
           "message": "擦除對象"
         },
         "app.U3RhYmlsaXR5QWk.action.ZXJhc2Utb2JqZWN0.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.display_name": {
-          "source": "Inpaint Image",
+          "source": "Inpaint image",
           "message": "替換影像遮罩區域"
         },
         "app.U3RhYmlsaXR5QWk.action.aW5wYWludC1pbWFnZQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.display_name": {
-          "source": "Extend Image",
+          "source": "Extend image",
           "message": "擴充影像"
         },
         "app.U3RhYmlsaXR5QWk.action.b3V0cGFpbnQtaW1hZ2U.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "搜尋與取代"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZXBsYWNl.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.display_name": {
-          "source": "Search and Recolor",
+          "source": "Search and recolor",
           "message": "搜尋和重新著色"
         },
         "app.U3RhYmlsaXR5QWk.action.c2VhcmNoLWFuZC1yZWNvbG9y.short_desc": {
@@ -3912,7 +3912,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.display_name": {
-          "source": "Remove Background",
+          "source": "Remove background",
           "message": "刪除背景"
         },
         "app.U3RhYmlsaXR5QWk.action.cmVtb3ZlLWJhY2tncm91bmQ.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.display_name": {
-          "source": "Start Background and Lighting Edit",
+          "source": "Start background and lighting edit",
           "message": "開始背景和燈光編輯"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYmFja2dyb3VuZC1yZWxpZ2h0.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "WebP"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.display_name": {
-          "source": "Get Image Job Result",
+          "source": "Get image job result",
           "message": "取得影像作業結果"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWltYWdlLXJlc3VsdA.short_desc": {
@@ -4704,7 +4704,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.display_name": {
-          "source": "Generate from Sketch",
+          "source": "Generate from sketch",
           "message": "從草圖生成"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1za2V0Y2g.short_desc": {
@@ -5020,7 +5020,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.display_name": {
-          "source": "Generate with Image Structure",
+          "source": "Generate with image structure",
           "message": "使用影像結構生成"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHJ1Y3R1cmU.short_desc": {
@@ -5336,7 +5336,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.display_name": {
-          "source": "Generate with Style Guide",
+          "source": "Generate with style guide",
           "message": "使用樣式指南生成"
         },
         "app.U3RhYmlsaXR5QWk.action.Y29udHJvbC1zdHlsZQ.short_desc": {
@@ -5700,7 +5700,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.display_name": {
-          "source": "Transfer Image Style",
+          "source": "Transfer image style",
           "message": "轉移圖像風格"
         },
         "app.U3RhYmlsaXR5QWk.action.dHJhbnNmZXItc3R5bGU.short_desc": {
@@ -6092,7 +6092,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.display_name": {
-          "source": "Generate Fast 3D Model",
+          "source": "Generate Fast 3D model",
           "message": "快速產生 3D 模型"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtZmFzdC0zZA.short_desc": {
@@ -6308,7 +6308,7 @@
           "message": "如果指定，結果將在簡化網格中具有大約這麼多的頂點（因此面數更少）。\n\n將此值設為 -1（預設值）意味著未設定限制。"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.display_name": {
-          "source": "Generate Point Aware 3D Model",
+          "source": "Generate Point Aware 3D model",
           "message": "使用 Point Aware 3D 生成模型"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtcG9pbnQtYXdhcmUtM2Q.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.display_name": {
-          "source": "Start Audio 3 Generation",
+          "source": "Start Audio 3 generation",
           "message": "開始使用 Audio 3 生成音訊"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMw.short_desc": {
@@ -7364,7 +7364,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.display_name": {
-          "source": "Start Audio 3 Transformation",
+          "source": "Start Audio 3 transformation",
           "message": "開始使用 Audio 3 轉換音訊"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy10cmFuc2Zvcm0.short_desc": {
@@ -7636,7 +7636,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.display_name": {
-          "source": "Start Audio 3 Inpainting",
+          "source": "Start Audio 3 inpainting",
           "message": "開始使用 Audio 3 替換音訊片段"
         },
         "app.U3RhYmlsaXR5QWk.action.c3RhcnQtYXVkaW8tMy1pbnBhaW50.short_desc": {
@@ -7920,7 +7920,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.display_name": {
-          "source": "Get Audio Job Result",
+          "source": "Get audio job result",
           "message": "取得音訊作業結果"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWF1ZGlvLXJlc3VsdA.short_desc": {
@@ -7964,7 +7964,7 @@
           "message": "Base64 JSON"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "取得帳戶"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -7976,7 +7976,7 @@
           "message": "閱讀帳戶詳細資訊和可用組織。"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.display_name": {
-          "source": "Get Credit Balance",
+          "source": "Get credit balance",
           "message": "查詢點數餘額"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2V0LWJhbGFuY2U.short_desc": {
@@ -7988,7 +7988,7 @@
           "message": "檢查所選組織的貸方餘額。"
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.display_name": {
-          "source": "List Legacy Engines",
+          "source": "List legacy engines",
           "message": "列出舊版生成模型"
         },
         "app.U3RhYmlsaXR5QWk.action.bGlzdC1lbmdpbmVz.short_desc": {
@@ -8000,7 +8000,7 @@
           "message": "列出此帳戶可用的舊圖像引擎。"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.display_name": {
-          "source": "Generate Legacy Image",
+          "source": "Generate legacy image",
           "message": "產生舊圖像"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LXRleHQtdG8taW1hZ2U.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "原始媒體"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.display_name": {
-          "source": "Transform Legacy Image",
+          "source": "Transform legacy image",
           "message": "轉換舊影像"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LWltYWdlLXRvLWltYWdl.short_desc": {
@@ -8716,7 +8716,7 @@
           "message": "原始媒體"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.display_name": {
-          "source": "Mask Legacy Image",
+          "source": "Mask legacy image",
           "message": "使用舊版模型遮罩編輯影像"
         },
         "app.U3RhYmlsaXR5QWk.action.bGVnYWN5LW1hc2staW1hZ2U.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "原始媒體"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.display_name": {
-          "source": "Wait for Image Job",
+          "source": "Wait for image job",
           "message": "等待影像作業完成"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItaW1hZ2U.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "輪詢延遲；生產中至少十秒。"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.display_name": {
-          "source": "Wait for Creative Upscale",
+          "source": "Wait for creative upscale",
           "message": "等待創意解析度提升完成"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItdXBzY2FsZQ.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "輪詢延遲；生產中至少十秒。"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.display_name": {
-          "source": "Wait for Audio Job",
+          "source": "Wait for audio job",
           "message": "等待音訊作業完成"
         },
         "app.U3RhYmlsaXR5QWk.action.d2FpdC1mb3ItYXVkaW8.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "輪詢延遲；生產中至少十秒。"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
-          "source": "Generate Image",
+          "source": "Generate image",
           "message": "產生影像"
         },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {

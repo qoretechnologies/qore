@@ -708,7 +708,7 @@
           "message": "La expresión OData para describir el orden de clasificación."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Obtener lote"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWJhdGNo.short_desc": {
@@ -752,7 +752,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Batch",
+          "source": "Cancel batch",
           "message": "Cancelar lote"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.display_name": {
-          "source": "Get Container",
+          "source": "Get container",
           "message": "Obtener Contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lcg.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.display_name": {
-          "source": "Delete Container",
+          "source": "Delete container",
           "message": "Eliminar Contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lcg.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.display_name": {
-          "source": "List Container Files",
+          "source": "List container files",
           "message": "Listar archivos de contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb250YWluZXItZmlsZXM.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Un cursor para usar en paginación. `before` es un ID de objeto que define tu lugar en la lista.\nPor ejemplo, si haces una solicitud de lista y recibes 100 objetos, terminando con obj_foo, tu\nllamada subsecuente puede incluir before=obj_foo para obtener la página anterior de la lista."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Create Container File",
+          "source": "Create container file",
           "message": "Crear archivo de contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3084,7 +3084,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Get Container File",
+          "source": "Get container file",
           "message": "Obtener Archivo del Contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.display_name": {
-          "source": "Delete Container File",
+          "source": "Delete container file",
           "message": "Eliminar Archivo de Contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnRhaW5lci1maWxl.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Container File Content",
+          "source": "Get container file content",
           "message": "Obtener Contenido del Archivo del Contenedor"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnRhaW5lci1maWxlLWNvbnRlbnQ.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "respuesta_de_aprobación_de_herramienta"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Get Conversation",
+          "source": "Get conversation",
           "message": "Obtener conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "El ID de la conversación a recuperar."
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update Conversation",
+          "source": "Update conversation",
           "message": "Actualizar Conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "Conjunto de 16 pares clave-valor que pueden adjuntarse a un objeto. Esto puede ser útil para almacenar información adicional sobre el objeto en un formato estructurado y consultar objetos vía API o el panel. Las claves son cadenas con una longitud máxima de 64 caracteres. Los valores son cadenas con una longitud máxima de 512 caracteres."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete Conversation",
+          "source": "Delete conversation",
           "message": "Eliminar Conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "El ID de la conversación a eliminar."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
-          "source": "List Conversation Items",
+          "source": "List conversation items",
           "message": "Listar elementos de conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
@@ -8832,7 +8832,7 @@
           "message": "Especificar datos de salida adicionales para incluir en la respuesta del modelo."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Create Conversation Items",
+          "source": "Create conversation items",
           "message": "Crear elementos de conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -14260,7 +14260,7 @@
           "message": "Campos adicionales para incluir en la respuesta."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Get Conversation Item",
+          "source": "Get conversation item",
           "message": "Obtener Elemento de Conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -14308,7 +14308,7 @@
           "message": "Campos adicionales para incluir en la respuesta."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete Conversation Item",
+          "source": "Delete conversation item",
           "message": "Eliminar Elemento de Conversación"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -15408,7 +15408,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.display_name": {
-          "source": "Get Evaluation",
+          "source": "Get evaluation",
           "message": "Obtener Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24.short_desc": {
@@ -15444,7 +15444,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Update Evaluation",
+          "source": "Update evaluation",
           "message": "Actualizar Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLWV2YWx1YXRpb24.short_desc": {
@@ -15496,7 +15496,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.display_name": {
-          "source": "Delete Evaluation",
+          "source": "Delete evaluation",
           "message": "Eliminar evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24.short_desc": {
@@ -15532,7 +15532,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.display_name": {
-          "source": "List Evaluation Runs",
+          "source": "List evaluation runs",
           "message": "Listar ejecuciones de evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLXJ1bnM.short_desc": {
@@ -15612,7 +15612,7 @@
           "message": "fallido"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Create Evaluation Run",
+          "source": "Create evaluation run",
           "message": "Crear ejecución de evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18392,7 +18392,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Get Evaluation Run",
+          "source": "Get evaluation run",
           "message": "Obtener Ejecución de Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18432,7 +18432,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Cancel Evaluation Run",
+          "source": "Cancel evaluation run",
           "message": "Cancelar Ejecución de Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18472,7 +18472,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.display_name": {
-          "source": "Delete Evaluation Run",
+          "source": "Delete evaluation run",
           "message": "Eliminar Ejecución de Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWV2YWx1YXRpb24tcnVu.short_desc": {
@@ -18512,7 +18512,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.display_name": {
-          "source": "List Evaluation Output Items",
+          "source": "List evaluation output items",
           "message": "Listar ítems de salida de evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1ldmFsdWF0aW9uLW91dHB1dC1pdGVtcw.short_desc": {
@@ -18584,7 +18584,7 @@
           "message": "descendente"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.display_name": {
-          "source": "Get Evaluation Run Output Item",
+          "source": "Get evaluation run output item",
           "message": "Obtener Elemento de Salida de Ejecución de Evaluación"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWV2YWx1YXRpb24tcnVuLW91dHB1dC1pdGVt.short_desc": {
@@ -18892,7 +18892,7 @@
           "message": "Después"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get File",
+          "source": "Get file",
           "message": "Obtener archivo"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbGU.short_desc": {
@@ -18936,7 +18936,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Eliminar archivo"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -18980,7 +18980,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Descargar archivo"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -21024,7 +21024,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.display_name": {
-          "source": "List Fine-Tuning Checkpoint Permissions",
+          "source": "List fine-tuning checkpoint permissions",
           "message": "Listar permisos de puntos de control de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1jaGVja3BvaW50LXBlcm1pc3Npb25z.short_desc": {
@@ -21124,7 +21124,7 @@
           "message": "descendente"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Create Fine-Tuning Checkpoint Permission",
+          "source": "Create fine-tuning checkpoint permission",
           "message": "Crear permiso para punto de control de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
@@ -21180,7 +21180,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.display_name": {
-          "source": "Delete Fine-Tuning Checkpoint Permission",
+          "source": "Delete fine-tuning checkpoint permission",
           "message": "Eliminar Permiso de Punto de Control de Ajuste Fino"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtcGVybWlzc2lvbg.short_desc": {
@@ -22324,7 +22324,7 @@
           "message": "Número de trabajos de ajuste fino a recuperar."
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Get Fine-Tuning Job",
+          "source": "Get fine-tuning job",
           "message": "Obtener Trabajo de Ajuste Fino"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -22368,7 +22368,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Cancel Fine-Tuning Job",
+          "source": "Cancel fine-tuning job",
           "message": "Cancelar Trabajo de Ajuste Fino"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -22412,7 +22412,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.display_name": {
-          "source": "List Fine-Tuning Job Checkpoints",
+          "source": "List fine-tuning job checkpoints",
           "message": "Listar puntos de control de trabajos de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1qb2ItY2hlY2twb2ludHM.short_desc": {
@@ -22480,7 +22480,7 @@
           "message": "Número de puntos de control a recuperar."
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.display_name": {
-          "source": "Copy Fine-Tuning Checkpoint",
+          "source": "Copy fine-tuning checkpoint",
           "message": "Copiar punto de control de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.Y29weS1maW5lLXR1bmluZy1jaGVja3BvaW50.short_desc": {
@@ -22560,7 +22560,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.display_name": {
-          "source": "Get Fine-Tuning Checkpoint Copy",
+          "source": "Get fine-tuning checkpoint copy",
           "message": "Obtener Copia del Punto de Control de Ajuste Fino"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LWZpbmUtdHVuaW5nLWNoZWNrcG9pbnQtY29weQ.short_desc": {
@@ -22616,7 +22616,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.display_name": {
-          "source": "List Fine-Tuning Events",
+          "source": "List fine-tuning events",
           "message": "Listar eventos de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maW5lLXR1bmluZy1ldmVudHM.short_desc": {
@@ -22684,7 +22684,7 @@
           "message": "Número de eventos a recuperar."
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.display_name": {
-          "source": "Pause Fine-Tuning Job",
+          "source": "Pause fine-tuning job",
           "message": "Pausar trabajo de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.cGF1c2UtZmluZS10dW5pbmctam9i.short_desc": {
@@ -22728,7 +22728,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.display_name": {
-          "source": "Resume Fine-Tuning Job",
+          "source": "Resume fine-tuning job",
           "message": "Reanudar trabajo de ajuste fino"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVzdW1lLWZpbmUtdHVuaW5nLWpvYg.short_desc": {
@@ -23620,7 +23620,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.display_name": {
-          "source": "Get Model",
+          "source": "Get model",
           "message": "Obtener modelo"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LW1vZGVs.short_desc": {
@@ -23664,7 +23664,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Eliminar modelo"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -24556,7 +24556,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Accept Realtime Call",
+          "source": "Accept realtime call",
           "message": "Aceptar llamada en tiempo real"
         },
         "app.QXp1cmVPcGVuQUk.action.YWNjZXB0LXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -25400,7 +25400,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Hangup Realtime Call",
+          "source": "Hangup realtime call",
           "message": "Colgar llamada en tiempo real"
         },
         "app.QXp1cmVPcGVuQUk.action.aGFuZ3VwLXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -25444,7 +25444,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.display_name": {
-          "source": "Refer Realtime Call",
+          "source": "Refer realtime call",
           "message": "Referir llamada en tiempo real"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVmZXItcmVhbHRpbWUtY2FsbA.short_desc": {
@@ -25500,7 +25500,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.display_name": {
-          "source": "Reject Realtime Call",
+          "source": "Reject realtime call",
           "message": "Rechazar llamada en tiempo real"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVqZWN0LXJlYWx0aW1lLWNhbGw.short_desc": {
@@ -33080,7 +33080,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "Obtener respuesta"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXJlc3BvbnNl.short_desc": {
@@ -33164,7 +33164,7 @@
           "message": "Cuando es verdadero, se habilitará la ofuscación de flujo. La ofuscación de flujo añade caracteres aleatorios a un campo `obfuscation` en los eventos delta de transmisión para normalizar los tamaños de carga útil como mitigación contra ciertos ataques de canal lateral. Estos campos de ofuscación se incluyen por defecto, pero añaden una pequeña sobrecarga al flujo de datos. Puedes establecer `include_obfuscation` en falso para optimizar el ancho de banda si confías en los enlaces de red entre tu aplicación y la API de OpenAI."
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Eliminar respuesta"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -33200,7 +33200,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel Response",
+          "source": "Cancel response",
           "message": "Cancelar Respuesta"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -33236,7 +33236,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
-          "source": "List Response Input Items",
+          "source": "List response input items",
           "message": "Listar elementos de entrada de respuesta"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
@@ -33548,7 +33548,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Get Vector Store",
+          "source": "Get vector store",
           "message": "Obtener Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33592,7 +33592,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Update Vector Store",
+          "source": "Update vector store",
           "message": "Actualizar Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33700,7 +33700,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Delete Vector Store",
+          "source": "Delete vector store",
           "message": "Eliminar Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -33744,7 +33744,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Create Vector Store File Batch",
+          "source": "Create vector store file batch",
           "message": "Crear lote de archivos de almacén de vectores"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -33968,7 +33968,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Get Vector Store File Batch",
+          "source": "Get vector store file batch",
           "message": "Obtener Lote de Archivo del Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -34024,7 +34024,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.display_name": {
-          "source": "Cancel Vector Store File Batch",
+          "source": "Cancel vector store file batch",
           "message": "Cancelar Lote de Archivo de Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2FuY2VsLXZlY3Rvci1zdG9yZS1maWxlLWJhdGNo.short_desc": {
@@ -34080,7 +34080,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.display_name": {
-          "source": "List Files In Vector Store Batch",
+          "source": "List files in vector store batch",
           "message": "Listar archivos en lote de almacenamiento vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC1maWxlcy1pbi12ZWN0b3Itc3RvcmUtYmF0Y2g.short_desc": {
@@ -34220,7 +34220,7 @@
           "message": "cancelado"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.display_name": {
-          "source": "List Vector Store Files",
+          "source": "List vector store files",
           "message": "Listar archivos de almacenamiento vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmUtZmlsZXM.short_desc": {
@@ -34348,7 +34348,7 @@
           "message": "cancelado"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Create Vector Store File",
+          "source": "Create vector store file",
           "message": "Crear archivo de almacén de vectores"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34488,7 +34488,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Get Vector Store File",
+          "source": "Get vector store file",
           "message": "Obtener Archivo del Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34544,7 +34544,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.display_name": {
-          "source": "Update Vector Store File Attributes",
+          "source": "Update vector store file attributes",
           "message": "Actualizar Atributos de Archivo del Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.dXBkYXRlLXZlY3Rvci1zdG9yZS1maWxlLWF0dHJpYnV0ZXM.short_desc": {
@@ -34596,7 +34596,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.display_name": {
-          "source": "Delete Vector Store File",
+          "source": "Delete vector store file",
           "message": "Eliminar Archivo de Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZlY3Rvci1zdG9yZS1maWxl.short_desc": {
@@ -34652,7 +34652,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.display_name": {
-          "source": "Get Vector Store File Content",
+          "source": "Get vector store file content",
           "message": "Obtener Contenido del Archivo del Almacén Vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZlY3Rvci1zdG9yZS1maWxlLWNvbnRlbnQ.short_desc": {
@@ -34708,7 +34708,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Search Vector Store",
+          "source": "Search vector store",
           "message": "Buscar en tienda vectorial"
         },
         "app.QXp1cmVPcGVuQUk.action.c2VhcmNoLXZlY3Rvci1zdG9yZQ.short_desc": {
@@ -35264,7 +35264,7 @@
           "message": "descendente"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.display_name": {
-          "source": "Get Video",
+          "source": "Get video",
           "message": "Obtener vídeo"
         },
         "app.QXp1cmVPcGVuQUk.action.Z2V0LXZpZGVv.short_desc": {
@@ -35308,7 +35308,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.display_name": {
-          "source": "Delete Video",
+          "source": "Delete video",
           "message": "Eliminar Video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZGVsZXRlLXZpZGVv.short_desc": {
@@ -35352,7 +35352,7 @@
           "message": "vista_previa"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.display_name": {
-          "source": "Download Video",
+          "source": "Download video",
           "message": "Descargar Video"
         },
         "app.QXp1cmVPcGVuQUk.action.ZG93bmxvYWQtdmlkZW8.short_desc": {
@@ -35408,7 +35408,7 @@
           "message": "Variantes de activos seleccionables para contenido descargado."
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.display_name": {
-          "source": "Remix Video",
+          "source": "Remix video",
           "message": "Remixar video"
         },
         "app.QXp1cmVPcGVuQUk.action.cmVtaXgtdmlkZW8.short_desc": {
@@ -35436,7 +35436,7 @@
           "message": "Prompt"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.display_name": {
-          "source": "Create Transcription",
+          "source": "Create transcription",
           "message": "Crear transcripción"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zY3JpcHRpb24.short_desc": {
@@ -35684,7 +35684,7 @@
           "message": "Versión de la API de audio de Azure basada en despliegue. La predeterminada soporta despliegues Whisper y de transcripción GPT."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.display_name": {
-          "source": "Create Translation",
+          "source": "Create translation",
           "message": "Crear traducción"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXRyYW5zbGF0aW9u.short_desc": {

@@ -529,7 +529,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Invoices/{InvoiceID}/History",
                 "operation_id": "getInvoiceHistory",
-                "display_name": "Find Invoice History",
+                "display_name": "Find invoice history",
                 "short_desc": "Read an invoice's history and notes",
                 "desc": "Reads the history of an invoice: who changed it, when, and any notes recorded "
                     "against it.",
@@ -544,7 +544,7 @@ public class XeroManifest {
                 "method": "PUT",
                 "path": "/Invoices/{InvoiceID}/History",
                 "operation_id": "createInvoiceHistory",
-                "display_name": "Add Note to Invoice",
+                "display_name": "Add note to invoice",
                 "short_desc": "Record a note against an invoice",
                 "desc": "Adds a note to an invoice's history.\n\n"
                     "`HistoryRecords` is an **array** even for one note, and the note itself is its "
@@ -566,7 +566,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Invoices/{InvoiceID}/Email",
                 "operation_id": "emailInvoice",
-                "display_name": "Email Invoice",
+                "display_name": "Email invoice",
                 "short_desc": "Send an invoice to its contact by email",
                 "desc": "Sends an invoice to the email address on its contact.\n\n"
                     "Xero decides the recipient and the template; there is nothing to fill in but the "
@@ -788,7 +788,7 @@ public class XeroManifest {
                 "method": "PUT",
                 "path": "/CreditNotes/{CreditNoteID}/Allocations",
                 "operation_id": "createCreditNoteAllocation",
-                "display_name": "Allocate Credit Note",
+                "display_name": "Allocate credit note",
                 "short_desc": "Apply a credit note to an invoice",
                 "desc": "Applies a credit note to one or more invoices.\n\n"
                     "`Allocations` is an **array** even for one allocation, and each names the `Invoice` it "
@@ -1098,7 +1098,7 @@ public class XeroManifest {
                 "method": "GET",
                 "path": "/Projects/{projectId}/Tasks",
                 "operation_id": "getTasks",
-                "display_name": "Find Tasks",
+                "display_name": "Find tasks",
                 "short_desc": "List the tasks in a project",
                 "desc": "Lists a project's tasks with their rates, charge types and estimates.",
                 "groups": (GroupProjects,),
@@ -1119,7 +1119,7 @@ public class XeroManifest {
                 "method": "POST",
                 "path": "/Projects/{projectId}/Tasks",
                 "operation_id": "createTask",
-                "display_name": "Create Task",
+                "display_name": "Create task",
                 "short_desc": "Add a task to a project",
                 "desc": "Creates a task in a project.\n\n"
                     "`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a "

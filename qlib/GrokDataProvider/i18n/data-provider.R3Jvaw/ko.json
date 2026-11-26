@@ -1108,7 +1108,7 @@
           "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Simple Chat"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -4528,7 +4528,7 @@
           "message": "자르지 않으며, 컨텍스트가 한도를 초과하면 오류를 반환합니다"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
-          "source": "Get Response",
+          "source": "Get response",
           "message": "응답 가져오기"
         },
         "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {

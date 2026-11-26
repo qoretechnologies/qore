@@ -8244,7 +8244,7 @@
           "message": "Дозволяє створити рахунок-фактуру, навіть якщо одна чи кілька позицій містять відстежувані запаси, кількість яких у рахунку-фактурі призведе до від’ємного залишку"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Find Invoice History",
+          "source": "Find invoice history",
           "message": "Знайти історію рахунка-фактури"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8268,7 +8268,7 @@
           "message": "Унікальний ідентифікатор рахунку"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
-          "source": "Add Note to Invoice",
+          "source": "Add note to invoice",
           "message": "Додати примітку до рахунку"
         },
         "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
@@ -8336,7 +8336,7 @@
           "message": "має значення 0"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Надіслати рахунок-фактуру електронною поштою"
         },
         "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
@@ -32424,7 +32424,7 @@
           "message": "Повертати лише записи, створені або змінені з цього часу.\n\nСаме це уможливлює інкрементний збір даних: без цього кожен виклик зчитує всю колекцію."
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
-          "source": "Allocate Credit Note",
+          "source": "Allocate credit note",
           "message": "Розподілити кредитну ноту"
         },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
@@ -49540,7 +49540,7 @@
           "message": "Кількість записів, які повертаються на одній сторінці. За замовчуванням у Xero це 100, а максимум — 1000."
         },
         "app.WGVybw.action.Z2V0VGFza3M.display_name": {
-          "source": "Find Tasks",
+          "source": "Find tasks",
           "message": "Знайти завдання"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
@@ -49624,7 +49624,7 @@
           "message": "Кількість записів, які повертаються на одній сторінці. За замовчуванням у Xero це 100, а максимум — 1000."
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Створити завдання"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
@@ -50464,7 +50464,7 @@
           "message": "Таблиця для роботи: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` або `project-tasks`"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
-          "source": "Find Employees",
+          "source": "Find employees",
           "message": "Знайти співробітників"
         },
         "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
@@ -50476,7 +50476,7 @@
           "message": "Повертає список співробітників у розрахунку заробітної плати організації.\n\n**Те, яке саме payroll API використовується, визначається параметром `payroll_region` підключення**, оскільки Xero не має єдиного payroll API: Австралія обслуговується за адресою `payroll.xro/1.0`, а Нова Зеландія та Велика Британія — за `payroll.xro/2.0`. Підключення без зазначеного регіону повідомляє про це замість спроби його вгадати.\n\nРегіони огортають результат по-різному — `{Employees: [...]}` в Австралії та `{employees: [...], pagination}` в інших двох, — але ця дія в будь-якому разі повертає співробітників у вигляді звичайного списку.\n\nЗастосунок, який замінює цей модуль, зчитував співробітників через accounting API, де вони відсутні, тому він взагалі нічого не повертав."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
-          "source": "Create Employees",
+          "source": "Create employees",
           "message": "Створити співробітників"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
@@ -50488,7 +50488,7 @@
           "message": "Створює співробітників у системі нарахування заробітної плати організації.\n\n`Employees` є списком, навіть для одного співробітника. API нарахування зарплати Австралії приймає список напряму; API Нової Зеландії та Великої Британії приймають одного співробітника на виклик, тому список із кількох надсилається по одному, а результати збираються.\n\n**Те, який API нарахування зарплати використовується, визначається параметром підключення `payroll_region`.** Поля, необхідні для співробітника, відрізняються залежно від регіону (наприклад, співробітник у Великій Британії має номер National Insurance, тоді як у Новій Зеландії — номер IRD), тому дані передаються як є, без визначення єдиної структури для всіх регіонів."
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
@@ -50500,7 +50500,7 @@
           "message": "Спрацьовує для кожного створеного або зміненого контакту в організації.\n\nXero позиціонує контакт за `UpdatedDateUTC` і не пропонує фільтра «створено після», тому контакт, відредагований пізніше, знову викличе цю подію. Подія містить запис контакту, який повертає Xero."
         },
         "app.WGVybw.action.bmV3X2JpbGw.display_name": {
-          "source": "New Bill",
+          "source": "New bill",
           "message": "Новий рахунок постачальника"
         },
         "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
@@ -50512,7 +50512,7 @@
           "message": "Спрацьовує для кожного створеного або зміненого рахунка постачальника.\n\nРахунок постачальника — це рахунок-фактура типу `ACCPAY`, і саме цей фільтр застосовує ця подія; рахунок-фактура на продаж (`ACCREC`) її не викликає. Подія містить запис рахунка-фактури, який повертає Xero."
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
-          "source": "New Credit Note",
+          "source": "New credit note",
           "message": "Нова кредитова авізо"
         },
         "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
@@ -50524,7 +50524,7 @@
           "message": "Спрацьовує для кожної створеної або зміненої кредитової авізо.\n\nПодія містить запис кредитової авізо, який повертає Xero. Застосунок, який замінює цей модуль, опитував кредитові авізо без можливості отримати список або прочитати їх; дія **Find Credit Notes** існує для того, щоб ця подія мала відповідник."
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
-          "source": "New Bank Transaction",
+          "source": "New bank transaction",
           "message": "Нова банківська транзакція"
         },
         "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
@@ -50536,7 +50536,7 @@
           "message": "Спрацьовує для кожної створеної або зміненої банківської транзакції — витрачених або отриманих коштів на банківському рахунку.\n\nПодія містить запис банківської транзакції, який повертає Xero."
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Новий платіж"
         },
         "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
@@ -50548,7 +50548,7 @@
           "message": "Спрацьовує для кожного платежу, створеного або зміненого щодо рахунка-фактури чи кредитової авізо.\n\nПодія містить запис платежу, який повертає Xero."
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Нове замовлення на купівлю"
         },
         "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
@@ -50560,7 +50560,7 @@
           "message": "Спрацьовує для кожного створеного або зміненого замовлення на купівлю.\n\nПодія містить запис замовлення на купівлю, який повертає Xero."
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
-          "source": "New Employee",
+          "source": "New employee",
           "message": "Новий працівник"
         },
         "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {
