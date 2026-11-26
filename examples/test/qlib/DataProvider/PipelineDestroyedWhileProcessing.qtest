@@ -86,11 +86,63 @@ class TestPipeline inherits DataProvider::DataProviderPipeline {
     }
 }
 
+#! records the calls of the methods that it reimplements, with the thread that made them
+/** reportError() cannot be reimplemented outside of the module: its argument is a queue, whose class is not public;
+    it logs the error with logError()
+*/
+class OverridingPipeline inherits DataProvider::DataProviderPipeline {
+    public {
+        Queue calls();
+    }
+
+    constructor(hash<PipelineOptionInfo> opts) : DataProviderPipeline(opts) {
+    }
+
+    logError(string fmt, ...) {
+        calls.push({"method": "logError", "tid": gettid(), "msg": vsprintf(fmt, argv)});
+    }
+
+    logDebug(string fmt, ...) {
+        calls.push({"method": "logDebug", "tid": gettid(), "msg": vsprintf(fmt, argv)});
+    }
+}
+
+#! records the thread that processes each record, and raises an error for the record if told to
+class ThreadProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        Queue tids();
+        bool fail;
+    }
+
+    constructor(bool fail) {
+        self.fail = fail;
+    }
+
+    string className() {
+        return "ThreadProcessor";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        tids.push(gettid());
+        if (fail) {
+            throw "TEST-ERROR", "the record failed";
+        }
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
 class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
     constructor() : QUnit::Test("PipelineDestroyedWhileProcessing", "1.0") {
         addTestCase("a record in progress completes while the pipeline is destroyed", \completesTest());
         addTestCase("the error of a record in progress is reported while the pipeline is destroyed", \errorTest());
         addTestCase("the metrics of a record in progress are taken while the pipeline is destroyed", \metricsTest());
+        addTestCase("a queue thread calls the reimplemented log methods of a live pipeline", \overridesTest());
+        addTestCase("the error of a queue thread of a live pipeline is logged with its reimplemented logError()",
+            \overridesErrorTest());
         set_return_value(main());
     }
 
@@ -121,6 +173,34 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         assertEq("destroyed-while-processing", worker_snap.snapshot.pipeline_name, "the queue thread's snapshot");
         assertEq(1, worker_snap.snapshot.num_queues);
         assertEq(PS_RUNNING, worker_snap.snapshot.status);
+    }
+
+    #! The queue thread of a live pipeline calls its reimplemented logDebug() (qore#7509)
+    overridesTest() {
+        OverridingPipeline pipe(<PipelineOptionInfo>{"name": "overrides", "debug_log": sub (string fmt, ...) {}});
+        ThreadProcessor proc(False);
+        pipe.append(proc);
+        pipe.submit({"a": 1});
+        pipe.waitDone();
+        int tid = proc.tids.get(HangTimeout);
+        assertNeq(gettid(), tid, "the record is processed in a queue thread");
+        list<hash<auto>> calls = map pipe.calls.get(), xrange(pipe.calls.size());
+        assertTrue((select calls, $1.method == "logDebug" && $1.tid == tid
+            && $1.msg =~ /data processor "ThreadProcessor" output/).size() > 0,
+            "the queue thread calls the pipeline's logDebug()");
+    }
+
+    #! The queue thread of a live pipeline reports its error to the pipeline, whose logError() logs it (qore#7509)
+    overridesErrorTest() {
+        OverridingPipeline pipe(<PipelineOptionInfo>{"name": "overrides"});
+        ThreadProcessor proc(True);
+        pipe.append(proc);
+        pipe.submit({"a": 1});
+        assertThrows("PIPELINE-FAILED", \pipe.waitDone());
+        int tid = proc.tids.get(HangTimeout);
+        list<hash<auto>> calls = map pipe.calls.get(), xrange(pipe.calls.size());
+        assertTrue((select calls, $1.method == "logError" && $1.tid == tid && $1.msg =~ /TEST-ERROR/).size() > 0,
+            "the queue thread's error is logged with the pipeline's logError()");
     }
 
     #! submits a record, releases the pipeline in another thread while the record is processed, and lets the record go on
