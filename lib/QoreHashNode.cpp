@@ -1810,19 +1810,21 @@ QoreStringNode* HashIterator::getKeyStringNode() const {
 }
 
 bool HashIterator::next() {
-    if (!h) {
-        return false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
     }
-    h->priv->assertNotReleasing();
-    return priv->next(h->priv->member_list);
+#endif
+    return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool HashIterator::prev() {
-    if (!h) {
-        return false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
     }
-    h->priv->assertNotReleasing();
-    return priv->prev(h->priv->member_list);
+#endif
+    return h ? priv->prev(h->priv->member_list) : false;
 }
 
 const char* HashIterator::getKey() const {
@@ -1980,19 +1982,21 @@ QoreStringNode* ConstHashIterator::getKeyStringNode() const {
 }
 
 bool ConstHashIterator::next() {
-    if (!h) {
-        return false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
     }
-    h->priv->assertNotReleasing();
-    return priv->next(h->priv->member_list);
+#endif
+    return h ? priv->next(h->priv->member_list) : false;
 }
 
 bool ConstHashIterator::prev() {
-    if (!h) {
-        return false;
+#ifdef DEBUG
+    if (h) {
+        h->priv->assertNotReleasing();
     }
-    h->priv->assertNotReleasing();
-    return priv->prev(h->priv->member_list);
+#endif
+    return h ? priv->prev(h->priv->member_list) : false;
 }
 
 const char* ConstHashIterator::getKey() const {
