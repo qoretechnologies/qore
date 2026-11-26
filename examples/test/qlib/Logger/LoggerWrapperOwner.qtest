@@ -4,9 +4,10 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # Only the owner of a LoggerWrapper changes its logger and the logger's level (issue #6842): sandboxed code can change
-# them only if its sandbox created the object, through the setter, a call of the setter with the reflection API
-# and a subclass that writes the member alike; the messages that the host and another tenant log through their own
-# objects reach only their own loggers.  Trusted code changes the logger of any object.
+# them only if its sandbox created the object, through the setter and a call of the setter with the reflection API
+# alike (a tenant's subclass cannot use the private logger member of the class at all, issue #6843); the messages
+# that the host and another tenant log through their own objects reach only their own loggers.  Trusted code changes
+# the logger of any object.
 
 %modern
 %no-child-restrictions
@@ -55,18 +56,6 @@ class Rec inherits LoggerAppenderWithLayout {
     }
 }
 
-class Sub inherits LoggerWrapper {
-    #! writes the logger member of the object
-    static string poke(LoggerWrapper w, LoggerInterface l) {
-        try {
-            w.logger = l;
-            return \"ok\";
-        } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
-        }
-    }
-}
-
 Rec rec();
 Logger mine(\"mine\", LoggerLevel::getLevelInfo());
 mine.addAppender(rec);
@@ -93,8 +82,6 @@ string sub change(string route, LoggerWrapper w) {
                 mem.setValue(w, mine);
                 break;
             }
-            case \"subclass\":
-                return Sub::poke(w, mine);
             case \"set-level\":
                 w.setLevel(\"TRACE\");
                 break;
@@ -139,6 +126,16 @@ list<string> sub msgs() {
 }
 ";
 
+#! a tenant's subclass that writes the private logger member of a LoggerWrapper: refused when it is parsed (qore#6843)
+const SubSource = "%modern
+%requires Logger
+class Sub inherits LoggerWrapper {
+    static poke(LoggerWrapper w, LoggerInterface l) {
+        w.logger = l;
+    }
+}
+";
+
 #! the code of a tenant that changes the logger of a REST client's connection manager
 const MgrSource = "%modern
 %requires Logger
@@ -179,7 +176,6 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
             "reflection-call": Err,
             # the reflection API refuses member writes by sandboxed code already
             "reflection-member": "REFLECTION-ACCESS-ERROR",
-            "subclass": Err,
             # the level of the logger of an object of another owner
             "set-level": Err,
             "inc-level": Err,
@@ -192,6 +188,7 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
         addTestCase("trusted code", \trustedTest());
         addTestCase("code safety", \codeSafetyTest());
         addTestCase("the connection manager of a REST client", \connectionManagerTest());
+        addTestCase("a tenant subclass", \subclassTest());
         set_return_value(main());
     }
 
@@ -239,10 +236,16 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
 
         # A changes the logger of its own objects with every route that sandboxed code may use
         LoggerWrapper a_obj = a.callFunction("make");
-        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "subclass",
-                "clear")) {
+        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "clear")) {
             assertEq("ok", a.callFunction("change", route, a_obj), "A on its own object: " + route);
         }
+    }
+
+    #! a tenant's subclass cannot write the private logger member of the class (qore#6843)
+    subclassTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \p.parse(), (SubSource, "tenant"));
     }
 
     #! a tenant cannot change the logger of the connection manager of a client that the host created (qore#6842)
@@ -277,8 +280,7 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
         LoggerWrapper host_obj(host_logger);
         assertEq(True, safe.callFunction("owns", host_obj));
         assertEq("ok", safe.callFunction("check_owned", host_obj));
-        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "subclass",
-                "clear")) {
+        foreach string route in (("setter", "set-level", "inc-level", "dec-level", "reflection-call", "clear")) {
             assertEq("ok", safe.callFunction("change", route, host_obj), "code safety on the host's object: " + route);
         }
         # an isolated tenant does not own the objects of code-safety code
