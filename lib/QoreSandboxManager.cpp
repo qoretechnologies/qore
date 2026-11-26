@@ -2387,15 +2387,20 @@ bool qore_calling_class_is_restricted() {
 }
 
 bool qore_program_is_restricted(const QoreProgram* pgm) {
+    // fails closed: true if the sandboxes cannot be resolved
+    return qore_program_restricted_state(pgm) != 0;
+}
+
+int qore_program_restricted_state(const QoreProgram* pgm) {
     // every restricted Program is sandboxed (a Program with a manager is); checked first, as it is cheap
     if (!pgm || !qore_program_is_sandboxed(pgm)) {
-        return false;
+        return 0;
     }
     // restricted code created the Program or committed code in it with no restricting sandbox that the Program could
     // keep (qore#7737): restricted for good
     if (qore_program_private::get(*const_cast<QoreProgram*>(pgm))->restricted_marked.load(
             std::memory_order_acquire)) {
-        return true;
+        return 1;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
@@ -2405,12 +2410,13 @@ bool qore_program_is_restricted(const QoreProgram* pgm) {
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
-            return qore_program_is_sandboxed(pgm);
+            return 1;
         }
-        return !sm->trustsUncontrolledApis();
+        return sm->trustsUncontrolledApis() ? 0 : 1;
     } catch (std::bad_alloc&) {
-        // the composition of the Program's sandboxes could not be made: fails closed
-        return true;
+        // the composition of the Program's sandboxes could not be made: not known (each caller fails closed in its
+        // own direction)
+        return -1;
     }
 }
 

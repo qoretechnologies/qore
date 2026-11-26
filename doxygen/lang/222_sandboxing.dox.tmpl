@@ -313,6 +313,17 @@ auto result = p.callFunction("main");
     A Qorus server, for example, gives its trusted interfaces a trusted manager and the interfaces of portable groups a
     restricting one.  Fails closed: code whose governing sandbox cannot be resolved is restricted.
 
+    The governance of trusted code by a trusted manager is cooperative: it bounds runaway trusted code (its
+    interrupts, force-termination, limits and I/O policy apply), but it does not contain it, as the code is trusted:
+    it may still use the system-policy calls
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), system threads
+    (@ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()") and cancellation
+    deferral (@ref Qore::defer_thread_cancel() "defer_thread_cancel()", which postpones its interrupts until the
+    deferred code returns), and any uncontrolled API.  Containment is what a restricting manager gives.  Code that a
+    trusted manager governs and that runs for restricted code (called by it, or in a thread, task or callback that was
+    started or created for it, also several steps later) is restricted.
+
     A policy barrier does not hide restricted code from these rules: trusted code that restricted code calls, also
     inside @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or a capability of
     @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()", acts for it, and is

@@ -973,7 +973,8 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     }
     // the code that calls: the code of a Program that no restricting sandbox governs (qore#7737)
     const QoreProgram* pgm = getProgram();
-    if (!pgm || qore_program_is_restricted(pgm)) {
+    // also the code of a class that restricted code declared (qore#7737)
+    if (!pgm || qore_program_is_restricted(pgm) || qore_calling_class_is_restricted()) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
             "object of class '%s'", theclass->getName());
         return QoreValue();

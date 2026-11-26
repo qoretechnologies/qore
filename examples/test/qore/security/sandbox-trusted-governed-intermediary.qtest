@@ -39,6 +39,70 @@ class SharedBox {
 
 our SharedBox shared_box;
 
+#! a serializable object that the host shares with every Program
+class SharedSerBox inherits Serializable {
+    public {
+        int v = 1;
+    }
+}
+
+our SharedSerBox shared_ser_box;
+
+object sub get_shared_ser_box() {
+    return shared_ser_box;
+}
+
+#! the Program that the governed code parses code into for its caller (it has a trusted manager of its own)
+our Program parse_target;
+
+#! the code parsed into it: a function that changes a shared object and a class that relates classes by injection
+const ParsedSource = "string sub t_change() {
+    try {
+        object o = get_shared_box();
+        o.v = o.v;
+        return 'ok';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+class TCls {
+    string inject() {
+        try {
+            build_host_program('t');
+            return 'ok';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+string sub t_inject() {
+    return (new TCls()).inject();
+}
+";
+
+#! the host starts a thread for its caller in which the governed code parses code into the target Program
+string sub run_bg_parse() {
+    Queue q();
+    background q.push(governed.callFunction("g_parse", parse_target, ParsedSource));
+    return q.get();
+}
+
+#! the governed code creates a closure that parses code, for its caller
+our code parse_closure;
+
+sub make_parse_closure() {
+    parse_closure = governed.callFunction("g_parse_closure");
+}
+
+#! the governed code creates a Program in a thread that the host starts for its caller
+our Program created_program;
+
+sub run_bg_new_program() {
+    Queue q();
+    background q.push(governed.callFunction("g_new_program", ParsedSource));
+    created_program = q.get();
+}
+
 #! the Program of the code of a trusted (governed) sandbox, created by the host
 our Program governed;
 
@@ -196,9 +260,49 @@ string sub g_cap() {
         return ex.err;
     }
 }
+string sub g_err(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 string sub g_ops() {
     list<string> r = ('change:' + g_change(), 'copy:' + g_copy(), 'creates:' + g_creates(), 'cache:' + g_cache(),
         'cap:' + g_cap());
+    r += 'ser:' + g_err(string sub () { Serializable::serialize(get_shared_ser_box()); return 'ok'; });
+    r += 'info:' + (exists AsyncIoController::getInfo().cache_size ? 'full' : 'settings');
+    r += 'spc:' + g_err(string sub () { SandboxManager::createSystemPolicyCall(sub () {}); return 'ok'; });
+    r += 'systhread:' + g_err(string sub () {
+        try {
+            SandboxManager::createSystemThreadCall(sub () {});
+            return 'ok';
+        } catch (hash<ExceptionInfo> ex) {
+            # trusted code gets past the classification: it is refused outside a module's initialization
+            if (ex.desc =~ /module is being loaded/) {
+                return 'init';
+            }
+            rethrow;
+        }
+    });
+    r += 'govcall:' + g_err(string sub () {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        return sprintf('%d', SandboxManager::callGoverned(int sub () { return 1; }, p));
+    });
+    r += 'scope:' + g_err(string sub () {
+        ThreadCapabilityScope scope({'qore-7737': sub () {}});
+        return 'ok';
+    });
+    {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        r += 'childpo:' + ((p.getParseOptions() & PO_NO_CHILD_PO_RESTRICTIONS) ? 'free' : 'restricted');
+    }
+    r += 'modcmd:' + g_err(string sub () {
+        Program p(PO_NEW_STYLE);
+        p.issueModuleCmd('qore-7737-no-module', 'x');
+        return 'ok';
+    });
     try {
         build_host_program('x');
         r += 'inject:ok';
@@ -229,6 +333,16 @@ string sub g_task() {
     Queue q();
     AsyncIoController::submitTask(sub () { q.push(g_ops()); });
     return q.get();
+}
+code sub g_parse_closure() {
+    return string sub (Program target, string src) { return g_parse(target, src); };
+}
+Program sub g_new_program(string src) {
+    Program p(PO_NEW_STYLE);
+    p.importFunction('get_shared_box');
+    p.importFunction('build_host_program');
+    p.parse(src, 'governed-new');
+    return p;
 }
 code sub g_wrap(code cb) {
     return sub () { return cb(); };
@@ -299,6 +413,19 @@ string sub bg_host_nested() {
         return 'error: ' + ex.err;
     }
 }
+string sub bg_parse() {
+    try {
+        return run_bg_parse();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+sub parse_closure_for_host() {
+    make_parse_closure();
+}
+sub bg_new_program() {
+    run_bg_new_program();
+}
 sub g_closure_for_host() {
     make_g_closure();
 }
@@ -355,10 +482,15 @@ TenantBox sub tenant_box() {
 ";
 
         #! what the governed code gets for trusted callers
-        const Trusted = "change:ok,copy:ok,creates:1,cache:ok,cap:ok,inject:ok,refl:ok";
+        const Trusted = "change:ok,copy:ok,creates:1,cache:ok,cap:ok,ser:ok,info:full,spc:ok,systhread:init,govcall:1,"
+            "scope:ok,childpo:free,modcmd:" + TrustedModCmd + ",inject:ok,refl:ok";
         #! what it gets for restricted callers
         const Restricted = "change:SHARED-OBJECT-ERROR,copy:SHARED-OBJECT-ERROR,creates:0,cache:PERMISSION-DENIED,"
-            "cap:SANDBOX-CAPABILITY-ERROR,inject:CLASS-IMPORT-ERROR,refl:REFLECTION-ACCESS-ERROR";
+            "cap:SANDBOX-CAPABILITY-ERROR,ser:SHARED-OBJECT-ERROR,info:settings,spc:SANDBOX-CAPABILITY-ERROR,"
+            "systhread:SANDBOX-CAPABILITY-ERROR,govcall:SANDBOX-CALL-GOVERNED-ERROR,scope:THREAD-CAPABILITY-ERROR,"
+            "childpo:restricted,modcmd:RUNTIME-COMMAND-ERROR,inject:CLASS-IMPORT-ERROR,refl:REFLECTION-ACCESS-ERROR";
+        #! the module command of trusted code fails only because the module does not exist
+        const TrustedModCmd = "LOAD-MODULE-ERROR";
     }
 
     constructor() : QUnit::Test("SandboxTrustedGovernedIntermediaryTest", "1.0") {
@@ -370,6 +502,11 @@ TenantBox sub tenant_box() {
         addTestCase("a closure of the governed code that the host runs later in a thread of its own",
             \closureLaterTest());
         addTestCase("an async task that the governed code submits for the caller", \taskTest());
+        addTestCase("code that the governed code parses into a trusted Program in a thread for the caller",
+            \threadParseTest());
+        addTestCase("code that a closure of the governed code parses into a trusted Program later",
+            \closureParseTest());
+        addTestCase("a Program that the governed code creates in a thread for the caller", \threadProgramTest());
         addTestCase("a thread that the host starts for no restricted code", \hostThreadTest());
         addTestCase("callbacks and call references that the governed code creates for the caller", \wrapperTest());
         addTestCase("a module loaded by the governed code in place of a module of the module path", \shadowingTest());
@@ -384,15 +521,18 @@ TenantBox sub tenant_box() {
     globalSetUp() {
         shared_box = new SharedBox();
         SandboxManager::shareObject(shared_box);
+        shared_ser_box = new SharedSerBox();
+        SandboxManager::shareObject(shared_ser_box);
         pre_bg = sub (Queue q) { q.push(governed.callFunction("g_ops")); };
         SandboxManager gsm();
         gsm.setFilesystemDefaultPolicy(True);
         gsm.setNetworkDefaultPolicy(True);
         gsm.setUncontrolledApiPolicy(True);
-        governed = new Program(PO_NEW_STYLE);
+        governed = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         governed.importFunction("get_shared_box");
         governed.importFunction("build_host_program");
         governed.importFunction("host_nested");
+        governed.importFunction("get_shared_ser_box");
         governed.setSandboxManager(gsm);
         governed.parse(GovernedSource, "governed");
     }
@@ -413,7 +553,8 @@ TenantBox sub tenant_box() {
     private static Program tenant(*SandboxManager sm) {
         Program p(PO_NEW_STYLE);
         foreach string f in (("run_bg_ops", "run_bg_closure_ops", "run_bg_nested", "run_bg_host_nested",
-                "make_g_closure", "direct_task", "direct_ops", "make_wrappers", "governed_parse",
+                "make_g_closure", "direct_task", "run_bg_parse", "make_parse_closure", "run_bg_new_program",
+                "direct_ops", "make_wrappers", "governed_parse",
                 "governed_defer", "interrupt_me", "fail_closed_ops", "get_shared_box")) {
             p.importFunction(f);
         }
@@ -472,6 +613,66 @@ TenantBox sub tenant_box() {
             background q.push(g_closure());
             assertEq(mode == "restricting" ? Restricted : Trusted, q.get(), mode);
             remove g_closure;
+            remove current_sm;
+        }
+    }
+
+    #! a new target Program with a trusted manager of its own
+    private static Program newTarget() {
+        SandboxManager tsm();
+        tsm.setFilesystemDefaultPolicy(True);
+        tsm.setNetworkDefaultPolicy(True);
+        tsm.setUncontrolledApiPolicy(True);
+        Program t(PO_NEW_STYLE);
+        t.importFunction("get_shared_box");
+        t.importFunction("build_host_program");
+        t.setSandboxManager(tsm);
+        return t;
+    }
+
+    #! the code committed for restricted code stays restricted when the host calls it later, with no restricted code on
+    #! the stack: its Program is restricted, and so is its class
+    private checkParsed(string mode, Program t) {
+        bool restricted = mode == "restricting";
+        assertEq(restricted ? "SHARED-OBJECT-ERROR" : "ok", t.callFunction("t_change"), mode + ": shared change");
+        assertEq(restricted ? "CLASS-IMPORT-ERROR" : "ok", t.callFunction("t_inject"), mode + ": injection");
+    }
+
+    threadParseTest() {
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            parse_target = newTarget();
+            assertEq("parsed", p.callFunction("bg_parse"), mode);
+            checkParsed(mode, parse_target);
+            remove parse_target;
+            remove current_sm;
+        }
+    }
+
+    closureParseTest() {
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            p.callFunction("parse_closure_for_host");
+            parse_target = newTarget();
+            Queue q();
+            background q.push(parse_closure(parse_target, ParsedSource));
+            assertEq("parsed", q.get(), mode);
+            checkParsed(mode, parse_target);
+            remove parse_closure;
+            remove parse_target;
+            remove current_sm;
+        }
+    }
+
+    threadProgramTest() {
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            p.callFunction("bg_new_program");
+            checkParsed(mode, created_program);
+            remove created_program;
             remove current_sm;
         }
     }

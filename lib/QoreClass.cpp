@@ -10119,7 +10119,9 @@ bool qore_class_private::isSandboxedCode() const {
 bool qore_class_private::isRestrictedDestructorCode() const {
     // builtin classes are trusted, also when a module created them while a sandboxed Program was current; the code of a
     // class of a trusted (governed) sandbox runs its destructor with the deferral of trusted code (qore#7737)
-    return !sys && isRestrictedCode();
+    // the permanent mark of a class that restricted code committed counts as well, also after the host relaxed the
+    // sandbox of its Program (as for the other rules, see qore_calling_class_is_restricted())
+    return !sys && (sandbox_ctx || isRestrictedCode());
 }
 
 bool qore_class_private::isRestrictedCode() const {

@@ -1646,7 +1646,7 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     // sandbox (qore#7737), the deferral is suspended again while restricted code that the cleanup calls runs
     // (ProgramThreadCountContextHelper)
     std::optional<QoreCancelDeferralHelper> cdh;
-    if (!qore_program_is_restricted(getProgram())) {
+    if (!qore_program_is_restricted(getProgram()) && !qore_calling_class_is_restricted()) {
         cdh.emplace();
     }
     ReferenceHolder<QoreListNode> vargs(xsink);
