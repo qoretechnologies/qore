@@ -430,6 +430,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
         addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
         addTestCase("attaching to a program of a debug server", \attachTest());
+        addTestCase("the debug server writes its port when its program has been created", \announceTest());
         addTestCase("a debug server that cannot be reached", \noServerTest());
         addTestCase("a debug server that ends during the session", \serverClosedTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
@@ -2198,6 +2199,67 @@ print('exit code: %d' % p.wait(30))
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
+    }
+
+    #! the debug server writes its port only when the program that it was given has been created, so that a client
+    #! that connects when it reads the line finds the program (qore#7610)
+    /** The program's parse is held, by a constant of the program, until the test has checked that the server has not
+        written its port yet: two FIFOs order the steps, with no wait
+    */
+    announceTest() {
+        TmpDir tmp("qore-vda-test-");
+        string started = tmp.path + "/started";
+        string gate = tmp.path + "/gate";
+        foreach string fifo in ((started, gate)) {
+            if (mkfifo(fifo, 0600)) {
+                throw "TEST-ERROR", sprintf("cannot create FIFO %y: %s", fifo, strerror());
+            }
+        }
+        # the constant is evaluated while the server creates the program: it tells the test, then waits for it
+        string path = writeProgram(tmp, sprintf("%%modern
+const Gate = gate();
+string sub gate() {
+    File f();
+    f.open2(%y, O_WRONLY);
+    f.write(\"started\");
+    f.close();
+    return ReadOnlyFile::readTextFile(%y);
+}
+", started, gate));
+        Process server(qore_exe, (server_script, "-v", path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        # the program is being created: opening the FIFO waits for the program to open it
+        assertEq("started", ReadOnlyFile::readTextFile(started), "the program is being created");
+        # the server writes nothing before the program has been created
+        *string early = server.readStdout(1024, 0);
+        assertEq(NOTHING, early, "the port is not written while the program is being created");
+        # the program's parse goes on
+        {
+            File f();
+            f.open2(gate, O_WRONLY);
+            f.write("go");
+        }
+        string line = early ?? readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+        assertGt(0, port, "the port is written: " + line);
+
+        # a client that connects then finds the program
+        Process proc = startAdapter(("-a", sprintf("ws://127.0.0.1:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
     }
 
     #! Attaches to the program of the debug server, and stops at a breakpoint in a thread that the program starts

@@ -265,3 +265,18 @@ invoker.call(owner, False);
 invoker.call(owner, True);
 invoker.call(new OtherOwner(), False);
 call_final(new FinalOwner());
+
+# an owning static method that reads its own implicit arguments (argv) when its caller has some of its own
+class A {
+    static int sa(list<auto> l, int i) { l = (); return i + argv.size(); }
+}
+
+sub argv_caller(int i) {
+    try {
+        printf("sa returned %d with %d caller arguments\n", A::sa((0, new T("sa")), i), argv.size());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("unexpected: %s\n", ex.err);
+    }
+}
+
+argv_caller(1, 2, 3);

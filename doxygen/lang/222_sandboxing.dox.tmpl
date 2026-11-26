@@ -117,6 +117,11 @@ Program p(opts);
     - <b>No resource limits</b>: Cannot limit the number of threads
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
+    - <b>Code as it was parsed</b>: parse options restrict code when it is parsed, and the code keeps the restrictions
+      that were in effect then.  Restricting code that is already parsed is not supported: a restricting option set
+      with @ref Qore::Program::setParseOptions() "Program::setParseOptions()" after code was parsed must not be relied
+      on to restrict that code, including calls that it makes at run time.  Code that must run restricted belongs in a
+      new @ref Qore::Program "Program" created (or given its restrictions) before the code is parsed
     - <b>The Program's own code</b>: parse options restrict the code parsed in the %Program.  They are not a run-time
       boundary for module code: a module that the host gave the %Program, or that another %Program loaded already and
       the %Program imports, is a capability, and its code runs in the module's %Program with the module's own options
@@ -339,10 +344,27 @@ authenticate();
     nor call their private methods (see @ref sandboxed_class_private_access).  It can still override and implement the
     private methods of the trusted class, and call the base class's version of a method that it overrides.
 
-    The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
-    sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager
-    was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
-    not trust.
+    The rule is decided for a class when it is committed: a class parsed in a Program whose sandbox manager does not
+    trust its code is a class that sandboxed code declared.  A sandbox manager trusts the code that it governs when it
+    allows uncontrolled APIs (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy(True)";
+    see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"): a host that gives its own trusted
+    Programs a manager to make their I/O interruptible and their threads terminable, and allows them uncontrolled
+    APIs, keeps the private access of their classes, while a tenant's Program with the default policy has none.  The
+    code that parses or loads the class counts too: a class that restricted code parses or loads in a Program whose
+    sandbox trusts its code, in a Program without a sandbox or in a Program that it creates is a class that sandboxed
+    code declared.  A class of a Program whose sandbox trusts its code is also a class that trusted code declared, so
+    a tenant's subclass of it has no private access to it.  Code that restricted code calls acts for it: a class that
+    such code parses or loads is a class that sandboxed code declared, also when the sandbox of the Program of the
+    code that parses it trusts its code (a host's function that parses the source that a tenant hands it, for
+    example).  A Program that is sandboxed without a manager (one that sandboxed code marked sandboxed, which no
+    manager governs) is restricted for this rule, as for
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; this includes a
+    Program without a manager of its own into which code that any sandbox governs parsed code that failed, as no
+    sandbox was attached for that code.  Code
+    that a sandbox restricts cannot relax the policy of the manager that governs it, and a class keeps the access that
+    it was committed with when the policy is changed later.  A class that a Program parsed before a sandbox manager
+    was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses
+    code that it does not trust.
 
     @subsection sandbox_program_capability Program Objects Are Capabilities
 

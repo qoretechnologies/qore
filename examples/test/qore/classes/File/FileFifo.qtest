@@ -280,6 +280,10 @@ class FileFifoTest inherits QUnit::Test {
         string sock_path = socket_dir.path + "/server.sock";
         Socket server();
         server.bindUNIX(sock_path);
+        # the close of the server removes its socket file, so it is closed before the socket directory is removed at
+        # the end of this scope: the server thread can hold the last reference of the server after it has pushed its
+        # result, and a close at the release of that reference would race with the removal of the directory
+        on_exit server.close();
         server.listen();
         Queue received();
         background sub () {
@@ -312,6 +316,8 @@ class FileFifoTest inherits QUnit::Test {
             throw rv.err, rv.desc, rv.arg;
         }
         assertEq(Data, rv, "the data, up to the end");
+        server.close();
+        assertFalse(is_socket(sock_path), "the socket file is removed before the socket directory");
     }
 
     testHighDescriptors() {
@@ -463,6 +469,10 @@ class FileFifoTest inherits QUnit::Test {
         string sock_path = socket_dir.path + "/server.sock";
         Socket server();
         server.bindUNIX(sock_path);
+        # the close of the server removes its socket file, so it is closed before the socket directory is removed at
+        # the end of this scope: the server thread can hold the last reference of the server after it has pushed its
+        # result, and a close at the release of that reference would race with the removal of the directory
+        on_exit server.close();
         server.listen();
         Queue received();
         background sub () {
@@ -484,6 +494,8 @@ class FileFifoTest inherits QUnit::Test {
             throw rv.err, rv.desc, rv.arg;
         }
         assertEq(binary(), rv, "nothing is sent after the end");
+        server.close();
+        assertFalse(is_socket(sock_path), "the socket file is removed before the socket directory");
     }
 
     #! reads a named pipe after its end with the reader, with the reader and the writer opened in the given order

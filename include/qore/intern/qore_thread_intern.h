@@ -2644,6 +2644,16 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
+//! Returns true if restricted code is on the calling thread's call stack (qore#7635)
+/** Code of a Program that qore_program_is_restricted() reports restricted (a sandbox that does not trust its code
+    governs it, or it is sandboxed without a manager): the Programs on the call stack are walked as in
+    qore_caller_is_sandboxed(), also past a Program whose sandbox trusts its code, and a sandboxed caller that a parse
+    or module load hid from the walk (see QoreCallerSandboxHelper) counts if it was restricted.  Code that restricted
+    code calls acts for it: a class that it parses or loads is a class of restricted code, also when the sandbox of
+    its own Program trusts its code
+*/
+DLLLOCAL bool qore_caller_has_restricted_code();
+
 //! Returns the Program of the calling code whose per-Program cache a library class uses (see
 //! SandboxManager::setProgramCacheValue())
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
@@ -2710,6 +2720,11 @@ public:
         return barrier_depth;
     }
 
+    //! Returns true if restricted code was on the caller's call stack (qore_caller_has_restricted_code()) (qore#7635)
+    DLLLOCAL bool isRestricted() const {
+        return restricted;
+    }
+
     //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
     DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
         return sandboxed_pgm_id;
@@ -2726,6 +2741,8 @@ private:
     //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
     qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
+    //! see isRestricted()
+    bool restricted = false;
 };
 
 //! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program

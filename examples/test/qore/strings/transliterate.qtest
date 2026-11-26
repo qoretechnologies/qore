@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+%modern
+%requires QUnit
+%exec-class TransliterateTest
+
+class TransliterateTest inherits QUnit::Test {
+    constructor() : Test("runtime transliteration", "1.0", \ARGV) {
+        addTestCase("runtime mappings", \mappings());
+        addTestCase("pattern errors", \patternErrors());
+        set_return_value(main());
+    }
+
+    mappings() {
+        string source = "a-cx";
+        string target = "A-C";
+        string original = "cab xyz";
+        string expected = original;
+        expected =~ tr/a-cx/A-C/;
+        assertEq(expected, transliterate(original, source, target));
+        assertEq("cab xyz", original);
+        assertEq("XYY!", transliterate("abc!", "abac", "XYZY"));
+        assertEq("xyz", transliterate("abc", "a-c", "x-z"));
+        assertEq("keep", transliterate("keep", "", ""));
+        assertEq("A", transliterate("a", "a", "ABC"));
+        assertEq("_/.", transliterate("-/\n", "\\-\\n", "_."));
+        assertEq("éA", transliterate("éa", "a", "A"));
+        string nul = chr(0);
+        assertEq("X" + nul, transliterate("a" + nul, "a", "X"));
+        assertEq("aX", transliterate("a" + nul, nul, "X"));
+    }
+
+    patternErrors() {
+        foreach string source in (("-a", "a-", "z-a", "a\\")) {
+            assertThrows("TRANSLITERATION-ERROR", \transliterate(), ("abc", source, "X"));
+        }
+        assertThrows("TRANSLITERATION-ERROR", \transliterate(), ("abc", "a", "Z-A"));
+        assertThrows("TRANSLITERATION-ERROR", \transliterate(), ("abc", "a", ""));
+    }
+}

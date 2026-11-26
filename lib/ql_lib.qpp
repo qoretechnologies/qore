@@ -436,7 +436,23 @@ hashdecl ScanStatsInfo {
     int exclusive_restarts;
 
     //! graph nodes (objects, closure-bound variables, lists, hashes, closures and references) the scans entered
+    /** A scan does not enter the part of the graph that an earlier scan recorded as a closed region (a part that
+        cannot reach the scan's root) while nothing in it has changed, and the passes that a scan abandons or
+        restarts are counted as well, so this depends on what other threads did before and during the scans; see
+        \c unsealed_nodes
+    */
     int nodes;
+
+    //! nodes of the graphs walked by the scans that completed that are outside the closed regions they recorded
+    /** The nodes in a cycle with each scan's root, and every node that cannot be part of a closed region (for
+        example, an object whose data can change without a scan, or anything that leads to one), counted once per
+        scan that completed: the part of the graph that every scan started at the root walks, whichever closed
+        regions are current.  Unlike \c nodes, it does not depend on the order of the scans made by other threads,
+        so it measures how the scans' work grows with the graph they walk.
+
+        @since %Qore 3.0
+    */
+    int unsealed_nodes;
 
     //! the total time spent in the scans, in milliseconds
     float total_ms;
@@ -1999,6 +2015,7 @@ list<hash<ScanStatsInfo>> get_scan_stats() [flags=RET_VALUE_ONLY;dom=EXTERNAL_IN
         hh->setKeyValueIntern("total_ms", r.total_ns / 1e6);
         hh->setKeyValueIntern("wait_ms", r.wait_ns / 1e6);
         hh->setKeyValueIntern("max_ms", r.max_ns / 1e6);
+        hh->setKeyValueIntern("unsealed_nodes", static_cast<int64>(r.unsealed));
         rv->push(h.release(), xsink);
     }
     return rv.release();

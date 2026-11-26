@@ -388,6 +388,7 @@ public class SmtpClientSendTest inherits QUnit::Test {
     }
 
     constructor() : Test("SmtpClientSendTest", "1.0", \ARGV) {
+        addTestCase("send-email plain and HTML alternatives", \testAlternatives());
         addTestCase("basic send with auth", \testBasicSendWithAuth());
         addTestCase("blocking sendMessage with auth", \testBlockingSendMessageWithAuth());
         addTestCase("blocking connect then sendMessage", \testBlockingConnectThenSendMessage());
@@ -772,6 +773,45 @@ public class SmtpClientSendTest inherits QUnit::Test {
     }
 
     #! Test basic SMTP send with a single recipient via SmtpSendPollOperation
+    testAlternatives() {
+        MockSmtpServer server(False);
+        server.start();
+        on_exit server.wait();
+        SmtpClient smtp(sprintf("smtp://localhost:%d", server.getPort()));
+        SmtpClientSendEmailDataProvider provider(smtp);
+        ProviderIndexUtil::addAppToCache(DataProviderActionCatalog::getAppEx("SMTP"));
+        ProviderIndexUtil::addActionToCache(DataProviderActionCatalog::getAppActionEx("SMTP", "send-email"));
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("SMTP", "send-email");
+        hash<auto> form = DataProviderMessageFormat::selectForm(action, "default", "html");
+        assertTrue(form.form.plain_alternative);
+        hash<auto> options = DataProviderMessageFormat::bindForm(action, "default", form,
+            {"to": "reader@example.org", "bcc": "blind@example.org", "sender": "me@example.org",
+                "body-encoding": "base64"},
+            {"subject": "Delivery", "content": "<p>Růžová</p>", "fallback": "Plain café"});
+        assertThrows("BODY-ERROR", \provider.doRequest(), options + {"body-mime-type": "text/plain"});
+        assertEq((), server.getReceivedCommands());
+        int submissions = 0;
+        string parser = get_script_dir() + "/../MailMessage/check-alternatives.py";
+        foreach string layout in ("alternative", "mixed") {
+            if (layout == "mixed") {
+                options.attachments = ({"data": parse_base64_string("AP8="), "name": "sample.bin",
+                    "mime-type": "application/octet-stream"},);
+            }
+            provider.doRequest(options);
+            ++submissions;
+            assertEq(submissions, (select server.getReceivedCommands(), $1 == "DATA").size());
+            assertEq(submissions, (select server.getReceivedCommands(), $1 == "RCPT TO: <blind@example.org>").size());
+            string raw = server.getReceivedBody();
+            assertFalse(raw.contains("blind@example.org"));
+            assertEq(0, system(sprintf("python3 -I '%s' %s %s", replace(parser, "'", "'\\''"),
+                make_base64_url_string(raw), layout)));
+        }
+        provider.doRequest(options - ("plain-body", "attachments"));
+        assertEq(3, (select server.getReceivedCommands(), $1 == "DATA").size());
+        assertRegex("(?im)^Content-Type: text/html", server.getReceivedBody());
+        assertNothing(server.getServerError());
+    }
+
     testBasicSendWithAuth() {
         MockSmtpServer server(True);
         server.start();
@@ -993,9 +1033,8 @@ public class SmtpClientSendTest inherits QUnit::Test {
         assertEq(("MAIL FROM: <J.O'B@test.com>",), (select cmds, $1 =~ /^MAIL FROM:/i));
         assertEq(("RCPT TO: <a+tag@test.com>", "RCPT TO: <\"x.y\"@test.com>", "RCPT TO: <j{x}|y~@test.com>"),
             (select cmds, $1 =~ /^RCPT TO:/i));
-        # only the display name is encoded in the BCC header
-        assertRegex("\r\nBCC: =\\?UTF-8\\?B\\?[^?]+\\?= <j\\{x\\}\\|y~@test\\.com>\r\n",
-            server.getReceivedBody() ?? "");
+        assertFalse((server.getReceivedBody() ?? "").contains("j{x}|y~@test.com"));
+        assertTrue(msg.serializeRaw().contains("BCC: "), "stored copy keeps the blind-copy header");
         assertNothing(server.getServerError(), "no server errors");
 
         # a quoted local part with a "<", a ">" or white space is not sent in an SMTP command

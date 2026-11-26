@@ -2264,8 +2264,9 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            sandboxed.store(true, std::memory_order_release);
+            // the manager flag first: a reader that sees the Program sandboxed also sees that it has a manager
             any_sandbox_manager.store(true, std::memory_order_release);
+            sandboxed.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -2303,14 +2304,18 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
+    return qore_program_is_restricted(obj->getProgram());
+}
+
+bool qore_program_is_restricted(const QoreProgram* pgm) {
     if (!pgm) {
         return false;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
         // its code only if every member does
-        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
@@ -2434,6 +2439,8 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     if (!qore_caller_is_sandboxed()) {
         return 0;
     }
+    pcs.sandboxed = true;
+    pcs.restricted = qore_caller_has_restricted_code();
     sandboxed.store(true, std::memory_order_release);
     try {
         qore_caller_sandbox_refs(pcs.sm, pcs.policy);
@@ -2480,6 +2487,11 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
         }
         pending_creator_policy = policy.release();
     }
+    // code that restricted code calls is restricted for the classes that it declares, also when a manager of a Program
+    // that trusts its code governs it: such code acts for the restricted code (qore#7635)
+    if (pcs.sandboxed && pcs.restricted) {
+        pending_restricted_caller = true;
+    }
     return 0;
 }
 
@@ -2503,7 +2515,14 @@ void qore_program_private::releaseSandboxManagers(ExceptionSink* xsink) {
     dropPendingCreatorSandbox();
 }
 
+bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
+    assert(parsingLocked());
+    return pending_restricted_caller || commit_restricted_caller
+        || (pending_creator_sandbox && !pending_creator_sandbox->trustsUncontrolledApis());
+}
+
 void qore_program_private::dropPendingCreatorSandbox() {
+    pending_restricted_caller = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2515,16 +2534,19 @@ void qore_program_private::dropPendingCreatorSandbox() {
 }
 
 int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
-    if (!pending_creator_sandbox && !pending_creator_policy) {
-        return 0;
-    }
-    try {
-        addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
-    } catch (std::bad_alloc&) {
-        xsink->outOfMemory();
-        return -1;
+    // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
+    // goes ahead, cleared when it ends
+    const bool restricted = pending_restricted_caller;
+    if (pending_creator_sandbox || pending_creator_policy) {
+        try {
+            addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
     }
     dropPendingCreatorSandbox();
+    commit_restricted_caller = restricted;
     return 0;
 }
 

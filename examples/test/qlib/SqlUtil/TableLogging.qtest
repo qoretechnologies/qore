@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SQLite driver loading and in-memory database initialization for unsupported table logging
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+%try-module oracle
+%define NoOracle
+%endtry
+%try-module sqlite3
+%define NoSqlite
+%endtry
+
+%exec-class TableLoggingTest
+
+class TableLoggingTest inherits QUnit::Test {
+    constructor() : Test("TableLogging", "1.0", \ARGV) {
+        addTestCase("PostgreSQL table persistence", \pgsql());
+        addTestCase("Oracle table logging", \oracle());
+        addTestCase("unsupported table logging", \sqlite());
+        set_return_value(main());
+    }
+
+    pgsql() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "TableLogging");
+        on_exit PgsqlRunSchema::teardown();
+        runChecks(new Datasource(ENV.QORE_DB_CONNSTR_PGSQL), True);
+    }
+
+    oracle() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            testSkip("QORE_DB_CONNSTR_ORACLE is not set");
+        }
+        string conn = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "TableLogging");
+        on_exit OracleRunSchema::teardown();
+        runChecks(new Datasource(conn), False);
+    }
+
+    sqlite() {
+%ifdef NoSqlite
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        AbstractTable t = AbstractTable::getTable(ds, "logs");
+        assertFalse(t.supportsTableLogging());
+        assertThrows("TABLE-LOGGING-NOT-SUPPORTED", \t.getSetLoggingSql(), False);
+        assertThrows("TABLE-LOGGING-NOT-SUPPORTED", \t.setLogging(), False);
+    }
+
+    private runChecks(Datasource ds, bool pg) {
+        on_exit ds.rollback();
+        string name = "log_" + get_random_string(8).lwr();
+        ds.execRaw("create table " + name + " (id integer)");
+        ds.commit();
+        on_exit {
+            ds.execRaw("drop table " + name);
+            ds.commit();
+        }
+        AbstractTable t = AbstractTable::getTable(ds, name);
+        assertTrue(t.supportsTableLogging());
+        list<string> captured;
+        string sql = t.getSetLoggingSql(False, {"sql_callback": sub (string stmt) { captured += stmt; }});
+        assertEq("alter table " + t.getSqlName() + (pg ? " set unlogged" : " nologging"), sql);
+        assertEq((sql,), captured);
+        assertThrows("OPTION-ERROR", \t.getSetLoggingSql(), (True, {"unknown_option": True}));
+        string query = pg ? "select relpersistence::text as logging_mode from pg_catalog.pg_class where oid = %v::regclass"
+            : "select logging as logging_mode from user_tables where table_name = upper(%v)";
+        t.setLoggingCommit(True);
+        assertEq(pg ? "p" : "YES", ds.selectRow(query, name).logging_mode);
+        t.setLogging(False);
+        assertEq(pg ? "u" : "NO", ds.selectRow(query, name).logging_mode);
+        ds.rollback();
+        assertEq(pg ? "p" : "NO", ds.selectRow(query, name).logging_mode, "Oracle DDL commits implicitly");
+        t.setLoggingCommit(False);
+        assertEq(pg ? "u" : "NO", ds.selectRow(query, name).logging_mode);
+        t.setLoggingCommit(True);
+        assertEq(pg ? "p" : "YES", ds.selectRow(query, name).logging_mode);
+    }
+}
