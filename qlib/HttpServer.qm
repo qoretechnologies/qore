@@ -7279,6 +7279,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 if (!server_header) {
                     async_response_out.code = rv."code";
                     async_response_out.hdr = rv.hdr;
+                } else {
+                    # the server sent the header itself: the response that doResponse() recorded for the controller
+                    # would send it again before the first event (qore#7551)
+                    remove async_response_out.code;
+                    remove async_response_out.hdr;
+                    remove async_response_out.body;
+                    remove async_response_out.input_stream;
+                    remove async_response_out.chunked;
+                    remove async_response_out.send_callback;
+                    remove async_response_out.send_timeout;
                 }
                 async_response_out.streaming = True;
                 async_response_out.stream_type =
