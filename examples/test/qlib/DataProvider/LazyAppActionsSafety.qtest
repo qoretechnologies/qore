@@ -757,8 +757,9 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         background LazyAppActionsSafetyTest::getValue(Values::cycle_a, done, results);
         background LazyAppActionsSafetyTest::getValue(Values::cycle_b, done, results);
         assertEq(0, done.waitForZero(Deadline), "neither thread waits for ever");
-        # a builder that needs its own value, through the other one, raises (qore#7712)
-        assertEq(("SHARED-INIT-ERROR", "SHARED-INIT-ERROR"), (results.get(), results.get()));
+        # the thread that closes the cycle of waits gets SHARED-INIT-CYCLE; the other one then builds both values,
+        # and the builder that needs its own value, through the other one, raises SHARED-INIT-ERROR (qore#7712)
+        assertEq(("SHARED-INIT-CYCLE", "SHARED-INIT-ERROR"), sort((results.get(), results.get())));
     }
 
     sandboxedValueLoadTest() {
