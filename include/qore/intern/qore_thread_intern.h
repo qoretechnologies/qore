@@ -2487,6 +2487,9 @@ DLLLOCAL int qore_caller_sandbox_state();
 //! sandbox cannot be resolved for lack of memory (qore#7737)
 /** As qore_caller_sandbox_state(), for the rules that restrict what code may do; for callers that must fail closed in
     the other direction than qore_caller_is_restricted() (see qore_caller_creates_shared_objects())
+
+    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if none is found or it is not
+    known
 */
 DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
 
@@ -2501,7 +2504,12 @@ DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
 
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 
-    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if it is not known
+    A policy barrier (SandboxManager::callWithSystemPolicy(), SandboxManager::createSystemPolicyCall()) does not hide
+    a restricted caller; a trusted build (SandboxManager::createTrustedBuildCall()) and the initialization of library
+    code that trusted code loads do.
+
+    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if none is found or it is not
+    known
 */
 DLLLOCAL bool qore_caller_is_restricted(qore_program_id_t* pgm_id = nullptr);
 

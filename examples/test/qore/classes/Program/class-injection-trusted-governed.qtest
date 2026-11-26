@@ -8,6 +8,7 @@
 # that a sandbox that refuses uncontrolled APIs governs, also further up the call stack, or code whose parse options
 # restrict a functional domain.  Code that a sandbox that allows uncontrolled APIs governs (one that a host attaches to
 # its trusted code only to interrupt or limit it) relates classes by injection and re-exports as trusted code does.
+# A policy barrier does not hide a restricted caller from the rule; a trusted build does.
 
 %modern
 %allow-injection
@@ -68,6 +69,19 @@ string sub reexport_hashdecl() {
     }
 }
 
+#! host code: runs the code given in a thread that it starts and waits for; returns its result or the error
+auto sub in_thread(code c) {
+    Queue q();
+    background sub () {
+        try {
+            q.push(c());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+    return q.get();
+}
+
 class ClassInjectionTrustedGovernedTest inherits QUnit::Test {
     public {
         #! the code of the tenant Programs
@@ -85,6 +99,13 @@ string sub inject(Program dst) {
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
+}
+string sub parse_into(Program p, string src) {
+    p.parse(src, \"parsed\");
+    return \"parsed\";
+}
+Program sub mk() {
+    return new Program(PO_NEW_STYLE);
 }
 string sub reexport(Program dst) {
     try {
@@ -107,7 +128,8 @@ module InjectProbe {
     author = \"Qore Technologies, s.r.o.\";
     license = \"MIT\";
     init = sub () {
-        InjectProbe::Probe::result = InjectProbe::Probe::build();
+        InjectProbe::Probe::result = InjectProbe::Probe::build() + \" \" + InjectProbe::Probe::reexportClass() + \" \"
+            + InjectProbe::Probe::reexportHashDecl();
     };
 }
 
@@ -115,9 +137,33 @@ public namespace InjectProbe {
 class QdspClient inherits Qore::SQL::AbstractDatasource {
 }
 
+hashdecl ProbeInfo {
+    string name;
+}
+
 public class Probe {
     public {
         static string result;
+    }
+
+    static string reexportClass() {
+        try {
+            Program p(PO_NEW_STYLE);
+            p.importClass(\"InjectProbe::QdspClient\", \"QdspClient\", NOTHING, CSP_UNCHANGED, True);
+            return \"imported\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static string reexportHashDecl() {
+        try {
+            Program p(PO_NEW_STYLE);
+            p.importHashDecl(\"InjectProbe::ProbeInfo\", \"ProbeInfo\", True);
+            return \"imported\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
     }
 
     static string build() {
@@ -136,22 +182,41 @@ public class Probe {
         #! the child: a tenant with the sandbox given loads the module first
         const ChildSource = "%modern
 %no-child-restrictions
-*SandboxManager sm;
-if (ARGV[0] != \"none\") {
-    sm = new SandboxManager();
-    if (ARGV[0] == \"trusted\") {
+SandboxManager sub manager(bool trusting) {
+    SandboxManager sm();
+    if (trusting) {
         sm.setUncontrolledApiPolicy(True);
         sm.setMaxThreads(16);
     } else {
         sm.setNetworkDefaultPolicy(True);
     }
+    return sm;
 }
-Program p(PO_NEW_STYLE);
-if (sm) {
-    p.setSandboxManager(sm);
+Program sub tenant(*SandboxManager sm, string pre = \"\") {
+    Program p(PO_NEW_STYLE);
+    if (sm) {
+        p.setSandboxManager(sm);
+    }
+    p.parse(pre + \"auto sub call(code c) { return c(); }\", \"tenant\");
+    return p;
 }
-p.parse(\"%requires InjectProbe\\nstring sub get() { return InjectProbe::Probe::result; }\\n\", \"tenant\");
-printf(\"result: %s\\n\", p.callFunction(\"get\"));
+switch (ARGV[0]) {
+    # a tenant loads the module itself
+    case \"none\": tenant(NOTHING, \"%requires InjectProbe\\n\"); break;
+    case \"trusted\": tenant(manager(True), \"%requires InjectProbe\\n\"); break;
+    case \"restricting\": tenant(manager(False), \"%requires InjectProbe\\n\"); break;
+    # the host loads it into a trusted governed Program
+    case \"host-trusted\": tenant(manager(True)).loadModule(\"InjectProbe\"); break;
+    # the host loads it into a trusted governed Program for restricted code
+    case \"restricted-host-trusted\": {
+        Program g = tenant(manager(True));
+        tenant(manager(False)).callFunction(\"call\", sub () { g.loadModule(\"InjectProbe\"); });
+        break;
+    }
+}
+Program reader(PO_NEW_STYLE);
+reader.parse(\"%requires InjectProbe\\nstring sub get() { return InjectProbe::Probe::result; }\\n\", \"reader\");
+printf(\"result: %s\\n\", reader.callFunction(\"get\"));
 ";
     }
 
@@ -169,6 +234,11 @@ printf(\"result: %s\\n\", p.callFunction(\"get\"));
         addTestCase("trusted governed code called by restricted code", \nestedTest());
         addTestCase("re-export", \reexportTest());
         addTestCase("the initialization of a module that a tenant loads", \moduleTest());
+        addTestCase("a policy barrier does not hide a restricted caller", \policyBarrierTest());
+        addTestCase("a thread started for restricted code", \threadTest());
+        addTestCase("code parsed by restricted code into a trusted governed Program", \parsedTest());
+        addTestCase("a sandbox changed while its code runs", \changedTest());
+        addTestCase("a composition of a trusting and a restricting sandbox", \compositeTest());
         set_return_value(main());
     }
 
@@ -181,6 +251,14 @@ printf(\"result: %s\\n\", p.callFunction(\"get\"));
             p.setSandboxManager(sm);
         }
         p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! a tenant Program with the given sandbox and no code yet
+    private static Program bare(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.importClass("QdspClient");
+        p.setSandboxManager(sm);
         return p;
     }
 
@@ -291,9 +369,99 @@ printf(\"result: %s\\n\", p.callFunction(\"get\"));
         string child = tmp.path + DirSep + "child.q";
         writeFile(child, ChildSource);
         # trusted code, governed or not, relates the module's classes; restricted code that loads the module does not
-        assertEq("result: built", runChild(qore_bin, libqore_dir, module_dir, child, "none"));
-        assertEq("result: built", runChild(qore_bin, libqore_dir, module_dir, child, "trusted"));
-        assertEq("result: CLASS-IMPORT-ERROR", runChild(qore_bin, libqore_dir, module_dir, child, "restricting"));
+        # (and re-exports classes and hashdecls in its initialization)
+        string built = "result: built imported imported";
+        string refused = "result: CLASS-IMPORT-ERROR CLASS-IMPORT-ERROR HASHDECL-IMPORT-ERROR";
+        assertEq(built, runChild(qore_bin, libqore_dir, module_dir, child, "none"));
+        assertEq(built, runChild(qore_bin, libqore_dir, module_dir, child, "trusted"));
+        assertEq(refused, runChild(qore_bin, libqore_dir, module_dir, child, "restricting"));
+        # the host loads it into a trusted governed Program: for itself, and for restricted code that called it
+        assertEq(built, runChild(qore_bin, libqore_dir, module_dir, child, "host-trusted"));
+        assertEq(refused, runChild(qore_bin, libqore_dir, module_dir, child, "restricted-host-trusted"));
+    }
+
+    policyBarrierTest() {
+        Program restricted = tenant(restrictingManager());
+        # a policy capability called by restricted code
+        code policy = SandboxManager::createSystemPolicyCall(\build_host_program());
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", policy));
+        # a policy barrier that the host establishes for restricted code
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call",
+            auto sub () { return SandboxManager::callWithSystemPolicy(\build_host_program()); }));
+        # a trusted build called by restricted code
+        code build = SandboxManager::createTrustedBuildCall(\build_host_program());
+        assertEq("built", restricted.callFunction("call", build));
+        # the host's own code
+        assertEq("built", policy());
+        assertEq("built", SandboxManager::callWithSystemPolicy(\build_host_program()));
+    }
+
+    threadTest() {
+        Program trusted = tenant(trustedManager());
+        Program restricted = tenant(restrictingManager());
+        code inject = auto sub () { return trusted.callFunction("inject", target()); };
+        # a thread that the host starts for itself and for trusted governed code
+        assertEq("injected", in_thread(inject));
+        assertEq("injected", trusted.callFunction("call", auto sub () { return in_thread(inject); }));
+        # a thread that the host starts for restricted code
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", auto sub () { return in_thread(inject); }));
+    }
+
+    parsedTest() {
+        Program restricted = tenant(restrictingManager());
+        string src = "string sub parsed_inject(Program dst) {
+    try {
+        dst.importClass(\"QdspClient\", \"Qore::SQL::DatasourcePool\", True);
+        return \"injected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}";
+        # parsed by the host
+        Program by_host = bare(trustedManager());
+        by_host.parse(src, "host");
+        assertEq("injected", by_host.callFunction("parsed_inject", target()));
+        # parsed by restricted code, run later by the host
+        Program by_restricted = bare(trustedManager());
+        assertEq("parsed", restricted.callFunction("parse_into", by_restricted, src));
+        assertEq("CLASS-IMPORT-ERROR", by_restricted.callFunction("parsed_inject", target()));
+    }
+
+    changedTest() {
+        # a trusting sandbox tightened: refused at the next call
+        SandboxManager sm = trustedManager();
+        Program p = tenant(sm);
+        assertEq("injected", p.callFunction("inject", target()));
+        sm.setUncontrolledApiPolicy(False);
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
+        # a restricting sandbox relaxed by the host: allowed at the next call
+        sm = restrictingManager();
+        p = tenant(sm);
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
+        sm.setUncontrolledApiPolicy(True);
+        assertEq("injected", p.callFunction("inject", target()));
+    }
+
+    #! prepares a Program that tenant code created as a tenant with the sandbox given
+    private static Program prepare(Program p, SandboxManager sm) {
+        p.importClass("QdspClient");
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    compositeTest() {
+        # created by trusted governed code, governed by a trusting sandbox of its own: both trust
+        Program trusted = tenant(trustedManager());
+        Program p = prepare(trusted.callFunction("mk"), trustedManager());
+        assertEq("injected", p.callFunction("inject", target()));
+        # created by trusted governed code, governed by a restricting sandbox of its own
+        p = prepare(trusted.callFunction("mk"), restrictingManager());
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
+        # created by restricted code, governed by a trusting sandbox of its own
+        Program restricted = tenant(restrictingManager());
+        p = prepare(restricted.callFunction("mk"), trustedManager());
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
     }
 
     #! writes a file

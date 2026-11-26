@@ -8070,11 +8070,13 @@ bool qore_caller_is_restricted_or_untrusted() {
         return true;
     }
     // library code that restricted code loaded, while it is initialized; library code that code that a trusted
-    // (governed) sandbox governs loaded is governed by that sandbox, but not restricted (qore#7737)
+    // (governed) sandbox governs loaded is governed by that sandbox, but not restricted (qore#7737): its
+    // initialization is judged by the checks below, which see the code entered under the barrier (a restricted
+    // Program, or a callback that restricted code created), but not the stack of the loader (qore#7730)
     if (!td->module_init_barriers.empty()) {
         const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
-        if (!mib.lift && mib.loader_untrusted) {
-            return mib.loader_restricted;
+        if (!mib.lift && mib.loader_untrusted && mib.loader_restricted) {
+            return true;
         }
     }
     // the code that qore_caller_is_untrusted() looks at, where only a restricting sandbox counts (fails closed), and
@@ -8274,10 +8276,18 @@ int qore_caller_sandbox_state() {
 }
 
 int qore_caller_restricted_state(qore_program_id_t* pgm_id) {
+    // the ID is 0 unless a restricted Program is found (qore#7730)
+    if (pgm_id) {
+        *pgm_id = 0;
+    }
     return qore_caller_sandbox_state_intern(pgm_id, true);
 }
 
 bool qore_caller_is_restricted(qore_program_id_t* pgm_id) {
+    // the ID is 0 unless a restricted Program is found (qore#7730)
+    if (pgm_id) {
+        *pgm_id = 0;
+    }
     // fails closed: code whose governing sandbox cannot be resolved is restricted
     return qore_caller_sandbox_state_intern(pgm_id, true) != 0;
 }
