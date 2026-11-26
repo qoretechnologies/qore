@@ -409,6 +409,16 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
 
+    //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
+    //! (qore#7673)
+    /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
+
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
+
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
     */
