@@ -128,6 +128,12 @@ class WebSocketClientConnectTimeoutTest inherits QUnit::Test {
             # the acquisition of the connection, whose protocol is negotiated
             assertRegex(sprintf("^no connection to 127\\.0\\.0\\.1:%d was acquired within the request's time", port),
                 err.desc, label + ": " + got);
+            # the timings of the waits of the race are in the argument (qore#7694)
+            assertEq(Type::List, err.arg.stages.type(), label + ": the timings of the race's waits");
+            assertTrue(err.arg.stages.size() > 0, label + ": at least one wait is timed");
+            assertEq(("stage", "start_ms", "asked_ms", "took_ms", "signaled"), err.arg.stages[0].keys(),
+                label + ": the timing of a wait");
+            assertTrue(exists err.arg.total_ms, label + ": the race's total time");
         }
         return err;
     }
@@ -155,7 +161,8 @@ class WebSocketClientConnectTimeoutTest inherits QUnit::Test {
             # the timeout, not the connect timeout of 30 s, ended it
             date elapsed = now_us() - start;
             assertGe(900ms, elapsed, scheme + ": the connect waited for its timeout");
-            assertLt(20s, elapsed, scheme + ": the connect ended at its timeout");
+            assertLt(20s, elapsed, sprintf("%s: the connect ended at its timeout: %y: %y %y", scheme, elapsed, err.desc,
+                err.arg));
             assertFalse(ws.isOpen(), scheme + ": the client is not connected");
         }
     }
