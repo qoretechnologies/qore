@@ -74,4 +74,7 @@ DLLLOCAL QoreValue qore_string_call_search(QoreValue str, QoreValue pattern, Qor
 DLLLOCAL QoreValue qore_string_call_index(QoreValue str, QoreValue pattern, bool reverse, int64 offset,
         ExceptionSink* xsink);
 
+//! makes the ordinary call of <list>::join() (\a function false) or of join() with a list
+DLLLOCAL QoreValue qore_string_call_join(QoreValue list, QoreValue separator, bool function, ExceptionSink* xsink);
+
 #endif

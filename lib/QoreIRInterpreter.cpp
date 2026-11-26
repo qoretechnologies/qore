@@ -8454,6 +8454,20 @@ static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
     return QoreValue();
 }
 
+//! list.string.join or list.string.join.identity-map: the join of <list>::join() or, if the instruction is a call of
+//! join(), of join(), so that an exception has the frame of the builtin that the code calls (qore#7731)
+static QoreValue qore_ir_eval_list_join(const QoreIRInstruction* inst, QoreIROpcode op, QoreValue separator,
+        QoreValue list, ExceptionSink* xsink) {
+    const bool function = qore_ir_is_list_join_function_form(inst);
+    if (op == QoreIROpcode::ListStringJoin) {
+        return fromBits(function ? qore_fast_join_list(toBits(separator), toBits(list), xsink)
+            : qore_rt_list_string_join_checked(toBits(separator), toBits(list), xsink));
+    }
+    assert(op == QoreIROpcode::ListStringJoinIdentityMap);
+    return fromBits(function ? qore_fast_join_list_identity_map(toBits(separator), toBits(list), xsink)
+        : qore_rt_list_string_join_identity_map_checked(toBits(separator), toBits(list), xsink));
+}
+
 // Evaluate an invoke instruction by dispatching to the appropriate eval method.
 // Unary/binary computation opcodes use evalUnary/evalBinary with the IR operand
 // values.  Expression opcodes (Call, DotEval, LoadLValue, etc.) use evalExpr
@@ -8686,8 +8700,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
         case QoreIROpcode::FoldlStringJoin:
         case QoreIROpcode::FoldrStringJoin:
-        case QoreIROpcode::ListStringJoin:
-        case QoreIROpcode::ListStringJoinIdentityMap:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -8698,6 +8710,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 return fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink));
             }
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
+        }
+        case QoreIROpcode::ListStringJoin:
+        case QoreIROpcode::ListStringJoinIdentityMap: {
+            QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
+            QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            return qore_ir_eval_list_join(inv, op, left, right, xsink);
         }
         // Ternary computation opcodes.  These can be emitted as Invoke
         // instructions inside try/on_error regions so exceptions branch to the
@@ -20478,8 +20496,6 @@ load_local_done:
             case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
             case QoreIROpcode::FoldlStringJoin:
             case QoreIROpcode::FoldrStringJoin:
-            case QoreIROpcode::ListStringJoin:
-            case QoreIROpcode::ListStringJoinIdentityMap:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -20552,6 +20568,34 @@ load_local_done:
                         releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
                             weak_load_temp_slots, borrowed_temp_remaining, xsink);
                     }
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListStringJoin:
+            case QoreIROpcode::ListStringJoinIdentityMap: {
+                if (inst->operands.size() < 2) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
+                QoreValue res = qore_ir_eval_list_join(inst, inst->opcode, getIRValue(values, inst->operands[0]),
+                    getIRValue(values, inst->operands[1]), xsink);
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {

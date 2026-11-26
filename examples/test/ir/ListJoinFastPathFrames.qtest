@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - JIT code generation and AOT code generation and linking of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%exec-class ListJoinFastPathFramesTest
+
+#! The exceptions of the list join fast paths have the builtin's frame, after the map that they join (qore#7731)
+/** The IR interpreter and JIT and AOT code call <list>::join() and join() of a list through fast paths without the call,
+    and fuse <list>::join() of a map with the map; an exception that the join raises has the builtin's frame at the top
+    of its call stack, as in the AST interpreter, and the map of a fused join gives all its values before the join
+    raises, so each exception and its whole call stack, and the output of the map, are the same in every execution
+    mode and in AOT executables, also without prelinked calls.
+*/
+class ListJoinFastPathFramesTest inherits QUnit::Test {
+    private {
+        string qore = realpath(TestInterpreter::qore_interpreter());
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/ListJoinFastPathFrames.qr";
+        *string expected;
+        # every child process is ended after this time, so a hang fails the test instead of outliving it
+        string timeout_prefix;
+    }
+
+    constructor() : Test("List join fast path exception frames", "1.0", \ARGV) {
+        string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        timeout_prefix = timeout_cmd.val() ? quote(timeout_cmd) + " -k 10s 240s " : "";
+        addTestCase("interpreter results", \interpreter());
+        addTestCase("execution modes match the interpreter", \modes());
+        addTestCase("AOT executables match the interpreter", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir) + " " + timeout_prefix
+            + (map ListJoinFastPathFramesTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+    }
+
+    interpreter() {
+        string out = getExpected();
+        # checked by hand: the builtin's frame is at the top of the call stack, at the line of the call
+        assertFrame(out, "mjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 21);
+        assertFrame(out, "fjoin", "ENCODING-CONVERSION-ERROR", "join", 22);
+        assertFrame(out, "idjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 23);
+        assertFrame(out, "fidjoin", "ENCODING-CONVERSION-ERROR", "join", 24);
+        # the map gives all its values, and then the join raises for the value that it cannot convert
+        assertRegex("(?m)^tr \"UTF-8\"\ntr \"Shift_JIS\"\ntr \"UTF-8\"\nmapjoin: ", out);
+        assertFrame(out, "mapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 27);
+        assertRegex("(?m)^tr \"Shift_JIS\"\ntr \"UTF-8\"\ntr \"UTF-8\"\nmapjoin-first: ", out);
+        assertFrame(out, "mapjoin-first", "ENCODING-CONVERSION-ERROR", "<list>::join", 27);
+        assertFrame(out, "selmapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 28);
+        assertFrame(out, "mapselmapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 29);
+        # an exception of the map after a value that the join cannot convert is the exception, as the join never runs; the
+        # frame of the function has the line of its call
+        assertRegex("(?m)^trt \"UTF-8\"\ntrt \"Shift_JIS\"\ntrt \"UTF-8\"\nmapjoin-throw: ", out);
+        assertFrame(out, "mapjoin-throw", "MAP-ERR", "tr_throw", 30, "user");
+        # the joins that raise nothing: "a,日,ö", "a" and an empty string, printed as their bytes
+        assertRegex("(?m)^mapjoin-ok: !!binary " + make_base64_string("a,日,ö") + "$", out);
+        assertRegex("(?m)^mapjoin-one: !!binary " + make_base64_string("a") + "$", out);
+        assertRegex("(?m)^mapjoin-empty: !!binary $", out);
+        # negative: the concatenation of a fold is an operator, whose exception has no frame of its own: the top frame
+        # is the function's, with the line of its call
+        assertFrame(out, "foldmap", "ENCODING-CONVERSION-ERROR", "f_foldmap", 104, "user");
+        assertFrame(out, "fold", "ENCODING-CONVERSION-ERROR", "f_fold", 105, "user");
+        # in try blocks, printed as their bytes
+        assertRegex("(?m)^mjoin-try: !!binary " + make_base64_string("ENCODING-CONVERSION-ERROR <list>::join 37")
+            + "$", out);
+        assertRegex("(?m)^fjoin-try: !!binary " + make_base64_string("ENCODING-CONVERSION-ERROR join 44") + "$", out);
+        assertRegex("(?m)^mapjoin-try: !!binary " + make_base64_string("ENCODING-CONVERSION-ERROR <list>::join 51")
+            + "$", out);
+        # closures and a nested closure
+        assertFrame(out, "cl-mjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 57);
+        assertFrame(out, "cl-fjoin", "ENCODING-CONVERSION-ERROR", "join", 58);
+        assertFrame(out, "cl-mapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 59);
+        assertFrame(out, "cl-nested-mapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 61);
+    }
+
+    #! checks the exception of a case and the top frame of its call stack
+    private assertFrame(string out, string name, string err, string function, int line, string type = "builtin") {
+        assertRegex("(?m)^" + name + ": \\{.*err: \"" + err + "\".*\n  0: \\{function: \"" + function + "\", line: "
+            + line + ",.*type: \"" + type + "\"", out, name);
+    }
+
+    modes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        # tiered execution on the IR tier: the IR interpreter's fast paths
+        assertEq(ast, run((qore, "--exec-mode=tiered", fixture),
+            "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1000000000 "), "tiered-ir");
+    }
+
+    aot() {
+        string ast = getExpected();
+        TmpDir dir("qore-list-join-fast-path-frames-");
+        string executable = dir.path + "/fixture";
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string out = run((qcc, level, "-o", executable, fixture), prefix);
+                # negative: the compile does not refuse any function
+                assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
+                assertEq(ast, run((executable,), prefix), label);
+                assertEq(ast, run((executable,), prefix + "QORE_AOT_DISABLE_PRELINKED_CALLS=1 "),
+                    label + " without prelinked calls");
+            }
+        }
+    }
+}

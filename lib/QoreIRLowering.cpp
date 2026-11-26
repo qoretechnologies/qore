@@ -25957,8 +25957,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue fold_result;
         QoreIRBasicBlock* fold_exit_block = nullptr;
         if (root_method_join) {
+            // the join of a value that it cannot convert raises its exception at the finish, after the map
+            // (qore_rt_string_method_join_start(), qore#7731)
             fold_result = lower_string_join_op(
-                QoreIROpcode::StringJoinAppend, state.fold_accum, element_val);
+                QoreIROpcode::StringMethodJoinStart, state.fold_accum, element_val);
             if (!fold_result.isValid()) {
                 return QoreIRValue();
             }
@@ -26291,7 +26293,19 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.createBranchIf(fold_has_accum_phi->result, fold_result_block, fold_empty_block, loc);
 
         builder.setBlock(fold_result_block);
-        add_final(fold_accum_phi->result, loc);
+        if (root_method_join) {
+            // the finish of the join, which raises the exception of a value that it could not convert, in the frame
+            // of <list>::join(), when the map has given all its values, as in the AST interpreter (qore#7731)
+            QoreIRValue nothing = builder.createConstNothing(loc)->result;
+            QoreIRValue join_result = lower_string_join_op(
+                QoreIROpcode::StringMethodJoinStart, fold_accum_phi->result, nothing);
+            if (!join_result.isValid()) {
+                return QoreIRValue();
+            }
+            add_final(join_result, loc);
+        } else {
+            add_final(fold_accum_phi->result, loc);
+        }
         if (root_foldl && !root_string_join) {
             recordFoldAccumulator(fold_accum_phi, fold_initial_accum);
         }

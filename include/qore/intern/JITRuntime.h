@@ -1692,14 +1692,19 @@ uint64_t qore_rt_list_string_join_checked(uint64_t separator, uint64_t list,
 uint64_t qore_rt_list_string_join_identity_map_checked(uint64_t separator, uint64_t list,
         ExceptionSink* xsink);
 
+//! qore_rt_list_string_join_checked() and qore_rt_list_string_join_identity_map_checked() for a call of join(): an
+//! exception has the frame of join() (qore#7731)
+uint64_t qore_fast_join_list(uint64_t separator, uint64_t list, ExceptionSink* xsink);
+uint64_t qore_fast_join_list_identity_map(uint64_t separator, uint64_t list, ExceptionSink* xsink);
+
 //! Start and extend an accumulator owned exclusively by fused string-join IR.
 uint64_t qore_rt_string_join_start(uint64_t first, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);
 uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);
 
-//! Start a pseudo-method join accumulator using the separator's encoding.
-uint64_t qore_rt_string_method_join_start(uint64_t unused, uint64_t separator, uint64_t value,
+//! Start, extend and finish the join of a fused <list>::join() of a map (see the definition).
+uint64_t qore_rt_string_method_join_start(uint64_t first, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);
 
 //! Format an exact list<int> with fixed %d metadata and join it in one pass.
