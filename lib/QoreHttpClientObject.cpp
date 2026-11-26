@@ -1318,11 +1318,14 @@ struct qore_httpclient_priv {
         encoding_passthru = false,
         // if URLs are pre-encoded
         pre_encoded_urls = false,
-        // HTTP/2 is currently active on the connection
-        http2_active = false,
         // h2c upgrade is pending (for HTTP2_MODE_H2C_UPGRADE)
         h2c_upgrade_pending = false
         ;
+
+    // HTTP/2 is currently active on the connection
+    // Atomic: set after each request of the connection manager path, which runs without priv->m in the threads that
+    // call sendUrl() on one client at once, and read from public isHttp2Active() without locking (qore#7720)
+    std::atomic<bool> http2_active{false};
 
     // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED, HTTP2_MODE_H2C_*)
     // Atomic: may be read from send_internal without priv->m while set
