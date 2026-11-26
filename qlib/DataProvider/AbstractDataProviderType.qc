@@ -593,14 +593,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
     /** A value that a type refuses is reported with \c TYPE-VALUE-ERROR.  A type never refuses a value with one of
         the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack),
-        nor with \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the
-        value no longer exists: they mean that the check itself failed, so they keep their code, to be told apart
-        from a value that was refused.
+        with \c THREAD-CANCELLED (the thread checking the value was cancelled), nor with
+        \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the value no
+        longer exists: they mean that the check itself failed, so they keep their code, to be told apart from a value
+        that was refused.
 
         @param err the code of the error raised when the part of the value was checked
 
-        @return the error code to report: \a err if it is a language error or \c SCHEMA-DOCUMENT-DESTROYED,
-        otherwise \c TYPE-VALUE-ERROR
+        @return the error code to report: \a err if it is a language error, \c THREAD-CANCELLED or
+        \c SCHEMA-DOCUMENT-DESTROYED, otherwise \c TYPE-VALUE-ERROR
 
         @since DataProvider 3.11
     */
@@ -609,6 +610,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             case "RUNTIME-TYPE-ERROR":
             case "RUNTIME-OVERLOAD-ERROR":
             case "STACK-LIMIT-EXCEEDED":
+            # the check was cancelled with its thread; it did not refuse the value (qore#7734)
+            case "THREAD-CANCELLED":
             # a schema whose document has been destroyed cannot check the value (see the OpenApi3 and Swagger
             # modules); this is a condition of the lifetime of the type, not a refused value
             case "SCHEMA-DOCUMENT-DESTROYED":
@@ -640,9 +643,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns True if an error raised when one alternative of a union checked a value means that the check failed
     /** A union tries its alternatives in turn, and an alternative that refuses the value does not match it.  An
-        error that means that the check itself failed (a call that no variant accepts, an exhausted stack or a schema
-        whose document no longer exists) must be raised instead of trying the next alternative.  \c RUNTIME-TYPE-ERROR
-        is not one of them here, as a type from outside this module may still refuse a value with it.
+        error that means that the check itself failed (a call that no variant accepts, an exhausted stack, a cancelled
+        thread or a schema whose document no longer exists) must be raised instead of trying the next alternative.
+        \c RUNTIME-TYPE-ERROR is not one of them here, as a type from outside this module may still refuse a value
+        with it.
 
         @param err the code of the error raised by the alternative
 
