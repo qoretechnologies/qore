@@ -56,6 +56,14 @@ string sub param_softlist_obj(softlist<Obj> l) {
     return desc(l);
 }
 
+string sub param_union_softlist_nothing(union<softlist, nothing> l) {
+    return desc(l);
+}
+
+union<softlist, nothing> sub return_union_softlist_nothing(any v) {
+    return v;
+}
+
 softlist sub return_softlist(any v) {
     return v;
 }
@@ -105,7 +113,14 @@ sub checks(string pfx, any v) {
         h.a = v;
         return desc(h.a);
     });
-    check(pfx + "softlist-object", string sub () { softlist<object> x = (); x = v; return desc(x); });
+    check(pfx + "union-softlist-nothing", string sub () {
+        union<softlist, nothing> x = (0,);
+        x = v;
+        return desc(x);
+    });
+    check(pfx + "param-union-softlist-nothing", string sub () { return param_union_softlist_nothing(v); });
+    check(pfx + "return-union-softlist-nothing", string sub () { return desc(return_union_softlist_nothing(v)); });
+    check(pfx + "softlist-object",string sub () { softlist<object> x = (); x = v; return desc(x); });
     check(pfx + "list", string sub () { list x = (0,); x = v; return desc(x); });
     check(pfx + "softint", string sub () { softint x = 1; x = v; return desc(x); });
 }

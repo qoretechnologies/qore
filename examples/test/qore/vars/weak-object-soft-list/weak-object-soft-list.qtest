@@ -17,10 +17,11 @@
 #! Tests the conversion of references to deleted objects to soft list types (qore#7759)
 /** An object that has been deleted, held by a weak or a strong reference, reads as no value, and softlist and
     softlist<T> convert it as they convert no value, to an empty list: in a variable, a parameter, a return value, a
-    hashdecl or object member, and a list element or hash value.  The conversion released no reference of the deleted
-    object, which leaked; the leak is checked by running the worker under valgrind.  The checks are in weak-object-soft-list-worker.qr, which is
-    run in each execution mode, on the IR tier and as a program compiled with qcc at -O0 and -O3; every run must give
-    the results below.
+    hashdecl or object member, and a list element or hash value, also when the type is in a union with nothing.  The
+    conversion did not release the reference to the deleted object, which leaked.  The checks are in
+    weak-object-soft-list-worker.qr, which is run in each execution mode, on the IR tier and as a program compiled with
+    qcc at -O0 and -O3; every run must give the results below.  The leak is checked by running the worker under
+    valgrind in the AST interpreter and in IR execution, when valgrind is available.
 */
 class WeakObjectSoftListTest inherits QUnit::Test {
     public {
@@ -42,6 +43,9 @@ class WeakObjectSoftListTest inherits QUnit::Test {
             "member-softlist-int": "list<int>:0",
             "list-element-softlist": "list:0",
             "hash-value-softlist": "list:0",
+            "union-softlist-nothing": "list:0",
+            "param-union-softlist-nothing": "list:0",
+            "return-union-softlist-nothing": "list:0",
             "softlist-object": "RUNTIME-TYPE-ERROR",
             "list": "RUNTIME-TYPE-ERROR",
             "softint": "RUNTIME-TYPE-ERROR",
@@ -64,8 +68,46 @@ class WeakObjectSoftListTest inherits QUnit::Test {
         addTestCase("each execution mode", \testExecModes());
         addTestCase("IR tier", \testIrTier());
         addTestCase("compiled program", \testCompiledProgram());
+        addTestCase("no leak under valgrind", \testValgrind());
 
         set_return_value(main());
+    }
+
+    #! valgrind reports no definite leak and no error in the AST interpreter and in IR execution (qore#7759: each
+    #! deleted object converted to softlist was lost)
+    testValgrind() {
+        if (is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/) {
+            testSkip("the test runs under valgrind already");
+        }
+        *string valgrind = find_valgrind();
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        string supp = get_script_dir() + DirSep + "../../../valgrind.supp";
+        TmpDir tmp("qore-weak-object-soft-list-vg-");
+        foreach string mode in (("ast", "ir")) {
+            string label = "valgrind " + mode;
+            string log = tmp.path + DirSep + mode + ".log";
+            int rc;
+            string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=full "
+                "--errors-for-leak-kinds=definite --error-exitcode=99 --suppressions=%s --log-file=%s %s -b "
+                "--enable-debug --exec-mode=%s %s 2>&1", getEnv(), valgrind, supp, log, qore_bin, mode, getWorker()),
+                \rc);
+            string vglog = ReadOnlyFile::readTextFile(log);
+            assertEq(0, rc, sprintf("%s: valgrind reports no error: %s", label, vglog));
+            assertRegex("definitely lost: 0 bytes|no leaks are possible|All heap blocks were freed", vglog,
+                label + ": no memory is definitely lost");
+            checkWorkerOutput(label, out);
+        }
+    }
+
+    #! returns the path of valgrind, if it is in the PATH
+    private static *string find_valgrind() {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
+            if (dir && is_executable(dir + "/valgrind")) {
+                return dir + "/valgrind";
+            }
+        }
     }
 
     testExecModes() {
