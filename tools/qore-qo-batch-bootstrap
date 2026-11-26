@@ -162,7 +162,9 @@ restore_ordering_token() {
         return 0
     fi
     if [ "$stamp_existed" = true ]; then
-        touch -r "$saved_stamp" "$bootstrap_stamp" 2>/dev/null || true
+        # The token itself, moved back over the one this run touched: a rename keeps
+        # its modification time exactly, which copying the time does not everywhere.
+        mv -f "$saved_stamp" "$bootstrap_stamp" 2>/dev/null || true
     else
         # -t with TZ=UTC0 rather than -d @0, which BSD touch does not accept
         TZ=UTC0 touch -t 197001010000.00 "$bootstrap_stamp" 2>/dev/null || true
@@ -177,8 +179,13 @@ save_ordering_token() {
     saved_stamp="${bootstrap_stamp}.pre.$$"
     if [ -f "$bootstrap_stamp" ]; then
         stamp_existed=true
-        # -p for the modification time: that timestamp IS the saved state.
-        cp -p "$bootstrap_stamp" "$saved_stamp"
+        # The token is moved aside, not copied: its modification time IS the saved
+        # state, and a rename in the same directory keeps it exactly.  `cp -p` does
+        # not: busybox's (Alpine) sets whole seconds, so the token put back was up to
+        # a second older than it had been, and a member stamped in that second read
+        # as current to the currency check although it was older than the token
+        # (qore#7723).  The caller touches a new token right after this.
+        mv -f "$bootstrap_stamp" "$saved_stamp"
     else
         stamp_existed=false
         : > "$saved_stamp"
