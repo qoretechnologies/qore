@@ -1960,7 +1960,7 @@
           "message": "Element listy, do którego ma nastąpić odwołanie"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument dodany"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Uruchamia się, gdy dokument zostanie dodany do biblioteki dokumentów. Używa zapytań delta, które wznawiają działanie dokładnie od miejsca, w którym zostało przerwane, zamiast odczytywać całą bibliotekę na nowo"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument zmodyfikowany"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Uruchamia się, gdy dokument znajdujący się już w bibliotece zostanie zmodyfikowany. Używa zapytań delta, które wznawiają działanie dokładnie od miejsca, w którym zostało przerwane, zamiast odczytywać całą bibliotekę na nowo"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Folder dodany"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Uruchamia się, gdy folder zostanie dodany do biblioteki dokumentów"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Element listy dodany"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

@@ -712,7 +712,7 @@
           "message": "Покоління вмісту, метадані якого потрібно оновити; якщо пропущено, використовується поточна версія"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "Завантажити об'єкт"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Виконувати запис, лише якщо поточне покоління об'єкта відповідає цьому значенню; передайте `0`, щоб записувати лише якщо об'єкт ще не існує, що робить завантаження безпечним створенням замість перезаписування"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "Завантажити об'єкт"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Покоління вмісту для завантаження; якщо опущено, використовується актуальна версія"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Видалити об'єкт"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Покоління вмісту для видалення; якщо опущено, видаляється актуальна версія. У бакеті з увімкненим керуванням версіями видалення актуальної версії залишає попередні покоління, і щоб видалити покоління назавжди, необхідно вказати його значення"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Копіювати об’єкт"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Користувацькі метадані для копії у вигляді пар ключ/значення; якщо опущено, зберігаються метадані вихідного об'єкта"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "Об'єднати об'єкти"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Користувацькі метадані для складеного об'єкта у вигляді пар ключ/значення"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "Створити підписаний URL"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

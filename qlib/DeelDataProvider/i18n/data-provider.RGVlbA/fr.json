@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Create a Contract",
+          "source": "Create a contract",
           "message": "Créer un contrat"
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
@@ -512,7 +512,7 @@
           "message": "La date de fin du contrat (format AAAA-MM-JJ), le cas échéant"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Terminate a Contract",
+          "source": "Terminate a contract",
           "message": "Résilier un contrat"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Le dernier jour où le travailleur sera actif (format AAAA-MM-JJ)"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
-          "source": "Sign a Contract",
+          "source": "Sign a contract",
           "message": "Signer un contrat"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
@@ -584,7 +584,7 @@
           "message": "L'identifiant unique du contrat à signer"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
-          "source": "Search Contracts",
+          "source": "Search contracts",
           "message": "Rechercher des contrats"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
-          "source": "Get a Contract",
+          "source": "Get a contract",
           "message": "Obtenir un contrat"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
@@ -712,7 +712,7 @@
           "message": "L'identifiant unique du contrat"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Update a Contract",
+          "source": "Update a contract",
           "message": "Mettre à jour un contrat"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
@@ -784,7 +784,7 @@
           "message": "L'intitulé de poste mis à jour pour le contrat"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
-          "source": "Submit a Timesheet",
+          "source": "Submit a timesheet",
           "message": "Soumettre une feuille de temps"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "Une description du travail effectué"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Update a Timesheet",
+          "source": "Update a timesheet",
           "message": "Mettre à jour une feuille de temps"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
@@ -892,7 +892,7 @@
           "message": "La description mise à jour du travail effectué"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
-          "source": "Approve a Timesheet",
+          "source": "Approve a timesheet",
           "message": "Approuver une feuille de temps"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "L'identifiant unique de l'entrée de feuille de temps à approuver"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
-          "source": "Reject a Timesheet",
+          "source": "Reject a timesheet",
           "message": "Rejeter une feuille de temps"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Une explication de la raison pour laquelle l'entrée de feuille de temps a été rejetée"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
-          "source": "Search Timesheets",
+          "source": "Search timesheets",
           "message": "Rechercher des feuilles de temps"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
-          "source": "Get a Timesheet",
+          "source": "Get a timesheet",
           "message": "Obtenir une feuille de temps"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "L'identifiant unique de l'entrée de feuille de temps"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Delete a Timesheet",
+          "source": "Delete a timesheet",
           "message": "Supprimer une feuille de temps"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "L'identifiant unique de l'entrée de feuille de temps à supprimer"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Create an Invoice Adjustment",
+          "source": "Create an invoice adjustment",
           "message": "Créer un ajustement de facture"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Une explication de la raison pour laquelle cet ajustement de facture est créé"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Update an Invoice Adjustment",
+          "source": "Update an invoice adjustment",
           "message": "Mettre à jour un ajustement de facture"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "L'explication mise à jour pour cet ajustement de facture"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Review an Invoice Adjustment",
+          "source": "Review an invoice adjustment",
           "message": "Examiner un ajustement de facture"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Refuser l'ajustement"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
-          "source": "Search Invoice Adjustments",
+          "source": "Search invoice adjustments",
           "message": "Rechercher des ajustements de facture"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Get an Invoice Adjustment",
+          "source": "Get an invoice adjustment",
           "message": "Obtenir un ajustement de facture"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "L'identifiant unique de l'ajustement de facture"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Delete an Invoice Adjustment",
+          "source": "Delete an invoice adjustment",
           "message": "Supprimer un ajustement de facture"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "L'identifiant unique de l'ajustement de facture à supprimer"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
-          "source": "Create a Worker",
+          "source": "Create a worker",
           "message": "Créer un travailleur"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Le numéro de téléphone du travailleur au format international"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
-          "source": "Update a Worker",
+          "source": "Update a worker",
           "message": "Mettre à jour un travailleur"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Niveau lead"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
-          "source": "Search Workers",
+          "source": "Search workers",
           "message": "Rechercher des travailleurs"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
-          "source": "Get a Worker",
+          "source": "Get a worker",
           "message": "Obtenir un travailleur"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "L'identifiant unique du travailleur"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Create a Time-Off Request",
+          "source": "Create a time-off request",
           "message": "Créer une demande de congé"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "Notes facultatives ou motif de la demande de congé"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
-          "source": "Search Time-Off Types",
+          "source": "Search time-off types",
           "message": "Rechercher des types de congés"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
-          "source": "List Legal Entities",
+          "source": "List legal entities",
           "message": "Lister les entités juridiques"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Rechercher des factures"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "Nombre de résultats à ignorer (pour la pagination manuelle)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "Obtenir une facture"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "L'identifiant unique de la facture"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
-          "source": "Approve a Time-Off Request",
+          "source": "Approve a time-off request",
           "message": "Approuver une demande de congé"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "L'identifiant unique de la demande de congé à approuver"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Reject a Time-Off Request",
+          "source": "Reject a time-off request",
           "message": "Rejeter une demande de congé"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "Une explication de la raison pour laquelle la demande de congé a été rejetée"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
-          "source": "Contract Created",
+          "source": "Contract created",
           "message": "Contrat créé"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Contract Status Updated",
+          "source": "Contract status updated",
           "message": "Statut du contrat mis à jour"
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
-          "source": "Contract Terminated",
+          "source": "Contract terminated",
           "message": "Contrat résilié"
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
-          "source": "Invoice Adjustment Created",
+          "source": "Invoice adjustment created",
           "message": "Ajustement de facture créé"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
-          "source": "Invoice Adjustment Reviewed",
+          "source": "Invoice adjustment reviewed",
           "message": "Ajustement de facture examiné"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
-          "source": "Timesheet Submitted",
+          "source": "Timesheet submitted",
           "message": "Feuille de temps soumise"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
-          "source": "Timesheet Reviewed",
+          "source": "Timesheet reviewed",
           "message": "Feuille de temps examinée"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
-          "source": "Time-Off Request Created",
+          "source": "Time-off request created",
           "message": "Demande de congé créée"
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
-          "source": "Time-Off Request Updated",
+          "source": "Time-off request updated",
           "message": "Demande de congé mise à jour"
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "Détecter uniquement les événements créés ou mis à jour après cette date/heure. Si non défini, l'interrogation commence à partir de l'heure actuelle."
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
-          "source": "Time-Off Request Reviewed",
+          "source": "Time-off request reviewed",
           "message": "Demande de congé examinée"
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Create Submission",
+          "source": "Create submission",
           "message": "Vytvoriť odoslanie"
         },
         "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Vyberte formulár, pre创新 chcete vytvoriť odoslanie. Polia odoslania sa aktualizujú na základe vášho výberu."
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Získať odoslanie"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Jedinečné ID odoslania, ktoré sa má získať"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
-          "source": "Get Form Submissions",
+          "source": "Get form submissions",
           "message": "Získať odoslané záznamy formulára"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Maximálny počet odoslaní, ktoré sa majú vrátiť"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Update Submission",
+          "source": "Update submission",
           "message": "Aktualizovať odoslanie"
         },
         "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "ID odoslania na aktualizáciu"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Vymazať odoslanie"
         },
         "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -508,7 +508,7 @@
           "message": "ID odoslania, ktoré sa má vymazať"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Získať formulár"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Formulár na načítanie"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
-          "source": "Get Forms",
+          "source": "Get forms",
           "message": "Získať formuláre"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Maximálny počet formulárov na vrátenie"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
-          "source": "Get Form Reports",
+          "source": "Get form reports",
           "message": "Získať reporty formulára"
         },
         "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Formulár, pre ktorý sa majú získať reporty"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
-          "source": "New Submission",
+          "source": "New submission",
           "message": "Nové odoslanie"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Vyberte formulár, na ktorom sa majú sledovať nové odoslania"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nová platba"
         },
         "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {

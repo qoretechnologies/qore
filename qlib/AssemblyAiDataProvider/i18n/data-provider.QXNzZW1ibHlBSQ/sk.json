@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.display_name": {
-          "source": "Upload Audio",
+          "source": "Upload audio",
           "message": "Nahrať zvuk"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBsb2FkLWF1ZGlv.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Argument tela požiadavky REST"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.display_name": {
-          "source": "Create Transcript",
+          "source": "Create transcript",
           "message": "Vytvoriť prepis"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Adresa URL zvukového alebo video súboru na prepis."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "Koniec zvuku o"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Časový bod v milisekundách na zastavenie prepisu vo vašom mediálnom súbore. Ďalšie podrobnosti nájdete v časti [Nastavenie začiatku a konca prepisu](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "Začiatok zvuku od"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Časový bod v milisekundách, kedy sa má začať prepisovanie vo vašom mediálnom súbore. Ďalšie podrobnosti nájdete v časti [Nastavenie začiatku a konca prepisu](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "Automatické kapitoly"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Generujte súhrny kapitol pomocou Universal-2. Vyžaduje `punctuate: true` a nemožno ho kombinovať s `summarization`. **Zastarané:** použite [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) na flexibilné súhrny kapitol."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "Automatické zvýraznenia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Povoliť [kľúčové frázy](https://www.assemblyai.com/docs/speech-understanding/key-phrases), buď pravdivé alebo nepravdivé"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "Bezpečnosť obsahu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Povoliť [Moderovanie obsahu](https://www.assemblyai.com/docs/content-moderation), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "Bezpečnosť obsahu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Prah spoľahlivosti pre model [Moderovanie obsahu](https://www.assemblyai.com/docs/content-moderation). Hodnoty musia byť medzi 25 a 100. Vyžaduje sa povolenie `content_safety`; inak sa to ignoruje."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "Vlastný pravopis"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -524,7 +524,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "Rozpoznávanie entít"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -536,7 +536,7 @@
           "message": "Povoliť [Entity Detection](https://www.assemblyai.com/docs/speech-understanding/entity-detection), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "Filtrovať vulgárne výrazy"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -548,7 +548,7 @@
           "message": "Filtrovať vulgárne výrazy z prepísaného textu môžu byť pravdivé alebo nepravdivé. Ďalšie podrobnosti nájdete v časti [Filtrovanie nadávok](https://www.assemblyai.com/docs/profanity-filtering)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "Formátovať text"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Povoliť [formátovanie textu](https://www.assemblyai.com/docs/pre-recorded-audio), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Kategórie Iab"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -572,7 +572,7 @@
           "message": "Povoliť [Topic Detection](https://www.assemblyai.com/docs/speech-understanding/topic-detection), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Výzva kľúčových pojmov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Zvýšte presnosť pomocou až 200 (pre Universal-2) alebo 1 000 (pre Universal-3.5 Pro) slov alebo fráz špecifických pre doménu (maximálne 6 slov na frázu). Ďalšie podrobnosti nájdete v časti [Keyterms Prompting](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Kód jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Jazykové kódy"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "Prah jazykovej dôvery"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Prah spoľahlivosti pre automaticky rozpoznaný jazyk.\nAk je jazyková spoľahlivosť pod touto hranicou, vráti sa chyba.\nPredvolená hodnota je 0. Dá sa nastaviť len vtedy, keď je povolená ochrana `language_detection`. Ďalšie podrobnosti nájdete v časti [Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "Detekcia jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "[Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) identifikuje hovorený jazyk a presmeruje požiadavku na najlepší model. Použije sa automaticky, keď nešpecifikujete `language_code`. Nastaviť na `false` len spolu s `language_code`; jeho zakázanie bez zadania jazyka vráti chybu."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "Možnosti detekcie jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "Zadajte možnosti pre [Automatická detekcia jazyka] (https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "Prepínanie kódu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Či sa má zistiť [prepínanie kódu] (/reč-na-text/vopred nahratý-audio/prepínanie kódu)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "Prah spoľahlivosti prepínania kódu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -1484,7 +1484,7 @@
           "message": "Prah spoľahlivosti pre detekciu [prepínanie kódu] (/reč na text/vopred nahratý zvuk/prepínanie kódu). If the code switching confidence is below this threshold, the transcript will be processed in the language with the highest `language_detection_confidence` score."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "Očakávané jazyky"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Zoznam jazykov očakávaných v audio súbore. Predvolená hodnota je `[\"all\"]`, ak nie je špecifikovaná. Ďalšie podrobnosti nájdete v časti [Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "Záložný jazyk"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -1520,7 +1520,7 @@
           "message": "Keď sa zistí angličtina, použite pravopis `en_au` alebo `en_uk`; je povolený len jeden variant na základný jazyk. Základné/predvolené kódy ako `en` alebo `en_us` sú odmietnuté. `language_code` odpovede hlási zvolený regionálny kód. Ostatné rozpoznané jazyky toto nastavenie ignorujú. Pozrite si [Detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "On No Speech Detection"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Redigovať PII z prepísaného textu pomocou modelu Redigovať PII môže byť pravda alebo nepravda. Vyžaduje sa, aby `format_text` bolo `true`. Ďalšie podrobnosti nájdete v časti [PII Redaction](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "Upraviť zvuk PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Vygenerujte kópiu pôvodného mediálneho súboru s „pípnutím“ hovoreného PII, môže byť pravda alebo nepravda. Vyžaduje sa, aby `redact_pii` bolo `true`. Ďalšie podrobnosti nájdete v časti [PII redaction](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "Upraviť možnosti zvuku PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Zadajte možnosti pre [PII redigované audio] (https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) súbory."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "Prepísať metódu úpravy zvuku"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "ticho"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "Vrátiť zredigovaný zvuk bez reči"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "V predvolenom nastavení poskytuje redigovanie zvuku redigované adresy URL zvuku iba vtedy, keď sa rozpozná reč. Ak však váš prípad použitia špecificky vyžaduje redigované zvukové súbory aj pre tiché zvukové súbory bez akéhokoľvek dialógu, môžete sa rozhodnúť prijímať tieto adresy URL nastavením tohto parametra na `true`. Vyžaduje sa, aby `redact_pii_audio` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "Upravte kvalitu zvuku PII"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "Upravte pravidlá umožňujúce identifikáciu osôb"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Zoznam zásad úpravy údajov umožňujúcich identifikáciu osôb, ktoré sa majú povoliť. Ďalšie podrobnosti nájdete v časti [PII redaction](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "Spôsob nahradenia osobných údajov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "hash"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "Vrátiť aj pôvodný text"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Vráťte `unredacted_text`, `unredacted_words` a `unredacted_utterances` vedľa redigovaných polí. Vyžaduje `redact_pii: true`. **Citlivý výstup:** ak to umožníte zachovať pôvodné osobné informácie. Predvolene vypnuté. Pozrite si [Editácia PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "Upravte statické entity"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "**Chráňte vlastnícke podmienky**\n- Mapujte štítky redakcie na presné výrazy, napríklad `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`. Vyžaduje `redact_pii: true` a používa `redact_pii_sub`. Zhoda toleruje veľké a malé písmená, interpunkciu a menšie rozdiely v medzier. Nezovšeobecňuje nad rámec poskytnutých podmienok.\n- S `redact_pii_audio` sa zhody odstránia aj zo zvuku.\n\n**Obmedzenia**\n- Až 100 štítkov, 200 výrazov na štítok a 200 znakov na výraz.\n- Štítky povoľujú písmená, čísla, medzery, podčiarkovníky a spojovníky v dĺžke až 80 znakov.\n\nPozrite si [Redigovanie statických entít] (https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "Analýza sentimentu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -1728,7 +1728,7 @@
           "message": "Povoliť [Analýzu sentimentu](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis), môže byť pravda alebo nepravda. Vyžaduje sa, aby `punctuate` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "Štítky reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -1740,7 +1740,7 @@
           "message": "Povoliť [diarizáciu reproduktora](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers), môže byť pravda alebo nepravda. Vyžaduje sa, aby `punctuate` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "Možnosti reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "Zadajte možnosti pre [diarizáciu reproduktora] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers). Použite toto na nastavenie rozsahu možných reproduktorov. Vyžaduje, aby `speaker_labels` bolo `true` a nemožno ho použiť spolu s `speakers_expected`. Keď sú nastavené obe hranice, `min_speakers_expected` musí byť menšie alebo rovné `max_speakers_expected`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "Zahrňte dôveru rečníka"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Keď `true`, zahŕňa pole `speaker_confidence` na slovo a na výrok v odpovedi. Ďalšie podrobnosti nájdete v časti [Diarizácia reproduktora](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "Očakávaný maximálny počet reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Obmedzte počet štítkov reproduktorov; ďalšie reproduktory sa zlúčia do existujúcich štítkov. **Príliš vysoký limit môže znížiť presnosť rozdelením jedného reproduktora na niekoľko.** Predvolené: bez obmedzenia na 0–2 minúty, 10 na 2–10 minút, 30 na viac ako 10 minút. Pozrite si [Rozsahy reproduktorov] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "Minimálny počet reproduktorov sa očakáva"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Pevný spodný limit na počet štítkov reproduktorov – model nevráti menej reproduktorov ako tento. Ďalšie podrobnosti nájdete v časti [Nastavenie rozsahu možných reproduktorov](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "Očakáva sa reproduktory"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Hovorí modelu štítku reproduktora, koľko reproduktorov by sa mal pokúsiť identifikovať. Vyžaduje, aby `speaker_labels` bolo `true` a musí to byť kladné celé číslo; nemožno použiť spolu s `speaker_options`. Ďalšie podrobnosti nájdete v časti [Očakávaný počet reproduktorov] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "Modely reči"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "Hranica reči"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -1832,7 +1832,7 @@
           "message": "Odmietnite zvukové súbory, ktoré obsahujú menej než tento zlomok reči.\nPlatné hodnoty sú v rozsahu [0, 1] vrátane. Ďalšie podrobnosti nájdete v časti [Speech Threshold](https://www.assemblyai.com/docs/speech-threshold)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Porozumenie reči"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Používajte formálny jazykový štýl. Ďalšie podrobnosti nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Porovnajte pôvodný výrok"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Keď je povolená s menovkami reproduktorov, vráti preložený text v poli výrokov. Každý výrok bude obsahovať kľúč `translated_texts` obsahujúci preklady pre každý cieľový jazyk."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Cieľové jazyky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -1888,11 +1888,11 @@
           "message": "Zoznam kódov cieľových jazykov (napr. `[\"es\", \"de\"]`). Podporované jazyky nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identifikácia reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Známe hodnoty"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "Vyžaduje sa, ak je speaker_type \"role\". Každá hodnota musí mať 35 znakov alebo menej."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Typ reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Úloha rečníka. Vyžaduje sa, keď je `speaker_type` „rola“."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Vlastné formátovanie"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -2000,7 +2000,7 @@
           "message": "Vzor formátu e-mailu (napr. `\"username@domain.com\"`). Ďalšie podrobnosti nájdete v časti [Vlastné formátovanie](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Telefónne číslo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Typ zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -2048,7 +2048,7 @@
           "message": "guľky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Akčné položky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -2064,7 +2064,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Zahrňte rozhodnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Zhrňte prepis Universal-2. Vyžaduje `punctuate: true` a `format_text: true`; nemožno kombinovať s `auto_chapters`. **Zastarané:** na flexibilné súhrny použite [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "Model zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "chytľavé"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Typ zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "odseku"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "Odstráňte zvukové značky"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Ovládajte množstvo náhodnosti vstreknutej do odozvy modelu. Ďalšie podrobnosti nájdete v [Sprievodca výzvami](https://www.assemblyai.com/docs/pre-recorded-audio/prompting).\n\nPoznámka: Tento parameter sa prejaví iba pri modeli Universal-3.5 Pro."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "Názov hlavičky autorizácie webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Názov hlavičky, ktorý sa má odoslať s prepisom dokončeným alebo neúspešnými žiadosťami [webhook] (https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio). Musí mať 1 až 1 000 znakov a obsahovať iba písmená ASCII, čísla, spojovníky a podčiarkovníky. Vyžaduje sa tiež nastavenie `webhook_auth_header_value` a `webhook_url`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "Hodnota hlavičky autorizácie webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "Webová adresa, na ktorú odosielame žiadosti [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "Vlastné témy"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "K tomuto parametru momentálne nie je pripojená žiadna funkcia."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "Model reči"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "K tomuto parametru momentálne nie je pripojená žiadna funkcia."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.display_name": {
-          "source": "List Transcripts",
+          "source": "List transcripts",
           "message": "Zoznam prepisov"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "chyba"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Vytvorené dňa"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.Y3JlYXRlZF9vbg.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Získajte prepisy, ktoré boli vytvorené po tomto ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.display_name": {
-          "source": "Throttled Only",
+          "source": "Throttled only",
           "message": "Len priškrtený"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC10cmFuc2NyaXB0cw.option.dGhyb3R0bGVkX29ubHk.short_desc": {
@@ -2440,7 +2440,7 @@
           "message": "WebVTT"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.display_name": {
-          "source": "Chars per Caption",
+          "source": "Chars per caption",
           "message": "Znaky na titulok"
         },
         "app.QXNzZW1ibHlBSQ.action.Z2V0LXN1YnRpdGxlcw.option.Y2hhcnNfcGVyX2NhcHRpb24.short_desc": {
@@ -2560,7 +2560,7 @@
           "message": "ID prepisu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.display_name": {
-          "source": "Create Voice Agent",
+          "source": "Create voice agent",
           "message": "Vytvorte hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Zobrazované meno pre agenta."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "Systémová výzva"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Vzorkovacia frekvencia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -2672,7 +2672,7 @@
           "message": "Až 100 reťazcov skreslenia transkripcie alebo null."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "Detekcia ťahu"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Kedy zavolať nástroj. Hlavný signál modelu."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "Režim vykonávania"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "Odoslané pri každom hovore. Hodnoty sú v pokoji zašifrované a iba na zápis (v odpovediach sú maskované ako „***“)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metóda HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "objekt"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "Časový limit (sekundy)"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.display_name": {
@@ -2908,7 +2908,7 @@
           "message": "Pripojte svoj vlastný LLM kompatibilný s OpenAI namiesto AssemblyAI\nriadený model. Poskytnite maximálne jednu konfiguráciu; vynechať použiť spravované\nLLM. Viaceré konfigurácie (záložné) zatiaľ nie sú podporované."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "Kľúč API"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Názov modelu bol odoslaný v tele žiadosti o dokončenie četu."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "Predbežné požiadavky na pripojenie"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "Vyhľadávania HTTPS, ktoré platforma spúšťa, v poradí, predtým, ako odpovie na prichádzajúcu komunikáciu\ntelefonický hovor. Každý z nich môže odoslať fakty o hovore (napríklad údaje o volajúcom\nčíslo) a hodnoty zachytenej skoršej položky a zachytí hodnoty z\njeho odpoveď JSON na pozdrav a konverzáciu. telefonovanie\niba; ignorované v reláciách WebSocket. Pozri\n[Požiadavky na predbežné pripojenie](/voice-agents/voice-agent-api/pre-connect-requests)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "Povoliť prepisy"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "Odoslané pri každom hovore. Hodnoty sú v pokoji zašifrované a iba na zápis (v odpovediach sú maskované ako „***“)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metóda HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "Názvy na odoslanie do tohto koncového bodu v tele JSON pre POST, PUT a\nPATCH alebo ako parametre dopytu pre GET a DELETE. Akýkoľvek záznam môže pomenovať\nfakty o volaní platformy `caller_number`, `dialed_number`,\n`direction`, `agent_id` a `session_id`; neskoršie záznamy môžu tiež pomenovať\nhodnoty zachytený skorší záznam. Prihlásenie na vstup: nič sa neodošle\npokiaľ nie je menovaný. Fakt, ktorý platforma nemá (napr\nzadržané číslo volajúceho) sa vynechá a nepošle sa prázdne."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "Časový limit pani"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3108,7 +3108,7 @@
           "message": "Znižuje časový limit tejto položky. Každý vstup má svoj vlastný 800 ms strop;\ntým sa to dá len skrátiť. Vynechať pre úplný strop."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.display_name": {
-          "source": "List Voice Agents",
+          "source": "List voice agents",
           "message": "Zoznam hlasových agentov"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1hZ2VudHM.short_desc": {
@@ -3172,7 +3172,7 @@
           "message": "Názov"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.c3lzdGVtX3Byb21wdA.display_name": {
-          "source": "System Prompt",
+          "source": "System prompt",
           "message": "Systémová výzva"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dm9pY2U.display_name": {
@@ -3228,7 +3228,7 @@
           "message": "audio/pcma"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Vzorkovacia frekvencia"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.a2V5dGVybXM.display_name": {
@@ -3244,7 +3244,7 @@
           "message": "Až 100 reťazcov skreslenia transkripcie alebo null."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.display_name": {
-          "source": "Turn Detection",
+          "source": "Turn detection",
           "message": "Detekcia ťahu"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.aW5wdXQ.field.dHVybl9kZXRlY3Rpb24.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Kedy zavolať nástroj. Hlavný signál modelu."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.display_name": {
-          "source": "Execution Mode",
+          "source": "Execution mode",
           "message": "Režim vykonávania"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.ZXhlY3V0aW9uX21vZGU.short_desc": {
@@ -3356,7 +3356,7 @@
           "message": "Odoslané pri každom hovore. Hodnoty sú v pokoji zašifrované a iba na zápis (v odpovediach sú maskované ako „***“)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metóda HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "objekt"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.dG9vbHM.field.dGltZW91dF9zZWNvbmRz.display_name": {
-          "source": "Timeout Seconds",
+          "source": "Timeout seconds",
           "message": "Časový limit (sekundy)"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.display_name": {
@@ -3464,7 +3464,7 @@
           "message": "LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
+          "source": "API key",
           "message": "Kľúč API"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.bGxt.field.YXBpX2tleQ.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Názov modelu bol odoslaný v tele žiadosti o dokončenie četu."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.display_name": {
-          "source": "Pre Connect Requests",
+          "source": "Pre connect requests",
           "message": "Predbežné požiadavky na pripojenie"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Nahrádza celý zoznam. Pozrite si žiadosť o vytvorenie."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.display_name": {
-          "source": "Allow Overrides",
+          "source": "Allow overrides",
           "message": "Povoliť prepisy"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.YWxsb3dfb3ZlcnJpZGVz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "Odoslané pri každom hovore. Hodnoty sú v pokoji zašifrované a iba na zápis (v odpovediach sú maskované ako „***“)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
-          "source": "HTTP Method",
+          "source": "HTTP method",
           "message": "Metóda HTTP"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "Názvy na odoslanie do tohto koncového bodu v tele JSON pre POST, PUT a\nPATCH alebo ako parametre dopytu pre GET a DELETE. Akýkoľvek záznam môže pomenovať\nfakty o volaní platformy `caller_number`, `dialed_number`,\n`direction`, `agent_id` a `session_id`; neskoršie záznamy môžu tiež pomenovať\nhodnoty zachytený skorší záznam. Prihlásenie na vstup: nič sa neodošle\npokiaľ nie je menovaný. Fakt, ktorý platforma nemá (napr\nzadržané číslo volajúceho) sa vynechá a nepošle sa prázdne."
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.display_name": {
-          "source": "Timeout Ms",
+          "source": "Timeout ms",
           "message": "Časový limit pani"
         },
         "app.QXNzZW1ibHlBSQ.action.dXBkYXRlLWFnZW50.option.cHJlX2Nvbm5lY3RfcmVxdWVzdHM.field.dGltZW91dF9tcw.short_desc": {
@@ -3688,7 +3688,7 @@
           "message": "Jedinečné ID agenta."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.display_name": {
-          "source": "List Voice Agent Sessions",
+          "source": "List voice agent sessions",
           "message": "Zobraziť zoznam relácií hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1zZXNzaW9ucw.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "Jedinečné ID relácie."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.display_name": {
-          "source": "Create Chat Completion",
+          "source": "Create chat completion",
           "message": "Vytvoriť dokončenie rozhovoru"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "nástroj"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID volania nástroja"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "ID modelu, ktorý sa má použiť pre túto požiadavku. Dostupné modely nájdete v [Prehľad brány LLM] (https://www.assemblyai.com/docs/llm-gateway/quickstart#available-models)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.display_name": {
-          "source": "Model Region",
+          "source": "Model region",
           "message": "Modelový región"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bW9kZWxfcmVnaW9u.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "globálne"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Maximálny počet tokenov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWF4X3Rva2Vucw.short_desc": {
@@ -4056,7 +4056,7 @@
           "message": "funkcia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "Výber nástroja"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "funkcia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
-          "source": "Response Format",
+          "source": "Response format",
           "message": "Formát odpovede"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Určuje formát odpovede modelu. Použite typ `json_schema` na obmedzenie modelu na výstup platného JSON zodpovedajúceho schéme."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "Schéma JSON"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cmVzcG9uc2VfZm9ybWF0.field.anNvbl9zY2hlbWE.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Súbor záložných objektov. Každý objekt musí obsahovať `model` a môže voliteľne prepísať ľubovoľné pole z pôvodnej požiadavky. Ak primárny model zlyhá, brána LLM skúša každý záložný postup v poradí, kým jeden neuspeje. Ďalšie podrobnosti nájdete v časti [Určenie záložných modelov](https://www.assemblyai.com/docs/llm-gateway/fallback)."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Maximálny počet tokenov"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tz.field.bWF4X3Rva2Vucw.short_desc": {
@@ -4256,7 +4256,7 @@
           "message": "nástroj"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID volania nástroja"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -4292,7 +4292,7 @@
           "message": "Prepísať teplotu pre záložnú požiadavku."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.display_name": {
-          "source": "Fallback Config",
+          "source": "Fallback config",
           "message": "Záložná konfigurácia"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.ZmFsbGJhY2tfY29uZmln.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "Či sa má žiadosť automaticky zopakovať raz po 500 ms pri zlyhaní. Predvolená hodnota je `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.display_name": {
-          "source": "Post Processing Steps",
+          "source": "Post processing steps",
           "message": "Kroky následného spracovania"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.cG9zdF9wcm9jZXNzaW5nX3N0ZXBz.short_desc": {
@@ -4356,7 +4356,7 @@
           "message": "json-repair"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.display_name": {
-          "source": "Understand Speech",
+          "source": "Understand speech",
           "message": "Porozumieť reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.short_desc": {
@@ -4380,7 +4380,7 @@
           "message": "ID prepisu, ktorý sa má spracovať."
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Porozumenie reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dW5kZXJzdGFuZC1zcGVlY2g.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -4412,7 +4412,7 @@
           "message": "Používajte formálny jazykový štýl. Ďalšie podrobnosti nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Porovnajte pôvodný výrok"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -4424,7 +4424,7 @@
           "message": "Keď je povolená s menovkami reproduktorov, vráti preložený text v poli výrokov. Každý výrok bude obsahovať kľúč `translated_texts` obsahujúci preklady pre každý cieľový jazyk."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Cieľové jazyky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -4436,11 +4436,11 @@
           "message": "Zoznam kódov cieľových jazykov (napr. `[\"es\", \"de\"]`). Podporované jazyky nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identifikácia reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Známe hodnoty"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -4452,7 +4452,7 @@
           "message": "Vyžaduje sa, ak je speaker_type \"role\". Každá hodnota musí mať 35 znakov alebo menej."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Typ reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -4520,7 +4520,7 @@
           "message": "Úloha rečníka. Vyžaduje sa, keď je `speaker_type` „rola“."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Vlastné formátovanie"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -4548,7 +4548,7 @@
           "message": "Vzor formátu e-mailu (napr. `\"username@domain.com\"`). Ďalšie podrobnosti nájdete v časti [Vlastné formátovanie](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Telefónne číslo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -4576,7 +4576,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Typ zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -4596,7 +4596,7 @@
           "message": "guľky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Akčné položky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -4612,7 +4612,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Zahrňte rozhodnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -4624,7 +4624,7 @@
           "message": "Možnosť zahrnúť rozhodovanie do akčných položiek."
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List LLM Models",
+          "source": "List LLM models",
           "message": "Zoznam modelov LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4636,7 +4636,7 @@
           "message": "Uveďte dostupné modely brány LLM, podporované parametre, kontextové limity, ceny a regionálnu dostupnosť."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.display_name": {
-          "source": "Create Streaming Token",
+          "source": "Create streaming token",
           "message": "Vytvorte token streamovania"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.short_desc": {
@@ -4648,7 +4648,7 @@
           "message": "Vytvorte dočasný token pre reláciu WebSocket prepisu v reálnom čase. Pred zdieľaním tokenu s klientskou aplikáciou obmedzte platnosť tokenu a trvanie relácie."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "Vyprší o niekoľko sekúnd"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4660,7 +4660,7 @@
           "message": "Okno na uplatnenie tokenov v sekundách. Token sa musí použiť na otvorenie pripojenia WebSocket v tomto okne. Ak okno po otvorení WebSocket uplynulo, server odmietne reláciu v prvom rámci. Toto NEOBMEDZUJE trvanie výslednej streamovacej relácie – akonáhle je WebSocket otvorený, relácia beží až `max_session_duration_seconds`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "Maximálne trvanie relácie v sekundách"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXN0cmVhbWluZy10b2tlbg.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4672,7 +4672,7 @@
           "message": "Maximálne trvanie relácie streamovania spustenej týmto tokenom v sekundách. Ak potrebujete dokončiť prácu pred koncom relácie, spustite časovač na strane klienta pomocou hodnoty, ktorú ste tu zadali."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.display_name": {
-          "source": "Create Voice Agent Token",
+          "source": "Create voice agent token",
           "message": "Vytvorte token hlasového agenta"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.short_desc": {
@@ -4684,7 +4684,7 @@
           "message": "Vytvorte dočasný token na jedno použitie pre reláciu Voice Agent WebSocket. Použitie sa pripisuje projektu, ktorý vlastní toto pripojenie."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
-          "source": "Expires in Seconds",
+          "source": "Expires in seconds",
           "message": "Vyprší o niekoľko sekúnd"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
@@ -4696,7 +4696,7 @@
           "message": "Okno na uplatnenie tokenov v sekundách. Token sa musí použiť na otvorenie pripojenia WebSocket v tomto okne. Ak okno po otvorení WebSocket uplynulo, server vráti `session.error` s kódom `unauthorized` v prvom rámci namiesto `session.ready`. Toto NEOBMEDZUJE trvanie výslednej relácie hlasového agenta – akonáhle je WebSocket otvorený, relácia trvá až `max_session_duration_seconds`."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.display_name": {
-          "source": "Max Session Duration Seconds",
+          "source": "Max session duration seconds",
           "message": "Maximálne trvanie relácie v sekundách"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXZvaWNlLWFnZW50LXRva2Vu.option.bWF4X3Nlc3Npb25fZHVyYXRpb25fc2Vjb25kcw.short_desc": {
@@ -4708,7 +4708,7 @@
           "message": "Maximálne trvanie relácie Voice Agent začatej s týmto tokenom v sekundách. Pred ukončením relácie nie je žiadna upozorňujúca udalosť „čoskoro sa zatvorí“, takže ak ju potrebujete elegantne dokončiť (napr. prehrať záverečnú správu, uložiť stav), spustite časovač na strane klienta pomocou hodnoty, ktorú ste tu zadali."
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook Subscription",
+          "source": "Create webhook subscription",
           "message": "Vytvorte predplatné Webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -4764,7 +4764,7 @@
           "message": "Povolené"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhook Subscriptions",
+          "source": "List webhook subscriptions",
           "message": "Zoznam odberov webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -4848,7 +4848,7 @@
           "message": "Predplatné"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.display_name": {
-          "source": "Transcribe Short Audio",
+          "source": "Transcribe short audio",
           "message": "Prepis krátkeho zvuku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "Kontext konverzácie"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5036,7 +5036,7 @@
           "message": "Poskytnite predchádzajúci dialóg, aby ste zlepšili kontinuitu v priebehu konverzácií. Akceptuje zoznam zoradený od najstaršieho po najnovší alebo jeden reťazec považovaný za jedno otočenie. Limity sú 500 otočení a celkovo 16 000 znakov; nadbytočný kontext je orezaný od najstarších otočení, vrátane prekročenia kontextového okna modelu."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Výzva kľúčových pojmov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "Kľúčové výrazy, ktoré prispôsobujú dekodér konkrétnym tokenom. Maximálne 100 výrazov a celkovo 8 000 znakov vo všetkých výrazoch. Akceptované aj ako `keyterms` alebo `word_boost` – uveďte iba jednu z troch možností."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Kód jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "Vlastná transkripčná inštrukcia pripojená k systémovej výzve modelu. Keď sa vynechá, použije sa predvolená výzva."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Vzorkovacia frekvencia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5140,7 +5140,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.display_name": {
-          "source": "Transcribe Audio Upload",
+          "source": "Transcribe audio upload",
           "message": "Prepis nahrávania zvuku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.short_desc": {
@@ -5184,7 +5184,7 @@
           "message": "2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
-          "source": "Conversation Context",
+          "source": "Conversation context",
           "message": "Kontext konverzácie"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
@@ -5196,7 +5196,7 @@
           "message": "Predchádzajúce odbočky z tej istej konverzácie v chronologickom poradí (najstaršie prvé, najnovšie posledné) poskytnuté ako kontext, takže model prepisuje aktuálny klip s väčšou kontinuitou. Akceptuje zoznam otočení alebo jeden reťazec. Ak je prekročený limit kontextového okna, najstaršie ťahy sa vypustia ako prvé."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Výzva kľúčových pojmov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5208,7 +5208,7 @@
           "message": "Kľúčové výrazy, ktoré prispôsobujú dekodér konkrétnym tokenom. Maximálne 2048 znakov spolu vo všetkých výrazoch. Akceptované aj ako `keyterms` alebo `word_boost` – uveďte iba jednu z troch možností."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Kód jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -5232,7 +5232,7 @@
           "message": "Vlastná transkripčná inštrukcia pripojená k systémovej výzve modelu. Keď sa vynechá, použije sa predvolená výzva."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Vzorkovacia frekvencia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5432,7 +5432,7 @@
           "message": "universal-3-5-pro"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.display_name": {
-          "source": "Transcribe Dictation",
+          "source": "Transcribe dictation",
           "message": "Prepis diktátu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.short_desc": {
@@ -5468,7 +5468,7 @@
           "message": "Počet audio kanálov. Vyžaduje sa, keď `audio` je `audio/pcm`. Ignorované pre WAV."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Výzva kľúčových pojmov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "Výrazy, na ktoré sa má transkripcia upraviť, ako sú mená alebo žargón. Maximálne 100 výrazov a celkovo 8 000 znakov. Akceptované sú aj staršie názvy `keyterms` a `word_boost`; odošlite iba jednu z troch, inak bude žiadosť zamietnutá s `400`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Jazykové kódy"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -5492,7 +5492,7 @@
           "message": "Jazyk alebo jazyky zvuku, ako kódy jazykov ISO. Kód mimo tejto sady je odmietnutý s `400`. Predvolená hodnota je `[\"en\"]`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.display_name": {
-          "source": "LLM Instruction",
+          "source": "LLM instruction",
           "message": "Inštrukcia LLM"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.bGxtX2luc3RydWN0aW9u.short_desc": {
@@ -5504,7 +5504,7 @@
           "message": "Obyčajný popis tvaru, v ktorom má byť text, ktorý nahrádza predvolenú úlohu čistenia. Popíšte iba transformáciu: pravidlá o výstupnom formáte, odmietnutí odpovede na text a manipulácii s čistým vstupom sa vynucujú automaticky. Vynechaním poľa alebo jeho nastavením na `null` sa zachová predvolená úloha čistenia, ktorá odstraňuje výplň, rieši samoopravy a používa interpunkciu a veľké písmená."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.display_name": {
-          "source": "Sample Rate",
+          "source": "Sample rate",
           "message": "Vzorkovacia frekvencia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c2FtcGxlX3JhdGU.short_desc": {
@@ -5516,7 +5516,7 @@
           "message": "Vzorkovacia frekvencia zdroja v Hz, napríklad `16000`. Vyžaduje sa, keď `audio` je `audio/pcm`. Ignorované pre WAV, ktorý má svoju vzorkovaciu frekvenciu v hlavičke súboru."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.display_name": {
-          "source": "STT Prompt",
+          "source": "STT prompt",
           "message": "Výzva STT"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1kaWN0YXRpb24.option.Y29uZmln.field.c3R0X3Byb21wdA.short_desc": {
@@ -5660,7 +5660,7 @@
           "message": "Názov súboru"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Prepísať zvuk"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.short_desc": {
@@ -5684,7 +5684,7 @@
           "message": "Adresa URL zvukového alebo video súboru na prepis."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.display_name": {
-          "source": "Audio End At",
+          "source": "Audio end at",
           "message": "Koniec zvuku o"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fZW5kX2F0.short_desc": {
@@ -5696,7 +5696,7 @@
           "message": "Časový bod v milisekundách na zastavenie prepisu vo vašom mediálnom súbore. Ďalšie podrobnosti nájdete v časti [Nastavenie začiatku a konca prepisu](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.display_name": {
-          "source": "Audio Start From",
+          "source": "Audio start from",
           "message": "Začiatok zvuku od"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fc3RhcnRfZnJvbQ.short_desc": {
@@ -5708,7 +5708,7 @@
           "message": "Časový bod v milisekundách, kedy sa má začať prepisovanie vo vašom mediálnom súbore. Ďalšie podrobnosti nájdete v časti [Nastavenie začiatku a konca prepisu](https://www.assemblyai.com/docs/pre-recorded-audio/set-the-start-and-end-of-the-transcript)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.display_name": {
-          "source": "Auto Chapters",
+          "source": "Auto chapters",
           "message": "Automatické kapitoly"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19jaGFwdGVycw.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "Generujte súhrny kapitol pomocou Universal-2. Vyžaduje `punctuate: true` a nemožno ho kombinovať s `summarization`. **Zastarané:** použite [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart) na flexibilné súhrny kapitol."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.display_name": {
-          "source": "Auto Highlights",
+          "source": "Auto highlights",
           "message": "Automatické zvýraznenia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXV0b19oaWdobGlnaHRz.short_desc": {
@@ -5732,7 +5732,7 @@
           "message": "Povoliť [kľúčové frázy](https://www.assemblyai.com/docs/speech-understanding/key-phrases), buď pravdivé alebo nepravdivé"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.display_name": {
-          "source": "Content Safety",
+          "source": "Content safety",
           "message": "Bezpečnosť obsahu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.short_desc": {
@@ -5744,7 +5744,7 @@
           "message": "Povoliť [Moderovanie obsahu](https://www.assemblyai.com/docs/content-moderation), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.display_name": {
-          "source": "Content Safety Confidence",
+          "source": "Content safety confidence",
           "message": "Bezpečnosť obsahu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHlfY29uZmlkZW5jZQ.short_desc": {
@@ -5756,7 +5756,7 @@
           "message": "Prah spoľahlivosti pre model [Moderovanie obsahu](https://www.assemblyai.com/docs/content-moderation). Hodnoty musia byť medzi 25 a 100. Vyžaduje sa povolenie `content_safety`; inak sa to ignoruje."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.display_name": {
-          "source": "Custom Spelling",
+          "source": "Custom spelling",
           "message": "Vlastný pravopis"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3NwZWxsaW5n.short_desc": {
@@ -5820,7 +5820,7 @@
           "message": "medical-v1"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
-          "source": "Entity Detection",
+          "source": "Entity detection",
           "message": "Rozpoznávanie entít"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
@@ -5832,7 +5832,7 @@
           "message": "Povoliť [Entity Detection](https://www.assemblyai.com/docs/speech-understanding/entity-detection), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.display_name": {
-          "source": "Filter Profanity",
+          "source": "Filter profanity",
           "message": "Filtrovať vulgárne výrazy"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZmlsdGVyX3Byb2Zhbml0eQ.short_desc": {
@@ -5844,7 +5844,7 @@
           "message": "Filtrovať vulgárne výrazy z prepísaného textu môžu byť pravdivé alebo nepravdivé. Ďalšie podrobnosti nájdete v časti [Filtrovanie nadávok](https://www.assemblyai.com/docs/profanity-filtering)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.display_name": {
-          "source": "Format Text",
+          "source": "Format text",
           "message": "Formátovať text"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.short_desc": {
@@ -5856,7 +5856,7 @@
           "message": "Povoliť [formátovanie textu](https://www.assemblyai.com/docs/pre-recorded-audio), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
-          "source": "Iab Categories",
+          "source": "Iab categories",
           "message": "Kategórie Iab"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
@@ -5868,7 +5868,7 @@
           "message": "Povoliť [Topic Detection](https://www.assemblyai.com/docs/speech-understanding/topic-detection), môže byť pravda alebo nepravda"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.display_name": {
-          "source": "Keyterms Prompt",
+          "source": "Keyterms prompt",
           "message": "Výzva kľúčových pojmov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.a2V5dGVybXNfcHJvbXB0.short_desc": {
@@ -5880,7 +5880,7 @@
           "message": "Zvýšte presnosť pomocou až 200 (pre Universal-2) alebo 1 000 (pre Universal-3.5 Pro) slov alebo fráz špecifických pre doménu (maximálne 6 slov na frázu). Ďalšie podrobnosti nájdete v časti [Keyterms Prompting](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting#keyterms-prompting)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
-          "source": "Language Code",
+          "source": "Language code",
           "message": "Kód jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
@@ -6300,7 +6300,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.display_name": {
-          "source": "Language Codes",
+          "source": "Language codes",
           "message": "Jazykové kódy"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZXM.short_desc": {
@@ -6720,7 +6720,7 @@
           "message": "Yoruba"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Language Confidence Threshold",
+          "source": "Language confidence threshold",
           "message": "Prah jazykovej dôvery"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6732,7 +6732,7 @@
           "message": "Prah spoľahlivosti pre automaticky rozpoznaný jazyk.\nAk je jazyková spoľahlivosť pod touto hranicou, vráti sa chyba.\nPredvolená hodnota je 0. Dá sa nastaviť len vtedy, keď je povolená ochrana `language_detection`. Ďalšie podrobnosti nájdete v časti [Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
-          "source": "Language Detection",
+          "source": "Language detection",
           "message": "Detekcia jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "[Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection) identifikuje hovorený jazyk a presmeruje požiadavku na najlepší model. Použije sa automaticky, keď nešpecifikujete `language_code`. Nastaviť na `false` len spolu s `language_code`; jeho zakázanie bez zadania jazyka vráti chybu."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.display_name": {
-          "source": "Language Detection Options",
+          "source": "Language detection options",
           "message": "Možnosti detekcie jazyka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.short_desc": {
@@ -6756,7 +6756,7 @@
           "message": "Zadajte možnosti pre [Automatická detekcia jazyka] (https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.display_name": {
-          "source": "Code Switching",
+          "source": "Code switching",
           "message": "Prepínanie kódu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmc.short_desc": {
@@ -6768,7 +6768,7 @@
           "message": "Či sa má zistiť [prepínanie kódu] (/reč-na-text/vopred nahratý-audio/prepínanie kódu)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.display_name": {
-          "source": "Code Switching Confidence Threshold",
+          "source": "Code switching confidence threshold",
           "message": "Prah spoľahlivosti prepínania kódu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.Y29kZV9zd2l0Y2hpbmdfY29uZmlkZW5jZV90aHJlc2hvbGQ.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "Prah spoľahlivosti pre detekciu [prepínanie kódu] (/reč na text/vopred nahratý zvuk/prepínanie kódu). If the code switching confidence is below this threshold, the transcript will be processed in the language with the highest `language_detection_confidence` score."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.display_name": {
-          "source": "Expected Languages",
+          "source": "Expected languages",
           "message": "Očakávané jazyky"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZXhwZWN0ZWRfbGFuZ3VhZ2Vz.short_desc": {
@@ -6792,7 +6792,7 @@
           "message": "Zoznam jazykov očakávaných v audio súbore. Predvolená hodnota je `[\"all\"]`, ak nie je špecifikovaná. Ďalšie podrobnosti nájdete v časti [Automatická detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.display_name": {
-          "source": "Fallback Language",
+          "source": "Fallback language",
           "message": "Záložný jazyk"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.ZmFsbGJhY2tfbGFuZ3VhZ2U.short_desc": {
@@ -6816,7 +6816,7 @@
           "message": "Keď sa zistí angličtina, použite pravopis `en_au` alebo `en_uk`; je povolený len jeden variant na základný jazyk. Základné/predvolené kódy ako `en` alebo `en_us` sú odmietnuté. `language_code` odpovede hlási zvolený regionálny kód. Ostatné rozpoznané jazyky toto nastavenie ignorujú. Pozrite si [Detekcia jazyka](https://www.assemblyai.com/docs/pre-recorded-audio/language-detection)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.display_name": {
-          "source": "On No Speech Detected",
+          "source": "On no speech detected",
           "message": "On No Speech Detection"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9uX29wdGlvbnM.field.b25fbm9fc3BlZWNoX2RldGVjdGVk.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "Redigovať PII z prepísaného textu pomocou modelu Redigovať PII môže byť pravda alebo nepravda. Vyžaduje sa, aby `format_text` bolo `true`. Ďalšie podrobnosti nájdete v časti [PII Redaction](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.display_name": {
-          "source": "Redact PII Audio",
+          "source": "Redact PII audio",
           "message": "Upraviť zvuk PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpbw.short_desc": {
@@ -6896,7 +6896,7 @@
           "message": "Vygenerujte kópiu pôvodného mediálneho súboru s „pípnutím“ hovoreného PII, môže byť pravda alebo nepravda. Vyžaduje sa, aby `redact_pii` bolo `true`. Ďalšie podrobnosti nájdete v časti [PII redaction](https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.display_name": {
-          "source": "Redact PII Audio Options",
+          "source": "Redact PII audio options",
           "message": "Upraviť možnosti zvuku PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "Zadajte možnosti pre [PII redigované audio] (https://www.assemblyai.com/docs/pii-redaction#request-for-redacted-audio) súbory."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.display_name": {
-          "source": "Override Audio Redaction Method",
+          "source": "Override audio redaction method",
           "message": "Prepísať metódu úpravy zvuku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.b3ZlcnJpZGVfYXVkaW9fcmVkYWN0aW9uX21ldGhvZA.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "ticho"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.display_name": {
-          "source": "Return Redacted No Speech Audio",
+          "source": "Return redacted no speech audio",
           "message": "Vrátiť zredigovaný zvuk bez reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19vcHRpb25z.field.cmV0dXJuX3JlZGFjdGVkX25vX3NwZWVjaF9hdWRpbw.short_desc": {
@@ -6936,7 +6936,7 @@
           "message": "V predvolenom nastavení poskytuje redigovanie zvuku redigované adresy URL zvuku iba vtedy, keď sa rozpozná reč. Ak však váš prípad použitia špecificky vyžaduje redigované zvukové súbory aj pre tiché zvukové súbory bez akéhokoľvek dialógu, môžete sa rozhodnúť prijímať tieto adresy URL nastavením tohto parametra na `true`. Vyžaduje sa, aby `redact_pii_audio` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.display_name": {
-          "source": "Redact PII Audio Quality",
+          "source": "Redact PII audio quality",
           "message": "Upravte kvalitu zvuku PII"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9hdWRpb19xdWFsaXR5.short_desc": {
@@ -6956,7 +6956,7 @@
           "message": "wav"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.display_name": {
-          "source": "Redact PII Policies",
+          "source": "Redact PII policies",
           "message": "Upravte pravidlá umožňujúce identifikáciu osôb"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9wb2xpY2llcw.short_desc": {
@@ -6968,7 +6968,7 @@
           "message": "Zoznam zásad úpravy údajov umožňujúcich identifikáciu osôb, ktoré sa majú povoliť. Ďalšie podrobnosti nájdete v časti [PII redaction](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.display_name": {
-          "source": "Redact PII Sub",
+          "source": "Redact PII sub",
           "message": "Spôsob nahradenia osobných údajov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.short_desc": {
@@ -6988,7 +6988,7 @@
           "message": "hash"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
-          "source": "Redact PII Return Unredacted",
+          "source": "Redact PII return unredacted",
           "message": "Vrátiť aj pôvodný text"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.short_desc": {
@@ -7000,7 +7000,7 @@
           "message": "Vráťte `unredacted_text`, `unredacted_words` a `unredacted_utterances` vedľa redigovaných polí. Vyžaduje `redact_pii: true`. **Citlivý výstup:** ak to umožníte zachovať pôvodné osobné informácie. Predvolene vypnuté. Pozrite si [Editácia PII](https://www.assemblyai.com/docs/pii-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.display_name": {
-          "source": "Redact Static Entities",
+          "source": "Redact static entities",
           "message": "Upravte statické entity"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3N0YXRpY19lbnRpdGllcw.short_desc": {
@@ -7012,7 +7012,7 @@
           "message": "**Chráňte vlastnícke podmienky**\n- Mapujte štítky redakcie na presné výrazy, napríklad `{\"INTERNAL_TOOL\": [\"Bearclaw\"]}`. Vyžaduje `redact_pii: true` a používa `redact_pii_sub`. Zhoda toleruje veľké a malé písmená, interpunkciu a menšie rozdiely v medzier. Nezovšeobecňuje nad rámec poskytnutých podmienok.\n- S `redact_pii_audio` sa zhody odstránia aj zo zvuku.\n\n**Obmedzenia**\n- Až 100 štítkov, 200 výrazov na štítok a 200 znakov na výraz.\n- Štítky povoľujú písmená, čísla, medzery, podčiarkovníky a spojovníky v dĺžke až 80 znakov.\n\nPozrite si [Redigovanie statických entít] (https://www.assemblyai.com/docs/guardrails/redact-pii-from-transcripts#static-entity-redaction)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
-          "source": "Sentiment Analysis",
+          "source": "Sentiment analysis",
           "message": "Analýza sentimentu"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
@@ -7024,7 +7024,7 @@
           "message": "Povoliť [Analýzu sentimentu](https://www.assemblyai.com/docs/speech-understanding/sentiment-analysis), môže byť pravda alebo nepravda. Vyžaduje sa, aby `punctuate` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
-          "source": "Speaker Labels",
+          "source": "Speaker labels",
           "message": "Štítky reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
@@ -7036,7 +7036,7 @@
           "message": "Povoliť [diarizáciu reproduktora](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers), môže byť pravda alebo nepravda. Vyžaduje sa, aby `punctuate` bolo `true`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.display_name": {
-          "source": "Speaker Options",
+          "source": "Speaker options",
           "message": "Možnosti reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.short_desc": {
@@ -7048,7 +7048,7 @@
           "message": "Zadajte možnosti pre [diarizáciu reproduktora] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers). Použite toto na nastavenie rozsahu možných reproduktorov. Vyžaduje, aby `speaker_labels` bolo `true` a nemožno ho použiť spolu s `speakers_expected`. Keď sú nastavené obe hranice, `min_speakers_expected` musí byť menšie alebo rovné `max_speakers_expected`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.display_name": {
-          "source": "Include Speaker Confidence",
+          "source": "Include speaker confidence",
           "message": "Zahrňte dôveru rečníka"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.aW5jbHVkZV9zcGVha2VyX2NvbmZpZGVuY2U.short_desc": {
@@ -7060,7 +7060,7 @@
           "message": "Keď `true`, zahŕňa pole `speaker_confidence` na slovo a na výrok v odpovedi. Ďalšie podrobnosti nájdete v časti [Diarizácia reproduktora](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#configuration)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Max Speakers Expected",
+          "source": "Max speakers expected",
           "message": "Očakávaný maximálny počet reproduktorov"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWF4X3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7072,7 +7072,7 @@
           "message": "Obmedzte počet štítkov reproduktorov; ďalšie reproduktory sa zlúčia do existujúcich štítkov. **Príliš vysoký limit môže znížiť presnosť rozdelením jedného reproduktora na niekoľko.** Predvolené: bez obmedzenia na 0–2 minúty, 10 na 2–10 minút, 30 na viac ako 10 minút. Pozrite si [Rozsahy reproduktorov] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.display_name": {
-          "source": "Min Speakers Expected",
+          "source": "Min speakers expected",
           "message": "Minimálny počet reproduktorov sa očakáva"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9vcHRpb25z.field.bWluX3NwZWFrZXJzX2V4cGVjdGVk.short_desc": {
@@ -7084,7 +7084,7 @@
           "message": "Pevný spodný limit na počet štítkov reproduktorov – model nevráti menej reproduktorov ako tento. Ďalšie podrobnosti nájdete v časti [Nastavenie rozsahu možných reproduktorov](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-a-range-of-possible-speakers)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.display_name": {
-          "source": "Speakers Expected",
+          "source": "Speakers expected",
           "message": "Očakáva sa reproduktory"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcnNfZXhwZWN0ZWQ.short_desc": {
@@ -7096,7 +7096,7 @@
           "message": "Hovorí modelu štítku reproduktora, koľko reproduktorov by sa mal pokúsiť identifikovať. Vyžaduje, aby `speaker_labels` bolo `true` a musí to byť kladné celé číslo; nemožno použiť spolu s `speaker_options`. Ďalšie podrobnosti nájdete v časti [Očakávaný počet reproduktorov] (https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers#set-number-of-speakers-expected)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.display_name": {
-          "source": "Speech Models",
+          "source": "Speech models",
           "message": "Modely reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVscw.short_desc": {
@@ -7116,7 +7116,7 @@
           "message": "Universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.display_name": {
-          "source": "Speech Threshold",
+          "source": "Speech threshold",
           "message": "Hranica reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3RocmVzaG9sZA.short_desc": {
@@ -7128,7 +7128,7 @@
           "message": "Odmietnite zvukové súbory, ktoré obsahujú menej než tento zlomok reči.\nPlatné hodnoty sú v rozsahu [0, 1] vrátane. Ďalšie podrobnosti nájdete v časti [Speech Threshold](https://www.assemblyai.com/docs/speech-threshold)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.display_name": {
-          "source": "Speech Understanding",
+          "source": "Speech understanding",
           "message": "Porozumenie reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX3VuZGVyc3RhbmRpbmc.short_desc": {
@@ -7160,7 +7160,7 @@
           "message": "Používajte formálny jazykový štýl. Ďalšie podrobnosti nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
-          "source": "Match Original Utterance",
+          "source": "Match original utterance",
           "message": "Porovnajte pôvodný výrok"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
@@ -7172,7 +7172,7 @@
           "message": "Keď je povolená s menovkami reproduktorov, vráti preložený text v poli výrokov. Každý výrok bude obsahovať kľúč `translated_texts` obsahujúci preklady pre každý cieľový jazyk."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
-          "source": "Target Languages",
+          "source": "Target languages",
           "message": "Cieľové jazyky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
@@ -7184,11 +7184,11 @@
           "message": "Zoznam kódov cieľových jazykov (napr. `[\"es\", \"de\"]`). Podporované jazyky nájdete v [Preklad](https://www.assemblyai.com/docs/speech-understanding/translation)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
-          "source": "Speaker Identification",
+          "source": "Speaker identification",
           "message": "Identifikácia reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
-          "source": "Known Values",
+          "source": "Known values",
           "message": "Známe hodnoty"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
@@ -7200,7 +7200,7 @@
           "message": "Vyžaduje sa, ak je speaker_type \"role\". Každá hodnota musí mať 35 znakov alebo menej."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
-          "source": "Speaker Type",
+          "source": "Speaker type",
           "message": "Typ reproduktora"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
@@ -7268,7 +7268,7 @@
           "message": "Úloha rečníka. Vyžaduje sa, keď je `speaker_type` „rola“."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
-          "source": "Custom Formatting",
+          "source": "Custom formatting",
           "message": "Vlastné formátovanie"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
@@ -7296,7 +7296,7 @@
           "message": "Vzor formátu e-mailu (napr. `\"username@domain.com\"`). Ďalšie podrobnosti nájdete v časti [Vlastné formátovanie](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)."
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
-          "source": "Phone Number",
+          "source": "Phone number",
           "message": "Telefónne číslo"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
@@ -7324,7 +7324,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Typ zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "guľky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
-          "source": "Action Items",
+          "source": "Action items",
           "message": "Akčné položky"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
@@ -7360,7 +7360,7 @@
           "message": "stredná"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
-          "source": "Include Decisions",
+          "source": "Include decisions",
           "message": "Zahrňte rozhodnutia"
         },
         "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Zhrňte prepis Universal-2. Vyžaduje `punctuate: true` a `format_text: true`; nemožno kombinovať s `auto_chapters`. **Zastarané:** na flexibilné súhrny použite [LLM Gateway](https://www.assemblyai.com/docs/llm-gateway/quickstart)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
-          "source": "Summary Model",
+          "source": "Summary model",
           "message": "Model zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "chytľavé"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.display_name": {
-          "source": "Summary Type",
+          "source": "Summary type",
           "message": "Typ zhrnutia"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.short_desc": {
@@ -7440,7 +7440,7 @@
           "message": "odseku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.display_name": {
-          "source": "Remove Audio Tags",
+          "source": "Remove audio tags",
           "message": "Odstráňte zvukové značky"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.short_desc": {
@@ -7472,7 +7472,7 @@
           "message": "Ovládajte množstvo náhodnosti vstreknutej do odozvy modelu. Ďalšie podrobnosti nájdete v [Sprievodca výzvami](https://www.assemblyai.com/docs/pre-recorded-audio/prompting).\n\nPoznámka: Tento parameter sa prejaví iba pri modeli Universal-3.5 Pro."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.display_name": {
-          "source": "Webhook Auth Header Name",
+          "source": "Webhook auth header name",
           "message": "Názov hlavičky autorizácie webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl9uYW1l.short_desc": {
@@ -7484,7 +7484,7 @@
           "message": "Názov hlavičky, ktorý sa má odoslať s prepisom dokončeným alebo neúspešnými žiadosťami [webhook] (https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio). Musí mať 1 až 1 000 znakov a obsahovať iba písmená ASCII, čísla, spojovníky a podčiarkovníky. Vyžaduje sa tiež nastavenie `webhook_auth_header_value` a `webhook_url`."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.display_name": {
-          "source": "Webhook Auth Header Value",
+          "source": "Webhook auth header value",
           "message": "Hodnota hlavičky autorizácie webhooku"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va19hdXRoX2hlYWRlcl92YWx1ZQ.short_desc": {
@@ -7508,7 +7508,7 @@
           "message": "Webová adresa, na ktorú odosielame žiadosti [webhook](https://www.assemblyai.com/docs/deployment/webhooks-for-pre-recorded-audio)."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.display_name": {
-          "source": "Custom Topics",
+          "source": "Custom topics",
           "message": "Vlastné témy"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y3VzdG9tX3RvcGljcw.short_desc": {
@@ -7520,7 +7520,7 @@
           "message": "K tomuto parametru momentálne nie je pripojená žiadna funkcia."
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.display_name": {
-          "source": "Speech Model",
+          "source": "Speech model",
           "message": "Model reči"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.short_desc": {

@@ -16,7 +16,7 @@
           "message": "Odczytuj i zarządzaj wiadomościami e-mail na dowolnym serwerze IMAP.\n\n- przeszukuj skrzynkę pocztową za pomocą kryteriów po stronie serwera, dzięki czemu przesyłane są tylko pasujące wiadomości\n- pobieraj całą wiadomość lub pojedynczą część MIME, gdy potrzebny jest tylko jeden załącznik\n- reaguj na nową pocztę w momencie jej nadejścia, korzystając z mechanizmu server push tam, gdzie serwer go obsługuje\n- zmieniaj flagi, przenoś wiadomości między skrzynkami pocztowymi i archiwizuj wiadomości za pomocą `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) to standardowy protokół skrzynek pocztowych, a dla wielu dostawców poczty e-mail jest to jedyny oferowany dostęp programistyczny. Ponieważ wiadomości pozostają na serwerze, integracja może monitorować skrzynkę pocztową i reagować na przychodzące wiadomości bez przejmowania obsługi poczty konta.\n\nObsługiwane jest uwierzytelnianie zarówno za pomocą hasła, jak i tokena bearer OAuth2; mechanizm jest wybierany na podstawie informacji rozgłaszanych przez serwer"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Wyszukaj wiadomości"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Otwórz skrzynkę pocztową za pomocą `EXAMINE` zamiast `SELECT`, aby pobieranie wiadomości nie mogło zmienić żadnych flag"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Pobierz wiadomość"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Ustaw flagę `\\Seen` w wiadomości po jej pobraniu.\n\nSamo pobranie nigdy nie zmienia flag, więc pozostaw to jako `False`, aby sprawdzić wiadomość bez oznaczania jej przez klienta pocztowego nadawcy jako przeczytanej"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Pobierz załącznik"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Identyfikator części MIME do pobrania (np.: `1`, `2.1`, `HEADER`, `TEXT`).\n\nPobranie pojedynczej części pozwala uniknąć przesyłania całej wiadomości, co ma znaczenie, gdy potrzebny jest jeden załącznik z wiadomości z kilkoma dużymi"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Wyświetl skrzynki pocztowe"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Zwraca tylko skrzynki pocztowe subskrybowane przez konto, używając `LSUB` zamiast `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Zmień flagi wiadomości"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Zastąp wszystkie flagi wiadomości podanymi flagami"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Przenieś wiadomości"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Kopiuj wiadomości zamiast je przenosić, pozostawiając oryginały na miejscu"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Zapisz wiadomość"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Czas nadejścia do zarejestrowania dla wiadomości; domyślnie czas zapisania jej przez serwer"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nowa wiadomość e-mail"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Oznacz każdą zgłoszoną wiadomość flagą `\\Deleted` i wyczyść (expunge) ją po wywołaniu jej zdarzenia.\n\n**Spowoduje to trwałe usunięcie poczty z serwera**; preferuj `mark_seen` lub przeniesienie do innej skrzynki pocztowej, chyba że skrzynka pocztowa jest kolejką przeznaczoną do opróżniania.\n\nWiadomość jest usuwana, gdy tylko jej zdarzenie zostanie **wywołane**, co nie jest tożsame z jej **przetworzeniem** przez konsumenta. Zgłoszenie wyjątku podczas wywoływania zdarzenia pozostawia wiadomość na miejscu do następnego cyklu, jednak konsument, który odbierze zdarzenie, a następnie ulegnie awarii, przekroczy limit czasu lub zostanie zrestartowany w trakcie przetwarzania, traci jedyną kopię. W przypadku zadań, w których nie wolno utracić wiadomości źródłowej, pozostaw tę opcję niewybraną i podejmij działanie z poziomu konsumenta po pomyślnym przetworzeniu: każde zdarzenie zawiera swój `uid`, a akcje `set-flags` i `move-messages` go przyjmują"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nowe załączniki wiadomości e-mail"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

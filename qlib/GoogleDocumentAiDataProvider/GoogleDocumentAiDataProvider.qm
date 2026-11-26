@@ -111,7 +111,7 @@ module GoogleDocumentAiDataProvider {
                 "app": GoogleDocumentAiDataProvider::AppName,
                 "path": "/process-document",
                 "action": "process-document",
-                "display_name": "Process Document",
+                "display_name": "Process document",
                 "short_desc": "Run a Document AI processor over a document",
                 "desc": "Calls a Document AI processor's `:process` endpoint to "
                     "extract text and structure from a document.  The processor "

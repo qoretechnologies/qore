@@ -16,8 +16,8 @@
           "message": "Read and manage email on any IMAP server.\n\n- search a mailbox with server-side criteria, so only matching messages are transferred\n- retrieve a whole message, or a single MIME part when only one attachment is needed\n- react to new mail as it arrives, using server push where the server supports it\n- change flags, move messages between mailboxes, and file messages with `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) is the standard mailbox protocol, and for many email providers it is the only programmatic access they offer. Because messages stay on the server, an integration can watch a mailbox and act on what arrives without taking over the account's mail.\n\nBoth password and OAuth2 bearer-token authentication are supported; the mechanism is chosen from what the server advertises"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
-          "message": "Search for Messages"
+          "source": "Search for messages",
+          "message": "Search for messages"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
           "source": "Search a mailbox for messages",
@@ -76,8 +76,8 @@
           "message": "Open the mailbox with `EXAMINE` instead of `SELECT`, so that retrieving messages cannot change any flags"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
-          "message": "Retrieve a Message"
+          "source": "Retrieve a message",
+          "message": "Retrieve a message"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
           "source": "Retrieve a message by UID",
@@ -124,8 +124,8 @@
           "message": "Set the `\\Seen` flag on the message after retrieving it.\n\nRetrieval itself never changes flags, so leave this `False` to inspect a message without the sender's mail client showing it as read"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
-          "message": "Retrieve an Attachment"
+          "source": "Retrieve an attachment",
+          "message": "Retrieve an attachment"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
           "source": "Retrieve a single MIME part of a message",
@@ -172,8 +172,8 @@
           "message": "The MIME part specifier to retrieve (ex: `1`, `2.1`, `HEADER`, `TEXT`).\n\nRetrieving a single part avoids transferring the whole message, which matters when one attachment is needed from a message with several large ones"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
-          "message": "List Mailboxes"
+          "source": "List mailboxes",
+          "message": "List mailboxes"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
           "source": "List the mailboxes in the account",
@@ -220,8 +220,8 @@
           "message": "List only mailboxes the account is subscribed to, using `LSUB` instead of `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
-          "message": "Change Message Flags"
+          "source": "Change message flags",
+          "message": "Change message flags"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
           "source": "Add, remove, or replace message flags",
@@ -304,8 +304,8 @@
           "message": "Replace all flags on the messages with the given flags"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
-          "message": "Move Messages"
+          "source": "Move messages",
+          "message": "Move messages"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
           "source": "Move or copy messages to another mailbox",
@@ -364,8 +364,8 @@
           "message": "Copy the messages instead of moving them, leaving the originals in place"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
-          "message": "Store a Message"
+          "source": "Store a message",
+          "message": "Store a message"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
           "source": "Store a message in a mailbox",
@@ -424,8 +424,8 @@
           "message": "The arrival time to record for the message; defaults to the time the server stores it"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
-          "message": "New Email"
+          "source": "New email",
+          "message": "New email"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
           "source": "React to new emails",
@@ -496,8 +496,8 @@
           "message": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
-          "message": "New Email Attachments"
+          "source": "New email attachments",
+          "message": "New email attachments"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
           "source": "React to new email attachments",

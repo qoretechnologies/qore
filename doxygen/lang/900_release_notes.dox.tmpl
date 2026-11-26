@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Data Provider Labels Are in Sentence Case
+    @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" renders a display name
+    in sentence case in English and without a locale (ex: \c "max_tokens_per_request" -> \c "Max tokens per request"),
+    and most of the data provider modules' action names follow; code that compares a display name with a literal in
+    title case must change (<a href="https://github.com/qoretechnologies/qore/issues/6784">issue 6784</a>).
+
     @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
     The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
     tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it

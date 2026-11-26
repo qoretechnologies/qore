@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
-          "message": "List Buckets"
+          "source": "List buckets",
+          "message": "List buckets"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
           "source": "List the buckets owned by the account",
@@ -352,8 +352,8 @@
           "message": "Lists every bucket owned by the authenticated account, with the date each was created."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
-          "message": "Create Bucket"
+          "source": "Create bucket",
+          "message": "Create bucket"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
           "source": "Create a new bucket",
@@ -448,8 +448,8 @@
           "message": "Enable object lock on the new bucket; object lock cannot be enabled after creation and requires versioning, which is enabled automatically when this is set"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
-          "message": "List Objects"
+          "source": "List objects",
+          "message": "List objects"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
           "source": "List the objects in a bucket",
@@ -532,8 +532,8 @@
           "message": "The `next_continuation_token` value returned by a previous truncated listing; used to retrieve the following page"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
-          "message": "Get Object"
+          "source": "Get object",
+          "message": "Get object"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
           "source": "Retrieve an object and its metadata",
@@ -592,8 +592,8 @@
           "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
-          "message": "Download File"
+          "source": "Download file",
+          "message": "Download file"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
           "source": "Download an object's content",
@@ -640,8 +640,8 @@
           "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file to a bucket",
@@ -976,8 +976,8 @@
           "message": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
-          "message": "Create Text Object"
+          "source": "Create text object",
+          "message": "Create text object"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
           "source": "Create an object from text content",
@@ -1204,8 +1204,8 @@
           "message": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
-          "message": "Delete Object"
+          "source": "Delete object",
+          "message": "Delete object"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
           "source": "Delete an object from a bucket",
@@ -1252,8 +1252,8 @@
           "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
-          "message": "Copy Object"
+          "source": "Copy object",
+          "message": "Copy object"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
           "source": "Copy an object within or between buckets",
@@ -1552,8 +1552,8 @@
           "message": "The `Content-Disposition` Amazon S3 should serve the download with; use this to make a browser save the object under a chosen name rather than display it"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
-          "message": "Delete Objects"
+          "source": "Delete objects",
+          "message": "Delete objects"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
           "source": "Delete up to 1000 objects in a single call",
@@ -1612,8 +1612,8 @@
           "message": "Remove objects that are under a governance-mode object-lock retention.\n\nThe credentials must be allowed `s3:BypassGovernanceRetention`; objects under a **compliance**-mode lock cannot be removed by anyone until the lock expires"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
-          "message": "Move Object"
+          "source": "Move object",
+          "message": "Move object"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
           "source": "Move an object within or between buckets",
@@ -1768,8 +1768,8 @@
           "message": "Long-term archive data retrieved in hours; the lowest-cost storage class"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
-          "message": "Get Object Tags"
+          "source": "Get object tags",
+          "message": "Get object tags"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
           "source": "Read the tags stored with an object",
@@ -1816,8 +1816,8 @@
           "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
-          "message": "Set Object Tags"
+          "source": "Set object tags",
+          "message": "Set object tags"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
           "source": "Replace the tags stored with an object",
@@ -1876,8 +1876,8 @@
           "message": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
-          "message": "List Object Versions"
+          "source": "List object versions",
+          "message": "List object versions"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
           "source": "List every version of the objects in a bucket",
@@ -1948,8 +1948,8 @@
           "message": "The `next_version_id_marker` value returned by a previous truncated listing; it is used together with `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
-          "message": "Delete Bucket"
+          "source": "Delete bucket",
+          "message": "Delete bucket"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
           "source": "Delete an empty bucket",
@@ -1972,8 +1972,8 @@
           "message": "The name of the bucket to delete; it must already be empty"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
-          "message": "Find Objects"
+          "source": "Find objects",
+          "message": "Find objects"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
           "source": "Read the objects in a bucket as records",
@@ -2044,8 +2044,8 @@
           "message": "How many keys to fetch per request; Amazon S3 caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
-          "message": "New Bucket"
+          "source": "New bucket",
+          "message": "New bucket"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
           "source": "React to a bucket being created in the account",
@@ -2080,8 +2080,8 @@
           "message": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
-          "message": "New or Updated File"
+          "source": "New or updated file",
+          "message": "New or updated file"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {
           "source": "React to an object being created or updated in a bucket",

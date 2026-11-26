@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Prehľadať index"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Vyhľadávať údaje v indexe ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Pridať dokument"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Pridať dokument do / importovať dáta do ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Hromadné operácie"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Vykonávať hromadné operácie indexovania, vytvárania, aktualizácie a odstraňovania dokumentov v ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Vyhľadávanie Scroll"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

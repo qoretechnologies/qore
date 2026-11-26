@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Create a Contract",
+          "source": "Create a contract",
           "message": "建立合約"
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
@@ -512,7 +512,7 @@
           "message": "合約結束日期（格式為 YYYY-MM-DD，若適用）"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Terminate a Contract",
+          "source": "Terminate a contract",
           "message": "終止合約"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
@@ -560,7 +560,7 @@
           "message": "工作者在職的最後一天（格式為 YYYY-MM-DD）"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
-          "source": "Sign a Contract",
+          "source": "Sign a contract",
           "message": "簽署合約"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
@@ -584,7 +584,7 @@
           "message": "要簽署之合約的唯一識別碼"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
-          "source": "Search Contracts",
+          "source": "Search contracts",
           "message": "搜尋合約"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
@@ -688,7 +688,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
-          "source": "Get a Contract",
+          "source": "Get a contract",
           "message": "取得合約"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
@@ -712,7 +712,7 @@
           "message": "合約的唯一識別碼"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Update a Contract",
+          "source": "Update a contract",
           "message": "更新合約"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
@@ -784,7 +784,7 @@
           "message": "合約更新後的職稱"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
-          "source": "Submit a Timesheet",
+          "source": "Submit a timesheet",
           "message": "提交工時表"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "所執行工作的說明"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Update a Timesheet",
+          "source": "Update a timesheet",
           "message": "更新工時表"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
@@ -892,7 +892,7 @@
           "message": "已完成工作更新後的說明"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
-          "source": "Approve a Timesheet",
+          "source": "Approve a timesheet",
           "message": "核准工時表"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "要核准的工時表項目的唯一識別碼"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
-          "source": "Reject a Timesheet",
+          "source": "Reject a timesheet",
           "message": "拒絕工時表"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
@@ -952,7 +952,7 @@
           "message": "工時表條目被拒絕的原因說明"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
-          "source": "Search Timesheets",
+          "source": "Search timesheets",
           "message": "搜尋工時表"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
-          "source": "Get a Timesheet",
+          "source": "Get a timesheet",
           "message": "取得工時表"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "工時表項目的唯一識別碼"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Delete a Timesheet",
+          "source": "Delete a timesheet",
           "message": "刪除工時表"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "要刪除之工時表項目的唯一識別碼"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Create an Invoice Adjustment",
+          "source": "Create an invoice adjustment",
           "message": "建立發票調整"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "建立此發票調整的原因說明"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Update an Invoice Adjustment",
+          "source": "Update an invoice adjustment",
           "message": "更新發票調整項目"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "此發票調整項目更新後的說明"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Review an Invoice Adjustment",
+          "source": "Review an invoice adjustment",
           "message": "審核發票調整"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "婉拒調整"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
-          "source": "Search Invoice Adjustments",
+          "source": "Search invoice adjustments",
           "message": "搜尋發票調整項目"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Get an Invoice Adjustment",
+          "source": "Get an invoice adjustment",
           "message": "取得發票調整"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "發票調整的唯一識別碼"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Delete an Invoice Adjustment",
+          "source": "Delete an invoice adjustment",
           "message": "刪除發票調整項目"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "要刪除之發票調整項目的唯一識別碼"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
-          "source": "Create a Worker",
+          "source": "Create a worker",
           "message": "建立工作者"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "工作者的國際格式電話號碼"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
-          "source": "Update a Worker",
+          "source": "Update a worker",
           "message": "更新工作者"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "主管級"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
-          "source": "Search Workers",
+          "source": "Search workers",
           "message": "搜尋工作者"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
-          "source": "Get a Worker",
+          "source": "Get a worker",
           "message": "取得工作者"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "工作者的唯一識別碼"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Create a Time-Off Request",
+          "source": "Create a time-off request",
           "message": "建立休假申請"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "休假申請的選填備註或原因"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
-          "source": "Search Time-Off Types",
+          "source": "Search time-off types",
           "message": "搜尋休假類型"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "要傳回的最大結果數量"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
-          "source": "List Legal Entities",
+          "source": "List legal entities",
           "message": "列出法人實體"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "搜尋發票"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "要略過的結果數量（用於手動分頁）"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "取得發票"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "發票的唯一識別碼"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
-          "source": "Approve a Time-Off Request",
+          "source": "Approve a time-off request",
           "message": "核准休假申請"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "要核准的休假申請的唯一識別碼"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Reject a Time-Off Request",
+          "source": "Reject a time-off request",
           "message": "拒絕休假申請"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "休假申請被拒絕的原因說明"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
-          "source": "Contract Created",
+          "source": "Contract created",
           "message": "合約已建立"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Contract Status Updated",
+          "source": "Contract status updated",
           "message": "合約狀態已更新"
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
-          "source": "Contract Terminated",
+          "source": "Contract terminated",
           "message": "合約已終止"
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
-          "source": "Invoice Adjustment Created",
+          "source": "Invoice adjustment created",
           "message": "發票調整項目已建立"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
-          "source": "Invoice Adjustment Reviewed",
+          "source": "Invoice adjustment reviewed",
           "message": "發票調整項目已審查"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
-          "source": "Timesheet Submitted",
+          "source": "Timesheet submitted",
           "message": "已提交工時表"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
-          "source": "Timesheet Reviewed",
+          "source": "Timesheet reviewed",
           "message": "已審核工時表"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
-          "source": "Time-Off Request Created",
+          "source": "Time-off request created",
           "message": "已建立休假申請"
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
-          "source": "Time-Off Request Updated",
+          "source": "Time-off request updated",
           "message": "已更新休假申請"
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "僅偵測在此日期/時間之後建立或更新的事件。若未設定，輪詢將從目前時間開始。"
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
-          "source": "Time-Off Request Reviewed",
+          "source": "Time-off request reviewed",
           "message": "已審核休假申請"
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {

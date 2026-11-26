@@ -16,7 +16,7 @@
           "message": "Підключитися до серверів MCP для інтеграції інструментів AI, ресурсів та промптів"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
+          "source": "Call tool",
           "message": "Викликати інструмент"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Виконати інструмент MCP із наданими аргументами та повернути результат"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
+          "source": "List tools",
           "message": "Список інструментів"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Отримати список усіх інструментів, доступних на сервері MCP"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "Читати ресурс"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Прочитати вміст ресурсу MCP за URI"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
+          "source": "List resources",
           "message": "Список ресурсів"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Отримати список усіх ресурсів, доступних на сервері MCP"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "Отримати промпт"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Отримати шаблон промпту від сервера MCP із аргументами"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
+          "source": "List prompts",
           "message": "Список промптів"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Отримати список усіх промптів, доступних на сервері MCP"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
+          "source": "Get completion",
           "message": "Отримати автодоповнення"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Отримати пропозиції автодоповнення для промптів або ресурсів"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
+          "source": "Ping server",
           "message": "Надіслати ping серверу"
         },
         "app.TUNQ.action.cGluZw.short_desc": {

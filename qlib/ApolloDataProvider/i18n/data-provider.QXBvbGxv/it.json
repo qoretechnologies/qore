@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Crea un contatto"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -432,7 +432,7 @@
           "message": "L'ID dell'utente proprietario di questo contatto"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Aggiorna un contatto"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Posizione attuale del contatto"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Cerca contatti"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Risultati massimi"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Ottieni un contatto"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -588,7 +588,7 @@
           "message": "L'ID del contatto"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
+          "source": "Create an account",
           "message": "Crea un account"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -644,7 +644,7 @@
           "message": "ID utente proprietario"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
+          "source": "Update an account",
           "message": "Aggiorna un account"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -704,7 +704,7 @@
           "message": "ID utente proprietario"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Cerca account"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Risultati massimi"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "Ottieni un account"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "L'ID dell'account"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
+          "source": "Create a deal",
           "message": "Crea una trattativa"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -848,7 +848,7 @@
           "message": "ID account associato"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
+          "source": "Update a deal",
           "message": "Aggiorna una trattativa"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ID utente proprietario"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Elenca trattative"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Risultati massimi"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
+          "source": "Get a deal",
           "message": "Ottieni una trattativa"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "Risultati per pagina (max 100)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
+          "source": "Search organizations",
           "message": "Cerca organizzazioni"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Risultati per pagina (max 100)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Contatto creato"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Si attiva quando viene creato un nuovo contatto in Apollo"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Contatto aggiornato"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Si attiva quando un contatto viene aggiornato in Apollo"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
+          "source": "Account created",
           "message": "Account creato"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Si attiva quando viene creato un nuovo account in Apollo"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
+          "source": "Deal created",
           "message": "Trattativa creata"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {

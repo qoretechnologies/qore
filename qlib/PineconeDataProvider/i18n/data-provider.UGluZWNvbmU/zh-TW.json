@@ -339,7 +339,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.display_name": {
-          "source": "List Indexes",
+          "source": "List indexes",
           "message": "列出索引"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.short_desc": {
@@ -375,7 +375,7 @@
           "message": "套用的索引，以名稱指定。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.display_name": {
-          "source": "Create Index",
+          "source": "Create index",
           "message": "建立索引"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.short_desc": {
@@ -471,7 +471,7 @@
           "message": "Microsoft Azure。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "部署類型"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -563,7 +563,7 @@
           "message": "Azure `eastus2`，位於維吉尼亞州。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "部署類型"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -731,7 +731,7 @@
           "message": "要使用的分片數量。分片決定索引的儲存容量，每個分片提供 250 GB 的儲存空間。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "節點類型"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
@@ -783,7 +783,7 @@
           "message": "讀取由專用節點提供，適用於可預測的工作負載。需要 `node_type` 和 `scaling` 附加其上。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.display_name": {
-          "source": "Create Index with Integrated Embedding",
+          "source": "Create index with integrated embedding",
           "message": "建立具備整合式嵌入的索引"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.short_desc": {
@@ -1131,7 +1131,7 @@
           "message": "要使用的分片數量。分片決定索引的儲存容量，每個分片提供 250 GB 的儲存空間。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "節點類型"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
@@ -1295,7 +1295,7 @@
           "message": "pod 型索引的部署更新參數。請指定 `replicas`、`pod_type` 或兩者。部署類型、雲端/區域與環境在建立後即無法變更。請勿包含 `deployment_type` 欄位；該欄位不被接受。"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.display_name": {
-          "source": "Pod Type",
+          "source": "Pod type",
           "message": "Pod 類型"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.short_desc": {
@@ -1431,7 +1431,7 @@
           "message": "分片數量。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "節點類型"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
@@ -1507,7 +1507,7 @@
           "message": "套用的索引，以名稱指定。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.display_name": {
-          "source": "List Backups",
+          "source": "List backups",
           "message": "列出備份"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.short_desc": {
@@ -1863,7 +1863,7 @@
           "message": "要使用的分片數量。分片決定索引的儲存容量，每個分片提供 250 GB 的儲存空間。"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "節點類型"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
@@ -2079,7 +2079,7 @@
           "message": "每個備份的保留時間，格式為 `{\"expire_after_days\": 30}`。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "到期天數"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2199,7 +2199,7 @@
           "message": "每個備份的保留時間，格式為 `{\"expire_after_days\": 30}`。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "到期天數"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2283,7 +2283,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.display_name": {
-          "source": "List Restore Jobs",
+          "source": "List restore jobs",
           "message": "列出還原作業"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.short_desc": {
@@ -2343,7 +2343,7 @@
           "message": "要取得詳細資料的還原作業 ID。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "列出集合"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -2355,7 +2355,7 @@
           "message": "列出專案中的集合。\n\n**集合屬於舊版功能。**  僅支援 pod 型索引，而此 API 版本無法建立 pod 型索引——因此這只適用於仍保有舊版索引的專案。  現行用途請改用 **備份**。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "建立集合"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -2439,7 +2439,7 @@
           "message": "集合的名稱。"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.display_name": {
-          "source": "Get Index Statistics",
+          "source": "Get index statistics",
           "message": "取得索引統計資料"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.short_desc": {
@@ -2475,7 +2475,7 @@
           "message": "用來選擇適用哪些紀錄的中繼資料篩選條件，以 Pinecone 自有的篩選語言撰寫——即欄位名稱對應條件的雜湊：\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\n運算子包括 `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$in`、`$nin`、`$exists` 以及 `$and` / `$or`。  請參閱 [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)。"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "以向量搜尋"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {
@@ -2643,7 +2643,7 @@
           "message": "控制要重新排序的候選稠密向量數量上限的最佳化參數。重新排序會計算精確距離以提升召回率，但會增加查詢延遲。範圍：top_k 至 100000。\n若要在召回率與延遲之間取得平衡，請保留預設值。若召回率過低可調高此值，或調低以犧牲準確度換取較低延遲。此參數僅支援專用（DRN）稠密索引。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.display_name": {
-          "source": "Upsert Vectors",
+          "source": "Upsert vectors",
           "message": "寫入向量"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.short_desc": {
@@ -2715,7 +2715,7 @@
           "message": "請求中包含的元資料。欄位名稱不得以 `$` 開頭，此為保留給篩選運算子使用。其他所有名稱皆可接受，包括空名稱、非 ASCII 名稱，或以 `_` 開頭的名稱。"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "稀疏值"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.short_desc": {
@@ -2763,7 +2763,7 @@
           "message": "此為向量資料。在請求中，此欄位必須非空，且至少有一個值的大小必須大於或等於 `1e-8` —— 若所有值均小於此值，則視為僅包含零的向量，將被拒絕。\n\n在回應中，當記錄無密集資料可回傳時（如稀疏索引，或任何索引中未請求值時），此陣列為空陣列。因此，此欄位在此處不受限制，因為此結構描述了兩個方向。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.display_name": {
-          "source": "Update Vectors",
+          "source": "Update vectors",
           "message": "更新向量"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.short_desc": {
@@ -2895,7 +2895,7 @@
           "message": "稀疏資料的對應值，長度必須與索引相同。"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.display_name": {
-          "source": "Delete Vectors",
+          "source": "Delete vectors",
           "message": "刪除向量"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.short_desc": {
@@ -2967,7 +2967,7 @@
           "message": "刪除命名空間中的所有紀錄。  無法與 **紀錄 ID** 或 **中繼資料篩選條件** 併用。"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.display_name": {
-          "source": "Fetch Vectors",
+          "source": "Fetch vectors",
           "message": "擷取向量"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.short_desc": {
@@ -3015,7 +3015,7 @@
           "message": "要擷取的向量 ID。"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.display_name": {
-          "source": "Fetch Vectors by Metadata",
+          "source": "Fetch vectors by metadata",
           "message": "依中繼資料擷取向量"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.short_desc": {
@@ -3087,7 +3087,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.display_name": {
-          "source": "List Record IDs",
+          "source": "List record IDs",
           "message": "列出紀錄 ID"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.short_desc": {
@@ -3159,7 +3159,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.display_name": {
-          "source": "List Namespaces",
+          "source": "List namespaces",
           "message": "列出命名空間"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.short_desc": {
@@ -3219,7 +3219,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Create Namespace",
+          "source": "Create namespace",
           "message": "建立命名空間"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3543,7 +3543,7 @@
           "message": "用於重新排序文件的查詢。若指定特定的重新排序查詢，將覆蓋於頂層提供的查詢文字。當搜尋使用 `vector` 或 `id` 時為必填，因為沒有可重新排序的查詢文字；若省略，將以 `400` 拒絕。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.display_name": {
-          "source": "Rank Fields",
+          "source": "Rank fields",
           "message": "排序欄位"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.short_desc": {
@@ -3555,7 +3555,7 @@
           "message": "用於重新排序的欄位。所有傳回的記錄都必須包含每個列出的欄位；否則請求將因 `400` 被拒絕。\n\n支援的欄位數量為 [模型特定](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "前 N 項"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.short_desc": {
@@ -3579,7 +3579,7 @@
           "message": "用來取代文字進行搜尋的向量，適用於未具備整合式嵌入的索引，或嵌入在其他位置計算的情況。\n\n密集值放在 `values` 中；稀疏向量則以 `sparse_values` 搭配對應的 `sparse_indices` 提供。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.display_name": {
-          "source": "Sparse Indices",
+          "source": "Sparse indices",
           "message": "稀疏索引"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.short_desc": {
@@ -3591,7 +3591,7 @@
           "message": "稀疏嵌入的索引"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "稀疏值"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -3815,7 +3815,7 @@
           "message": "用於 `text` 與 `query_string` 評分類型的文字查詢。前後空白會被修剪；修剪後為空的查詢將被拒絕。最多 10 KB。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "稀疏值"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -4099,7 +4099,7 @@
           "message": "要更新的文件唯一識別碼。"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "移除欄位"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.short_desc": {
@@ -4291,7 +4291,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.display_name": {
-          "source": "List Imports",
+          "source": "List imports",
           "message": "列出匯入作業"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.short_desc": {
@@ -4339,7 +4339,7 @@
           "message": "前一個回應中的 `pagination.next` 值。  未帶 `pagination` 的回應即為最後一頁。"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.display_name": {
-          "source": "Start Import",
+          "source": "Start import",
           "message": "開始匯入"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.short_desc": {
@@ -4499,7 +4499,7 @@
           "message": "匯入作業的唯一識別碼。"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.display_name": {
-          "source": "Generate Embeddings",
+          "source": "Generate embeddings",
           "message": "產生嵌入向量"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.short_desc": {
@@ -4559,7 +4559,7 @@
           "message": "模型專屬參數，例如 `{\"input_type\": \"query\", \"truncate\": \"END\"}`。  模型接受哪些參數由 **取得模型詳細資料** 回報。\n\n`input_type` 很重要：多個模型對 **查詢** 與 **段落** 的嵌入方式不同，使用錯誤的值會在無聲無息中降低相關性。"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.display_name": {
-          "source": "Rerank Results",
+          "source": "Rerank results",
           "message": "重新排序結果"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.short_desc": {
@@ -4655,7 +4655,7 @@
           "message": "其他模型專屬參數。可用的模型參數請參閱 [模型指南](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)。"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "列出模型"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4747,7 +4747,7 @@
           "message": "要查詢的模型名稱。"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "搜尋記錄"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.short_desc": {
@@ -4771,7 +4771,7 @@
           "message": "要操作的資料表：`indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` 或 `documents`"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "尋找單筆記錄"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4795,7 +4795,7 @@
           "message": "要操作的資料表：`indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` 或 `documents`"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "建立記錄"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.short_desc": {
@@ -4819,7 +4819,7 @@
           "message": "要操作的資料表：`indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` 或 `documents`"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "更新記錄"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.short_desc": {
@@ -4843,7 +4843,7 @@
           "message": "要操作的資料表：`indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` 或 `documents`"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "刪除記錄"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.short_desc": {

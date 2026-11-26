@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "顧客の一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "顧客を作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "有効なIETF BCP 47短縮形式ロケールタグ。省略した場合のデフォルトは`en`です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -508,7 +508,7 @@
           "message": "独自の構造化キー/値データ。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "マーケティング同意"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "この顧客がマーケティング情報の受信に同意したかどうか。顧客がPaddle Checkoutの使用時にマーケティング同意チェックボックスをオンにしない限り`false`となります。Paddleによって自動的に設定されます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "インポートメタ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -544,7 +544,7 @@
           "message": "このエンティティのプロバイダーからインポートされた際の参照または識別子。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "インポート元"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -648,7 +648,7 @@
           "message": "archived"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -672,7 +672,7 @@
           "message": "有効な IETF BCP 47 短縮形式のロケールタグ。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "マーケティング同意"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -684,7 +684,7 @@
           "message": "この顧客がマーケティング情報の受信に同意したかどうか。顧客がPaddle Checkoutの使用時にマーケティング同意チェックボックスをオンにしない限り`false`となります。Paddleによって自動的に設定されます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "インポートメタ"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -708,7 +708,7 @@
           "message": "このエンティティのプロバイダーからインポートされた際の参照または識別子。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "インポート元"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -780,7 +780,7 @@
           "message": "通貨コードに一致するエンティティを返します。複数の通貨コードを指定するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "商品一覧"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
@@ -852,7 +852,7 @@
           "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "税金カテゴリ"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -908,7 +908,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "商品を作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
@@ -932,7 +932,7 @@
           "message": "この商品の名前。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "税金カテゴリ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "この商品の一意のPaddle ID（プレフィックス: `pro_`）。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "インポートメタ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "このエンティティのプロバイダーからインポートされた際の参照または識別子。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "インポート元"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "標準"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "税金カテゴリ"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "archived"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
-          "source": "List Prices",
+          "source": "List prices",
           "message": "価格を一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "指定したフィールドと方向 (`[ASC]` または `[DESC]`) で返されるエンティティを並べ替えます。 例: `?order_by=id[ASC]`。\n\n並べ替えに使用できるフィールド: `billing_cycle.frequency`, `billing_cycle.interval`, `id`, `product_id`, `quantity.maximum`, `quantity.minimum`, `status`, `tax_mode`, `unit_price.amount`, 、 `unit_price.currency_code`."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
-          "source": "Billing Cycle Interval",
+          "source": "Billing cycle interval",
           "message": "請求サイクル間隔"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
-          "source": "Billing Cycle Frequency",
+          "source": "Billing cycle frequency",
           "message": "請求サイクル頻度"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
-          "source": "Create Price",
+          "source": "Create price",
           "message": "価格を作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "この価格の内部説明（顧客には表示されません）。通常はチーム向けのメモです。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "請求サイクル"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "お試し期間"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "支払い方法を要する"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "この価格がトライアル中に支払い方法を必要とするか（`true`）または不要か（`false`）か。`false` の場合、顧客は支払い詳細を入力せずにサブスクリプションに登録でき、いわゆる「カードレストライアル」と呼ばれます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "トライアル価格の単価オーバーライドのリスト。国または国々のグループに対して、基本トライアル価格をカスタムトライアル価格および通貨で上書きするために使用する。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "国コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "対応する2文字のISO 3166-1 alpha-2国コード。リストされた国に所在する顧客は、オーバーライド価格が課金されます。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示されます）。通常は関連製品の請求頻度を記載します。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "税モード"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "この価格に関連する製品の購入可能最小数量。`maximum` が設定されている場合は必須"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "単価オーバーライドのリスト。特定の国または国のグループに対して、基本価格をカスタム価格および通貨で上書きするために使用します。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "国コード"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "対応する2文字のISO 3166-1 alpha-2国コード。リストされた国に所在する顧客は、オーバーライド価格が課金されます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2136,7 +2136,7 @@
           "message": "価格の上書き。この価格は、この単価上書きに適用される国に所在する顧客に適用されます"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "この価格の一意のPaddle ID（プレフィックス: `pri_`）。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "インポートメタ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "このエンティティのプロバイダーからインポートされた際の参照または識別子。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "インポート元"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "この価格の内部説明（顧客には表示されません）。通常はチーム向けのメモです。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "archived"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "請求サイクル"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "お試し期間"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "支払い方法を要する"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "この価格がトライアル中に支払い方法を必要とするか（`true`）または不要か（`false`）か。`false` の場合、顧客は支払い詳細を入力せずにサブスクリプションに登録でき、いわゆる「カードレストライアル」と呼ばれます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "トライアル価格の単価オーバーライドのリスト。国または国々のグループに対して、基本トライアル価格をカスタムトライアル価格および通貨で上書きするために使用する。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "国コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "対応する2文字のISO 3166-1 alpha-2国コード。リストされた国に所在する顧客は、オーバーライド価格が課金されます。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示されます）。通常は関連製品の請求頻度を記載します。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "税モード"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "この価格に関連する製品の購入可能最小数量。`maximum` が設定されている場合は必須"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "単価オーバーライドのリスト。特定の国または国のグループに対して、基本価格をカスタム価格および通貨で上書きするために使用します。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "国コード"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "対応する2文字のISO 3166-1 alpha-2国コード。リストされた国に所在する顧客は、オーバーライド価格が課金されます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "価格の上書き。この価格は、この単価上書きに適用される国に所在する顧客に適用されます"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "標準"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "サブスクリプションを一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "回収モード"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "手動"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
-          "source": "Scheduled Change Action",
+          "source": "Scheduled change action",
           "message": "スケジュールされた変更アクション"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "変更がスケジュールされているサブスクリプションを返します。複数のスケジュール変更アクションを指定する場合はカンマ区切りリストを使用してください。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
-          "source": "Next Billed At",
+          "source": "Next billed at",
           "message": "次回請求日時"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "取引一覧"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "指定されたサブスクリプションに関連するエンティティを返します。複数のサブスクリプションIDを指定するにはカンマ区切りリストを使用します。どのサブスクリプションにも関連付けられていないエンティティを返すには `null` を渡します。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "更新日時"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
@@ -3200,7 +3200,7 @@
           "message": "特定の時刻に更新されたエンティティを返します。RFC 3339形式の日時文字列を渡すか、`[LT]`（未満）、`[LTE]`（以下）、`[GT]`（超）、または `[GTE]`（以上）演算子を使用します。例: `updated_at=2023-04-18T17:03:26` や `updated_at[LT]=2023-04-18T17:03:26`。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "作成日時"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "特定の時刻に作成されたエンティティを返します。RFC 3339形式の日時文字列を渡すか、`[LT]`（未満）、`[LTE]`（以下）、`[GT]`（超）、または `[GTE]`（以上）演算子を使用します。例: `created_at=2023-04-18T17:03:26` や `created_at[LT]=2023-04-18T17:03:26`。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
-          "source": "Billed At",
+          "source": "Billed at",
           "message": "請求日時"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
-          "source": "Invoice Number",
+          "source": "Invoice number",
           "message": "請求書番号"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "指定された発生元に関連するエンティティを返します。複数の発生元を指定するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "回収モード"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "取引を作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "国コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "対応する2文字のISO 3166-1 alpha-2国コード。リストされた国に所在する顧客は、オーバーライド価格が課金されます。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "past_due"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "サポートされている3文字のISO 4217通貨コード。`collection_mode` が `manual` の場合、`USD`、`EUR`、または `GBP` である必要があります。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "回収モード"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3632,7 +3632,7 @@
           "message": "この取引の対象となるサブスクリプションのPaddle ID（プレフィックス: `sub_`）。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
+          "source": "Billing period",
           "message": "請求期間"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
@@ -3644,7 +3644,7 @@
           "message": "このトランザクションが対象とする期間。サブスクリプションの更新時に請求対象期間を表すためにPaddleによって自動的に設定されます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
+          "source": "Ends at",
           "message": "終了日時"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "この期間の終了時刻を示すRFC 3339日時文字列。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
+          "source": "Starts at",
           "message": "開始日時"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.short_desc": {
@@ -3668,7 +3668,7 @@
           "message": "この期間の開始時刻を示すRFC 3339日時文字列。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
-          "source": "Billing Details",
+          "source": "Billing details",
           "message": "請求先情報"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
@@ -3680,7 +3680,7 @@
           "message": "請求書発行の詳細。`collection_mode` が `manual` の場合に必須です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.display_name": {
-          "source": "Additional Information",
+          "source": "Additional information",
           "message": "追加情報"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "この請求書に含めるメモまたはその他の情報。請求書文書に表示されます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.display_name": {
-          "source": "Enable Checkout",
+          "source": "Enable checkout",
           "message": "チェックアウトを有効化"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "関連する取引が Paddle Checkout で支払えるか。取引作成時に省略された場合、`false` がデフォルトです。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.display_name": {
-          "source": "Payment Terms",
+          "source": "Payment terms",
           "message": "支払条件"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "発行後、顧客がこの請求書を支払うまでの期間。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.display_name": {
-          "source": "Purchase Order Number",
+          "source": "Purchase order number",
           "message": "発注番号"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "顧客購入注文番号。請求書文書に表示されます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3812,7 +3812,7 @@
           "message": "割引額。`percentage`割引の場合、`0.01` から `100` の間の金額である必要があります。`flat` および `flat_per_seat` 割引の場合、通貨の最小単位での金額を指定します。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "この割引の短い説明（参考用）。顧客には表示されません。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.display_name": {
-          "source": "Maximum Recurring Intervals",
+          "source": "Maximum recurring intervals",
           "message": "最大繰り返し間隔"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "この割引が複数のサブスクリプション課金期間に適用されるか（`true`）か、そうでないか（`false`）。省略された場合、`false` がデフォルトです。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.display_name": {
-          "source": "Restrict To",
+          "source": "Restrict to",
           "message": "制限対象"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "レポートを一覧表示"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
-          "source": "Create Report",
+          "source": "Create report",
           "message": "レポートを作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
@@ -4712,7 +4712,7 @@
           "message": "レポートエンティティのPaddle ID。"
         },
         "app.UGFkZGxl.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "レコードの検索"
         },
         "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "単一レコードの検索"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4760,7 +4760,7 @@
           "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "レコードを作成"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
         },
         "app.UGFkZGxl.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
@@ -5012,7 +5012,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5324,7 +5324,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5624,7 +5624,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "請求サイクル"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5636,7 +5636,7 @@
           "message": "この価格が請求される頻度。価格が非継続（1 回限り）の場合は `null`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "この価格に関連する製品の購入可能最小数量。`maximum` が設定されている場合は必須"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "税モード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "場所"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "お試し期間"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -5760,7 +5760,7 @@
           "message": "この価格に関連付けられた商品のトライアル期間。請求サイクルはトライアル期間終了後に開始されます。トライアル期間がない場合は `null`。`billing_cycle` が必要です。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.short_desc": {
@@ -5784,7 +5784,7 @@
           "message": "通貨の最小単位での金額。例：10 USD = 1000（セント）。文字列として表現されますが、有効な整数でなければなりません。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "通貨コード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -5940,7 +5940,7 @@
           "message": "単価オーバーライドのリスト。特定の国または国のグループに対して、基本価格をカスタム価格および通貨で上書きするために使用します。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "請求サイクル"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "この価格が請求される頻度。価格が非継続（1 回限り）の場合は `null`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "課金対象のカタログ外アイテムの製品オブジェクト。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "カスタムデータ"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "この商品の名前。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "税金カテゴリ"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "この価格で関連製品を購入できる回数の制限。割引キャンペーンに便利です。省略した場合のデフォルトは1〜100です。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "税モード"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.short_desc": {
@@ -6136,7 +6136,7 @@
           "message": "場所"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "お試し期間"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -6148,7 +6148,7 @@
           "message": "この価格に関連付けられた商品のトライアル期間。請求サイクルはトライアル期間終了後に開始されます。トライアル期間がない場合は `null`。`billing_cycle` が必要です。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "単価"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "基本価格。`unit_price_overrides`を設定している国に所在する顧客を除き、すべての顧客にこの価格が適用されます。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "単価の上書き"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
-          "message": "List Projects"
+          "source": "List projects",
+          "message": "List projects"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
           "source": "List projects",
@@ -352,8 +352,8 @@
           "message": "List all projects in an organization."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
-          "message": "Create Project"
+          "source": "Create project",
+          "message": "Create project"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
           "source": "Create a new project",
@@ -400,8 +400,8 @@
           "message": "Whether to force encryption with a customer-managed encryption key (CMEK). Default is `false`."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
-          "message": "List Organizations"
+          "source": "List organizations",
+          "message": "List organizations"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
           "source": "List organizations",
@@ -820,8 +820,8 @@
           "message": "Data Plane Viewer"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List users in the organization",
@@ -916,8 +916,8 @@
           "message": "User ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
-          "message": "List Invites"
+          "source": "List invites",
+          "message": "List invites"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
           "source": "List invites",
@@ -952,8 +952,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
-          "message": "Create Invite"
+          "source": "Create invite",
+          "message": "Create invite"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
           "source": "Invite a user to the organization",
@@ -1156,8 +1156,8 @@
           "message": "Invite ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
-          "message": "List Service Accounts"
+          "source": "List service accounts",
+          "message": "List service accounts"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
           "source": "List service accounts",
@@ -1192,8 +1192,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
-          "message": "Create Service Account"
+          "source": "Create service account",
+          "message": "Create service account"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
           "source": "Create a service account",
@@ -1432,8 +1432,8 @@
           "message": "The unique identifier of the service account."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
-          "message": "List Role Bindings"
+          "source": "List role bindings",
+          "message": "List role bindings"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
           "source": "List role bindings",
@@ -1604,8 +1604,8 @@
           "message": "Cursor from `pagination.next` of a prior response. Must be reused with the same query context (path parameters, filters, and `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
-          "message": "Create Role Binding"
+          "source": "Create role binding",
+          "message": "Create role binding"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {
           "source": "Create a role binding",

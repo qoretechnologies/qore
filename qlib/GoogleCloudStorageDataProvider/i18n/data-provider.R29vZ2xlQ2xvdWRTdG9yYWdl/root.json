@@ -712,8 +712,8 @@
           "message": "The content generation whose metadata should be updated; when omitted the live version is used"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
-          "message": "Upload Object"
+          "source": "Upload object",
+          "message": "Upload object"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
           "source": "Upload content to a bucket",
@@ -988,8 +988,8 @@
           "message": "Only perform the write if the object's current generation matches this value; pass `0` to write only if the object does not exist yet, which makes the upload a safe create rather than an overwrite"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
-          "message": "Download Object"
+          "source": "Download object",
+          "message": "Download object"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
           "source": "Download an object's content",
@@ -1036,8 +1036,8 @@
           "message": "The content generation to download; when omitted the live version is used"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
-          "message": "Delete Object"
+          "source": "Delete object",
+          "message": "Delete object"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
           "source": "Delete an object",
@@ -1084,8 +1084,8 @@
           "message": "The content generation to delete; when omitted the live version is deleted.  In a bucket with versioning enabled, deleting the live version leaves the earlier generations in place, and a specific generation must be named to remove it permanently"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
-          "message": "Copy Object"
+          "source": "Copy object",
+          "message": "Copy object"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
           "source": "Copy an object without downloading it",
@@ -1192,8 +1192,8 @@
           "message": "User-defined metadata for the copy as key/value pairs; when omitted the source's metadata is kept"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
-          "message": "Compose Objects"
+          "source": "Compose objects",
+          "message": "Compose objects"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
           "source": "Concatenate objects into one object",
@@ -1264,8 +1264,8 @@
           "message": "User-defined metadata for the composed object as key/value pairs"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
-          "message": "Create Signed URL"
+          "source": "Create signed URL",
+          "message": "Create signed URL"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {
           "source": "Create a time-limited URL granting access to one object",

@@ -201,7 +201,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/account",
                 "operation_id": "GetAccount",
-                "display_name": "Get Account",
+                "display_name": "Get account",
                 "short_desc": "Retrieve the account the credentials belong to",
                 "desc": "Retrieves the Stripe account that the connection's credentials authenticate as.\n\n"
                     "Use this to confirm which account an integration is working against - the `id`, the "
@@ -214,7 +214,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/balance",
                 "operation_id": "GetBalance",
-                "display_name": "Get Balance",
+                "display_name": "Get balance",
                 "short_desc": "Retrieve the current account balance",
                 "desc": "Retrieves the funds Stripe currently holds for the account, split into `available` "
                     "and `pending` amounts per currency.\n\n"
@@ -228,7 +228,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/balance/history",
                 "operation_id": "GetBalanceHistory",
-                "display_name": "List Balance Transactions",
+                "display_name": "List balance transactions",
                 "short_desc": "List the transactions that moved the balance",
                 "desc": "Lists every transaction that contributed to the account balance: charges, refunds, "
                     "Stripe's fees, disputes, transfers and payouts.\n\n"
@@ -272,7 +272,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/accounts",
                 "operation_id": "GetAccounts",
-                "display_name": "List Connected Accounts",
+                "display_name": "List connected accounts",
                 "short_desc": "List the connected accounts this platform manages",
                 "desc": "Lists the [Stripe Connect](https://stripe.com/connect) accounts this platform "
                     "manages.\n\n"
@@ -353,7 +353,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/account_links",
                 "operation_id": "PostAccountLinks",
-                "display_name": "Create Account Link",
+                "display_name": "Create account link",
                 "short_desc": "Create a single-use onboarding URL for a connected account",
                 "desc": "Creates a single-use URL that sends a connected account holder into Stripe's "
                     "hosted onboarding, where they enter the identity and bank details Stripe requires.\n\n"
@@ -501,7 +501,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/charges",
                 "operation_id": "GetCharges",
-                "display_name": "List Charges",
+                "display_name": "List charges",
                 "short_desc": "List charges, most recent first",
                 "desc": "Lists charges, most recently created first.\n\n"
                     "Filter by `customer` to see everything one customer has paid, or by `payment_intent` "
@@ -539,7 +539,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/charges",
                 "operation_id": "PostCharges",
-                "display_name": "Create Charge",
+                "display_name": "Create charge",
                 "short_desc": "Charge a card directly (legacy; prefer a payment intent)",
                 "desc": "Charges a card directly.\n\n"
                     "**Stripe no longer recommends this for new integrations.** It cannot carry out the "
@@ -592,7 +592,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/customers",
                 "operation_id": "GetCustomers",
-                "display_name": "List Customers",
+                "display_name": "List customers",
                 "short_desc": "List customers, most recent first",
                 "desc": "Lists customers, most recently created first.\n\n"
                     "`email` matches exactly and is the usual way to find whether somebody already exists "
@@ -631,7 +631,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/customers",
                 "operation_id": "PostCustomers",
-                "display_name": "Create Customer",
+                "display_name": "Create customer",
                 "short_desc": "Create a customer",
                 "desc": "Creates a customer, which is what payment methods, invoices and subscriptions are "
                     "attached to.\n\n"
@@ -844,7 +844,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/invoices",
                 "operation_id": "GetInvoices",
-                "display_name": "List Invoices",
+                "display_name": "List invoices",
                 "short_desc": "List invoices, most recent first",
                 "desc": "Lists invoices, most recently created first.\n\n"
                     "Filter by `status` to find work to do: `draft` invoices are still editable, `open` "
@@ -879,7 +879,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/invoices",
                 "operation_id": "PostInvoices",
-                "display_name": "Create Invoice",
+                "display_name": "Create invoice",
                 "short_desc": "Create a draft invoice for a customer",
                 "desc": "Creates an invoice for a customer.\n\n"
                     "A new invoice is a **draft**: it is not sent and cannot be paid until it is finalized, "
@@ -946,7 +946,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/payment_intents",
                 "operation_id": "GetPaymentIntents",
-                "display_name": "List Payment Intents",
+                "display_name": "List payment intents",
                 "short_desc": "List payment intents, most recent first",
                 "desc": "Lists payment intents, most recently created first.\n\n"
                     "The `status` of each says where it is: `requires_payment_method` and "
@@ -963,7 +963,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/payment_intents",
                 "operation_id": "PostPaymentIntents",
-                "display_name": "Create Payment Intent",
+                "display_name": "Create payment intent",
                 "short_desc": "Start a payment",
                 "desc": "Starts a payment and tracks it through to completion.\n\n"
                     "This is the way to take a payment: a payment intent can carry out the customer "
@@ -994,7 +994,7 @@ public class StripeManifest {
                 "method": "GET",
                 "path": "/v1/refunds",
                 "operation_id": "GetRefunds",
-                "display_name": "List Refunds",
+                "display_name": "List refunds",
                 "short_desc": "List refunds, most recent first",
                 "desc": "Lists refunds, most recently created first.\n\n"
                     "Filter by `charge` or `payment_intent` to see what has already been refunded against "
@@ -1019,7 +1019,7 @@ public class StripeManifest {
                 "method": "POST",
                 "path": "/v1/refunds",
                 "operation_id": "PostRefunds",
-                "display_name": "Create Refund",
+                "display_name": "Create refund",
                 "short_desc": "Refund a charge or payment intent",
                 "desc": "Refunds a payment, in full or in part.\n\n"
                     "Name either the `charge` or the `payment_intent` to refund. Leaving `amount` unset "

@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "Cerca clienti"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Recupera un elenco di clienti da Cin7Core con filtro facoltativo per nome, ID o data di modifica."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Crea cliente"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Tag separati da virgola per il cliente"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Recupera cliente"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -744,7 +744,7 @@
           "message": "L'identificatore univoco (GUID) del cliente da recuperare"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aggiorna cliente"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "Tag separati da virgola per il cliente"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
+          "source": "Search suppliers",
           "message": "Cerca fornitori"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Recupera un elenco di fornitori da Cin7Core con filtri facoltativi."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
+          "source": "Create supplier",
           "message": "Crea fornitore"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Tag separati da virgole per il fornitore"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
+          "source": "Get supplier",
           "message": "Ottieni fornitore"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "L'identificatore univoco (GUID) del fornitore da recuperare"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
+          "source": "Update supplier",
           "message": "Aggiorna fornitore"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "Tag associati a questo fornitore"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "Cerca prodotti"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Recupera un elenco di prodotti da Cin7Core con filtro facoltativo per SKU, nome, categoria o marchio."
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Ottieni prodotto"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1888,7 +1888,7 @@
           "message": "L'identificatore univoco (GUID) del prodotto da recuperare"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
+          "source": "Find product availability",
           "message": "Trova disponibilità prodotti"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Verifica la disponibilità dei prodotti e i livelli di giacenza nelle varie sedi di magazzino."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
+          "source": "Search sales",
           "message": "Cerca vendite"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Recupera un elenco di ordini di vendita da Cin7Core con filtro opzionale."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
+          "source": "Create sale",
           "message": "Crea vendita"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
@@ -2368,7 +2368,7 @@
           "message": "Totale per questo articolo"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
+          "source": "Get sale",
           "message": "Ottieni vendita"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "L'identificatore univoco (GUID) della vendita da recuperare"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
+          "source": "Update sale",
           "message": "Aggiorna vendita"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "L'importo totale per questo addebito"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
+          "source": "Delete sale",
           "message": "Elimina vendita"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "L'identificatore univoco (GUID) della vendita da eliminare/annullare"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
+          "source": "Search sale payments",
           "message": "Cerca pagamenti vendite"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "Recupera un elenco di pagamenti per le vendite."
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
+          "source": "Add sale payment",
           "message": "Aggiungi pagamento vendita"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Il conto su cui registrare il pagamento"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
+          "source": "Update sale payment",
           "message": "Aggiorna pagamento vendita"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Numero di riferimento o nota per il pagamento"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
+          "source": "Delete sale payment",
           "message": "Elimina pagamento vendita"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "L'identificatore univoco (GUID) del pagamento da eliminare"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
+          "source": "Add sale attachment",
           "message": "Aggiungi allegato vendita"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Il contenuto del file codificato come stringa Base64"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
+          "source": "Delete sale attachment",
           "message": "Elimina allegato vendita"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "L'identificatore univoco (GUID) dell'allegato da eliminare"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
+          "source": "Add sale pack",
           "message": "Aggiungi pacco vendita"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
@@ -3496,7 +3496,7 @@
           "message": "L'ubicazione di magazzino per l'imballaggio"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
+          "source": "Get sale pack",
           "message": "Ottieni pacco vendita"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
@@ -3532,7 +3532,7 @@
           "message": "ID attività opzionale per ottenere un record di imballaggio specifico"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
+          "source": "Add sale shipment",
           "message": "Aggiungi spedizione vendita"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
@@ -3748,7 +3748,7 @@
           "message": "Data entro cui è richiesta la spedizione"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
+          "source": "Find sale fulfilment",
           "message": "Trova evasione vendite"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "Cerca attività di evasione ordini, prelievo e imballaggio per le vendite."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
+          "source": "Find sale invoices",
           "message": "Trova fatture vendite"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
@@ -3772,7 +3772,7 @@
           "message": "Cerca fatture associate agli ordini di vendita."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
+          "source": "Find sale credit notes",
           "message": "Trova note di credito vendite"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "Cerca note di credito associate agli ordini di vendita."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
+          "source": "Search stock adjustments",
           "message": "Cerca rettifiche di magazzino"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
@@ -3796,7 +3796,7 @@
           "message": "Recupera un elenco di rettifiche di magazzino da Cin7Core."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
+          "source": "Create stock adjustment",
           "message": "Crea rettifica di magazzino"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "Il costo unitario per l'adeguamento"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
+          "source": "Get stock adjustment",
           "message": "Ottieni rettifica scorte"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "L'identificatore univoco (GUID) della rettifica delle scorte da recuperare"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
+          "source": "Update stock adjustment",
           "message": "Aggiorna rettifica scorte"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4180,7 +4180,7 @@
           "message": "Lo stato della rettifica (Draft, Authorized, Void)"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
+          "source": "Delete stock adjustment",
           "message": "Elimina rettifica di magazzino"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "L'identificatore univoco (GUID) della rettifica di magazzino da eliminare/annullare"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
+          "source": "Find assemblies",
           "message": "Trova assemblaggi"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "Cerca attività di assemblaggio e prodotti finiti."
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
+          "source": "New payment",
           "message": "Nuovo pagamento"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
@@ -4228,7 +4228,7 @@
           "message": "Si attiva quando viene rilevato un nuovo pagamento su una vendita tramite polling."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
+          "source": "New sale credit note authorized",
           "message": "Nuova nota di credito vendita autorizzata"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "Si attiva quando una nuova nota di credito di vendita viene autorizzata tramite polling."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
+          "source": "New sale invoice authorized",
           "message": "Nuova fattura vendita autorizzata"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
@@ -4252,7 +4252,7 @@
           "message": "Si attiva quando una nuova fattura di vendita viene autorizzata tramite polling."
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
+          "source": "Sale tracking changed",
           "message": "Tracciamento vendita modificato"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "Si attiva quando le informazioni di tracciamento della vendita o di spedizione cambiano tramite polling."
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
+          "source": "Sale voided",
           "message": "Vendita annullata"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
@@ -4276,7 +4276,7 @@
           "message": "Si attiva quando un ordine di vendita viene annullato tramite polling."
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
+          "source": "Stock level update",
           "message": "Aggiornamento livello scorte"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "Viene attivato quando i livelli delle scorte/dell'inventario dei prodotti cambiano tramite polling."
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "Cliente aggiornato"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -4300,7 +4300,7 @@
           "message": "Viene attivato quando un cliente viene creato o modificato tramite polling."
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
+          "source": "Supplier updated",
           "message": "Fornitore aggiornato"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {

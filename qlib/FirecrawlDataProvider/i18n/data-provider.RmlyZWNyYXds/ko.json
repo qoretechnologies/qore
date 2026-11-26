@@ -1864,7 +1864,7 @@
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "일괄 스크랩 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "확인할 크롤링 작업의 고유 식별자"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "크롤링 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "에이전트 작업 취소"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {

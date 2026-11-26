@@ -100,7 +100,7 @@ module LlamaParseDataProvider {
                 "app": LlamaParseDataProvider::AppName,
                 "path": "/" + LlamaParseUploadFileDataProvider::ProviderName,
                 "action": "upload-file",
-                "display_name": "Upload File",
+                "display_name": "Upload file",
                 "short_desc": "Upload a document so that it can be parsed, extracted from or classified",
                 "desc": "Uploads a document to LlamaParse and returns the stored file.\n\n"
                     "Uploading is worth doing on its own rather than passing a URL to every job: the "

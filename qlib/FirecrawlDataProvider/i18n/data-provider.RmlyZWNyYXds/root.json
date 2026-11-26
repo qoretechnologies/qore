@@ -1864,8 +1864,8 @@
           "message": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
-          "message": "Cancel a Batch Scrape"
+          "source": "Cancel a batch scrape",
+          "message": "Cancel a batch scrape"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
           "source": "Cancel an in-progress batch scrape job",
@@ -2624,8 +2624,8 @@
           "message": "The unique identifier of the crawl job to check"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
-          "message": "Cancel a Crawl"
+          "source": "Cancel a crawl",
+          "message": "Cancel a crawl"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
           "source": "Cancel an in-progress crawl job",
@@ -3936,8 +3936,8 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
-          "message": "Cancel an Agent Job"
+          "source": "Cancel an agent job",
+          "message": "Cancel an agent job"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
           "source": "Cancel an in-progress agent job",

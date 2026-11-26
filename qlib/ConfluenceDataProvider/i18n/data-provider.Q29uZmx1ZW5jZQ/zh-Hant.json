@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "列出頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.short_desc": {
@@ -432,7 +432,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -508,7 +508,7 @@
           "message": "頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.display_name": {
-          "source": "Create Page",
+          "source": "Create page",
           "message": "建立頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.short_desc": {
@@ -592,7 +592,7 @@
           "message": "網頁內文，格式與表示欄位中的內容相同。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Atlas 文件格式"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -712,7 +712,7 @@
           "message": "將內容標記為嵌入式，內容將在 NCS 中建立。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.display_name": {
-          "source": "Root Level",
+          "source": "Root level",
           "message": "根層級"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
@@ -748,7 +748,7 @@
           "message": "要傳回之頁面的 ID。如果您不知道頁面 ID，請使用「取得頁面」並篩選結果。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -800,7 +800,7 @@
           "message": "允許您檢索先前發佈的版本。指定前一個版本的編號以檢索其詳細資訊。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "取得草稿"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.short_desc": {
@@ -812,7 +812,7 @@
           "message": "擷取此頁面的草稿版本。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "包含標籤"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -836,7 +836,7 @@
           "message": "依狀態篩選要擷取的頁面。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "包含屬性"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "在回應中包含與此頁面關聯的內容屬性。\n結果數量將限制為 50 個，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指示是否有更多可用結果以及用於檢索其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "包含作業"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -860,7 +860,7 @@
           "message": "在回應中包含與此頁面關聯的作業（如 `Operation` 物件中所定義）。\n結果數量將限制為 50 個，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指示是否有更多可用結果以及用於檢索其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "包含按讚"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -872,7 +872,7 @@
           "message": "在回應中包含與此頁面關聯的按讚數。\n結果數量將限制為 50 個，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指示是否有更多可用結果以及用於檢索其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "包含版本"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "在回應中包含與此頁面關聯的版本。\n結果數量上限為 50 筆，並依預設排序順序排序。\n回應中會提供 `meta` 與 `_links` 屬性，用以指示是否有更多可用結果以及擷取其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "包含版本"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -896,7 +896,7 @@
           "message": "在回應中包含與此頁面關聯的目前版本。\n預設會包含此項目，可透過將值設為 `false` 來省略。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "包含目前使用者最愛狀態"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -908,7 +908,7 @@
           "message": "包含目前使用者是否已將此頁面加入我的最愛。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "包含 Web 資源"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "包含可用於在用戶端轉譯頁面內容的 Web 資源。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "包含協作者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -932,7 +932,7 @@
           "message": "包含頁面的協作者。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
-          "source": "Include Direct Children",
+          "source": "Include direct children",
           "message": "包含直接子頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "網頁內文，格式與表示欄位中的內容相同。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Atlas 文件格式"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1364,7 +1364,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.display_name": {
-          "source": "List Blog Posts",
+          "source": "List blog posts",
           "message": "列出部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "依網誌文章 ID 篩選結果。可用以逗號分隔的清單指定多個 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Create Blog Post",
+          "source": "Create blog post",
           "message": "建立部落格文章"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "部落格文章內文，格式與表示欄位中的內容相同。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Atlas 文件格式"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -1856,7 +1856,7 @@
           "message": "網誌文章將設為私人。只有建立此文章的使用者才有權檢視與編輯。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "建立時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "要傳回的網誌文章 ID。若不知道網誌文章 ID，請使用「取得網誌文章」並篩選結果。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "允許您檢索先前發佈的版本。指定前一個版本的編號以檢索其詳細資訊。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "包含標籤"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "在回應中納入與此網誌文章關聯的標籤。\n結果數量將限制為 50 筆，並依預設排序順序排列。 \n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
+          "source": "Get draft",
           "message": "取得草稿"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "依狀態篩選要檢索的部落格文章。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "包含屬性"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -1992,7 +1992,7 @@
           "message": "在回應中納入與此網誌文章關聯的內容屬性。\n結果數量將限制為 50 筆，並依預設排序順序排列。 \n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "包含作業"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "在回應中納入與此網誌文章關聯的操作，如 `Operation` 物件所定義。\n結果數量將限制為 50 筆，並依預設排序順序排列。 \n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
+          "source": "Include likes",
           "message": "包含按讚"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "在回應中納入與此網誌文章關聯的按讚。\n結果數量將限制為 50 筆，並依預設排序順序排列。 \n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
+          "source": "Include versions",
           "message": "包含版本"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "在回應中納入與此網誌文章關聯的版本。\n結果數量將限制為 50 筆，並依預設排序順序排列。 \n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
+          "source": "Include version",
           "message": "包含版本"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "在回應中納入與此網誌文章關聯的目前版本。\n預設會納入，將值設為 `false` 即可省略。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
+          "source": "Include favorited by current user status",
           "message": "包含目前使用者最愛狀態"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -2052,7 +2052,7 @@
           "message": "納入目前使用者是否已將此網誌文章加入最愛。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
+          "source": "Include webresources",
           "message": "包含 Web 資源"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "納入可用於在用戶端呈現網誌文章內容的網頁資源。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
+          "source": "Include collaborators",
           "message": "包含協作者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
@@ -2160,7 +2160,7 @@
           "message": "部落格文章內文，格式與表示欄位中的內容相同。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
+          "source": "Atlas doc format",
           "message": "Atlas 文件格式"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
@@ -2276,7 +2276,7 @@
           "message": "包含空間的 ID。\n\n目前**不支援將網誌文章移至其他空間**。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "建立時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "列出空間"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "依據空間標籤篩選結果。可以使用逗號分隔清單指定多個標籤。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.display_name": {
-          "source": "Favorited By",
+          "source": "Favorited by",
           "message": "收藏者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "將結果篩選為指定帳戶 ID 的使用者所收藏的空間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.display_name": {
-          "source": "Not Favorited By",
+          "source": "Not favorited by",
           "message": "未收藏者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "將結果篩選為指定帳戶 ID 的使用者未收藏的空間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "描述格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "包含圖示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "要傳回的空間 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
+          "source": "Description format",
           "message": "描述格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
@@ -2848,7 +2848,7 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
+          "source": "Include icon",
           "message": "包含圖示"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "是否應擷取空間的圖示。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
+          "source": "Include operations",
           "message": "包含作業"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "在回應中納入與此空間關聯的操作，如 `Operation` 物件所定義。\n結果數量將限制為 50 筆，並依預設排序順序排列。\n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
+          "source": "Include properties",
           "message": "包含屬性"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "在回應中納入與此空間關聯的空間屬性。\n結果數量將限制為 50 筆，並依預設排序順序排列。\n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.display_name": {
-          "source": "Include Permissions",
+          "source": "Include permissions",
           "message": "包含權限"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "在回應中包含與此空間關聯的空間權限。\n結果數量將限制為 50 個，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指示是否有更多可用結果以及用於檢索其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.display_name": {
-          "source": "Include Role Assignments",
+          "source": "Include role assignments",
           "message": "包含角色指派"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "在回應中包含與此空間相關聯的角色指派。此參數僅適用於 EAP 網站。\n結果數量將限制為 50 筆，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指出是否有更多可用結果以及用於擷取其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
+          "source": "Include labels",
           "message": "包含標籤"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "在回應中納入與此空間關聯的標籤。\n結果數量將限制為 50 筆，並依預設排序順序排列。\n回應會包含 `meta` 與 `_links` 屬性，指出是否有更多結果，以及取得其餘結果的連結。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "未完成"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "指派給"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3032,7 +3032,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.display_name": {
-          "source": "Include Blank Tasks",
+          "source": "Include blank tasks",
           "message": "包含空白任務"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "根據任務的部落格文章 ID 篩選。可指定多個 ID。注意 - 頁面和部落格文章篩選條件可結合使用。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "建立者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "根據建立此任務的使用者帳戶 ID 篩選。可指定多個 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "完成者"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.short_desc": {
@@ -3092,7 +3092,7 @@
           "message": "根據完成此任務的使用者帳戶 ID 篩選。可指定多個 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created at From",
+          "source": "Created at from",
           "message": "建立時間起"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "根據建立日期篩選任務日期時間範圍的起點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created at To",
+          "source": "Created at to",
           "message": "建立時間止"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "根據建立日期篩選任務日期時間範圍的終點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due at From",
+          "source": "Due at from",
           "message": "到期時間起"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "根據到期日篩選任務日期時間範圍的起點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due at To",
+          "source": "Due at to",
           "message": "到期時間止"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "根據到期日篩選任務日期時間範圍的終點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed at From",
+          "source": "Completed at from",
           "message": "完成時間起"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "根據完成日期篩選任務日期時間範圍的起點（包含）。輸入為以毫秒為單位的 Epoch 時間。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed at To",
+          "source": "Completed at to",
           "message": "完成時間止"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "要傳回的工作 ID。若不知道工作 ID，請使用「取得工作」並篩選結果。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3288,7 +3288,7 @@
           "message": "工作所在頁面的 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post ID",
+          "source": "Blog post ID",
           "message": "網誌文章 ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3300,7 +3300,7 @@
           "message": "工作所在網誌文章的 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.display_name": {
-          "source": "Created By",
+          "source": "Created by",
           "message": "建立者"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "建立此工作的使用者帳戶 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.display_name": {
-          "source": "Assigned To",
+          "source": "Assigned to",
           "message": "指派給"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.short_desc": {
@@ -3324,7 +3324,7 @@
           "message": "指派此工作的使用者帳戶 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.display_name": {
-          "source": "Completed By",
+          "source": "Completed by",
           "message": "完成者"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.short_desc": {
@@ -3336,7 +3336,7 @@
           "message": "完成此工作的使用者帳戶 ID。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "建立時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.short_desc": {
@@ -3348,7 +3348,7 @@
           "message": "建立工作的日期與時間。格式為「YYYY-MM-DDTHH:mm:ss.sssZ」。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "更新時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.short_desc": {
@@ -3360,7 +3360,7 @@
           "message": "工作更新的日期與時間。格式為「YYYY-MM-DDTHH:mm:ss.sssZ」。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.display_name": {
-          "source": "Due At",
+          "source": "Due at",
           "message": "到期時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "工作到期的日期與時間。格式為「YYYY-MM-DDTHH:mm:ss.sssZ」。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.display_name": {
-          "source": "Completed At",
+          "source": "Completed at",
           "message": "完成時間"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "工作完成的日期與時間。格式為「YYYY-MM-DDTHH:mm:ss.sssZ」。"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
+          "source": "Body format",
           "message": "內文格式"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "列出標籤"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.display_name": {
-          "source": "List Attachments",
+          "source": "List attachments",
           "message": "列出附件"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "根據附件狀態篩選結果。預設使用 `current` 和 `archived`。"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.display_name": {
-          "source": "Media Type",
+          "source": "Media type",
           "message": "媒體類型"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "分頁游標：從先前回應中的 `_links.next` URL 取得 `cursor` 查詢引數並傳入此處。\n\n此值是不透明的，不可手動構建。"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "搜尋記錄"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "要操作的表格：`pages`、`blogposts`、`tasks`、`spaces`、`labels` 或 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "尋找單筆記錄"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "要操作的表格：`pages`、`blogposts`、`tasks`、`spaces`、`labels` 或 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "建立記錄"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "要操作的表格：`pages`、`blogposts`、`tasks`、`spaces`、`labels` 或 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "更新記錄"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "要操作的表格：`pages`、`blogposts`、`tasks`、`spaces`、`labels` 或 `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "刪除記錄"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.short_desc": {

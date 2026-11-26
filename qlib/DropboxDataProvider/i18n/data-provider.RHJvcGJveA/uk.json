@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
-          "source": "List Folder",
+          "source": "List folder",
           "message": "Список вмісту папки"
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Шукати лише файли з цими розширеннями, зазначеними без крапки на початку та розділеними комами"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Отримати інформацію про файл"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Шлях до файлу або папки, метадані яких потрібні"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Завантажити файл"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Шлях до файлу для завантаження"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Завантажити файл"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Не показувати користувачеві сповіщення на робочому столі про цю зміну; корисно для масових завантажень"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Створити текстовий файл"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Не показувати користувачеві сповіщення на робочому столі про цю зміну"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
-          "source": "Get Temporary Link",
+          "source": "Get temporary link",
           "message": "Отримати тимчасове посилання"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Шлях до файлу, для якого потрібно створити тимчасове посилання"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Створити папку"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File or Folder",
+          "source": "Delete file or folder",
           "message": "Видалити файл або папку"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Шлях до файлу або папки для видалення; видалення папки призводить до видалення всього її вмісту"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File or Folder",
+          "source": "Copy file or folder",
           "message": "Скопіювати файл або папку"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
-          "source": "Move or Rename File or Folder",
+          "source": "Move or rename file or folder",
           "message": "Перемістити або перейменувати файл чи папку"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Список версій файлу"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Максимальна кількість версій для повернення"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
-          "source": "Restore File Revision",
+          "source": "Restore file revision",
           "message": "Відновити ревізію файлу"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Ідентифікатор ревізії для відновлення, повернутий `list-file-revisions`"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Create Shared Link",
+          "source": "Create shared link",
           "message": "Створити спільне посилання"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Коли посилання перестане працювати; потрібен платний обліковий запис Dropbox"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
-          "source": "List Shared Links",
+          "source": "List shared links",
           "message": "Список спільних посилань"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Перелічувати лише посилання, створені безпосередньо для цього шляху, за винятком посилань на батьківську папку, які також надають до нього доступ"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Revoke Shared Link",
+          "source": "Revoke shared link",
           "message": "Відкликати спільне посилання"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Спільне посилання для відкликання, повернуте `create-shared-link` або `list-shared-links`"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
-          "source": "Get Account Info",
+          "source": "Get account info",
           "message": "Отримати інформацію про обліковий запис"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Повертає інформацію про обліковий запис Dropbox, від імені якого автентифікується з’єднання: кому він належить, адресу електронної пошти, на яку його зареєстровано, та тип облікового запису.\n\nТип облікового запису має значення для кількох інших дій: спільне посилання не можна захистити паролем в обліковому записі `basic`, а видимість посилання `team_only` вимагає облікового запису `business`."
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
-          "source": "Get Space Usage",
+          "source": "Get space usage",
           "message": "Отримати використання сховища"
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "URL-адреса, яку Dropbox має отримати.\n\n**Dropbox отримує її зі своїх власних серверів**, тому URL-адреса має бути доступною з публічного інтернету, а вміст ніколи не проходить через цю систему"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
-          "source": "Check Job Status",
+          "source": "Check job status",
           "message": "Перевірити статус завдання"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Пакетне копіювання, запущене `copy-batch`"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete Files (Batch)",
+          "source": "Delete files (batch)",
           "message": "Видалити файли (пакетно)"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Шляхи для видалення.\n\nDropbox виконує великі пакети у фоновому режимі, тому у відповіді може повертатися завдання для відстеження, а не самі результати"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
-          "source": "Move Files (Batch)",
+          "source": "Move files (batch)",
           "message": "Перемістити файли (пакетно)"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
-          "source": "Copy Files (Batch)",
+          "source": "Copy files (batch)",
           "message": "Копіювати файли (пакетно)"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
-          "source": "Permanently Delete",
+          "source": "Permanently delete",
           "message": "Видалити остаточно"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Шлях до файлу або папки для остаточного видалення"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
-          "source": "Get Thumbnail",
+          "source": "Get thumbnail",
           "message": "Отримати ескіз"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "2048 на 1536 пікселів"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
-          "source": "Get Preview",
+          "source": "Get preview",
           "message": "Отримати попередній перегляд"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Шлях до документа для відтворення як попередній перегляд PDF"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
-          "source": "Share File with People",
+          "source": "Share file with people",
           "message": "Поділитися файлом із користувачами"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Повідомлення для додавання до електронного листа зі сповіщенням; ігнорується, якщо встановлено `quiet`"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
-          "source": "List File Members",
+          "source": "List file members",
           "message": "Список учасників файлу"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Максимальна кількість учасників для повернення"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files in a Folder",
+          "source": "Find files in a folder",
           "message": "Знайти файли в папці"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Скільки записів отримувати за один запит; Dropbox розглядає це як підказку.\n\nЦе впливає на те, як обхід розбивається на запити, а не на те, скільки записів повертається — ітератор отримує наступні сторінки за потреби"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
-          "source": "Find Files by Search",
+          "source": "Find files by search",
           "message": "Знайти файли за допомогою пошуку"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "Скільки збігів отримувати за запит.\n\nЦе впливає на те, як обхід розбивається на запити, а не на загальну кількість повернутих записів"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Новий файл"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження, щоб відрізнити новий файл від зміненого (за замовчуванням `100000`).\n\nDropbox однаково повідомляє про створення та зміну, тому різницю можна визначити лише за історією переглянутих записів. Якщо досягнуто цього обмеження, у журнал записується попередження; краще звузити область за допомогою `path` та `recursive`, ніж збільшувати це значення"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Нова папка"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження, щоб відрізнити новий файл від зміненого (за замовчуванням `100000`).\n\nDropbox однаково повідомляє про створення та зміну, тому різницю можна визначити лише за історією переглянутих записів. Якщо досягнуто цього обмеження, у журнал записується попередження; краще звузити область за допомогою `path` та `recursive`, ніж збільшувати це значення"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "File Modified",
+          "source": "File modified",
           "message": "Файл змінено"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {

@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
-          "source": "List Addresses",
+          "source": "List addresses",
           "message": "アドレスの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "アドレスのページネーションされた一覧を取得するか、IDで特定のアドレスを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
-          "source": "Create Address",
+          "source": "Create address",
           "message": "住所を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
@@ -616,7 +616,7 @@
           "message": "取得するアドレス"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
-          "source": "Verify Address",
+          "source": "Verify address",
           "message": "住所の検証"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
@@ -640,7 +640,7 @@
           "message": "検証する既存の EasyPost 住所 ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
-          "source": "Create and Verify Address",
+          "source": "Create and verify address",
           "message": "住所を作成して検証"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
@@ -904,7 +904,7 @@
           "message": "取得する既存のEasyPost小包ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "小包を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Small Package"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "配送の一覧取得"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "発送のページネーションされたリストを取得します。オプションでIDによる取得や購入ステータスによる絞り込みが可能です。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "配送を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -3724,7 +3724,7 @@
           "message": "取得する配送"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
-          "source": "Buy Shipment",
+          "source": "Buy shipment",
           "message": "配送を購入"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
@@ -3808,7 +3808,7 @@
           "message": "購入のエンドシッパーID"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
-          "source": "Refund Shipment",
+          "source": "Refund shipment",
           "message": "発送の返金"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
@@ -3884,7 +3884,7 @@
           "message": "PNG画像"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
-          "source": "Get Shipment SmartRates",
+          "source": "Get shipment SmartRates",
           "message": "配送SmartRateの取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "SmartRateを取得する配送"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
-          "source": "Rerate Shipment",
+          "source": "Rerate shipment",
           "message": "発送の料金再計算"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
@@ -3932,7 +3932,7 @@
           "message": "料金を再計算する発送"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
-          "source": "Insure Shipment",
+          "source": "Insure shipment",
           "message": "配送の保険適用"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "配送に保険を掛ける金額（文字列形式、例: `\"100.00\"`）"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
-          "source": "List Trackers",
+          "source": "List trackers",
           "message": "トラッカーの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "トラッカーのページネーションされた一覧を取得します。必要に応じて追跡コードまたは配送業者で絞り込みます。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
-          "source": "Create Tracker",
+          "source": "Create tracker",
           "message": "トラッカーを作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "取得するトラッカー"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
-          "source": "Delete Tracker",
+          "source": "Delete tracker",
           "message": "トラッカーの削除"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "削除するトラッカー"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
-          "source": "Bulk Create Trackers",
+          "source": "Bulk create trackers",
           "message": "トラッカーを一括作成"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
@@ -4112,7 +4112,7 @@
           "message": "監視する追跡番号"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
-          "source": "List Insurance Records",
+          "source": "List insurance records",
           "message": "保険レコードを一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "保険レコードのページネーションされたリストを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
-          "source": "Create Insurance",
+          "source": "Create insurance",
           "message": "保険の作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
@@ -4568,7 +4568,7 @@
           "message": "呼び出し元が指定したリファレンス"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
-          "source": "Get Insurance",
+          "source": "Get insurance",
           "message": "保険を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "取得する保険レコード"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
-          "source": "Refund Insurance",
+          "source": "Refund insurance",
           "message": "保険の返金"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
@@ -4616,7 +4616,7 @@
           "message": "返金する保険ID"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
-          "source": "List Pickups",
+          "source": "List pickups",
           "message": "集荷を一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
@@ -4628,7 +4628,7 @@
           "message": "集荷のページネーションされたリストを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
-          "source": "Create Pickup",
+          "source": "Create pickup",
           "message": "集荷を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "集荷の料金計算に使用する配送業者アカウントID"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
-          "source": "Get Pickup",
+          "source": "Get pickup",
           "message": "集荷を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "取得する集荷"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
-          "source": "Buy Pickup",
+          "source": "Buy pickup",
           "message": "集荷を購入"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "`pickup_rates` で返された集荷サービスコード"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
-          "source": "Cancel Pickup",
+          "source": "Cancel pickup",
           "message": "集荷をキャンセル"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "キャンセルする集荷"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "注文を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "取得する注文"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "注文を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -7568,7 +7568,7 @@
           "message": "配送業者名"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
-          "source": "Buy Order",
+          "source": "Buy order",
           "message": "オーダーを購入"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "配送業者サービスコード"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Get Customs Info",
+          "source": "Get customs info",
           "message": "通関情報を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7640,7 +7640,7 @@
           "message": "取得する通関情報ID"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Create Customs Info",
+          "source": "Create customs info",
           "message": "税関情報を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "自由形式の税関申告テキスト"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Get Customs Item",
+          "source": "Get customs item",
           "message": "通関品目を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "取得する通関品目"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Create Customs Item",
+          "source": "Create customs item",
           "message": "税関品目の作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -8140,7 +8140,7 @@
           "message": "税関申告書に印刷されるオプションの識別子"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "返金を一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -8152,7 +8152,7 @@
           "message": "返金のページネーションされたリストを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "返金を作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "返金対象の追跡コードのリスト"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get Refund",
+          "source": "Get refund",
           "message": "返金を取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -8212,7 +8212,7 @@
           "message": "取得する返金"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "バッチの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -8224,7 +8224,7 @@
           "message": "バッチのページネーションされた一覧を取得します。"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "バッチを作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -8272,7 +8272,7 @@
           "message": "呼び出し元が指定したリファレンス"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "バッチを取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "取得するバッチ"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
-          "source": "Add Shipments to Batch",
+          "source": "Add shipments to batch",
           "message": "バッチに配送を追加"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "参照オブジェクトのID"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
-          "source": "Remove Shipments from Batch",
+          "source": "Remove shipments from batch",
           "message": "バッチから配送を削除"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "参照オブジェクトのID"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
-          "source": "Buy Batch",
+          "source": "Buy batch",
           "message": "バッチを購入"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
@@ -8416,7 +8416,7 @@
           "message": "購入するバッチ (すべての配送のラベルを購入)"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
-          "source": "Get Batch Label",
+          "source": "Get batch label",
           "message": "バッチラベルを取得"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
@@ -8464,7 +8464,7 @@
           "message": "Eltron EPL2"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
-          "source": "Generate Batch Scan Form",
+          "source": "Generate batch scan form",
           "message": "バッチスキャンフォームを生成"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "スキャンフォームを生成するバッチ"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Webhookの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -8500,7 +8500,7 @@
           "message": "設定されているすべてのWebhookを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Webhookの取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "取得するWebhook"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Webhookを作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -8596,7 +8596,7 @@
           "message": "ヘッダーバリュー"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Webhook の更新"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "ヘッダーバリュー"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Webhookの削除"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -8704,7 +8704,7 @@
           "message": "Webhook配信イベントのページネーションされた一覧を取得します。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "イベントを取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "取得するイベント"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
-          "source": "List Event Payloads",
+          "source": "List event payloads",
           "message": "イベントペイロードの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "ペイロードを一覧表示するイベント"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
-          "source": "Get Event Payload",
+          "source": "Get event payload",
           "message": "イベントペイロードを取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
@@ -8788,7 +8788,7 @@
           "message": "取得するペイロード"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Carrier Accounts",
+          "source": "List carrier accounts",
           "message": "配送業者アカウントの一覧表示"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
@@ -8800,7 +8800,7 @@
           "message": "EasyPostアカウントに設定されているすべての配送業者アカウントを取得します。"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Get Carrier Account",
+          "source": "Get carrier account",
           "message": "配送業者アカウントを取得"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8824,7 +8824,7 @@
           "message": "取得する配送業者アカウント"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Create Carrier Account",
+          "source": "Create carrier account",
           "message": "配送業者アカウントの作成"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8896,7 +8896,7 @@
           "message": "テスト環境用の配送業者固有の認証情報ハッシュ。`credentials` と同じ構造です。`type` を選択して、このフィールドに配送業者固有のスキーマを入力してください。"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Update Carrier Account",
+          "source": "Update carrier account",
           "message": "配送業者アカウントの更新"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8968,7 +8968,7 @@
           "message": "新しいテスト環境の認証情報。`credentials` と同じスキーマです。"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Delete Carrier Account",
+          "source": "Delete carrier account",
           "message": "配送業者アカウントの削除"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8992,7 +8992,7 @@
           "message": "削除する配送業者アカウント"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
-          "source": "On Tracker Created",
+          "source": "On tracker created",
           "message": "トラッカー作成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
@@ -9004,7 +9004,7 @@
           "message": "新しいトラッカーが作成されたときに発火します (`tracker.created` Webhook イベント)。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
-          "source": "On Tracker Updated",
+          "source": "On tracker updated",
           "message": "トラッカー更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
@@ -9016,7 +9016,7 @@
           "message": "トラッカーのステータスが変更されたときに発火します (`tracker.updated` Webhook イベント)。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
-          "source": "On Batch Created",
+          "source": "On batch created",
           "message": "バッチ作成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
@@ -9028,7 +9028,7 @@
           "message": "新しいバッチが作成されたときにトリガーされます（`batch.created` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
-          "source": "On Batch Updated",
+          "source": "On batch updated",
           "message": "バッチ更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "バッチが更新されたときにトリガーされます（`batch.updated` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
-          "source": "On Insurance Purchased",
+          "source": "On insurance purchased",
           "message": "保険購入時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "保険が購入されたときにトリガーされます（`insurance.purchased` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
-          "source": "On Refund Successful",
+          "source": "On refund successful",
           "message": "返金成功時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
@@ -9064,7 +9064,7 @@
           "message": "返金が成功したときにトリガーされます（`refund.successful` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "On Shipment Invoice Created",
+          "source": "On shipment invoice created",
           "message": "発送請求書作成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "発送請求書が作成されたときにトリガーされます（`shipment.invoice.created` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
-          "source": "On Payment Completed",
+          "source": "On payment completed",
           "message": "支払い完了時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
@@ -9088,7 +9088,7 @@
           "message": "支払いが完了したときにトリガーされます（`payment.completed` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "On Payment Failed",
+          "source": "On payment failed",
           "message": "支払い失敗時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "支払いが失敗したときにトリガーされます（`payment.failed` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "On Payment Created",
+          "source": "On payment created",
           "message": "支払い作成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -9112,7 +9112,7 @@
           "message": "銀行口座またはクレジットカードへの請求が成功したときにトリガーされます（`payment.created` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
-          "source": "On Insurance Cancelled",
+          "source": "On insurance cancelled",
           "message": "保険キャンセル時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "スタンドアロンの保険がキャンセルされたか購入に失敗したときにトリガーされます（`insurance.cancelled` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
-          "source": "On Shipment Invoice Updated",
+          "source": "On shipment invoice updated",
           "message": "発送請求書更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
@@ -9136,7 +9136,7 @@
           "message": "発送請求書が調整および更新されたときにトリガーされます（`shipment.invoice.updated` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
-          "source": "On Scan Form Created",
+          "source": "On scan form created",
           "message": "スキャンフォーム作成時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "ScanFormオブジェクトの初期作成が完了したときにトリガーされます（`scan_form.created` Webhookイベント）。"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
-          "source": "On Scan Form Updated",
+          "source": "On scan form updated",
           "message": "スキャンフォーム更新時"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {

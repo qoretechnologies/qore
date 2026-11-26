@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Generovať obsah"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Voliteľný text systémových pokynov, ktorý nastavuje správanie a kontext pre model"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
-          "source": "Stream Content",
+          "source": "Stream content",
           "message": "Streamovať obsah"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Voliteľný názov pre text. Použiteľné iba vtedy, keď `taskType` je `RETRIEVAL_DOCUMENT`"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Spočítať tokeny"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Obsah z modelu"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Odoslať súbor"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Voliteľný zobrazovaný názov pre nahraný súbor. Ak nie je zadaný, použije sa názov súboru z nahraného súboru"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Odstrániť súbor"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Názov prostriedku súboru, ktorý sa má vymazať (napr. `files/abc-123`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Create Cached Content",
+          "source": "Create cached content",
           "message": "Vytvoriť obsah vo vyrovnávacej pamäti"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2400,7 +2400,7 @@
           "message": "Obsah z modelu"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Delete Cached Content",
+          "source": "Delete cached content",
           "message": "Vymazať obsah vo vyrovnávacej pamäti"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Názov prostriedku obsahu vo vyrovnávacej pamäti, ktorý sa má vymazať"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Update Cached Content",
+          "source": "Update cached content",
           "message": "Aktualizovať obsah vo vyrovnávacej pamäti"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Nová doba životnosti (TTL) pre obsah vo vyrovnávacej pamäti (napr. `3600s` na jednu hodinu)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Create File Search Store",
+          "source": "Create file search store",
           "message": "Vytvoriť úložisko vyhľadávania súborov"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Zobrazovaný názov pre nové úložisko vyhľadávania súborov čitateľný pre človeka"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Delete File Search Store",
+          "source": "Delete file search store",
           "message": "Vymazať úložisko vyhľadávania súborov"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Názov prostriedku úložiska vyhľadávania súborov, ktoré sa má vymazať"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
-          "source": "Import File to Search Store",
+          "source": "Import file to search store",
           "message": "Importovať súbor do úložiska vyhľadávania"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {

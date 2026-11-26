@@ -520,7 +520,7 @@
           "message": "要驗證的電子郵件地址"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
+          "source": "Add mailing list member",
           "message": "新增郵件清單成員"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -604,7 +604,7 @@
           "message": "若為 `True`，則在成員已存在時進行更新（預設值：`False`）"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
+          "source": "Get mailing list member",
           "message": "取得郵件清單成員"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -640,7 +640,7 @@
           "message": "要擷取成員的電子郵件地址"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
+          "source": "Delete mailing list member",
           "message": "刪除郵件清單成員"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -676,7 +676,7 @@
           "message": "要移除成員的電子郵件地址"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
+          "source": "List mailing list members",
           "message": "列出郵件清單成員"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
@@ -724,7 +724,7 @@
           "message": "要傳回的成員數量上限"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
+          "source": "Create route",
           "message": "建立路由"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
@@ -784,7 +784,7 @@
           "message": "此路由用途的說明"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
+          "source": "List routes",
           "message": "列出路由"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
@@ -808,7 +808,7 @@
           "message": "要傳回的最大路由數量"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
+          "source": "List mailing lists",
           "message": "列出郵件清單"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "要傳回的最大郵件清單數量"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "列出網域"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
@@ -880,7 +880,7 @@
           "message": "要傳回的最大網域數量"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "已點擊電子郵件連結"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "選取要監控點擊事件的網域"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
+          "source": "Email delivered",
           "message": "電子郵件已送達"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
@@ -928,7 +928,7 @@
           "message": "選取要監控傳遞事件的網域"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "電子郵件已開啟"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
@@ -952,7 +952,7 @@
           "message": "選取要監控開啟事件的網域"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
+          "source": "Permanent failure",
           "message": "永久失敗"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
@@ -976,7 +976,7 @@
           "message": "選取要監視永久失敗事件的網域"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
+          "source": "Temporary failure",
           "message": "暫時失敗"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "選取要監視暫時失敗事件的網域"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
+          "source": "Spam complaint",
           "message": "垃圾郵件申訴"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {

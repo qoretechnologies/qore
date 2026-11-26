@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "Vektorsuche"
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.short_desc": {

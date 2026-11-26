@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Datei konvertieren"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Das Konvertierungs-Timeout in Sekunden, von `10` bis `1200`; wenn nicht gesetzt, gilt der Standardwert des Konverters, zum Beispiel `900` für Office-Dokumente und `120` für Webseiten."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Konverterinformationen abrufen"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Weitere Parameter des Konverters, als Hash von ConvertAPI-Parameternamen auf Werte.\n\nDie Parameter jedes Konverters sind in der [ConvertAPI-Dokumentation](https://docs.convertapi.com) aufgeführt und werden von der Aktion `get-converter-info` zurückgegeben.\n\n- Skalare Werte werden unverändert gesendet\n- Ein Datei-Hash (`name` und `content`) wird als Datei gesendet\n- Eine Liste von Datei-Hashes wird als Liste von Dateien gesendet\n\n**Beispiel**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "PDF in Bilder konvertieren"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Weitere Parameter des Konverters, als Hash von ConvertAPI-Parameternamen auf Werte.\n\nDie Parameter jedes Konverters sind in der [ConvertAPI-Dokumentation](https://docs.convertapi.com) aufgeführt und werden von der Aktion `get-converter-info` zurückgegeben.\n\n- Skalare Werte werden unverändert gesendet\n- Ein Datei-Hash (`name` und `content`) wird als Datei gesendet\n- Eine Liste von Datei-Hashes wird als Liste von Dateien gesendet\n\n**Beispiel**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "PDF-Dateien zusammenführen"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

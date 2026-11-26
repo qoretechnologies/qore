@@ -435,7 +435,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/accounts",
                 "operation_id": "Gateway_ListAccounts",
-                "display_name": "List Accounts",
+                "display_name": "List accounts",
                 "short_desc": "List Accounts in Fireworks AI",
                 "desc": "List Accounts. Choose the account to use in subsequent Fireworks operations. Use `pageToken` with the returned `nextPageToken` to retrieve further pages.",
                 "groups": (
@@ -7979,7 +7979,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/completions",
                 "operation_id": "create_completion_v1_completions_post",
-                "display_name": "Text Completion",
+                "display_name": "Text completion",
                 "short_desc": "Text Completion in Fireworks AI",
                 "desc": "Text Completion. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (
@@ -8048,7 +8048,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/chat/completions",
                 "operation_id": "create_chat_completion_v1_chat_completions_post",
-                "display_name": "Chat Completion",
+                "display_name": "Chat completion",
                 "short_desc": "Chat Completion in Fireworks AI",
                 "desc": "Chat Completion. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (
@@ -8150,7 +8150,7 @@ public class FireworksManifest {
                 "method": "POST",
                 "path": "/v1/responses",
                 "operation_id": "create_response_v1_responses_post",
-                "display_name": "Create Response",
+                "display_name": "Create response",
                 "short_desc": "Create Response in Fireworks AI",
                 "desc": "Create Response. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.**",
                 "groups": (
@@ -8179,7 +8179,7 @@ public class FireworksManifest {
                 "method": "GET",
                 "path": "/v1/responses",
                 "operation_id": "list_responses_v1_responses_get",
-                "display_name": "List Responses",
+                "display_name": "List responses",
                 "short_desc": "List Responses in Fireworks AI",
                 "desc": "List Responses. Create and manage persistent model responses for agent workflows. **Creating responses incurs inference charges.**",
                 "groups": (
@@ -8253,7 +8253,7 @@ public class FireworksManifest {
                 "mutates_state": False,
                 "path": "/v1/messages",
                 "operation_id": "messages_post",
-                "display_name": "Create Message",
+                "display_name": "Create message",
                 "short_desc": "Create Message in Fireworks AI",
                 "desc": "Create Message. Generate responses for conversations, agents, or text-processing workflows. **Inference is billed by Fireworks.** This action returns a completed response.",
                 "groups": (

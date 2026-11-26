@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "주문 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -396,7 +396,7 @@
           "message": "주문이 발생한 스토어별로 주문 필터링"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "주문 가져오기"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
@@ -420,7 +420,7 @@
           "message": "고유 ShipStation 주문 ID"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "주문 생성"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "주문에 적용할 태그 ID 배열"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "주문 업데이트"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "주문에 적용할 태그 ID 배열"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "주문 삭제"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2488,7 +2488,7 @@
           "message": "삭제할 ShipStation 주문 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
-          "source": "Mark Order as Shipped",
+          "source": "Mark order as shipped",
           "message": "주문을 배송 완료로 표시"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "판매 채널(마켓플레이스)에 배송 사실을 알릴지 여부"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
-          "source": "Add Tag to Order",
+          "source": "Add tag to order",
           "message": "주문에 태그 추가"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "주문에 추가할 태그 선택"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
-          "source": "Remove Tag from Order",
+          "source": "Remove tag from order",
           "message": "주문에서 태그 제거"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
@@ -2644,7 +2644,7 @@
           "message": "주문에서 제거할 태그 선택"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
-          "source": "Assign User to Order",
+          "source": "Assign user to order",
           "message": "주문에 사용자 할당"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "주문에 할당할 사용자 선택"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
-          "source": "Unassign User from Order",
+          "source": "Unassign user from order",
           "message": "주문에서 사용자 할당 해제"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "사용자 할당을 해제할 주문 ID 배열"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
-          "source": "List Carriers",
+          "source": "List carriers",
           "message": "배송업체 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "ShipStation 계정에 연결된 모든 배송업체 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
-          "source": "Get Carrier",
+          "source": "Get carrier",
           "message": "운송업체 가져오기"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
@@ -2740,7 +2740,7 @@
           "message": "세부 정보를 검색할 운송업체 선택"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
-          "source": "List Services",
+          "source": "List services",
           "message": "서비스 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "사용 가능한 서비스를 나열할 배송업체 선택"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "패키지 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "사용 가능한 패키지 유형을 나열할 배송업체 선택"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
-          "source": "Add Funds",
+          "source": "Add funds",
           "message": "자금 추가"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
@@ -2824,7 +2824,7 @@
           "message": "운송업체 계정에 추가할 금액(USD)"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "고객 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "선택적 필터링을 통해 ShipStation에서 고객 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "고객 조회"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "고유 ShipStation 고객 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "제품 목록"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "SKU, 이름 또는 카테고리별로 선택적 필터링하여 ShipStation에서 제품 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "제품 가져오기"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "고유 ShipStation 상품 ID"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "제품 업데이트"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "세관용 원산지 국가 코드"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "배송 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -3184,7 +3184,7 @@
           "message": "배송업체별로 배송 필터링"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "이행 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "ShipStation에서 이행(완료된 배송) 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
-          "source": "Void Label",
+          "source": "Void label",
           "message": "라벨 무효화"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "무효화할 라벨의 고유 ShipStation 배송 ID"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
-          "source": "List Stores",
+          "source": "List stores",
           "message": "스토어 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "ShipStation 계정에 연결된 모든 스토어(판매 채널) 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
-          "source": "Get Store",
+          "source": "Get store",
           "message": "스토어 가져오기"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "세부 정보를 검색할 스토어 선택"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
-          "source": "Update Store",
+          "source": "Update store",
           "message": "스토어 업데이트"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "주문 상태를 동기화하기 위한 상태 매핑 배열"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Deactivate Store",
+          "source": "Deactivate store",
           "message": "스토어 비활성화"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "비활성화할 스토어 선택"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Reactivate Store",
+          "source": "Reactivate store",
           "message": "스토어 다시 활성화"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3400,7 +3400,7 @@
           "message": "다시 활성화할 스토어 선택"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
-          "source": "Refresh Store",
+          "source": "Refresh store",
           "message": "스토어 새로고침"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
@@ -3436,7 +3436,7 @@
           "message": "새로고침을 시작할 날짜입니다. 제공되지 않으면 최근 주문을 새로고침합니다."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
-          "source": "List Marketplaces",
+          "source": "List marketplaces",
           "message": "마켓플레이스 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "ShipStation에 연결할 수 있는 모든 마켓플레이스 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "웨어하우스 목록 조회"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "ShipStation 계정의 모든 창고(출고지) 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "웨어하우스 가져오기"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "세부 정보를 검색할 창고 선택"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "웨어하우스 생성"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "이 창고를 새 주문의 기본 창고로 설정할지 여부"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "웨어하우스 업데이트"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -4192,7 +4192,7 @@
           "message": "이 창고를 새 주문의 기본 창고로 설정할지 여부"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "태그 목록"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "주문에 사용 가능한 모든 태그 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "사용자 목록"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "ShipStation 계정의 모든 사용자 목록을 조회합니다."
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "주문 생성/업데이트됨"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "선택적으로 이벤트를 특정 스토어로 필터링"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
-          "source": "Order Created/Updated (with Items)",
+          "source": "Order created/updated (with items)",
           "message": "주문 생성/업데이트됨 (품목 포함)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "선택적으로 이벤트를 특정 스토어로 필터링"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
-          "source": "Label Created",
+          "source": "Label created",
           "message": "라벨 생성됨"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "선택적으로 이벤트를 특정 스토어로 필터링"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
-          "source": "Label Created (with Items)",
+          "source": "Label created (with items)",
           "message": "라벨 생성됨 (품목 포함)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {

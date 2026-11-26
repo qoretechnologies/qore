@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create Message",
-          "message": "Create Message"
+          "source": "Create message",
+          "message": "Create message"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
           "source": "Send a message to a Claude model and receive a response",
@@ -868,8 +868,8 @@
           "message": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically"
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.display_name": {
-          "source": "Stream Message",
-          "message": "Stream Message"
+          "source": "Stream message",
+          "message": "Stream message"
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.short_desc": {
           "source": "Stream a response from a Claude model via Server-Sent Events",
@@ -1736,8 +1736,8 @@
           "message": "Return models before this model ID (cursor for backward pagination)"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Message Batch",
-          "message": "Create Message Batch"
+          "source": "Create message batch",
+          "message": "Create message batch"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.short_desc": {
           "source": "Submit a batch of message requests for async processing",
@@ -2696,8 +2696,8 @@
           "message": "Return batches created before this batch ID (cursor for backward pagination)"
         },
         "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Message Batch",
-          "message": "Cancel Message Batch"
+          "source": "Cancel message batch",
+          "message": "Cancel message batch"
         },
         "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.short_desc": {
           "source": "Cancel a message batch before it finishes processing",
@@ -2720,8 +2720,8 @@
           "message": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
         },
         "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file for reuse across API calls (Beta)",
@@ -2960,8 +2960,8 @@
           "message": "The unique identifier for the file"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file from the workspace (Beta)",
@@ -2984,8 +2984,8 @@
           "message": "The unique identifier for the file"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.display_name": {
-          "source": "Create Skill",
-          "message": "Create Skill"
+          "source": "Create skill",
+          "message": "Create skill"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.short_desc": {
           "source": "Create a custom skill (Beta)",
@@ -3132,8 +3132,8 @@
           "message": "The unique identifier for the skill"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.display_name": {
-          "source": "Delete Skill",
-          "message": "Delete Skill"
+          "source": "Delete skill",
+          "message": "Delete skill"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.short_desc": {
           "source": "Delete a custom skill (Beta)",
@@ -3156,8 +3156,8 @@
           "message": "The unique identifier for the skill"
         },
         "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.display_name": {
-          "source": "Update Skill",
-          "message": "Update Skill"
+          "source": "Update skill",
+          "message": "Update skill"
         },
         "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.short_desc": {
           "source": "Update an existing skill (Beta)",

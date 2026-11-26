@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
-          "source": "List Folder",
+          "source": "List folder",
           "message": "Wyświetl zawartość folderu"
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Dopasowuj tylko pliki z tymi rozszerzeniami, podanymi bez początkowej kropki i oddzielonymi przecinkami"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "Pobierz informacje o pliku"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Ścieżka pliku lub folderu, którego metadane mają zostać pobrane"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Pobierz plik"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Ścieżka pliku do pobrania"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Prześlij plik"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Nie wyświetlaj użytkownikowi powiadomienia na pulpicie o tej zmianie; przydatne przy operacjach masowych"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "Utwórz plik tekstowy"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Nie pokazuj użytkownikowi powiadomienia na pulpicie o tej zmianie"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
-          "source": "Get Temporary Link",
+          "source": "Get temporary link",
           "message": "Pobierz link tymczasowy"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Ścieżka pliku, dla którego ma zostać wygenerowany link tymczasowy"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "Utwórz folder"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -976,7 +976,7 @@
           "message": "Wybierz nazwę, która nie powoduje konfliktu, zamiast zgłaszać błąd, gdy plik już istnieje w miejscu docelowym"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File or Folder",
+          "source": "Delete file or folder",
           "message": "Usuń plik lub folder"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Ścieżka pliku lub folderu do usunięcia; usunięcie folderu powoduje usunięcie całej jego zawartości"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File or Folder",
+          "source": "Copy file or folder",
           "message": "Kopiuj plik lub folder"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Wybierz nazwę, która nie powoduje konfliktu, zamiast zgłaszać błąd, gdy plik już istnieje w miejscu docelowym"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
-          "source": "Move or Rename File or Folder",
+          "source": "Move or rename file or folder",
           "message": "Przenieś lub zmień nazwę pliku bądź folderu"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Wybierz nazwę, która nie powoduje konfliktu, zamiast zgłaszać błąd, gdy plik już istnieje w miejscu docelowym"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "Wyświetl wersje pliku"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Maksymalna liczba zwracanych wersji"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
-          "source": "Restore File Revision",
+          "source": "Restore file revision",
           "message": "Przywróć wersję pliku"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Identyfikator wersji do przywrócenia, zwrócony przez `list-file-revisions`"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Create Shared Link",
+          "source": "Create shared link",
           "message": "Utwórz łącze udostępnione"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Kiedy łącze przestaje działać; wymaga płatnego konta Dropbox"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
-          "source": "List Shared Links",
+          "source": "List shared links",
           "message": "Wyświetl udostępnione łącza"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Wyświetl tylko łącza utworzone dla samej ścieżki, z wyłączeniem łączy do folderu nadrzędnego, które również dają do niej dostęp"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Revoke Shared Link",
+          "source": "Revoke shared link",
           "message": "Odwołaj link udostępniony"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Link udostępniony do odwołania, zwrócony przez `create-shared-link` lub `list-shared-links`"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
-          "source": "Get Account Info",
+          "source": "Get account info",
           "message": "Pobierz informacje o koncie"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Zwraca informacje o koncie Dropbox, jako które uwierzytelnia się połączenie: do kogo należy, na jaki adres e-mail jest zarejestrowane oraz jakiego jest typu.\n\nTyp konta ma znaczenie w przypadku kilku innych akcji: link udostępniony nie może być chroniony hasłem na koncie typu `basic`, a widoczność linku `team_only` wymaga konta `business`."
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
-          "source": "Get Space Usage",
+          "source": "Get space usage",
           "message": "Pobierz wykorzystanie miejsca"
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "Adres URL do pobrania przez Dropbox.\n\n**Dropbox pobiera go z własnych serwerów**, dlatego adres URL musi być dostępny z publicznego internetu, a zawartość nigdy nie przechodzi przez ten system"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
-          "source": "Check Job Status",
+          "source": "Check job status",
           "message": "Sprawdź status zadania"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Kopiowanie wsadowe uruchomione przez `copy-batch`"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete Files (Batch)",
+          "source": "Delete files (batch)",
           "message": "Usuń pliki (wsadowo)"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Ścieżki do usunięcia.\n\nDropbox wykonuje pakiet w tle, gdy jest on duży, więc odpowiedź może zawierać nazwę zadania do śledzenia zamiast samych wyników"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
-          "source": "Move Files (Batch)",
+          "source": "Move files (batch)",
           "message": "Przenieś pliki (wsadowo)"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Wybierz nazwę, która nie powoduje konfliktu, zamiast zgłaszać błąd, gdy plik już istnieje w miejscu docelowym"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
-          "source": "Copy Files (Batch)",
+          "source": "Copy files (batch)",
           "message": "Kopiuj pliki (wsadowo)"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Wybierz nazwę, która nie powoduje konfliktu, zamiast zgłaszać błąd, gdy plik już istnieje w miejscu docelowym"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
-          "source": "Permanently Delete",
+          "source": "Permanently delete",
           "message": "Usuń trwale"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Ścieżka pliku lub folderu do trwałego usunięcia"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
-          "source": "Get Thumbnail",
+          "source": "Get thumbnail",
           "message": "Pobierz miniaturę"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "2048 na 1536 pikseli"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
-          "source": "Get Preview",
+          "source": "Get preview",
           "message": "Pobierz podgląd"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Ścieżka dokumentu do wyrenderowania jako podgląd PDF"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
-          "source": "Share File with People",
+          "source": "Share file with people",
           "message": "Udostępnij plik osobom"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Wiadomość do dołączenia w wiadomości e-mail z powiadomieniem; ignorowane, gdy parametr `quiet` jest ustawiony"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
-          "source": "List File Members",
+          "source": "List file members",
           "message": "Wyświetl członków pliku"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Maksymalna liczba zwracanych członków"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files in a Folder",
+          "source": "Find files in a folder",
           "message": "Znajdź pliki w folderze"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Liczba wpisów do pobrania na żądanie; Dropbox traktuje to jako wskazówkę.\n\nWpływa to na podział przeglądania na żądania, a nie na łączną liczbę zwracanych rekordów — iterator pobiera kolejne strony w miarę potrzeb"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
-          "source": "Find Files by Search",
+          "source": "Find files by search",
           "message": "Znajdź pliki przez wyszukiwanie"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "Ile dopasowań pobrać na żądanie.\n\nWpływa to na sposób podziału przeglądania na żądania, a nie na liczbę zwracanych rekordów"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "Nowy plik"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "Ile tożsamości wpisów zapamiętuje obserwator, aby odróżnić nowy plik od zmodyfikowanego (domyślnie `100000`).\n\nDropbox raportuje utworzenie i modyfikację identycznie, więc różnica może wynikać tylko z zapamiętania tego, co zostało zauważone. Obserwator, który osiągnie ten limit, rejestruje ostrzeżenie; zawęź go za pomocą `path` i `recursive`, zamiast zwiększać tę wartość"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "Nowy folder"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Ile tożsamości wpisów zapamiętuje obserwator, aby odróżnić nowy plik od zmodyfikowanego (domyślnie `100000`).\n\nDropbox raportuje utworzenie i modyfikację identycznie, więc różnica może wynikać tylko z zapamiętania tego, co zostało zauważone. Obserwator, który osiągnie ten limit, rejestruje ostrzeżenie; zawęź go za pomocą `path` i `recursive`, zamiast zwiększać tę wartość"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "File Modified",
+          "source": "File modified",
           "message": "Plik zmodyfikowany"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {

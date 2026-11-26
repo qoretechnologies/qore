@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
-          "message": "Create a Customer"
+          "source": "Create a customer",
+          "message": "Create a customer"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -436,8 +436,8 @@
           "message": "ID of the customer group to assign"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
-          "message": "Update a Customer"
+          "source": "Update a customer",
+          "message": "Update a customer"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -544,8 +544,8 @@
           "message": "ID of the customer group to assign"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
-          "message": "Delete a Customer"
+          "source": "Delete a customer",
+          "message": "Delete a customer"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -568,8 +568,8 @@
           "message": "The ID of the customer to delete"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
-          "message": "Get a Customer"
+          "source": "Get a customer",
+          "message": "Get a customer"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a single customer by ID",
@@ -592,8 +592,8 @@
           "message": "The ID of the customer to retrieve"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
-          "message": "Search Customers"
+          "source": "Search customers",
+          "message": "Search customers"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
           "source": "Search for customers or list all",
@@ -716,8 +716,8 @@
           "message": "Sort by modification date descending"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create a Customer Address",
-          "message": "Create a Customer Address"
+          "source": "Create a customer address",
+          "message": "Create a customer address"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Create a new address for a customer",
@@ -880,8 +880,8 @@
           "message": "Commercial address"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.display_name": {
-          "source": "Search Customer Addresses",
-          "message": "Search Customer Addresses"
+          "source": "Search customer addresses",
+          "message": "Search customer addresses"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.short_desc": {
           "source": "Search for customer addresses or list all",
@@ -940,8 +940,8 @@
           "message": "Page number"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update a Customer Address",
-          "message": "Update a Customer Address"
+          "source": "Update a customer address",
+          "message": "Update a customer address"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Update an existing customer address",
@@ -1104,8 +1104,8 @@
           "message": "Commercial address"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete a Customer Address",
-          "message": "Delete a Customer Address"
+          "source": "Delete a customer address",
+          "message": "Delete a customer address"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
           "source": "Delete a customer address",
@@ -1128,8 +1128,8 @@
           "message": "The ID of the customer address to delete"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
-          "message": "Create a Product"
+          "source": "Create a product",
+          "message": "Create a product"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -1352,8 +1352,8 @@
           "message": "Sale price (overrides price when set)"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
-          "message": "Update a Product"
+          "source": "Update a product",
+          "message": "Update a product"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -1624,8 +1624,8 @@
           "message": "Sale price (overrides price when set)"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
-          "message": "Delete a Product"
+          "source": "Delete a product",
+          "message": "Delete a product"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
           "source": "Delete a product",
@@ -1648,8 +1648,8 @@
           "message": "The ID of the product to delete"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
-          "message": "Get a Product"
+          "source": "Get a product",
+          "message": "Get a product"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -1672,8 +1672,8 @@
           "message": "The ID of the product to retrieve"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
-          "message": "Search Products"
+          "source": "Search products",
+          "message": "Search products"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
           "source": "Search for products or list all",
@@ -1856,8 +1856,8 @@
           "message": "Descending order"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Create a Blog Post",
-          "message": "Create a Blog Post"
+          "source": "Create a blog post",
+          "message": "Create a blog post"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.short_desc": {
           "source": "Create a new blog post",
@@ -1988,8 +1988,8 @@
           "message": "SEO meta keywords"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.display_name": {
-          "source": "Get a Blog Post",
-          "message": "Get a Blog Post"
+          "source": "Get a blog post",
+          "message": "Get a blog post"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.short_desc": {
           "source": "Get a single blog post by ID",
@@ -2012,8 +2012,8 @@
           "message": "The ID of the blog post to retrieve"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Update a Blog Post",
-          "message": "Update a Blog Post"
+          "source": "Update a blog post",
+          "message": "Update a blog post"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.short_desc": {
           "source": "Update an existing blog post",
@@ -2156,8 +2156,8 @@
           "message": "SEO meta keywords"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Delete a Blog Post",
-          "message": "Delete a Blog Post"
+          "source": "Delete a blog post",
+          "message": "Delete a blog post"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.short_desc": {
           "source": "Delete a blog post",
@@ -2180,8 +2180,8 @@
           "message": "The ID of the blog post to delete"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.display_name": {
-          "source": "Search Blog Posts",
-          "message": "Search Blog Posts"
+          "source": "Search blog posts",
+          "message": "Search blog posts"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.short_desc": {
           "source": "Search for blog posts or list all",
@@ -2224,8 +2224,8 @@
           "message": "Page number"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
-          "message": "Get an Order"
+          "source": "Get an order",
+          "message": "Get an order"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -2248,8 +2248,8 @@
           "message": "The ID of the order to retrieve"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
-          "message": "Update an Order"
+          "source": "Update an order",
+          "message": "Update an order"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
           "source": "Update an existing order",
@@ -2380,8 +2380,8 @@
           "message": "Billing address object for the order"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
-          "message": "Search Orders"
+          "source": "Search orders",
+          "message": "Search orders"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.short_desc": {
           "source": "Search for orders or list all",
@@ -2576,8 +2576,8 @@
           "message": "Page number"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create a Shipment",
-          "message": "Create a Shipment"
+          "source": "Create a shipment",
+          "message": "Create a shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
           "source": "Create a new shipment for an order",
@@ -2684,8 +2684,8 @@
           "message": "Comments about the shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get a Shipment",
-          "message": "Get a Shipment"
+          "source": "Get a shipment",
+          "message": "Get a shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.short_desc": {
           "source": "Get a single shipment by ID",
@@ -2720,8 +2720,8 @@
           "message": "The ID of the shipment to retrieve"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.display_name": {
-          "source": "Update a Shipment",
-          "message": "Update a Shipment"
+          "source": "Update a shipment",
+          "message": "Update a shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.short_desc": {
           "source": "Update an existing shipment",
@@ -2840,8 +2840,8 @@
           "message": "Array of items in the shipment with `order_product_id` and `quantity`"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.display_name": {
-          "source": "Delete a Shipment",
-          "message": "Delete a Shipment"
+          "source": "Delete a shipment",
+          "message": "Delete a shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.short_desc": {
           "source": "Delete a shipment",
@@ -2876,8 +2876,8 @@
           "message": "The ID of the shipment to delete"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
-          "message": "Search Shipments"
+          "source": "Search shipments",
+          "message": "Search shipments"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
           "source": "Search for shipments by order",
@@ -2912,8 +2912,8 @@
           "message": "Page number"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.display_name": {
-          "source": "Watch Abandoned Cart",
-          "message": "Watch Abandoned Cart"
+          "source": "Watch abandoned cart",
+          "message": "Watch abandoned cart"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.short_desc": {
           "source": "Trigger when a cart is abandoned",
@@ -2936,8 +2936,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.display_name": {
-          "source": "Watch New Cart",
-          "message": "Watch New Cart"
+          "source": "Watch new cart",
+          "message": "Watch new cart"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new cart is created",
@@ -2960,8 +2960,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Customer",
-          "message": "Watch New Customer"
+          "source": "Watch new customer",
+          "message": "Watch new customer"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new customer is created",
@@ -2984,8 +2984,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.display_name": {
-          "source": "Watch New Customer Address",
-          "message": "Watch New Customer Address"
+          "source": "Watch new customer address",
+          "message": "Watch new customer address"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new customer address is created",
@@ -3008,8 +3008,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Order",
-          "message": "Watch New Order"
+          "source": "Watch new order",
+          "message": "Watch new order"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new order is created",
@@ -3032,8 +3032,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Watch New Product",
-          "message": "Watch New Product"
+          "source": "Watch new product",
+          "message": "Watch new product"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new product is created",
@@ -3056,8 +3056,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Watch New Shipment",
-          "message": "Watch New Shipment"
+          "source": "Watch new shipment",
+          "message": "Watch new shipment"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new shipment is created",
@@ -3080,8 +3080,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Customer",
-          "message": "Watch Updated Customer"
+          "source": "Watch updated customer",
+          "message": "Watch updated customer"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a customer is updated",
@@ -3104,8 +3104,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.display_name": {
-          "source": "Watch Updated Customer Address",
-          "message": "Watch Updated Customer Address"
+          "source": "Watch updated customer address",
+          "message": "Watch updated customer address"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.short_desc": {
           "source": "Trigger when a customer address is updated",
@@ -3128,8 +3128,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Order",
-          "message": "Watch Updated Order"
+          "source": "Watch updated order",
+          "message": "Watch updated order"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when an order is updated",
@@ -3152,8 +3152,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Watch Updated Order Status",
-          "message": "Watch Updated Order Status"
+          "source": "Watch updated order status",
+          "message": "Watch updated order status"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.short_desc": {
           "source": "Trigger when an order status changes",

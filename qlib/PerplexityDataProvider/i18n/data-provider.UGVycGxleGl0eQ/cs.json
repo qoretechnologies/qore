@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Vícenásobný chat"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Kód jazyka podle ISO 639-1 určující preferovaný jazyk pro odpověď"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Jednoduchý chat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Kód jazyka podle ISO 639-1 určující preferovaný jazyk pro odpověď"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
+          "source": "Stream chat",
           "message": "Streamovat chat"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {

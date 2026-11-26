@@ -339,7 +339,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.display_name": {
-          "source": "List Indexes",
+          "source": "List indexes",
           "message": "Vypsat indexy"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.short_desc": {
@@ -375,7 +375,7 @@
           "message": "Index, kterého se to týká, podle názvu."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.display_name": {
-          "source": "Create Index",
+          "source": "Create index",
           "message": "Vytvořit index"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.short_desc": {
@@ -471,7 +471,7 @@
           "message": "Microsoft Azure."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "Typ nasazení"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -563,7 +563,7 @@
           "message": "Azure `eastus2`, ve Virginii."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "Typ nasazení"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -731,7 +731,7 @@
           "message": "Počet shardů k použití. Shardy určují kapacitu úložiště indexu, přičemž každý shard poskytuje 250 GB úložiště."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Typ uzlu"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
@@ -783,7 +783,7 @@
           "message": "Čtení jsou zpracovávána dedicated uzly, pro předvídatelné zatížení. Vyžaduje `node_type` a `scaling` kromě toho."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.display_name": {
-          "source": "Create Index with Integrated Embedding",
+          "source": "Create index with integrated embedding",
           "message": "Vytvořit index s integrovaným embeddingem"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.short_desc": {
@@ -1131,7 +1131,7 @@
           "message": "Počet shardů k použití. Shardy určují kapacitu úložiště indexu, přičemž každý shard poskytuje 250 GB úložiště."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Typ uzlu"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
@@ -1295,7 +1295,7 @@
           "message": "Parametry aktualizace nasazení pro indexy založené na podech. Zadejte `replicas`, `pod_type` nebo obojí. Typ nasazení, cloud/region a prostředí nelze po vytvoření změnit. Neuvádějte pole `deployment_type`; není přijímáno."
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.display_name": {
-          "source": "Pod Type",
+          "source": "Pod type",
           "message": "Typ skupiny"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.short_desc": {
@@ -1431,7 +1431,7 @@
           "message": "Počet shardů."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Typ uzlu"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
@@ -1507,7 +1507,7 @@
           "message": "Index, kterého se to týká, podle názvu."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.display_name": {
-          "source": "List Backups",
+          "source": "List backups",
           "message": "Vypsat zálohy"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.short_desc": {
@@ -1863,7 +1863,7 @@
           "message": "Počet shardů k použití. Shardy určují kapacitu úložiště indexu, přičemž každý shard poskytuje 250 GB úložiště."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Typ uzlu"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
@@ -2079,7 +2079,7 @@
           "message": "Jak dlouho se každá záloha uchovává, ve tvaru `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "Vyprší po dnech"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2199,7 +2199,7 @@
           "message": "Jak dlouho se každá záloha uchovává, ve tvaru `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "Vyprší po dnech"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2283,7 +2283,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.display_name": {
-          "source": "List Restore Jobs",
+          "source": "List restore jobs",
           "message": "Vypsat úlohy obnovení"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.short_desc": {
@@ -2343,7 +2343,7 @@
           "message": "ID úlohy obnovení, která se má popsat."
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Seznam kolekcí"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -2355,7 +2355,7 @@
           "message": "Vypíše kolekce v projektu.\n\n**Kolekce jsou zastaralé.**  Jsou podporovány pouze pro indexy založené na podech a takový index nelze v této verzi API vytvořit — takže se to týká pouze projektu, který ještě nějaký má z dřívější verze.  Pro cokoli současného použijte místo toho **zálohy**."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "Vytvořit kolekci"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -2439,7 +2439,7 @@
           "message": "Název kolekce."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.display_name": {
-          "source": "Get Index Statistics",
+          "source": "Get index statistics",
           "message": "Získat statistiky indexu"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.short_desc": {
@@ -2475,7 +2475,7 @@
           "message": "Filtr metadat určující, kterých záznamů se to týká, zapsaný ve vlastním filtrovacím jazyce Pinecone — hash názvů polí a podmínek:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nOperátory jsou `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` a `$and` / `$or`.  Viz [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "Vyhledat pomocí vektoru"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {
@@ -2643,7 +2643,7 @@
           "message": "Optimalizační parametr, který řídí maximální počet kandidátních hustých vektorů k přeřazení. Přeřazení počítá přesné vzdálenosti, čímž zlepšuje úplnost, ale zvyšuje latenci dotazu. Rozsah: top_k – 100000.\nPro vyvážení úplnosti a latence ponechte výchozí hodnotu. Zvyšte ji, pokud je úplnost příliš nízká, nebo ji snižte pro nižší latenci na úkor přesnosti. Tento parametr je podporován pouze u vyhrazených (DRN) hustých indexů."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.display_name": {
-          "source": "Upsert Vectors",
+          "source": "Upsert vectors",
           "message": "Zapsat vektory"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.short_desc": {
@@ -2715,7 +2715,7 @@
           "message": "Metadata přidaná do požadavku. Názvy polí nesmí začínat `$`, který je vyhrazen pro operátory filtrů. Přijímají se všechny ostatní názvy, včetně prázdných, ne-ASCII nebo začínajících `_`."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Rzídké hodnoty"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.short_desc": {
@@ -2763,7 +2763,7 @@
           "message": "Vektorová data. U požadavku musí být neprázdná a alespoň jedna hodnota musí mít velikost `1e-8` nebo větší – vektor, jehož všechny hodnoty jsou menší, je zamítnut jako obsahující pouze nuly.\n\nU odpovědi je pole prázdné, když záznam nemá k dispozici hustá data: u řídkého indexu a u jakéhokoli indexu, pokud nebyly požadovány hodnoty. Pole tedy není zde omezeno, protože toto schéma popisuje obě směry."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.display_name": {
-          "source": "Update Vectors",
+          "source": "Update vectors",
           "message": "Aktualizovat vektory"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.short_desc": {
@@ -2895,7 +2895,7 @@
           "message": "Příslušné hodnoty řídkých dat, které musí mít stejnou délku jako indexy."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.display_name": {
-          "source": "Delete Vectors",
+          "source": "Delete vectors",
           "message": "Odstranit vektory"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.short_desc": {
@@ -2967,7 +2967,7 @@
           "message": "Odstranit všechny záznamy v namespace.  Nelze kombinovat s poli **ID záznamů** ani **Filtr metadat**."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.display_name": {
-          "source": "Fetch Vectors",
+          "source": "Fetch vectors",
           "message": "Načíst vektory"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.short_desc": {
@@ -3015,7 +3015,7 @@
           "message": "ID vektorů, které se mají načíst."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.display_name": {
-          "source": "Fetch Vectors by Metadata",
+          "source": "Fetch vectors by metadata",
           "message": "Načíst vektory podle metadat"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.short_desc": {
@@ -3087,7 +3087,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.display_name": {
-          "source": "List Record IDs",
+          "source": "List record IDs",
           "message": "Vypsat ID záznamů"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.short_desc": {
@@ -3159,7 +3159,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.display_name": {
-          "source": "List Namespaces",
+          "source": "List namespaces",
           "message": "Vypsat namespaces"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.short_desc": {
@@ -3219,7 +3219,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Create Namespace",
+          "source": "Create namespace",
           "message": "Vytvořit namespace"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3543,7 +3543,7 @@
           "message": "Dotaz pro přeřazení dokumentů. Pokud je zadán konkrétní dotaz pro přeřazení, přepíše dotaz zadaný na úrovni výše. Vyžadováno, pokud se vyhledávání používá s `vector` nebo `id`, protože neexistuje text dotazu pro přeřazení; jeho vynechání bude zamítnuto s `400`."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.display_name": {
-          "source": "Rank Fields",
+          "source": "Rank fields",
           "message": "Pole pro řazení"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.short_desc": {
@@ -3555,7 +3555,7 @@
           "message": "Pole pro zvážení při přeřazení. Každý vrácený záznam musí obsahovat každé uvedené pole; jinak je požadavek zamítnut s kódem `400`.\n\nPočet podporovaných polí je [model specifický](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Prvních N"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.short_desc": {
@@ -3579,7 +3579,7 @@
           "message": "Vektor, kterým se hledá místo textu, pro index bez integrovaného embeddingu — nebo když se embedding počítá jinde.\n\nHusté hodnoty patří do `values`; řídký vektor se zadává jako `sparse_values` s odpovídajícími `sparse_indices`."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.display_name": {
-          "source": "Sparse Indices",
+          "source": "Sparse indices",
           "message": "Rzídké indexy"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.short_desc": {
@@ -3591,7 +3591,7 @@
           "message": "Indexy řídkého vektoru."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Rzídké hodnoty"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -3815,7 +3815,7 @@
           "message": "Textový dotaz pro použití u typů hodnocení `text` a `query_string`. Vedoucí a koncové mezery jsou odstraněny; dotaz, který je po odstranění mezer prázdný, je zamítnut. Maximálně 10 KB."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Rzídké hodnoty"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -4099,7 +4099,7 @@
           "message": "Jedinečný identifikátor dokumentu k aktualizaci."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "Odebrat pole"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.short_desc": {
@@ -4291,7 +4291,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.display_name": {
-          "source": "List Imports",
+          "source": "List imports",
           "message": "Vypsat importy"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.short_desc": {
@@ -4339,7 +4339,7 @@
           "message": "Hodnota `pagination.next` z předchozí odpovědi.  Odpověď, která neobsahuje `pagination`, je poslední stránkou."
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.display_name": {
-          "source": "Start Import",
+          "source": "Start import",
           "message": "Spustit import"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.short_desc": {
@@ -4499,7 +4499,7 @@
           "message": "Jedinečný identifikátor operace importu."
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.display_name": {
-          "source": "Generate Embeddings",
+          "source": "Generate embeddings",
           "message": "Vygenerovat embeddingy"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.short_desc": {
@@ -4559,7 +4559,7 @@
           "message": "Parametry specifické pro model, například `{\"input_type\": \"query\", \"truncate\": \"END\"}`.  Které z nich model přijímá, uvádí akce **Popsat model**.\n\nNa `input_type` záleží: několik modelů vytváří embedding **dotazu** jinak než **pasáže**, a použití nesprávné hodnoty tiše zhoršuje relevanci."
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.display_name": {
-          "source": "Rerank Results",
+          "source": "Rerank results",
           "message": "Přeřadit výsledky"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.short_desc": {
@@ -4655,7 +4655,7 @@
           "message": "Další parametry specifické pro model. Dostupné parametry modelů najdete v [průvodci modely](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)."
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Seznam modelů"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4747,7 +4747,7 @@
           "message": "Název modelu, který se má vyhledat."
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhledat záznamy"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.short_desc": {
@@ -4771,7 +4771,7 @@
           "message": "Tabulka, se kterou se má pracovat: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` nebo `documents`"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Najít jeden záznam"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4795,7 +4795,7 @@
           "message": "Tabulka, se kterou se má pracovat: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` nebo `documents`"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvořit záznamy"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.short_desc": {
@@ -4819,7 +4819,7 @@
           "message": "Tabulka, se kterou se má pracovat: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` nebo `documents`"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovat záznamy"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.short_desc": {
@@ -4843,7 +4843,7 @@
           "message": "Tabulka, se kterou se má pracovat: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` nebo `documents`"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Smazat záznamy"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.short_desc": {

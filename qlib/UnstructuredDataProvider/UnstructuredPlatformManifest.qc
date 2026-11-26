@@ -273,7 +273,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-workflows",
                 "method": "GET",
                 "path": "/api/v1/workflows/",
-                "display_name": "List Workflows",
+                "display_name": "List workflows",
                 "short_desc": "List the workflows in this Unstructured account",
                 "desc": "Lists workflows, with optional filtering by state, by the connectors they "
                     "use, and by when they were created.\n\n"
@@ -374,7 +374,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-workflow",
                 "method": "POST",
                 "path": "/api/v1/workflows/",
-                "display_name": "Create Workflow",
+                "display_name": "Create workflow",
                 "short_desc": "Create a workflow",
                 "desc": "Creates a workflow that reads from a source connector, processes documents "
                     "through a chain of nodes, and writes to a destination connector.\n\n"
@@ -553,7 +553,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-jobs",
                 "method": "GET",
                 "path": "/api/v1/jobs/",
-                "display_name": "List Jobs",
+                "display_name": "List jobs",
                 "short_desc": "List workflow runs",
                 "desc": "Lists jobs, optionally narrowed to one workflow or one status.\n\n"
                     "A job is one run of a workflow, scheduled or explicit.",
@@ -691,7 +691,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-sources",
                 "method": "GET",
                 "path": "/api/v1/sources/",
-                "display_name": "List Source Connectors",
+                "display_name": "List source connectors",
                 "short_desc": "List the source connectors in this account",
                 "desc": "Lists source connectors, optionally narrowed to one connector type.\n\n"
                     "A source connector is where a workflow reads documents from.",
@@ -729,7 +729,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-source",
                 "method": "POST",
                 "path": "/api/v1/sources/",
-                "display_name": "Create Source Connector",
+                "display_name": "Create source connector",
                 "short_desc": "Create a source connector",
                 "desc": "Creates a source connector for a workflow to read documents from.\n\n"
                     "`config` is specific to the connector type chosen in `type` - an S3 connector "
@@ -853,7 +853,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-destinations",
                 "method": "GET",
                 "path": "/api/v1/destinations/",
-                "display_name": "List Destination Connectors",
+                "display_name": "List destination connectors",
                 "short_desc": "List the destination connectors in this account",
                 "desc": "Lists destination connectors, optionally narrowed to one connector type.\n\n"
                     "A destination connector is where a workflow writes its processed output - "
@@ -892,7 +892,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-destination",
                 "method": "POST",
                 "path": "/api/v1/destinations/",
-                "display_name": "Create Destination Connector",
+                "display_name": "Create destination connector",
                 "short_desc": "Create a destination connector",
                 "desc": "Creates a destination connector for a workflow to write its output to.\n\n"
                     "`config` is specific to the connector type chosen in `type` - a Pinecone "
@@ -1015,7 +1015,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-notification-channels",
                 "method": "GET",
                 "path": "/api/v1/notifications/channels",
-                "display_name": "List Notification Channels",
+                "display_name": "List notification channels",
                 "short_desc": "List the notification channels in this account",
                 "desc": "Lists notification channels of one kind.  A channel is where Unstructured "
                     "sends job notifications: a webhook URL, or an email address.",
@@ -1053,7 +1053,7 @@ public class UnstructuredPlatformManifest {
                 "action": "create-notification-channel",
                 "method": "POST",
                 "path": "/api/v1/notifications/channels",
-                "display_name": "Create Notification Channel",
+                "display_name": "Create notification channel",
                 "short_desc": "Create a notification channel",
                 "desc": "Creates a channel Unstructured sends job notifications to.\n\n"
                     "The settings depend on the kind of channel: a webhook channel takes a `url` "
@@ -1210,7 +1210,7 @@ public class UnstructuredPlatformManifest {
                 "action": "list-templates",
                 "method": "GET",
                 "path": "/api/v1/templates/",
-                "display_name": "List Workflow Templates",
+                "display_name": "List workflow templates",
                 "short_desc": "List the workflow templates available to this account",
                 "desc": "Lists workflow templates - Unstructured's ready-made processing chains, "
                     "which a workflow can be built from instead of describing its nodes by hand.",

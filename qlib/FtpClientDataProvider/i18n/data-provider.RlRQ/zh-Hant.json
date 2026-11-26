@@ -16,7 +16,7 @@
           "message": "用於透過 FTP 和 FTPS 交換檔案的通用 FTP 伺服器"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
-          "source": "Retrieve File With FTP",
+          "source": "Retrieve file with FTP",
           "message": "透過 FTP 擷取檔案"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
@@ -64,7 +64,7 @@
           "message": "若 `text` = `True` 時要使用的字串編碼（預設值：`UTF-8`）"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
+          "source": "Encoding errors",
           "message": "編碼錯誤"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
@@ -76,7 +76,7 @@
           "message": "當 `text` = `True` 時，在其字元編碼中無效的文字的處理方式：`raise`（預設值）會引發 `INVALID-ENCODING` 錯誤，`latin1` 會將文字以 `ISO-8859-1` 傳回，`keep` 則不經檢查而以該編碼傳回"
         },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
-          "source": "Send File With FTP",
+          "source": "Send file with FTP",
           "message": "透過 FTP 傳送檔案"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "若 `text` = `True` 時要使用的字串編碼（預設值：`UTF-8`）"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File With FTP",
+          "source": "Delete file with FTP",
           "message": "透過 FTP 刪除檔案"
         },
         "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {

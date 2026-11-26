@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
-          "source": "List People",
-          "message": "List People"
+          "source": "List people",
+          "message": "List people"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
           "source": "List and search people",
@@ -388,8 +388,8 @@
           "message": "Filter people by Customer.io internal ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
-          "source": "Get Person",
-          "message": "Get Person"
+          "source": "Get person",
+          "message": "Get person"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
           "source": "Get a person by ID",
@@ -412,8 +412,8 @@
           "message": "The customer ID, email, or cio_id to look up"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
-          "source": "Create/Update Customer",
-          "message": "Create/Update Customer"
+          "source": "Create/update customer",
+          "message": "Create/update customer"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
           "source": "Create or update a customer",
@@ -472,8 +472,8 @@
           "message": "Custom attributes to set on the customer"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -496,8 +496,8 @@
           "message": "The unique customer identifier to delete"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
-          "source": "Suppress Customer",
-          "message": "Suppress Customer"
+          "source": "Suppress customer",
+          "message": "Suppress customer"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
           "source": "Suppress a customer",
@@ -520,8 +520,8 @@
           "message": "The unique customer identifier to suppress"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
-          "source": "Unsuppress Customer",
-          "message": "Unsuppress Customer"
+          "source": "Unsuppress customer",
+          "message": "Unsuppress customer"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
           "source": "Unsuppress a customer",
@@ -544,8 +544,8 @@
           "message": "The unique customer identifier to unsuppress"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
-          "source": "Merge Customers",
-          "message": "Merge Customers"
+          "source": "Merge customers",
+          "message": "Merge customers"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
           "source": "Merge two customer profiles",
@@ -628,8 +628,8 @@
           "message": "Secondary identifier value"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
-          "message": "List Segments"
+          "source": "List segments",
+          "message": "List segments"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
           "source": "List segments",
@@ -664,8 +664,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
-          "message": "Get Segment"
+          "source": "Get segment",
+          "message": "Get segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
           "source": "Get a segment by ID",
@@ -688,8 +688,8 @@
           "message": "The unique Customer.io segment ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment People",
-          "message": "Get Segment People"
+          "source": "Get segment people",
+          "message": "Get segment people"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
           "source": "Get people in a segment",
@@ -724,8 +724,8 @@
           "message": "The page number for paginated results"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
-          "message": "List Campaigns"
+          "source": "List campaigns",
+          "message": "List campaigns"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
           "source": "List campaigns",
@@ -760,8 +760,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
-          "message": "Get Campaign"
+          "source": "Get campaign",
+          "message": "Get campaign"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
           "source": "Get a campaign by ID",
@@ -784,8 +784,8 @@
           "message": "The unique Customer.io campaign ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
-          "source": "Get Campaign Metrics",
-          "message": "Get Campaign Metrics"
+          "source": "Get campaign metrics",
+          "message": "Get campaign metrics"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
           "source": "Get metrics for a campaign",
@@ -820,8 +820,8 @@
           "message": "The period for metrics aggregation"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
-          "source": "Get Campaign Actions",
-          "message": "Get Campaign Actions"
+          "source": "Get campaign actions",
+          "message": "Get campaign actions"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
           "source": "Get actions for a campaign",
@@ -844,8 +844,8 @@
           "message": "The unique Customer.io campaign ID to get actions for"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
-          "message": "List Broadcasts"
+          "source": "List broadcasts",
+          "message": "List broadcasts"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
           "source": "List broadcasts",
@@ -880,8 +880,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get Broadcast",
-          "message": "Get Broadcast"
+          "source": "Get broadcast",
+          "message": "Get broadcast"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
           "source": "Get a broadcast by ID",
@@ -904,8 +904,8 @@
           "message": "The unique Customer.io broadcast ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
-          "source": "Trigger Broadcast",
-          "message": "Trigger Broadcast"
+          "source": "Trigger broadcast",
+          "message": "Trigger broadcast"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
           "source": "Trigger a broadcast",
@@ -1192,8 +1192,8 @@
           "message": "Override the message body with HTML content"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
-          "source": "Send Transactional Push",
-          "message": "Send Transactional Push"
+          "source": "Send transactional push",
+          "message": "Send transactional push"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
           "source": "Send a transactional push notification",
@@ -1300,8 +1300,8 @@
           "message": "Override the push notification body text"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
-          "message": "List Collections"
+          "source": "List collections",
+          "message": "List collections"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
           "source": "List collections",
@@ -1336,8 +1336,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
-          "message": "Get Collection"
+          "source": "Get collection",
+          "message": "Get collection"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
           "source": "Get a collection by ID",
@@ -1360,8 +1360,8 @@
           "message": "The unique Customer.io collection ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
-          "message": "Create Collection"
+          "source": "Create collection",
+          "message": "Create collection"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Create a new collection",
@@ -1408,8 +1408,8 @@
           "message": "URL for an external data source for the collection"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Update Collection",
-          "message": "Update Collection"
+          "source": "Update collection",
+          "message": "Update collection"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Update an existing collection",
@@ -1468,8 +1468,8 @@
           "message": "Updated URL for an external data source"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
-          "message": "Delete Collection"
+          "source": "Delete collection",
+          "message": "Delete collection"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Delete a collection",
@@ -1492,8 +1492,8 @@
           "message": "The unique Customer.io collection ID to delete"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
-          "source": "List Snippets",
-          "message": "List Snippets"
+          "source": "List snippets",
+          "message": "List snippets"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
           "source": "List snippets",
@@ -1504,8 +1504,8 @@
           "message": "Retrieve a list of all snippets from Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
-          "source": "Get Snippet",
-          "message": "Get Snippet"
+          "source": "Get snippet",
+          "message": "Get snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
           "source": "Get a snippet by name",
@@ -1528,8 +1528,8 @@
           "message": "The unique name identifier for the snippet to retrieve"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Create Snippet",
-          "message": "Create Snippet"
+          "source": "Create snippet",
+          "message": "Create snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
           "source": "Create a new snippet",
@@ -1564,8 +1564,8 @@
           "message": "The content of the snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Update Snippet",
-          "message": "Update Snippet"
+          "source": "Update snippet",
+          "message": "Update snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
           "source": "Update an existing snippet",
@@ -1600,8 +1600,8 @@
           "message": "The updated content of the snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
-          "source": "Delete Snippet",
-          "message": "Delete Snippet"
+          "source": "Delete snippet",
+          "message": "Delete snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
           "source": "Delete a snippet",
@@ -1624,8 +1624,8 @@
           "message": "The unique name identifier for the snippet to delete"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
-          "source": "Create Export",
-          "message": "Create Export"
+          "source": "Create export",
+          "message": "Create export"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
           "source": "Create a data export",
@@ -1668,8 +1668,8 @@
           "message": "Filters to apply to the export"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
-          "source": "Get Export Status",
-          "message": "Get Export Status"
+          "source": "Get export status",
+          "message": "Get export status"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
           "source": "Get the status of an export",
@@ -1692,8 +1692,8 @@
           "message": "The unique Customer.io export ID to check status for"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
-          "source": "Download Export",
-          "message": "Download Export"
+          "source": "Download export",
+          "message": "Download export"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
           "source": "Download a completed export",
@@ -1716,8 +1716,8 @@
           "message": "The unique Customer.io export ID to download"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
-          "source": "List Deliveries",
-          "message": "List Deliveries"
+          "source": "List deliveries",
+          "message": "List deliveries"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
           "source": "List message deliveries",
@@ -1824,8 +1824,8 @@
           "message": "Filter messages sent on or before this Unix timestamp"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get Message",
-          "message": "Get Message"
+          "source": "Get message",
+          "message": "Get message"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
           "source": "Get a message by ID",
@@ -1848,8 +1848,8 @@
           "message": "The unique Customer.io message ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
-          "message": "List Activities"
+          "source": "List activities",
+          "message": "List activities"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
           "source": "List activities",
@@ -1908,8 +1908,8 @@
           "message": "Filter activities on or before this Unix timestamp"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
-          "source": "List Newsletters",
-          "message": "List Newsletters"
+          "source": "List newsletters",
+          "message": "List newsletters"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
           "source": "List newsletters",
@@ -1944,8 +1944,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
-          "source": "Get Newsletter",
-          "message": "Get Newsletter"
+          "source": "Get newsletter",
+          "message": "Get newsletter"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
           "source": "Get a newsletter by ID",
@@ -1968,8 +1968,8 @@
           "message": "The unique Customer.io newsletter ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
-          "source": "Track Event",
-          "message": "Track Event"
+          "source": "Track event",
+          "message": "Track event"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
           "source": "Track a custom event for a customer",
@@ -2028,8 +2028,8 @@
           "message": "Unix timestamp for the event"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
-          "source": "Track Anonymous Event",
-          "message": "Track Anonymous Event"
+          "source": "Track anonymous event",
+          "message": "Track anonymous event"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
           "source": "Track an anonymous event",
@@ -2088,8 +2088,8 @@
           "message": "Unix timestamp for the event"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
-          "source": "Track Page View",
-          "message": "Track Page View"
+          "source": "Track page view",
+          "message": "Track page view"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
           "source": "Track a page view for a customer",
@@ -2148,8 +2148,8 @@
           "message": "Unix timestamp for the page view event"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
-          "source": "Add Device",
-          "message": "Add Device"
+          "source": "Add device",
+          "message": "Add device"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
           "source": "Add a device to a customer",
@@ -2228,8 +2228,8 @@
           "message": "Device attributes"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
-          "source": "Delete Device",
-          "message": "Delete Device"
+          "source": "Delete device",
+          "message": "Delete device"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
           "source": "Delete a device from a customer",
@@ -2264,8 +2264,8 @@
           "message": "The device token to remove"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
-          "source": "Create/Update Object",
-          "message": "Create/Update Object"
+          "source": "Create/update object",
+          "message": "Create/update object"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
           "source": "Create or update an object",
@@ -2312,8 +2312,8 @@
           "message": "Custom attributes to set on the object"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
-          "message": "Delete Object"
+          "source": "Delete object",
+          "message": "Delete object"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
           "source": "Delete an object",
@@ -2348,8 +2348,8 @@
           "message": "The object identifier"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Add Relationships",
-          "message": "Add Relationships"
+          "source": "Add relationships",
+          "message": "Add relationships"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
           "source": "Add relationships between an object and people",
@@ -2396,8 +2396,8 @@
           "message": "List of identifier hashes, each with 'identifier' and optionally 'relationship_attributes'"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Delete Relationships",
-          "message": "Delete Relationships"
+          "source": "Delete relationships",
+          "message": "Delete relationships"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
           "source": "Delete relationships between an object and people",
@@ -2444,8 +2444,8 @@
           "message": "List of identifier hashes to disconnect from the object"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch Email Sent",
-          "message": "Watch Email Sent"
+          "source": "Watch email sent",
+          "message": "Watch email sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
           "source": "Watch for email sent events",
@@ -2456,8 +2456,8 @@
           "message": "Receive a notification when an email is sent via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
-          "source": "Watch Email Delivered",
-          "message": "Watch Email Delivered"
+          "source": "Watch email delivered",
+          "message": "Watch email delivered"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
           "source": "Watch for email delivered events",
@@ -2468,8 +2468,8 @@
           "message": "Receive a notification when an email is delivered via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
-          "source": "Watch Email Opened",
-          "message": "Watch Email Opened"
+          "source": "Watch email opened",
+          "message": "Watch email opened"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
           "source": "Watch for email opened events",
@@ -2480,8 +2480,8 @@
           "message": "Receive a notification when an email is opened via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Watch Email Clicked",
-          "message": "Watch Email Clicked"
+          "source": "Watch email clicked",
+          "message": "Watch email clicked"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
           "source": "Watch for email clicked events",
@@ -2492,8 +2492,8 @@
           "message": "Receive a notification when a link in an email is clicked via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Watch Email Bounced",
-          "message": "Watch Email Bounced"
+          "source": "Watch email bounced",
+          "message": "Watch email bounced"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
           "source": "Watch for email bounced events",
@@ -2504,8 +2504,8 @@
           "message": "Receive a notification when an email bounces via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
-          "source": "Watch Email Dropped",
-          "message": "Watch Email Dropped"
+          "source": "Watch email dropped",
+          "message": "Watch email dropped"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
           "source": "Watch for email dropped events",
@@ -2516,8 +2516,8 @@
           "message": "Receive a notification when an email is dropped by Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
-          "source": "Watch Email Spammed",
-          "message": "Watch Email Spammed"
+          "source": "Watch email spammed",
+          "message": "Watch email spammed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
           "source": "Watch for email marked as spam events",
@@ -2528,8 +2528,8 @@
           "message": "Receive a notification when an email is marked as spam via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Email Unsubscribed",
-          "message": "Watch Email Unsubscribed"
+          "source": "Watch email unsubscribed",
+          "message": "Watch email unsubscribed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
           "source": "Watch for email unsubscribed events",
@@ -2540,8 +2540,8 @@
           "message": "Receive a notification when a recipient unsubscribes via an email from Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
-          "message": "Watch SMS Sent"
+          "source": "Watch SMS sent",
+          "message": "Watch SMS sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
           "source": "Watch for SMS sent events",
@@ -2552,8 +2552,8 @@
           "message": "Receive a notification when an SMS message is sent via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
-          "source": "Watch SMS Delivered",
-          "message": "Watch SMS Delivered"
+          "source": "Watch SMS delivered",
+          "message": "Watch SMS delivered"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
           "source": "Watch for SMS delivered events",
@@ -2564,8 +2564,8 @@
           "message": "Receive a notification when an SMS message is delivered via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
-          "source": "Watch SMS Failed",
-          "message": "Watch SMS Failed"
+          "source": "Watch SMS failed",
+          "message": "Watch SMS failed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
           "source": "Watch for SMS failed events",
@@ -2576,8 +2576,8 @@
           "message": "Receive a notification when an SMS message fails to send via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
-          "source": "Watch SMS Clicked",
-          "message": "Watch SMS Clicked"
+          "source": "Watch SMS clicked",
+          "message": "Watch SMS clicked"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
           "source": "Watch for SMS clicked events",
@@ -2588,8 +2588,8 @@
           "message": "Receive a notification when a link in an SMS message is clicked via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch Push Sent",
-          "message": "Watch Push Sent"
+          "source": "Watch push sent",
+          "message": "Watch push sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
           "source": "Watch for push sent events",
@@ -2600,8 +2600,8 @@
           "message": "Receive a notification when a push notification is sent via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
-          "source": "Watch Push Delivered",
-          "message": "Watch Push Delivered"
+          "source": "Watch push delivered",
+          "message": "Watch push delivered"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
           "source": "Watch for push delivered events",
@@ -2612,8 +2612,8 @@
           "message": "Receive a notification when a push notification is delivered via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
-          "source": "Watch Push Opened",
-          "message": "Watch Push Opened"
+          "source": "Watch push opened",
+          "message": "Watch push opened"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
           "source": "Watch for push opened events",
@@ -2624,8 +2624,8 @@
           "message": "Receive a notification when a push notification is opened via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
-          "source": "Watch Push Failed",
-          "message": "Watch Push Failed"
+          "source": "Watch push failed",
+          "message": "Watch push failed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
           "source": "Watch for push failed events",
@@ -2636,8 +2636,8 @@
           "message": "Receive a notification when a push notification fails to send via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
-          "message": "Watch Slack Sent"
+          "source": "Watch Slack sent",
+          "message": "Watch Slack sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
           "source": "Watch for Slack sent events",
@@ -2648,8 +2648,8 @@
           "message": "Receive a notification when a Slack message is sent via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
-          "source": "Watch Slack Clicked",
-          "message": "Watch Slack Clicked"
+          "source": "Watch Slack clicked",
+          "message": "Watch Slack clicked"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
           "source": "Watch for Slack clicked events",
@@ -2660,8 +2660,8 @@
           "message": "Receive a notification when a link in a Slack message is clicked via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
-          "source": "Watch Slack Failed",
-          "message": "Watch Slack Failed"
+          "source": "Watch Slack failed",
+          "message": "Watch Slack failed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
           "source": "Watch for Slack failed events",
@@ -2672,8 +2672,8 @@
           "message": "Receive a notification when a Slack message fails to send via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
-          "source": "Watch Subscribed",
-          "message": "Watch Subscribed"
+          "source": "Watch subscribed",
+          "message": "Watch subscribed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
           "source": "Watch for customer subscribed events",
@@ -2684,8 +2684,8 @@
           "message": "Receive a notification when a customer subscribes via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Unsubscribed",
-          "message": "Watch Unsubscribed"
+          "source": "Watch unsubscribed",
+          "message": "Watch unsubscribed"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {
           "source": "Watch for customer unsubscribed events",

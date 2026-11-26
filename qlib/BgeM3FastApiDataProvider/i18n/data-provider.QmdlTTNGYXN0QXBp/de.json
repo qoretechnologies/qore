@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Embeddings erstellen"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Maximale Anzahl an Texten, die das Sidecar pro internem Encoder-Batch verarbeitet. Wenn nicht festgelegt, wird der Standardwert des Sidecars (`256`) verwendet. Niedrigere Werte reduzieren die Speicherauslastung auf Kosten des Durchsatzes."
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
+          "source": "Get health",
           "message": "Zustand abrufen"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Gibt den Liveness-Status des Sidecars (typischerweise `\"ok\"`) und Daten zur Host-Speicherauslastung zurück. Upstream-Router können das Feld `pressure` verwenden, um die Backoff-Eskalation zwischen lokalem und Cloud-Routing zu steuern."
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
+          "source": "Get metrics",
           "message": "Metriken abrufen"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {

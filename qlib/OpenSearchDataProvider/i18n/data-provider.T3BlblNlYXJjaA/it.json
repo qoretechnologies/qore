@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Cerca nell'indice"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Se `true` (predefinito `false`), restituisce la versione del documento come parte di un hit"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
-          "source": "k-NN Search",
+          "source": "k-NN search",
           "message": "Ricerca k-NN"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Soglia facoltativa di punteggio minimo"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
-          "source": "Neural Search",
+          "source": "Neural search",
           "message": "Ricerca neurale"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Soglia facoltativa di punteggio minimo"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
-          "source": "Hybrid Search",
+          "source": "Hybrid search",
           "message": "Ricerca ibrida"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Numero massimo di risultati di ricerca da recuperare da ciascuno shard per ciascuna sottoquery ibrida"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector Index",
+          "source": "Create vector index",
           "message": "Crea indice vettoriale"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Periodo di attesa per una risposta"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Aggiungi documento"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "Se `true` (predefinito: `false`), la destinazione deve essere un alias di indice"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Operazioni bulk"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Se true, la destinazione deve essere un alias di indice"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Ricerca scroll"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

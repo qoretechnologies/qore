@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Пошук в індексі"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Якщо `true` (за замовчуванням `false`), повертає версію документа як частину результату"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
-          "source": "k-NN Search",
+          "source": "k-NN search",
           "message": "Пошук k-NN"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Необов'язковий поріг мінімальної оцінки"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
-          "source": "Neural Search",
+          "source": "Neural search",
           "message": "Нейропошук"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Необов'язковий поріг мінімальної оцінки"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
-          "source": "Hybrid Search",
+          "source": "Hybrid search",
           "message": "Гібридний пошук"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Максимальна кількість результатів пошуку для отримання з кожного шарду для кожного гібридного підзапиту"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector Index",
+          "source": "Create vector index",
           "message": "Створити векторний індекс"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Період очікування відповіді"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Додати документ"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "Якщо `true` (за замовчуванням `false`), цільовим об’єктом має бути псевдонім індексу"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Масові операції"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Якщо true, призначенням має бути псевдонім індексу"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Пошук через скролінг"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

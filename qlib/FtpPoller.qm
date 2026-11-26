@@ -63,7 +63,7 @@ module FtpPoller {
             "app": FtpPoller::AppName,
             "path": "/",
             "action": "ftp-file-event",
-            "display_name": "FTP File Received",
+            "display_name": "FTP file received",
             "subtype": "ftppoller",
             "short_desc": "A file is uploaded to an FTP server",
             "desc": "React to files uploaded to an FTP server; the action configuration determines if the event "

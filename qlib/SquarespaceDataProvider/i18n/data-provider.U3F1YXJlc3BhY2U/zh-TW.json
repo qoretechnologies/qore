@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "建立訂單"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -952,7 +952,7 @@
           "message": "金額字串（例如 \"9.99\"）"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
-          "source": "Fulfill an Order",
+          "source": "Fulfill an order",
           "message": "履行訂單"
         },
         "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "追蹤運送狀態的網址"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "取得訂單"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "訂單 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "建立產品"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "該變體是否無限庫存"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "更新產品"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1684,7 +1684,7 @@
           "message": "規格屬性名稱清單（例如 Size、Color）"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
+          "source": "Delete a product",
           "message": "刪除產品"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "要刪除的產品 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "取得商品"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "產品 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Create a Product Variant",
+          "source": "Create a product variant",
           "message": "建立產品款式"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "重量值"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Update a Product Variant",
+          "source": "Update a product variant",
           "message": "更新商品規格"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "重量值"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
-          "source": "Delete a Product Variant",
+          "source": "Delete a product variant",
           "message": "刪除商品規格"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "要刪除的規格 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
-          "source": "List Product Variants",
+          "source": "List product variants",
           "message": "列出商品規格"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Upload a Product Image",
+          "source": "Upload a product image",
           "message": "上傳商品圖片"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "圖片的替代文字"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Assign a Product Image",
+          "source": "Assign a product image",
           "message": "指派產品圖片"
         },
         "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "要指派圖片的款式 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Update a Product Image",
+          "source": "Update a product image",
           "message": "更新商品圖片"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "要為商品圖片設定的替代文字"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
-          "source": "Delete a Product Image",
+          "source": "Delete a product image",
           "message": "刪除產品圖片"
         },
         "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "要刪除的圖片 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
-          "source": "Update Stock Quantities",
+          "source": "Update stock quantities",
           "message": "更新庫存數量"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "減少庫存"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
-          "source": "List Inventory",
+          "source": "List inventory",
           "message": "列出庫存"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
-          "source": "Get Inventory",
+          "source": "Get inventory",
           "message": "取得庫存"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
@@ -2744,7 +2744,7 @@
           "message": "變體 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "列出交易"
         },
         "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get a Transaction",
+          "source": "Get a transaction",
           "message": "取得交易"
         },
         "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "交易 ID"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "訂單已建立/已更新"
         },
         "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Created/Updated",
+          "source": "Product created/updated",
           "message": "商品已建立/已更新"
         },
         "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -2856,7 +2856,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
-          "source": "Transaction Created/Updated",
+          "source": "Transaction created/updated",
           "message": "交易已建立/已更新"
         },
         "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {

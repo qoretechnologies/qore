@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -648,7 +648,7 @@
           "message": "排除 `parent_id` 在此清單中的訂單"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "取得訂單"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -672,7 +672,7 @@
           "message": "要擷取的訂單唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "建立訂單"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "更新訂單"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "刪除訂單"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "若為 `True`，則永久刪除訂單；否則移至垃圾桶"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Update Order Status",
+          "source": "Update order status",
           "message": "更新訂單狀態"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVyLXN0YXR1cw.short_desc": {
@@ -2688,7 +2688,7 @@
           "message": "訂單狀態：垃圾桶"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Create Order Note",
+          "source": "Create order note",
           "message": "建立訂單備註"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "若為 `True`，客戶將可以看到此備註"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.display_name": {
-          "source": "List Order Notes",
+          "source": "List order notes",
           "message": "列出訂單備註"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1vcmRlci1ub3Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "僅內部備註"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.display_name": {
-          "source": "Delete Order Note",
+          "source": "Delete order note",
           "message": "刪除訂單備註"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLW9yZGVyLW5vdGU.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "若為 `True`，則永久刪除備註"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "建立退款"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "若為 `True`，則退款會透過付款閘道處理"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "列出退款"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "集合的當前頁碼（從 1 開始）"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "排除 `parent_id` 位於此清單中的商品"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "取得產品"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "要擷取的商品唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "建立產品"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -4732,7 +4732,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "更新產品"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -5892,7 +5892,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "刪除產品"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "若為 `True`，則永久刪除商品；否則移至垃圾桶"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.display_name": {
-          "source": "Update Stock Quantity",
+          "source": "Update stock quantity",
           "message": "更新庫存數量"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXR5.short_desc": {
@@ -5976,7 +5976,7 @@
           "message": "若為 `True`，則啟用庫存管理 (預設為 `True`)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Create Variation",
+          "source": "Create variation",
           "message": "建立變化版本"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6228,7 +6228,7 @@
           "message": "圖片的網址"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Update Variation",
+          "source": "Update variation",
           "message": "更新變化版本"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "圖片的網址"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.display_name": {
-          "source": "List Variations",
+          "source": "List variations",
           "message": "列出規格變體"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC12YXJpYXRpb25z.short_desc": {
@@ -6552,7 +6552,7 @@
           "message": "僅限符合搜尋字串的結果"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Create Category",
+          "source": "Create category",
           "message": "建立分類"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNhdGVnb3J5.short_desc": {
@@ -6672,7 +6672,7 @@
           "message": "圖片的網址"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.display_name": {
-          "source": "Update Category",
+          "source": "Update category",
           "message": "更新類別"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNhdGVnb3J5.short_desc": {
@@ -6744,7 +6744,7 @@
           "message": "分類說明"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.display_name": {
-          "source": "Delete Category",
+          "source": "Delete category",
           "message": "刪除分類"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.short_desc": {
@@ -6780,7 +6780,7 @@
           "message": "由於分類不支援垃圾桶，因此必須為 `True`"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.display_name": {
-          "source": "Delete Variation",
+          "source": "Delete variation",
           "message": "刪除變化類型"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXZhcmlhdGlvbg.short_desc": {
@@ -6828,7 +6828,7 @@
           "message": "若為 `True`，則永久刪除變化類型；否則移至垃圾桶"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.display_name": {
-          "source": "Get Variation",
+          "source": "Get variation",
           "message": "取得規格"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXZhcmlhdGlvbg.short_desc": {
@@ -6864,7 +6864,7 @@
           "message": "規格的唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.display_name": {
-          "source": "List Categories",
+          "source": "List categories",
           "message": "列出分類"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jYXRlZ29yaWVz.short_desc": {
@@ -6996,7 +6996,7 @@
           "message": "商品數量"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "建立標籤"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -7044,7 +7044,7 @@
           "message": "標籤說明"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "更新標籤"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRhZw.short_desc": {
@@ -7104,7 +7104,7 @@
           "message": "標籤說明"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "刪除標籤"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -7140,7 +7140,7 @@
           "message": "由於標籤不支援垃圾桶，因此必須為 `True`"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YWdz.short_desc": {
@@ -7260,7 +7260,7 @@
           "message": "商品數量"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -7384,7 +7384,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "取得客戶"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -7408,7 +7408,7 @@
           "message": "要擷取的客戶唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "建立客戶"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -7792,7 +7792,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "更新客戶"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "刪除客戶"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -8236,7 +8236,7 @@
           "message": "用於重新指派文章和連結的使用者 ID"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.display_name": {
-          "source": "List Coupons",
+          "source": "List coupons",
           "message": "列出優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1jb3Vwb25z.short_desc": {
@@ -8372,7 +8372,7 @@
           "message": "Slug"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "取得優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -8396,7 +8396,7 @@
           "message": "要擷取的優惠券唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "建立優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -8696,7 +8696,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "更新優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -9008,7 +9008,7 @@
           "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "刪除優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -9044,7 +9044,7 @@
           "message": "若為 `True`，則永久刪除優惠券；否則移至垃圾桶"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "列出 Webhook"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -9220,7 +9220,7 @@
           "message": "標題"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "建立 Webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -9436,7 +9436,7 @@
           "message": "Webhook 狀態：disabled"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "更新 Webhook"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -9664,7 +9664,7 @@
           "message": "Webhook 狀態：disabled"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "刪除 Webhook"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -9700,7 +9700,7 @@
           "message": "若為 `True`，則永久刪除 Webhook"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.display_name": {
-          "source": "Sales Report",
+          "source": "Sales report",
           "message": "銷售報告"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNhbGVzLXJlcG9ydA.short_desc": {
@@ -9764,7 +9764,7 @@
           "message": "今年"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.display_name": {
-          "source": "Top Sellers Report",
+          "source": "Top sellers report",
           "message": "熱銷排行報告"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRvcC1zZWxsZXJzLXJlcG9ydA.short_desc": {
@@ -9828,7 +9828,7 @@
           "message": "今年"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.display_name": {
-          "source": "Orders Totals",
+          "source": "Orders totals",
           "message": "訂單總計"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LW9yZGVycy10b3RhbHM.short_desc": {
@@ -9840,7 +9840,7 @@
           "message": "從 WooCommerce 擷取依狀態分組的訂單總數。"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.display_name": {
-          "source": "Products Totals",
+          "source": "Products totals",
           "message": "商品總計"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXByb2R1Y3RzLXRvdGFscw.short_desc": {
@@ -9852,7 +9852,7 @@
           "message": "從 WooCommerce 擷取依類型分組的商品總數。"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.display_name": {
-          "source": "Customers Totals",
+          "source": "Customers totals",
           "message": "客戶總計"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVycy10b3RhbHM.short_desc": {
@@ -9864,7 +9864,7 @@
           "message": "從 WooCommerce 擷取依角色分組的客戶總數。"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.display_name": {
-          "source": "List Shipping Zones",
+          "source": "List shipping zones",
           "message": "列出運送區域"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy16b25lcw.short_desc": {
@@ -9876,7 +9876,7 @@
           "message": "擷取 WooCommerce 中設定的所有運送區域。"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "列出運送方式"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -9900,7 +9900,7 @@
           "message": "運送區域的唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.display_name": {
-          "source": "Create Tax Rate",
+          "source": "Create tax rate",
           "message": "建立稅率"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.short_desc": {
@@ -10068,7 +10068,7 @@
           "message": "此稅率所屬的稅別"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.display_name": {
-          "source": "Get Tax Rate",
+          "source": "Get tax rate",
           "message": "取得稅率"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXRheC1yYXRl.short_desc": {
@@ -10092,7 +10092,7 @@
           "message": "稅率的唯一識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.display_name": {
-          "source": "Update Tax Rate",
+          "source": "Update tax rate",
           "message": "更新稅率"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXRheC1yYXRl.short_desc": {
@@ -10272,7 +10272,7 @@
           "message": "此稅率所屬的稅別"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.display_name": {
-          "source": "Delete Tax Rate",
+          "source": "Delete tax rate",
           "message": "刪除稅率"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.short_desc": {
@@ -10308,7 +10308,7 @@
           "message": "由於稅率不支援垃圾桶，因此必須為 `True`"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.display_name": {
-          "source": "List Tax Rates",
+          "source": "List tax rates",
           "message": "列出稅率"
         },
         "app.V29vQ29tbWVyY2U.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
@@ -10396,7 +10396,7 @@
           "message": "顯示順序"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.display_name": {
-          "source": "Get Setting",
+          "source": "Get setting",
           "message": "取得設定"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.short_desc": {
@@ -10432,7 +10432,7 @@
           "message": "群組內的設定識別碼"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.display_name": {
-          "source": "Update Setting",
+          "source": "Update setting",
           "message": "更新設定"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.short_desc": {
@@ -10480,7 +10480,7 @@
           "message": "設定的新值"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.display_name": {
-          "source": "System Status",
+          "source": "System status",
           "message": "系統狀態"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXN5c3RlbS1zdGF0dXM.short_desc": {
@@ -10492,7 +10492,7 @@
           "message": "擷取 WooCommerce 系統狀態資訊，包括環境、資料庫、已啟用的外掛程式、佈景主題和設定。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "已建立訂單"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -10504,7 +10504,7 @@
           "message": "當在 WooCommerce 中建立新訂單時觸發。完整的訂單資料會包含在承載資料中。**注意：**付款失敗的訂單也會觸發此事件。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "已更新訂單"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -10516,7 +10516,7 @@
           "message": "在 WooCommerce 中，當訂單更新時觸發。**注意：** 每次使用者操作可能會觸發多次；請在接收端進行去重處理。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.display_name": {
-          "source": "Order Deleted",
+          "source": "Order deleted",
           "message": "訂單已刪除"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItZGVsZXRlZA.short_desc": {
@@ -10528,7 +10528,7 @@
           "message": "當在 WooCommerce 中刪除訂單時觸發。**注意：**承載資料可能僅包含最少資料 (僅訂單 ID)，因為訂單資料已移除。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.display_name": {
-          "source": "Order Restored",
+          "source": "Order restored",
           "message": "訂單已還原"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItcmVzdG9yZWQ.short_desc": {
@@ -10540,7 +10540,7 @@
           "message": "在 WooCommerce 中，當訂單從垃圾桶還原時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Product Created",
+          "source": "Product created",
           "message": "產品已建立"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -10552,7 +10552,7 @@
           "message": "當在 WooCommerce 中建立新商品時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
-          "source": "Product Updated",
+          "source": "Product updated",
           "message": "產品已更新"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
@@ -10564,7 +10564,7 @@
           "message": "當 WooCommerce 中的商品更新時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.display_name": {
-          "source": "Product Deleted",
+          "source": "Product deleted",
           "message": "產品已刪除"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1kZWxldGVk.short_desc": {
@@ -10576,7 +10576,7 @@
           "message": "當 WooCommerce 中的商品被刪除時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.display_name": {
-          "source": "Product Restored",
+          "source": "Product restored",
           "message": "商品已還原"
         },
         "app.V29vQ29tbWVyY2U.action.cHJvZHVjdC1yZXN0b3JlZA.short_desc": {
@@ -10588,7 +10588,7 @@
           "message": "當 WooCommerce 中的商品從垃圾桶還原時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "已建立客戶"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -10600,7 +10600,7 @@
           "message": "在 WooCommerce 中建立新顧客時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
+          "source": "Customer updated",
           "message": "客戶已更新"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -10612,7 +10612,7 @@
           "message": "在 WooCommerce 中更新顧客時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.display_name": {
-          "source": "Customer Deleted",
+          "source": "Customer deleted",
           "message": "已刪除顧客"
         },
         "app.V29vQ29tbWVyY2U.action.Y3VzdG9tZXItZGVsZXRlZA.short_desc": {
@@ -10624,7 +10624,7 @@
           "message": "在 WooCommerce 中刪除顧客時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.display_name": {
-          "source": "Coupon Created",
+          "source": "Coupon created",
           "message": "已建立優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWNyZWF0ZWQ.short_desc": {
@@ -10636,7 +10636,7 @@
           "message": "在 WooCommerce 中建立新優惠券時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.display_name": {
-          "source": "Coupon Updated",
+          "source": "Coupon updated",
           "message": "已更新優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXVwZGF0ZWQ.short_desc": {
@@ -10648,7 +10648,7 @@
           "message": "在 WooCommerce 中更新優惠券時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.display_name": {
-          "source": "Coupon Deleted",
+          "source": "Coupon deleted",
           "message": "已刪除優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLWRlbGV0ZWQ.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "在 WooCommerce 中刪除優惠券時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.display_name": {
-          "source": "Coupon Restored",
+          "source": "Coupon restored",
           "message": "已還原優惠券"
         },
         "app.V29vQ29tbWVyY2U.action.Y291cG9uLXJlc3RvcmVk.short_desc": {
@@ -10672,7 +10672,7 @@
           "message": "在 WooCommerce 中從垃圾桶還原優惠券時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.display_name": {
-          "source": "Payment Complete",
+          "source": "Payment complete",
           "message": "付款完成"
         },
         "app.V29vQ29tbWVyY2U.action.cGF5bWVudC1jb21wbGV0ZQ.short_desc": {
@@ -10684,7 +10684,7 @@
           "message": "當訂單付款完成時觸發。僅針對先前處於 `pending`、`on-hold`、`failed` 或 `cancelled` 狀態的訂單觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.display_name": {
-          "source": "Order Status: Pending",
+          "source": "Order status: pending",
           "message": "訂單狀態：待處理"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXBlbmRpbmc.short_desc": {
@@ -10696,7 +10696,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `pending` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.display_name": {
-          "source": "Order Status: Processing",
+          "source": "Order status: processing",
           "message": "訂單狀態：處理中"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXByb2Nlc3Npbmc.short_desc": {
@@ -10708,7 +10708,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `processing` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.display_name": {
-          "source": "Order Status: Completed",
+          "source": "Order status: completed",
           "message": "訂單狀態：已完成"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNvbXBsZXRlZA.short_desc": {
@@ -10720,7 +10720,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `completed` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.display_name": {
-          "source": "Order Status: On Hold",
+          "source": "Order status: on hold",
           "message": "訂單狀態：保留"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLW9uLWhvbGQ.short_desc": {
@@ -10732,7 +10732,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `on-hold` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.display_name": {
-          "source": "Order Status: Refunded",
+          "source": "Order status: refunded",
           "message": "訂單狀態：已退款"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXJlZnVuZGVk.short_desc": {
@@ -10744,7 +10744,7 @@
           "message": "在 WooCommerce 中，當訂單狀態變更為 `refunded` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.display_name": {
-          "source": "Order Status: Failed",
+          "source": "Order status: failed",
           "message": "訂單狀態：失敗"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWZhaWxlZA.short_desc": {
@@ -10756,7 +10756,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `failed` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.display_name": {
-          "source": "Order Status: Cancelled",
+          "source": "Order status: cancelled",
           "message": "訂單狀態：已取消"
         },
         "app.V29vQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLWNhbmNlbGxlZA.short_desc": {
@@ -10768,7 +10768,7 @@
           "message": "當 WooCommerce 中的訂單狀態變更為 `cancelled` 時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.display_name": {
-          "source": "Product Added to Cart",
+          "source": "Product added to cart",
           "message": "商品已加入購物車"
         },
         "app.V29vQ29tbWVyY2U.action.YWRkLXRvLWNhcnQ.short_desc": {
@@ -10780,7 +10780,7 @@
           "message": "在將商品新增至顧客購物車時觸發。承載資料僅包含 `action` 與 `arg`（購物車品項索引鍵）。"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.display_name": {
-          "source": "Product Low Stock",
+          "source": "Product low stock",
           "message": "商品低庫存"
         },
         "app.V29vQ29tbWVyY2U.action.bG93LXN0b2Nr.short_desc": {
@@ -10792,7 +10792,7 @@
           "message": "當商品庫存數量達到 WooCommerce 中設定的低庫存門檻時觸發。"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.display_name": {
-          "source": "Product Out of Stock",
+          "source": "Product out of stock",
           "message": "商品缺貨"
         },
         "app.V29vQ29tbWVyY2U.action.bm8tc3RvY2s.short_desc": {

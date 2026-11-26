@@ -1076,7 +1076,7 @@
           "message": "Datum und Uhrzeit, zu denen der Freigabelink abläuft"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Datei oder Ordner geändert"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

@@ -1864,7 +1864,7 @@
           "message": "如果 `True`，抓取期間所做的變更（Cookie、本地儲存等）會保存回命名的設定檔。預設為 `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "取消批次抓取"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "要檢查的檢索作業唯一識別碼"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "取消編目"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "取消代理工作"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {

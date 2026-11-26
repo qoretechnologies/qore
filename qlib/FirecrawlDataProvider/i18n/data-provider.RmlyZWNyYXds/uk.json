@@ -1864,7 +1864,7 @@
           "message": "Якщо `True`, зміни, зроблені під час скрапінгу (cookies, локальне сховище тощо), зберігаються назад у зазначений профіль. За замовчуванням — `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "Скасувати пакетний скрапінг"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Унікальний ідентифікатор завдання сканування для перевірки"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "Скасувати сканування"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "Скасувати завдання агента"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {

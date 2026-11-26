@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Створити ембединги"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Розмір вихідного вектора. Вибраний `model` визначає підтримуваний діапазон."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "Тип вбудовування"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Якщо `true`, обрізає вхідні дані, що перевищують максимальний ліміт токенів моделі, замість повернення помилки."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "Пізнє розбиття (Late Chunking)"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Значення `True` обробляє вхідні дані як одну послідовність перед поділом, зберігаючи контекст між фрагментами."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "Повернути мультивіктор"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Якщо `true`, повертає одне вбудовування на токен. Не можна використовувати з `dimensions`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "Повернути токенізований ввід"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Якщо `true`, повертає токени разом з багатовекторними вбудовуваннями. Потрібно `return_multivector=true`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Тип введення"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "документ"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Переранжувати документи"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Зображення як URL або рядок у форматі base64."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Топ N"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Кількість найкращих результатів. Якщо не вказано, повертаються всі документи."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "Повертати документи"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Значення `True` (типове) додає вміст документа до кожного результату."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "Максимальна довжина документа"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Максимальна кількість токенів на документ (1-8192). Пропустіть, щоб використовувати значення за замовчуванням моделі (2048 для jina-reranker-v3, 8192 для jina-reranker-v3.5)."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "Повернути вбудовування"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Якщо `true`, повертає вбудовування документа разом з оцінкою релевантності."
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "Класифікувати вміст"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Мітки-кандидати: список до 512 міток або словник до 8 груп з максимум 64 мітками в кожній."
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "Навчити або оновити класифікатор"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Публічний"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "Кількість ітерацій"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Кількість ітерацій для процесу навчання."
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "Список класифікаторів"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Модель, можливості та ціни якої потрібно отримати."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "Створити пакетні вбудовування"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Пакет вбудовування для перевірки або скасування."
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Перелічити пакети"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Включити іконки сайту до результатів."
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "Сегментувати текст"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Повернути лише стільки кінцевих токенів."
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "Чат з моделлю Vision"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Температура вибірки, що контролює варіації відповіді."
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "Глибокий пошук"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Читати джерела лише з цих доменів."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "Завантажити пакетний вивід"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Завершений пакет, чиї результати або помилки у форматі JSONL потрібно завантажити."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "Завантажити пакетні помилки"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

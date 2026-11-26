@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Datensatz erstellen"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Der Name der Dynamics-Tabelle, z. B.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Einzelnen Datensatz suchen"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Der Name der Dynamics-Tabelle, z. B.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Datensätze suchen"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Der Name der Dynamics-Tabelle, z. B.: `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Datensätze aktualisieren"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Der Name der Dynamics-Tabelle, z. B.: `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Datensätze löschen"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
