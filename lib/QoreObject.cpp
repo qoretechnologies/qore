@@ -2514,12 +2514,30 @@ int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, c
     // the call can have entered the Program of the method already (CodeEvaluationHelper); the code that makes it is
     // the code of class_ctx, whose sandboxes are decided in the Program of that class
     bool denied;
-    QoreProgram* cpgm = class_ctx->spgm.load(std::memory_order_acquire);
-    if (cpgm && cpgm != getProgram()) {
-        QoreProgramContextHelper pch(cpgm);
+    if (class_ctx->spgm.load(std::memory_order_acquire) == getProgram()) {
         denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
     } else {
-        denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+        // a reference to the Program of the calling class, which this cold path takes as the other readers do
+        struct ProgramRefHolder {
+            ~ProgramRefHolder() {
+                if (p) {
+                    p->deref();
+                }
+            }
+            QoreProgram* p;
+        } cpgm{class_ctx->getReferencedSourceProgram()};
+        if (!cpgm.p) {
+            // the Program has released the class: the call is refused if its code was sandboxed (fails closed)
+            denied = class_ctx->isSandboxedCode();
+        } else {
+            try {
+                QoreProgramContextHelper pch(cpgm.p);
+                denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+            } catch (std::bad_alloc&) {
+                // the sandboxes cannot be resolved: fails closed
+                denied = true;
+            }
+        }
     }
     if (!denied) {
         return 0;
