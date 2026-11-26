@@ -134,7 +134,10 @@ int sub copies() {
 # the containers copied by the call, or -1 without library debugging; -2 if it did not push all elements
 int sub copiedBy(code<int(int)> pusher) {
     int before = copies();
-    int size = pusher(PushCount);
+    # through the generic call path, whose first call of a function the JIT and tiered modes run in the IR interpreter:
+    # a call through the reference would take the runtime's fast call of the function (qore#5578), which promotes it to
+    # native code before its first call
+    int size = call_function(pusher, PushCount);
     if (size != PushCount) {
         return -2;
     }

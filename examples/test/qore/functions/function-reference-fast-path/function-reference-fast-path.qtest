@@ -39,6 +39,10 @@
     FunctionReferenceDebugger.q attaches a debugger while a loop calls a function through a reference after a warm-up:
     every call made after it attached must give the debugger the function's entry, as with the AST interpreter, and
     none takes the fast path.
+
+    FunctionReferenceBackground.q calls a function of a Program that may not control threads through a reference, from
+    the expression of the background operator, after calls of the reference in its own thread: the call must be
+    refused in every execution mode (qore#7087).
 */
 class FunctionReferenceFastPathTest inherits QUnit::Test {
     private {
@@ -46,6 +50,7 @@ class FunctionReferenceFastPathTest inherits QUnit::Test {
         string dir = realpath(get_script_dir());
         string fixture = dir + "/FunctionReferenceFastPath.q";
         string debugger_fixture = dir + "/FunctionReferenceDebugger.q";
+        string background_fixture = dir + "/FunctionReferenceBackground.q";
         string expected = ReadOnlyFile::readTextFile(dir + "/FunctionReferenceFastPath.expected");
         string report_expected = ReadOnlyFile::readTextFile(dir + "/FunctionReferenceFastPath.report.expected");
         #! the cases that take the fast path in a program compiled with qcc, which compiles the module that the
@@ -79,6 +84,12 @@ class FunctionReferenceFastPathTest inherits QUnit::Test {
             string execution_mode = mode;
             addTestCase("debugger attached after warm-up, " + mode, sub () {
                 checkDebugger(execution_mode);
+            });
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("background call of restricted code, " + mode, sub () {
+                checkBackground(execution_mode);
             });
         }
 
@@ -134,6 +145,15 @@ class FunctionReferenceFastPathTest inherits QUnit::Test {
             out = ExecModeHarness::run(command(mode, debugger_fixture, "report"), ExecModeHarness::NativeCheck::None);
             assertEq(DebuggerExpected + "fast calls after attach: 0\n", out);
         }
+    }
+
+    #! the expression of the background operator calls code of a Program that may not control threads through a
+    #! reference: the call is refused in the new thread, whose exception is reported on stderr
+    private checkBackground(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode, background_fixture));
+        assertEq("background call through a reference to restricted code: not run\n", r.stdout, mode);
+        list<string> refused = select r.stderr.split("\n"), $1 =~ /^PERMISSION-DENIED: background operator/;
+        assertEq(1, refused.size(), mode + ": the thread's exception: " + r.stderr);
     }
 
     private static string shellQuote(string value) {

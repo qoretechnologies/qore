@@ -7,10 +7,13 @@ hash, 2 args: {k199: 199}
 no args: 8400
 3 args: 94600
 auto param: [1, 2, 3, 5, 0, 8, 9]
-exception: FUNCREF-ERROR: x=7 (arg 7) stack: thrower:119 <- call_ref:256
-nested exception: FUNCREF-ERROR: x=8 (arg 8) stack: thrower:62 <- deep:119 <- call_ref:264
+given temporaries: destroy t198; returned "t198"; destroy t199; returned "t199"
+given temporary, return type and destructor exception: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+typed list: 600
+exception: FUNCREF-ERROR: x=7 (arg 7) stack: thrower:176 <- call_ref:346
+nested exception: FUNCREF-ERROR: x=8 (arg 8) stack: thrower:62 <- deep:176 <- call_ref:354
 exceptions in a loop: caught 200
-return type: 200 RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead stack: bad_return:123 <- call_ref_any:279
+return type: 200 RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead stack: bad_return:180 <- call_ref_any:369
 named: 1600
 positional after named: 20108
 too few args: RUNTIME-OVERLOAD-ERROR
@@ -29,10 +32,11 @@ overload added later: int PARSE-EXCEPTION int RUNTIME-OVERLOAD-ERROR
 concurrent first use: 321600
 background: 20142
 module function: 40000
-module function exception: caught 200, last MODULE-FUNCREF-ERROR: module x=199 (arg 199) stack: mod_throw:119 <- call_ref:463
+module function exception: caught 200, last MODULE-FUNCREF-ERROR: module x=199 (arg 199) stack: mod_throw:176 <- call_ref:553
 module's reference: 40000
 script reference called by the module: 20100
 deleted Program: 21300 PROGRAM-ERROR
+thread entry handler: 55 entries 11 exits 11
 trusted self call: read:secret
 sandboxed reference called by trusted code: FILESYSTEM-ACCESS-DENIED
 sandboxed reference to a trusted function called by trusted code: FILESYSTEM-ACCESS-DENIED

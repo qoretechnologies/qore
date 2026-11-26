@@ -99,6 +99,63 @@ int sub any_param(auto v) {
     return v.typeCode();
 }
 
+int sub list_size(list<auto> l) {
+    return l.size();
+}
+
+#! an object whose destructor logs, or raises an exception
+class Tmp {
+    private {
+        string n;
+        *Queue log;
+    }
+
+    constructor(string n, *Queue log) {
+        self.n = n;
+        self.log = log;
+    }
+
+    destructor() {
+        if (log) {
+            log.push("destroy " + n);
+        } else {
+            throw "DESTRUCTOR-ERROR", n;
+        }
+    }
+
+    string name() {
+        return n;
+    }
+}
+
+string sub take_tmp(Tmp t) {
+    return t.name();
+}
+
+int sub take_tmp_bad_return(Tmp t) {
+    auto v = t.name();
+    return v;
+}
+
+# the argument is a temporary, whose reference the call gives to the callee (issue #5882)
+auto sub call_tmp(code f, string n, *Queue log) {
+    auto r = f(new Tmp(n, log));
+    if (log) {
+        log.push(sprintf("returned %y", r));
+    }
+    return r;
+}
+
+string sub errs(hash<ExceptionInfo> ex) {
+    list<string> l = ();
+    *hash<ExceptionInfo> e = ex;
+    while (e) {
+        push l, e.err;
+        e = e.next;
+    }
+    return l.join(",");
+}
+
 int sub loop_ref(code f, int n) {
     int sum = 0;
     for (int i = 0; i < n; ++i) {
@@ -248,6 +305,39 @@ run_case("auto param", string sub () {
         push l, call_ref_any(\any_param(), v);
     }
     return sprintf("%y", l);
+});
+
+# arguments whose references the call gives to the callee: they are released when the callee returns, after the
+# check of its return value
+run_case("given temporaries", string sub () {
+    Queue log();
+    for (int i = 0; i < N; ++i) {
+        call_tmp(\take_tmp(), "t" + i, i >= N - 2 ? log : new Queue());
+    }
+    list<string> l = ();
+    while (log.size()) {
+        push l, log.get();
+    }
+    return l.join("; ");
+});
+run_case("given temporary, return type and destructor exception", string sub () {
+    for (int i = 0; i < N; ++i) {
+        call_tmp(\take_tmp(), "w" + i, new Queue());
+    }
+    try {
+        call_tmp(\take_tmp_bad_return(), "bad");
+        return "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        return errs(ex);
+    }
+});
+run_case("typed list", string sub () {
+    int t = 0;
+    for (int i = 0; i < N; ++i) {
+        list<auto> l = (1, 2, i);
+        t += call_ref_any(\list_size(), l);
+    }
+    return sprintf("%d", t);
 });
 
 # exceptions raised by the callee, with the call stack of the user functions
@@ -502,6 +592,45 @@ int sub run(code c, int n) { int t = 0; for (int i = 0; i < n; ++i) { t += c(i);
     } catch (hash<ExceptionInfo> ex) {
         return sprintf("%d %s", before, ex.err);
     }
+});
+
+# a function of a Program with thread entry handlers, imported into another Program: each call enters its Program
+# once, with the handlers (generic call path: the Program can be deleted)
+run_case("thread entry handler", string sub () {
+    Program b(PO_NEW_STYLE);
+    b.parse("%modern
+int sub g(int x) { return x + 1; }
+sub export_to(Program p) { p.importFunction(\"g\"); }
+", "b");
+    Queue log();
+    b.setThreadEntryHandler(auto sub () { log.push("enter"); }, sub (auto v) { log.push("exit"); });
+    Program a(PO_NEW_STYLE);
+    b.callFunction("export_to", a);
+    a.parse("%modern
+int sub run(int n) {
+    code r = \\g();
+    Qore::Thread::Queue q();
+    background sub () {
+        int t = 0;
+        for (int i = 0; i < n; ++i) {
+            t += r(i);
+        }
+        q.push(t);
+    }();
+    return q.get();
+}
+", "a");
+    int t = a.callFunction("run", 10);
+    int entries = 0;
+    int exits = 0;
+    while (log.size()) {
+        if (log.get() == "enter") {
+            ++entries;
+        } else {
+            ++exits;
+        }
+    }
+    return sprintf("%d entries %d exits %d", t, entries, exits);
 });
 
 # the sandbox: references made by sandboxed code, called by trusted code and the reverse, references reached through a

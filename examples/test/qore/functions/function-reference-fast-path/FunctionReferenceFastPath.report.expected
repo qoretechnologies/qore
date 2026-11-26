@@ -7,6 +7,9 @@ hash, 2 args: fast
 no args: fast
 3 args: fast
 auto param: generic
+given temporaries: fast
+given temporary, return type and destructor exception: fast
+typed list: generic
 exception: fast
 nested exception: fast
 exceptions in a loop: fast
@@ -32,7 +35,8 @@ module function: fast
 module function exception: fast
 module's reference: generic
 script reference called by the module: generic
-deleted Program: fast
+deleted Program: generic
+thread entry handler: generic
 trusted self call: fast
 sandboxed reference called by trusted code: generic
 sandboxed reference to a trusted function called by trusted code: generic
