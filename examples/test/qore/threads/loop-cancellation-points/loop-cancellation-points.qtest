@@ -483,6 +483,9 @@ req.push(NOTHING);
     #! invocation in native code, whose other iterations poll inline (see "Inline polls of native code" in
     #! design/cooperative-cancellation.md); QORE_DISABLE_LLVM_INLINE_CANCEL_POLL gives the full check at every
     #! iteration in native code as well
+    /** The exact count of native code (3: the first poll of each invocation) is intended: a full check added to the
+        path of every iteration, or of every call, shows here
+    */
     inlinePollTest() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the library does not count cancellation checks (not a debug build)");

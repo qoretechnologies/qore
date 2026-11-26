@@ -15624,11 +15624,13 @@ void QoreIRToLLVM::emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm
         const char* operation) {
     assert(llvm_func && inst && operation);
     llvm::Value* label = builder->CreateGlobalString(operation, "loop_cancel_operation");
-    // the full check at every poll, as before: where the exception checks are deferred (an init function) or the
-    // next one is skipped (right after an invoke), whose exception check is not the test of the sink after the call
-    // only; and with QORE_DISABLE_LLVM_INLINE_CANCEL_POLL (for comparisons)
-    if (deferred_exception_checking || skip_next_exception_check
-            || q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
+    // the skip of the next exception check is for the check of an invoke right before, whose normal edge has a clear
+    // sink; the check after a call of the full check must not be skipped, or an exception that it raised would only
+    // be branched on by a later check
+    skip_next_exception_check = false;
+    // the full check at every poll, as before: where the exception checks are deferred (an init function), and with
+    // QORE_DISABLE_LLVM_INLINE_CANCEL_POLL (for comparisons)
+    if (deferred_exception_checking || q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
         auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
         builder->CreateCall(check_cancel, {xsink_arg, label});
@@ -15673,7 +15675,6 @@ void QoreIRToLLVM::emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm
     llvm::Value* count = load_word(cancel_poll_count_slot, "cancel_interrupts");
     llvm::Value* set = builder->CreateICmpNE(builder->CreateOr(bits, count), llvm::ConstantInt::get(word_type, 0),
         "cancel_poll_set");
-    llvm::BasicBlock* poll_block = builder->GetInsertBlock();
     llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "cancel_poll_check", llvm_func);
     llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "cancel_poll_done", llvm_func);
     builder->CreateCondBr(set, check_block, done_block, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
@@ -15688,18 +15689,12 @@ void QoreIRToLLVM::emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm
         cancel_poll_bits_slot);
     builder->CreateStore(builder->CreateLoad(ptr_type, builder->CreateStructGEP(words_type, cancel_poll_words, 1)),
         cancel_poll_count_slot);
-    // the test of the sink after the call, as emitExceptionCheck() makes it after the full check of every poll;
-    // where no word is set, the sink is clear as it was before the poll: every instruction that can raise is
-    // followed by its own exception check (the deferred checks of init functions are handled above)
-    llvm::Value* raised = emitPendingExceptionTest();
-    llvm::BasicBlock* check_end = builder->GetInsertBlock();
     builder->CreateBr(done_block);
 
+    // the test of the sink on both paths, as emitExceptionCheck() made it after the full check of every poll, so an
+    // exception pending before the poll is branched on here as before
     builder->SetInsertPoint(done_block);
-    llvm::PHINode* pending = builder->CreatePHI(i1_type, 2, "cancel_poll_raised");
-    pending->addIncoming(builder->getFalse(), poll_block);
-    pending->addIncoming(raised, check_end);
-    emitExceptionBranch(module, llvm_func, inst, false, pending);
+    emitExceptionBranch(module, llvm_func, inst, false);
 }
 
 static const char* qoreIROpcodeDiagnosticName(QoreIROpcode op) {

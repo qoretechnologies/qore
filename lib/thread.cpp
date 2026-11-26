@@ -15448,11 +15448,10 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
 }
 
 template <bool check_sandbox>
-static bool qore_check_cancel_impl(ExceptionSink* xsink, const char* operation) {
+static bool qore_check_cancel_impl(ThreadData* td, ExceptionSink* xsink, const char* operation) {
 #ifdef DEBUG
     ++cancel_check_count;
 #endif
-    ThreadData* td = thread_data.get();
     if (!qore_check_cancel_intern<check_sandbox>(td, xsink, operation)) {
         return false;
     }
@@ -15464,11 +15463,11 @@ static bool qore_check_cancel_impl(ExceptionSink* xsink, const char* operation) 
 }
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
-    return qore_check_cancel_impl<true>(xsink, operation);
+    return qore_check_cancel_impl<true>(thread_data.get(), xsink, operation);
 }
 
 bool qore_check_thread_cancel(ExceptionSink& xsink, const char* operation) {
-    return qore_check_cancel_impl<false>(&xsink, operation);
+    return qore_check_cancel_impl<false>(thread_data.get(), &xsink, operation);
 }
 
 // the inline poll of native code reads the words with 32-bit atomic loads (see "Inline polls of native code" in
@@ -15486,11 +15485,11 @@ extern "C" DLLEXPORT void qore_rt_check_cancel_poll(ExceptionSink* xsink, const 
     assert(words);
     // the full check first: it makes the decision of a poll that found a word set, as qore_check_cancel() made it at
     // every poll before
-    qore_check_cancel(xsink, operation);
+    ThreadData* td = thread_data.get();
+    qore_check_cancel_impl<true>(td, xsink, operation);
     // the words that the following polls of the invocation read: the thread's request bits as getCancelBits() reads
     // them, and the count of requested interrupts; without thread data (when objects in the static namespace are
     // destroyed after it), or with an invalid TID, a word that is never 0, so every poll makes the full check
-    ThreadData* td = thread_data.get();
     const std::atomic<unsigned>* bits = td ? thread_list.getCancelWord(td->tid) : nullptr;
     words->thread_bits = bits ? bits : &qore_cancel_poll_unresolved;
     words->interrupt_count = &qore_sandbox_interrupt_count;
