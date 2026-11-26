@@ -2773,6 +2773,14 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
     cleanup.clear();
 }
 
+//! releases the values of a frame whose unwinding failed for lack of memory (qore#7466); out of line and given only
+//! the frame, so that the handler of QoreIRInterpreter::execute() that calls it does not enlarge its frame
+static __attribute__((noinline, cold)) void qore_ir_release_failed_unwind_values(IRCallFrame& frame,
+        const QoreIRFunction& func, ExceptionSink* xsink, std::vector<std::string>* cleanup_log) {
+    IRValueSlots values{frame.values};
+    cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
+}
+
 //! Returns true if a local variable of the given type can hold a reference (reference r = \x;), whose value is that
 //! of the referenced lvalue
 static bool qore_ir_type_may_hold_reference(const QoreTypeInfo* ti) {
@@ -23952,7 +23960,7 @@ weak_receiver_raised:
         if (frame.unwinding_function) {
             // the frame was already being unwound when the memory could not be allocated: its values are released,
             // and the handlers that had not run yet are skipped, as running them again could run some twice
-            cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
+            qore_ir_release_failed_unwind_values(frame, func, xsink, cleanup_log);
             cleanupLocalCaches(false);
             return false;
         }
