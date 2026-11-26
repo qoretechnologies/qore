@@ -1098,6 +1098,67 @@ int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, Exc
     return -1;
 }
 
+int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // the class of the object whose data would be serialized without a serializeMembers() method of its own, and
+    // whether it is a builtin class with a serializer
+    const QoreClass* refused = nullptr;
+    bool builtin = false;
+    QoreClassHierarchyIterator ci(*theclass);
+    while (ci.next()) {
+        // the serializer does not process virtual classes
+        if (ci.isVirtual()) {
+            continue;
+        }
+        const QoreClass& cls = ci.get();
+        if (cls.isSystem()) {
+            // Serializable serializes no data; compared by class ID, as a Program can hold a copy of the builtin class
+            // (an AOT-compiled program does)
+            if (cls.getID() != QC_SERIALIZABLE->getID()) {
+                refused = &cls;
+                builtin = true;
+                break;
+            }
+            continue;
+        }
+        if (cls.findLocalMethod("serializeMembers")) {
+            continue;
+        }
+        QoreClassMemberIterator mi(cls);
+        while (mi.next()) {
+            if (!mi.getMember().isTransient()) {
+                refused = &cls;
+                break;
+            }
+        }
+        if (refused) {
+            break;
+        }
+    }
+    if (!refused) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: serialize an object of class '%s'\n",
+            theclass->getName());
+    }
+    if (builtin) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+            "serialize an object of class '%s', as its builtin class '%s' serializes its own data: the object is "
+            "shared by every Program of the process", theclass->getName(), refused->getName());
+    } else {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+            "serialize an object of class '%s', as its class '%s' serializes members without declaring a "
+            "serializeMembers() method of its own: the object is shared by every Program of the process",
+            theclass->getName(), refused->getName());
+    }
+    return -1;
+}
+
 void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (!cls->has_member_accessors) {

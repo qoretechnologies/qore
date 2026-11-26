@@ -801,6 +801,19 @@ authenticate();
     copy.  The copy rule follows the other shared-object checks: if they are narrowed to the code of sandboxes that do
     not trust it, it is too.
 
+    Serializing a shared object gives its members, also the private ones, as data, from which
+    @ref Qore::Serializable::deserialize() "Serializable::deserialize()" makes an ordinary object, so code that is
+    sandboxed or acts for sandboxed code (as decided for a copy) cannot serialize a shared object, also not in a value
+    that holds it (a member of another object, a hash or a list), with any of the serialization APIs: the
+    serialization raises \c SHARED-OBJECT-ERROR before anything is written.  A class lets such code serialize its
+    shared objects by declaring a \c serializeMembers() method that leaves out what it guards for a shared object;
+    as the members of each class of an object are serialized separately, with the \c serializeMembers() method of that
+    class only, each class of the object that serializes members must declare its own (an inherited one does not
+    count; a class with no members, or only transient ones, needs none), and an object of a class that inherits a
+    builtin class that serializes data of its own is refused.  Deserialization is not affected: an object that it
+    makes is not shared unless its class marks it; deserialized data that sandboxed code supplies is the subject of
+    <a href="https://github.com/qoretechnologies/qore/issues/7706">issue 7706</a>.
+
     An object that
     \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
     it: trusted code that shares a deserialized object marks it with
