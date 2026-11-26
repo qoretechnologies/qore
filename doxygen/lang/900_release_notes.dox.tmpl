@@ -2986,6 +2986,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - spellings of a time zone region that are not the name of its zoneinfo entry (case variants on macOS, names
+      through links to directories), such as those in data, no longer add a time zone each without bound
+      (@ref time_zone_region_spellings; <a href="https://github.com/qoretechnologies/qore/issues/7592">issue 7592</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
