@@ -72,12 +72,20 @@ int sub discarded() {
     makeRow(1, 2, 3);
     return 60;
 }
-printf(\"%d %d %d %d %d %d %d %d\\n\", deep(), consumer(), nested(), stored(), chosen(True), chosen(False),
-    indexed(2), discarded());
+# the projections of the other functions in one: a projection prepared (the facts of its consumer's result set) is
+# abandoned when another operation of the pass is stopped after it
+int sub combo(int i) {
+    hash<string, int> row = makeRow(20, 21, 22);
+    hash<string, int> other = i ? makeRow(30, 31, 32) : makeRow(40, 41, 42);
+    return row.left + row.right + other.middle + makeValues(50, 51, 52)[i] + makeRow(1, 2, 3).middle
+        + wrapRow(makeRow(4, 5, 6), makeRow(1, 1, 1)).row.left + consume(makeRow(0, 0, 3));
+}
+printf(\"%d %d %d %d %d %d %d %d %d\\n\", deep(), consumer(), nested(), stored(), chosen(True), chosen(False),
+    indexed(2), discarded(), combo(1));
 ";
 
         #! the program's output
-        const Expected = "8 3 7 42 31 41 52 60\n";
+        const Expected = "8 3 7 42 31 41 52 60 133\n";
 
         #! the operations of the pass that JIT execution reaches with the program
         const JitOperations = (

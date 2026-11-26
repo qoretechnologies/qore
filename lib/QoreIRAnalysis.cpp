@@ -13833,6 +13833,35 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     return folds.size();
 }
 
+// Runs a rollback when its scope ends, unless dismissed first: a change that an exception (an allocation that fails)
+// interrupts is undone as the stack unwinds; the rollback must not throw
+namespace {
+template <typename F>
+class QoreIRRollback {
+public:
+    explicit QoreIRRollback(F rollback) : rollback(std::move(rollback)) {
+    }
+
+    ~QoreIRRollback() {
+        if (active) {
+            rollback();
+        }
+    }
+
+    QoreIRRollback(const QoreIRRollback&) = delete;
+    QoreIRRollback& operator=(const QoreIRRollback&) = delete;
+
+    //! the change is complete: it is not undone
+    void dismiss() {
+        active = false;
+    }
+
+private:
+    F rollback;
+    bool active = true;
+};
+}  // namespace
+
 // Removes the capture of a call argument (CopyCallArg and its ReleaseCallArgSource, qore#7426) whose source is the
 // value of an exact call to a producer of a fresh fixed aggregate (a callee that get_projection accepts for
 // DiscardResult: its body returns a list or hash literal of its parameters and constants).  Such a value is a new
@@ -13881,8 +13910,15 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     // A producer's operands are rewritten below as soon as the copies they replace are taken, so the copies taken are
     // removed even when cancellation stops the search: the IR is never left with a call that reads a source that the
-    // ReleaseCallArgSource of a capture that is kept releases.
+    // ReleaseCallArgSource of a capture that is kept releases.  An exception before the removal (an allocation that
+    // fails) gives the rewritten producers their operands back, so that nothing is changed.
     bool cancelled = false;
+    std::vector<std::pair<QoreIRInstruction*, std::vector<QoreIRValue>>> rewritten_calls;
+    QoreIRRollback restore_calls([&rewritten_calls]() noexcept {
+        for (auto& [call, operands] : rewritten_calls) {
+            call->operands.swap(operands);
+        }
+    });
     for (QoreIRInstruction* copy : copies) {
         if (qore_ir_analysis_cancelled(check_count, "IR fresh aggregate argument copy selection")) {
             cancelled = true;
@@ -13910,8 +13946,16 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
         // the producer's own arguments whose captures were removed before (the copies are visited in block and
         // instruction order, and an argument is evaluated before its call) are the values of their calls, which the
         // query checks the facts of: wrapRows(wrapRow(makeRow(...), ...), ...)
-        if (!replacements.empty()) {
-            (void)qore_ir_rewrite_value_operands(*call, replacements, check_count, false);
+        if (!replacements.empty() && std::any_of(call->operands.begin(), call->operands.end(),
+                [&replacements](QoreIRValue operand) { return replacements.count(operand.id) != 0; })) {
+            // the operands of a call are its only values (qore_ir_rewrite_value_operands())
+            rewritten_calls.emplace_back(call, call->operands);
+            for (QoreIRValue& operand : call->operands) {
+                auto replacement = replacements.find(operand.id);
+                if (replacement != replacements.end()) {
+                    operand = replacement->second;
+                }
+            }
         }
         bool has_ref_args = true;
         const AbstractQoreFunctionVariant* callee = qore_ir_get_resolved_effect_callee(call, has_ref_args);
@@ -13932,6 +13976,11 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
         removed.insert(release->second);
         replacements.emplace(copy->result.id, source);
     }
+    // a call is rewritten only with the value of a copy that is taken, so no call is rewritten if none is
+    assert(!removed.empty() || rewritten_calls.empty());
+    // the removal below allocates nothing (an erasure, and the operands rewritten in place), so it cannot be
+    // interrupted
+    restore_calls.dismiss();
     if (removed.empty()) {
         return !cancelled;
     }
@@ -16127,19 +16176,31 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     };
     // The preparation of the rewrite below sets the facts of values that the function already has (a consumer's
     // result that a projection replaces) before the instructions are rewritten; a preparation that is abandoned (by
-    // cancellation, or an unexpected projection) restores them, so that the function is left as it was, and the
-    // rewrite itself, once started, is completed even if cancellation is requested.
+    // cancellation, an unexpected projection, or an exception such as a failed allocation) restores them, so that the
+    // function is left as it was, and the rewrite itself, once started, is completed even if cancellation is
+    // requested.
     std::vector<std::pair<QoreIRValue, QoreIRValueFacts>> rewrite_facts_undo;
     auto set_rewrite_facts = [&](QoreIRValue value, const QoreIRValueFacts& facts) {
         const QoreIRValueFacts* previous = func.getValueFacts(value);
         rewrite_facts_undo.emplace_back(value, previous ? *previous : QoreIRValueFacts());
         func.setValueFacts(value, facts);
     };
-    auto abandon_rewrite = [&]() -> size_t {
+    // allocates nothing: a value whose facts were set has its slot in the table, and one whose setting failed (in the
+    // allocation of the table) has none and keeps no facts
+    auto restore_rewrite_facts = [&]() noexcept {
         for (size_t i = rewrite_facts_undo.size(); i > 0; --i) {
-            func.setValueFacts(rewrite_facts_undo[i - 1].first, rewrite_facts_undo[i - 1].second);
+            if (func.getValueFacts(rewrite_facts_undo[i - 1].first)) {
+                func.setValueFacts(rewrite_facts_undo[i - 1].first, rewrite_facts_undo[i - 1].second);
+            }
         }
         rewrite_facts_undo.clear();
+        if (borrowed_projections) {
+            *borrowed_projections = 0;
+        }
+    };
+    QoreIRRollback restore_facts_on_unwind(restore_rewrite_facts);
+    auto abandon_rewrite = [&]() -> size_t {
+        restore_rewrite_facts();
         return 0;
     };
     for (VirtualizedCall& candidate : virtualized) {
@@ -16720,6 +16781,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     }
     std::unordered_map<QoreIRInstruction*,
         std::unique_ptr<QoreIRInstruction>> moved_guarded_calls;
+    // the preparation is complete: the facts set are those of the rewrite
+    restore_facts_on_unwind.dismiss();
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
