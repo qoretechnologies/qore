@@ -1696,7 +1696,7 @@
           "message": "Максимальна кількість результатів пошуку для отримання з кожного шарду для кожного гібридного підзапиту"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Створити векторний індекс"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

@@ -2204,7 +2204,7 @@
           "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
+          "source": "New events",
           "message": "Nouveaux événements"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {

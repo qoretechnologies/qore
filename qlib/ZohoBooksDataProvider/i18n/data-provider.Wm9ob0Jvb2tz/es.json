@@ -1944,7 +1944,7 @@
           "message": "El pago a recuperar"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Crear contacto"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Notas adicionales"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Actualizar contacto"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Solo contactos de proveedores"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Obtener contacto"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {

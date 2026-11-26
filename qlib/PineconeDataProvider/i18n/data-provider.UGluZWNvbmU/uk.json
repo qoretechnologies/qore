@@ -2475,7 +2475,7 @@
           "message": "Фільтр метаданих, що визначає, до яких записів це застосовується, записаний власною мовою фільтрів Pinecone — хеш назв полів до умов:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nОператори: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` та `$and` / `$or`.  Див. [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "Пошук за вектором"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

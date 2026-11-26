@@ -2475,7 +2475,7 @@
           "message": "用來選擇適用哪些紀錄的中繼資料篩選條件，以 Pinecone 自有的篩選語言撰寫——即欄位名稱對應條件的雜湊：\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\n運算子包括 `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$in`、`$nin`、`$exists` 以及 `$and` / `$or`。  請參閱 [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)。"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "以向量搜尋"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

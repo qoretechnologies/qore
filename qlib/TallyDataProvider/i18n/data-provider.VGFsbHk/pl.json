@@ -2336,7 +2336,7 @@
           "message": "Liczba webhooków na stronę (1–100, domyślnie `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search webhook Events",
+          "source": "Search webhook events",
           "message": "Wyszukaj zdarzenia webhooka"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {

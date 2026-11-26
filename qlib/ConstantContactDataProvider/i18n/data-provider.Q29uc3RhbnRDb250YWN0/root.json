@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -832,8 +832,8 @@
           "message": "The value for this custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -1316,8 +1316,8 @@
           "message": "The value for this custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -1472,8 +1472,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -1492,8 +1492,8 @@
           "message": "The contact ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Create a Contact list",
-          "message": "Create a Contact list"
+          "source": "Create a contact list",
+          "message": "Create a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Create a new contact list",
@@ -1540,8 +1540,8 @@
           "message": "Whether to mark this list as a favorite"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Update a Contact list",
-          "message": "Update a Contact list"
+          "source": "Update a contact list",
+          "message": "Update a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Update an existing contact list",
@@ -1596,8 +1596,8 @@
           "message": "Whether to mark this list as a favorite"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Delete a Contact list",
-          "message": "Delete a Contact list"
+          "source": "Delete a contact list",
+          "message": "Delete a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Delete a contact list",
@@ -1616,8 +1616,8 @@
           "message": "The contact list to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
-          "source": "List Contact lists",
-          "message": "List Contact lists"
+          "source": "List contact lists",
+          "message": "List contact lists"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
           "source": "List all contact lists",
@@ -1648,8 +1648,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Get a Contact list",
-          "message": "Get a Contact list"
+          "source": "Get a contact list",
+          "message": "Get a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Get a single contact list by ID",
@@ -1980,8 +1980,8 @@
           "message": "The custom field ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Create a Segment",
-          "message": "Create a Segment"
+          "source": "Create a segment",
+          "message": "Create a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
           "source": "Create a new segment",
@@ -2016,8 +2016,8 @@
           "message": "The criteria expression for the segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Update a Segment",
-          "message": "Update a Segment"
+          "source": "Update a segment",
+          "message": "Update a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
           "source": "Update an existing segment",
@@ -2060,8 +2060,8 @@
           "message": "The new criteria expression for the segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
-          "source": "Delete a Segment",
-          "message": "Delete a Segment"
+          "source": "Delete a segment",
+          "message": "Delete a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
           "source": "Delete a segment",
@@ -2156,8 +2156,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get a Segment",
-          "message": "Get a Segment"
+          "source": "Get a segment",
+          "message": "Get a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
           "source": "Get a single segment by ID",
@@ -3232,8 +3232,8 @@
           "message": "The time zone ID (e.g., `US/Eastern`)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",
@@ -3280,8 +3280,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "New Contact list",
-          "message": "New Contact list"
+          "source": "New contact list",
+          "message": "New contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Trigger when a new contact list is created",

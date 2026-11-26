@@ -3640,7 +3640,7 @@
           "message": "現在のワークスペースに関する情報を取得します。"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get workspace Admin",
+          "source": "Get workspace admin",
           "message": "ワークスペース管理者の取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {

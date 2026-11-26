@@ -3640,7 +3640,7 @@
           "message": "Pobierz informacje o bieżącym obszarze roboczym."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get workspace Admin",
+          "source": "Get workspace admin",
           "message": "Pobierz dane administratora obszaru roboczego"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {

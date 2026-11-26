@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Vytvoriť kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Vlastné atribúty kontaktu vo forme kľúč – hodnota. Kľúče aj hodnoty musia byť reťazce. Kľúče so špeciálnymi znakmi sa automaticky skonvertujú na `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Aktualizovať kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Vlastné atribúty kontaktu vo forme kľúč – hodnota. Kľúče aj hodnoty musia byť reťazce. Kľúče so špeciálnymi znakmi sa automaticky skonvertujú na `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Odstrániť kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Jedinečný identifikátor kontaktu, ktorý sa má odstrániť"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
-          "source": "Upsert a Contact",
+          "source": "Upsert a contact",
           "message": "Vytvoriť alebo aktualizovať kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Získať kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "ID kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact tag",
+          "source": "Create a contact tag",
           "message": "Vytvoriť značku kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Kód farby pre značku"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact tag",
+          "source": "Update a contact tag",
           "message": "Aktualizovať štítok kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Nový kód farby pre štítok"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact tag",
+          "source": "Delete a contact tag",
           "message": "Odstrániť značku kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Jedinečný identifikátor značky, ktorá sa má odstrániť"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact tags",
+          "source": "List contact tags",
           "message": "Zoznam značiek kontaktov"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Maximálny počet výsledkov"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact tag",
+          "source": "Get a contact tag",
           "message": "Získať značku kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "ID značky na získanie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Priradiť značku kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "ID značky, ktorá sa má priradiť kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Odstrániť štítok z kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {

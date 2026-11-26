@@ -804,7 +804,7 @@
           "message": "L'ID del lead"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Crea un contatto"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -956,7 +956,7 @@
           "message": "Valore URL"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Aggiorna un contatto"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Il tipo di numero di telefono (es. `mobile`, `office`, `home`, `fax`)"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Elimina un contatto"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Numero massimo di risultati da restituire"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Ottieni un contatto"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {

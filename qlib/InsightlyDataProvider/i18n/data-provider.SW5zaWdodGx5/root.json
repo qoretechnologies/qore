@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
-          "message": "Create Contact"
+          "source": "Create contact",
+          "message": "Create contact"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -968,8 +968,8 @@
           "message": "The name of the occasion (e.g., `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -1608,8 +1608,8 @@
           "message": "The name of the occasion (e.g., `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -1736,8 +1736,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -7616,8 +7616,8 @@
           "message": "The unique identifier of the calendar event to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List calendar Events",
-          "message": "List calendar Events"
+          "source": "List calendar events",
+          "message": "List calendar events"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
           "source": "List calendar events with optional pagination",
@@ -8456,8 +8456,8 @@
           "message": "The email ID"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",

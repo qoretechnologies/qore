@@ -2336,7 +2336,7 @@
           "message": "Numero di webhook per pagina (1-100, predefinito `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search webhook Events",
+          "source": "Search webhook events",
           "message": "Cerca eventi webhook"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {

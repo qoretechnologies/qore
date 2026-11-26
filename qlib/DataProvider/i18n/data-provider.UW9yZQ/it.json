@@ -732,7 +732,7 @@
           "message": "Se abilitato, applica una media mobile semplice sulla finestra prima di calcolare le derivate, riducendo il rumore nella velocità di variazione; disabilitare per tassi non elaborati da punto a punto; predefinito: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Monitora stabilità processo"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

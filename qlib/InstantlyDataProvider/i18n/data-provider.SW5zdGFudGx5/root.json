@@ -3640,8 +3640,8 @@
           "message": "Retrieve information about the current workspace."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get workspace Admin",
-          "message": "Get workspace Admin"
+          "source": "Get workspace admin",
+          "message": "Get workspace admin"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
           "source": "Get workspace admin information",

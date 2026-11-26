@@ -2336,7 +2336,7 @@
           "message": "Počet webhookov na stránku (1 – 100, predvolené `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search webhook Events",
+          "source": "Search webhook events",
           "message": "Vyhľadať udalosti webhooku"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {

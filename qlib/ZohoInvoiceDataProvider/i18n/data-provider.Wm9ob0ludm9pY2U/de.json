@@ -1228,7 +1228,7 @@
           "message": "Wiederkehrende Rechnung fortsetzen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Kontakt erstellen"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Interne Notizen zu diesem Kontakt (für Kunden nicht sichtbar)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Kontakt aktualisieren"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Interne Notizen zu diesem Kontakt (für Kunden nicht sichtbar)"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Kontakt löschen"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Der zu löschende Kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Kontakt abrufen"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Kontakte nach E-Mail-Adresse suchen"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact status",
+          "source": "Mark contact status",
           "message": "Kontaktstatus kennzeichnen"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -4020,7 +4020,7 @@
           "message": "Wie oft nach neuen Rechnungen gesucht werden soll (Sekunden)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Neuer Kontakt"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.short_desc": {

@@ -732,8 +732,8 @@
           "message": "When enabled, applies a simple moving average over the window before computing derivatives, reducing noise in the rate of change; disable for raw point-to-point rates; default: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
-          "message": "Monitor process Stability"
+          "source": "Monitor process stability",
+          "message": "Monitor process stability"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",

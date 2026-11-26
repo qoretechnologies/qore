@@ -388,7 +388,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Отримати контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -408,7 +408,7 @@
           "message": "ID контакту"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Створити контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -660,7 +660,7 @@
           "message": "Унікальний ідентифікатор користувацького поля"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Оновити контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Унікальний ідентифікатор користувацького поля"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Видалити контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Контакт для видалення"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a campaign",
+          "source": "Add a contact to a campaign",
           "message": "Додати контакт до кампанії"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Ідентифікатор кампанії, до якої додається контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a campaign",
+          "source": "Remove a contact from a campaign",
           "message": "Видалити контакт із кампанії"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "ID кампанії, з якої потрібно видалити контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a note to the Contact",
+          "source": "Add a note to the contact",
           "message": "Додати примітку до контакту"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "ID завдання, яке потрібно видалити"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.short_desc": {

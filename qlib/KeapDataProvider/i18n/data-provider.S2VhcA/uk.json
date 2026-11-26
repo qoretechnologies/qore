@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Створити контакт"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Часовий пояс контакту"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Оновити контакт"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Часовий пояс контакту"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Видалити контакт"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Отримати контакт"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "Тег для видалення"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Застосувати тег до контакту"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Список цілочисельних ID тегів"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Видалити тег із контакту"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {

@@ -2475,7 +2475,7 @@
           "message": "Un filtro de metadatos que selecciona a qué registros se aplica, escrito en el lenguaje de filtros propio de Pinecone: un hash de nombres de campo a condiciones:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nLos operadores son `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` y `$and` / `$or`.  Consulte [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "Buscar con un vector"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

@@ -1936,7 +1936,7 @@
           "message": "Blocs calculés à inclure sur chaque profil, que Klaviyo omet par défaut car ils sont coûteux à générer :\n\n- `subscriptions` : l'état de consentement du profil par canal\n- `predictive_analytics` : la valeur vie client prédite et la probabilité d'attrition selon Klaviyo"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
+          "source": "Create segment",
           "message": "Créer un segment"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
@@ -9784,7 +9784,7 @@
           "message": "L'ID de la campagne à envoyer"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Lister les événements"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
@@ -10228,7 +10228,7 @@
           "message": "La liste de laquelle retirer la balise"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add tag to Segment",
+          "source": "Add tag to segment",
           "message": "Ajouter une étiquette à un segment"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
@@ -10264,7 +10264,7 @@
           "message": "Le segment à étiqueter"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove tag from Segment",
+          "source": "Remove tag from segment",
           "message": "Retirer la balise du segment"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {

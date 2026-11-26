@@ -1936,7 +1936,7 @@
           "message": "各個人檔案要包含的計算區塊（Klaviyo 預設會省略，因為產生運算成本較高）：\n\n- `subscriptions`：各通路的個人檔案同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
+          "source": "Create segment",
           "message": "建立區隔"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
@@ -9784,7 +9784,7 @@
           "message": "要傳送的行銷活動 ID"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "列出事件"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
@@ -10228,7 +10228,7 @@
           "message": "要從中移除標籤的清單"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add tag to Segment",
+          "source": "Add tag to segment",
           "message": "將標籤新增至區隔"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
@@ -10264,7 +10264,7 @@
           "message": "要加上標籤的區隔"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove tag from Segment",
+          "source": "Remove tag from segment",
           "message": "從客群移除標籤"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {

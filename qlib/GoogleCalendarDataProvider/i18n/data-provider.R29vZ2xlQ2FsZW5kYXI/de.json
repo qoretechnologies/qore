@@ -472,7 +472,7 @@
           "message": "Der Kalender, zu dem der Termin hinzugefügt werden soll"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Termine auflisten"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {

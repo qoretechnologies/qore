@@ -1936,7 +1936,7 @@
           "message": "Blocchi calcolati da includere in ciascun profilo, che Klaviyo omette per impostazione predefinita poiché onerosi da produrre:\n\n- `subscriptions`: lo stato del consenso del profilo per canale\n- `predictive_analytics`: il lifetime value stimato e la probabilità di abbandono previsti da Klaviyo"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
+          "source": "Create segment",
           "message": "Crea segmento"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
@@ -9784,7 +9784,7 @@
           "message": "L'ID della campagna da inviare"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Elenca eventi"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
@@ -10228,7 +10228,7 @@
           "message": "L'elenco da cui rimuovere il tag"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add tag to Segment",
+          "source": "Add tag to segment",
           "message": "Aggiungi tag al segmento"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
@@ -10264,7 +10264,7 @@
           "message": "Segmento a cui applicare il tag"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove tag from Segment",
+          "source": "Remove tag from segment",
           "message": "Rimuovi tag dal segmento"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {

@@ -388,7 +388,7 @@
           "message": "Nombre maximum de résultats à renvoyer"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Obtenir un contact"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -408,7 +408,7 @@
           "message": "L'ID du contact"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Créer un contact"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -660,7 +660,7 @@
           "message": "L'identifiant unique du champ personnalisé"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Mettre à jour un contact"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -920,7 +920,7 @@
           "message": "L'identifiant unique du champ personnalisé"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Supprimer un contact"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Le contact à supprimer"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a campaign",
+          "source": "Add a contact to a campaign",
           "message": "Ajouter un contact à une campagne"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "L'ID de la campagne à laquelle ajouter le contact"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a campaign",
+          "source": "Remove a contact from a campaign",
           "message": "Supprimer un contact d'une campagne"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "L'ID de la campagne de laquelle supprimer le contact"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a note to the Contact",
+          "source": "Add a note to the contact",
           "message": "Ajouter une note au contact"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "L'ID de la tâche à supprimer"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nouveau contact"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.short_desc": {

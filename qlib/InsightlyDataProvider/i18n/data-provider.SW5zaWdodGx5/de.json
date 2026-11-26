@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Kontakt erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Der Name der Gelegenheit (z. B. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Kontakt aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Der Name der Gelegenheit (z. B. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Kontakt löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Kontakt abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kalenderereignisses"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List calendar Events",
+          "source": "List calendar events",
           "message": "Kalenderereignisse auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "Die E-Mail-ID"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Neuer Kontakt"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {

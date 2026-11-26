@@ -36624,8 +36624,8 @@
           "message": "A cursor for use in pagination. `before` is an object ID that defines your place in the list.\nFor instance, if you make a list request and receive 100 objects, ending with obj_foo, your\nsubsequent call can include before=obj_foo in order to fetch the previous page of the list."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
-          "message": "List Vector stores"
+          "source": "List vector stores",
+          "message": "List vector stores"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
           "source": "Returns a list of vector stores",
@@ -36712,8 +36712,8 @@
           "message": "A cursor for use in pagination. `before` is an object ID that defines your place in the list.\nFor instance, if you make a list request and receive 100 objects, ending with obj_foo, your\nsubsequent call can include before=obj_foo in order to fetch the previous page of the list."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
-          "message": "Create Vector store"
+          "source": "Create vector store",
+          "message": "Create vector store"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {
           "source": "Index files for retrieval and file search",

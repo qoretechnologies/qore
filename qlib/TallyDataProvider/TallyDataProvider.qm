@@ -467,7 +467,7 @@ module TallyDataProvider {
             "app": TallyDataProvider::AppName,
             "path": "/webhook-events",
             "action": "search-webhook-events",
-            "display_name": "Search webhook Events",
+            "display_name": "Search webhook events",
             "short_desc": "List delivery events for a webhook",
             "desc": "List webhook delivery events (status, status code, response, retry count, "
                 "payload) for a specific webhook; useful for debugging failed deliveries",

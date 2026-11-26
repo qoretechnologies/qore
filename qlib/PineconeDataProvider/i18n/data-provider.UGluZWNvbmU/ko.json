@@ -2475,7 +2475,7 @@
           "message": "어떤 레코드에 적용할지 선택하는 메타데이터 필터로, Pinecone 고유의 필터 언어로 작성합니다 — 필드 이름에서 조건으로의 해시입니다:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\n연산자는 `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` 및 `$and` / `$or` 입니다.  [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)를 참조하세요."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "벡터로 검색"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

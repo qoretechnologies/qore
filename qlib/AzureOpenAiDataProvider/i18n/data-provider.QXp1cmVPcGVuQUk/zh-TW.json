@@ -33328,7 +33328,7 @@
           "message": "分頁用的游標。`before` 是定義您在列表中位置的物件 ID。\n例如，若您發出列表請求並收到 100 個物件，最後一個為 obj_foo，\n您後續的呼叫可包含 before=obj_foo 以取得列表的上一頁。"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "列出向量庫"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "分頁用的游標。`before` 是定義您在列表中位置的物件 ID。\n例如，若您發出列表請求並收到 100 個物件，最後一個為 obj_foo，\n您後續的呼叫可包含 before=obj_foo 以取得列表的上一頁。"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "建立向量庫"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

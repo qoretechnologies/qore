@@ -517,7 +517,7 @@ module DataProvider {
             "app": QoreApp::AppName,
             "path": "/",
             "action": "ewma-control-chart",
-            "display_name": "Monitor process Stability",
+            "display_name": "Monitor process stability",
             "short_desc": "Detects when values drift outside normal operating range",
             "desc": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) "
                 "control chart to detect when values drift outside the normal operating range. "

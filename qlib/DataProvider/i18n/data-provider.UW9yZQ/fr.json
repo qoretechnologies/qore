@@ -732,7 +732,7 @@
           "message": "Lorsqu'il est activé, applique une moyenne mobile simple sur la fenêtre avant de calculer les dérivées, réduisant le bruit dans le taux de variation ; désactivez pour les taux bruts point à point ; valeur par défaut : `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Surveiller la stabilité du processus"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

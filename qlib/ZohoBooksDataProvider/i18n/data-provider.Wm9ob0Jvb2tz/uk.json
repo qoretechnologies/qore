@@ -1944,7 +1944,7 @@
           "message": "Платіж для отримання"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Додаткові примітки"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "Лише контакти постачальників"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {

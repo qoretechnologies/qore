@@ -33328,7 +33328,7 @@
           "message": "Ein Cursor zur Verwendung bei der Paginierung. `before` ist eine Objekt-ID, die Ihren Platz in der Liste definiert.\nBeispielsweise, wenn Sie eine Listenanfrage stellen und 100 Objekte erhalten, die mit obj_foo enden, kann Ihr\nnachfolgender Aufruf before=obj_foo enthalten, um die vorherige Seite der Liste abzurufen."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "Vektor-Speicher auflisten"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "Ein Cursor zur Verwendung bei der Paginierung. `before` ist eine Objekt-ID, die Ihren Platz in der Liste definiert.\nBeispielsweise, wenn Sie eine Listenanfrage stellen und 100 Objekte erhalten, die mit obj_foo enden, kann Ihr\nnachfolgender Aufruf before=obj_foo enthalten, um die vorherige Seite der Liste abzurufen."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "Vektor-Speicher erstellen"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

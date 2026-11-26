@@ -664,7 +664,7 @@
           "message": "페이지당 결과 수"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "세그먼트 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "고유 Customer.io 세그먼트 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment people",
+          "source": "Get segment people",
           "message": "세그먼트 사용자 조회"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "객체에서 연결 해제할 식별자 해시 목록"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch email Sent",
+          "source": "Watch email sent",
           "message": "이메일 발송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Customer.io의 이메일을 통해 수신자가 구독을 취소할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
+          "source": "Watch SMS sent",
           "message": "SMS 발송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Customer.io를 통해 SMS 메시지의 링크를 클릭할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch push Sent",
+          "source": "Watch push sent",
           "message": "푸시 전송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Customer.io를 통해 푸시 알림 전송에 실패할 때 알림을 받습니다."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
+          "source": "Watch Slack sent",
           "message": "Slack 전송 감시"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {

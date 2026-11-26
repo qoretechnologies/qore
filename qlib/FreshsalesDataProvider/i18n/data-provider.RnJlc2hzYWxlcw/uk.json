@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Ідентифікатор етапу життєвого циклу контакту"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Ідентифікатор етапу життєвого циклу контакту"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Максимальна кількість результатів"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Унікальний ідентифікатор примітки для видалення"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact event",
+          "source": "New contact event",
           "message": "Подія: новий контакт"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Crear un contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Atributos clave-valor personalizados para el contacto. Tanto las claves como los valores deben ser cadenas. Las claves con caracteres especiales se convierten automáticamente a `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Actualizar un contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Atributos clave-valor personalizados para el contacto. Tanto las claves como los valores deben ser cadenas. Las claves con caracteres especiales se convierten automáticamente a `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Eliminar un contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -724,7 +724,7 @@
           "message": "El identificador único del contacto que se eliminará"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
-          "source": "Upsert a Contact",
+          "source": "Upsert a contact",
           "message": "Insertar o actualizar un contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Resultados máximos"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Obtener un contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "El ID del contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact tag",
+          "source": "Create a contact tag",
           "message": "Crear una etiqueta de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "El código de color para la etiqueta"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact tag",
+          "source": "Update a contact tag",
           "message": "Actualizar una etiqueta de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "El nuevo código de color para la etiqueta"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact tag",
+          "source": "Delete a contact tag",
           "message": "Eliminar una etiqueta de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "El identificador único de la etiqueta que se eliminará"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact tags",
+          "source": "List contact tags",
           "message": "Listar etiquetas de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Resultados máximos"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact tag",
+          "source": "Get a contact tag",
           "message": "Obtener una etiqueta de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "El ID de la etiqueta que se recuperará"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Aplicar etiqueta a contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "El ID de la etiqueta que se aplicará al contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Eliminar etiqueta de contacto"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {

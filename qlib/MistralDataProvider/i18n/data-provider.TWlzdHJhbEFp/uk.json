@@ -11340,7 +11340,7 @@
           "message": "Значення `schedule_id` для цієї операції."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.display_name": {
-          "source": "Get workflow Events",
+          "source": "Get workflow events",
           "message": "Отримати події робочого процесу"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.short_desc": {
@@ -29644,7 +29644,7 @@
           "message": "Повернути тарифний план організації та інформацію про те, чи ввімкнено оплату за фактом використання. Читайте тарифний план і бюджети організації.\n\n**Публічний перегляд:** Доступність залежить від вашого облікового запису та дозволів."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcXVlcnktdXNhZ2U.display_name": {
-          "source": "Query detailed usage (Admin)",
+          "source": "Query detailed usage (admin)",
           "message": "Запит детального використання (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcXVlcnktdXNhZ2U.short_desc": {
@@ -30048,7 +30048,7 @@
           "message": "Включати кількість окремих викликів API у згруповані рядки та агрегати."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2Vycw.display_name": {
-          "source": "List users (Admin)",
+          "source": "List users (admin)",
           "message": "Отримати список користувачів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2Vycw.short_desc": {
@@ -30108,7 +30108,7 @@
           "message": "Також повертати деактивованих і заблокованих учасників."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXJz.display_name": {
-          "source": "Create users (Admin)",
+          "source": "Create users (admin)",
           "message": "Створити користувачів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXJz.short_desc": {
@@ -30240,7 +30240,7 @@
           "message": "Місця в продуктах, які потрібно призначити користувачу."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4taW52aXRlLXVzZXJz.display_name": {
-          "source": "Invite users (Admin)",
+          "source": "Invite users (admin)",
           "message": "Запросити користувачів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4taW52aXRlLXVzZXJz.short_desc": {
@@ -30444,7 +30444,7 @@
           "message": "Ідентифікатори робочих просторів, до яких мають приєднатися запрошені користувачі."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1pbnZpdGF0aW9ucw.display_name": {
-          "source": "List invitations (Admin)",
+          "source": "List invitations (admin)",
           "message": "Отримати список запрошень (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1pbnZpdGF0aW9ucw.short_desc": {
@@ -30720,7 +30720,7 @@
           "message": "Максимальна кількість результатів на сторінці."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1yb2xlcw.display_name": {
-          "source": "List roles (Admin)",
+          "source": "List roles (admin)",
           "message": "Отримати список ролей (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1yb2xlcw.short_desc": {
@@ -30732,7 +30732,7 @@
           "message": "Отримати список ролей організації та робочих просторів. Керуйте учасниками, запрошеннями та ролями організації. Потрібен ключ API адміністратора.\n\n**Публічний перегляд:** Доступність залежить від вашого облікового запису та дозволів."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List workspaces (Admin)",
+          "source": "List workspaces (admin)",
           "message": "Отримати список робочих просторів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC13b3Jrc3BhY2Vz.short_desc": {
@@ -30792,7 +30792,7 @@
           "message": "Пошуковий запит для фільтрації робочих просторів за назвою."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create workspace (Admin)",
+          "source": "Create workspace (admin)",
           "message": "Створити робочий простір (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -31292,7 +31292,7 @@
           "message": "Ідентифікатор користувача учасника робочого простору."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXJhdGUtbGltaXRz.display_name": {
-          "source": "Get rate limits (Admin)",
+          "source": "Get rate limits (admin)",
           "message": "Отримати ліміти частоти запитів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXJhdGUtbGltaXRz.short_desc": {
@@ -31304,7 +31304,7 @@
           "message": "Отримати ліміти частоти запитів. Читайте дані про використання та керуйте лімітами витрат і частоти запитів організації. Потрібен ключ API адміністратора.\n\n**Публічний перегляд:** Доступність залежить від вашого облікового запису та дозволів."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNwZW5kLWxpbWl0cw.display_name": {
-          "source": "Get spend limits (Admin)",
+          "source": "Get spend limits (admin)",
           "message": "Отримати ліміти витрат (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNwZW5kLWxpbWl0cw.short_desc": {
@@ -31316,7 +31316,7 @@
           "message": "Отримати ліміти використання, частоти запитів і завдань для організації. Читайте дані про використання та керуйте лімітами витрат і частоти запитів організації. Потрібен ключ API адміністратора.\n\n**Публічний перегляд:** Доступність залежить від вашого облікового запису та дозволів."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXNwZW5kLWxpbWl0cw.display_name": {
-          "source": "Update spend limits (Admin)",
+          "source": "Update spend limits (admin)",
           "message": "Оновити ліміти витрат (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXNwZW5kLWxpbWl0cw.short_desc": {
@@ -31352,7 +31352,7 @@
           "message": "Чи вилучити місячний ліміт використання."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LW1vbnRobHktdXNhZ2U.display_name": {
-          "source": "Get monthly usage (Admin)",
+          "source": "Get monthly usage (admin)",
           "message": "Отримати місячне використання (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LW1vbnRobHktdXNhZ2U.short_desc": {
@@ -31424,7 +31424,7 @@
           "message": "Європейський Союз"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List audit logs (Admin)",
+          "source": "List audit logs (admin)",
           "message": "Отримати список журналів аудиту (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -31540,7 +31540,7 @@
           "message": "Максимальна кількість результатів для повернення."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3Vwcw.display_name": {
-          "source": "List user groups (Admin)",
+          "source": "List user groups (admin)",
           "message": "Отримати список груп користувачів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3Vwcw.short_desc": {
@@ -31664,7 +31664,7 @@
           "message": "Учасник"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Create user group (Admin)",
+          "source": "Create user group (admin)",
           "message": "Створити групу користувачів (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -32180,7 +32180,7 @@
           "message": "Роль в організації, яку потрібно призначити групі: назва ролі (`member`, `billing_manager`, `organization_admin`) або UUID ролі."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hcGkta2V5cw.display_name": {
-          "source": "List API keys (Admin)",
+          "source": "List API keys (admin)",
           "message": "Отримати список ключів API (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hcGkta2V5cw.short_desc": {
@@ -32228,7 +32228,7 @@
           "message": "Фільтрувати ключі API за підрядком назви або за останніми 4 символами ключа. Зіставлення не враховує регістр і діакритичні знаки."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLWFwaS1rZXk.display_name": {
-          "source": "Create API key (Admin)",
+          "source": "Create API key (admin)",
           "message": "Створити ключ API (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLWFwaS1rZXk.short_desc": {
@@ -32312,7 +32312,7 @@
           "message": "Ідентифікатор ключа API."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tc3RhcnQtc2NpbS1zeW5j.display_name": {
-          "source": "Start SCIM synchronization (Admin)",
+          "source": "Start SCIM synchronization (admin)",
           "message": "Запустити синхронізацію SCIM (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tc3RhcnQtc2NpbS1zeW5j.short_desc": {
@@ -32432,7 +32432,7 @@
           "message": "Ідентифікатор запуску синхронізації SCIM."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (Admin)",
+          "source": "Get vibe work usage by user (admin)",
           "message": "Отримати використання Vibe Work за користувачами (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "Кінець запитуваного вікна як позначка часу Unix у секундах."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (Admin)",
+          "source": "Get vibe work usage by agent (admin)",
           "message": "Отримати використання Vibe Work за агентами (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "Кінець запитуваного вікна як позначка часу Unix у секундах."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (Admin)",
+          "source": "Get vibe work usage over time (admin)",
           "message": "Отримати використання Vibe Work у часі (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "Місяць"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (Admin)",
+          "source": "Get vibe code usage by workspace (admin)",
           "message": "Отримати використання Vibe Code за робочим простором (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "Ідентифікатор робочого простору для фільтрації результатів."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (Admin)",
+          "source": "Get vibe code usage by organization (admin)",
           "message": "Отримати використання Vibe Code за організацією (адмін.)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

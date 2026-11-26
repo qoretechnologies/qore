@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Créer un contact"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -604,7 +604,7 @@
           "message": "L'ID de l'étape du cycle de vie du contact"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Mettre à jour le contact"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "L'ID de l'étape du cycle de vie du contact"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Supprimer le contact"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Résultats maximums"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Obtenir le contact"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "L'identifiant unique de la note à supprimer"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact event",
+          "source": "New contact event",
           "message": "Événement Nouveau contact"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {

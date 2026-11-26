@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -524,8 +524,8 @@
           "message": "Contact time zone"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -664,8 +664,8 @@
           "message": "Contact time zone"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -784,8 +784,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -1444,8 +1444,8 @@
           "message": "The tag to delete"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
-          "message": "Apply tag to Contact"
+          "source": "Apply tag to contact",
+          "message": "Apply tag to contact"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
           "source": "Apply a tag to a contact",
@@ -1476,8 +1476,8 @@
           "message": "List of integer tag IDs"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
-          "message": "Remove tag from Contact"
+          "source": "Remove tag from contact",
+          "message": "Remove tag from contact"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
           "source": "Remove a tag from a contact",

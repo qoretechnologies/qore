@@ -3640,7 +3640,7 @@
           "message": "Recupera informazioni sull'area di lavoro corrente."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get workspace Admin",
+          "source": "Get workspace admin",
           "message": "Ottieni amministrazione area di lavoro"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {

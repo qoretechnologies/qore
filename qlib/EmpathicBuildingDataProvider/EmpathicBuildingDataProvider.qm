@@ -111,7 +111,7 @@ module EmpathicBuildingDataProvider {
             "app": EmpathicBuildingDataProvider::AppName,
             "path": "/organizations/{org}/locations/{loc}/sensors/{sensor}/watch",
             "action": "watch-sensor",
-            "display_name": "Sensor Events",
+            "display_name": "Sensor events",
             "short_desc": "Watch for events on a particular Empathic Building sensor",
             "desc": "Watch for events on a particular Empathic Building sensor",
             "action_code": DPAT_EVENT,

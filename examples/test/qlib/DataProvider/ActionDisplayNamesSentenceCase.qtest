@@ -1,11 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires Util
 
@@ -14,10 +13,15 @@
 #! The display names of the data provider actions in qlib are labels in sentence case
 /** A user interface lists an app's actions by their display names, beside the labels that
     @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" derives from field
-    names, which are in sentence case.  An action's display name is written by hand, so this test reads every one in
-    the modules' sources: only its first word starts with a capital letter, apart from words in capitals (API, PDF),
-    words with a capital after their first letter (WebSocket, OAuth2), single capital letters, and proper names: the
-    words of an app's own display name (ex: "Google Drive", "HubSpot") and the product names in @ref ProperNames.
+    names, which are in sentence case.  An action's display name is written by hand, so this test reads the action
+    display names written in the action hashes of the modules' sources: only its first word starts with a capital
+    letter, apart from words in capitals (API, PDF), words with a capital after their first letter (WebSocket,
+    OAuth2), single capital letters, and proper names: an app's display name (ex: "Google Drive", "Klaviyo") and the
+    product names in @ref ProperNames.
+
+    An app's display name is a proper name as a whole: the words of "Constant Contact" or "Server Sent Events" are
+    ordinary words elsewhere ("Create a contact", "List calendar events").  A one-word app name is a proper name
+    only in its own module, as it is an ordinary word in the others (the "Segment" app, a Klaviyo segment).
 */
 class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     public {
@@ -28,14 +32,19 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     }
 
     private {
-        #! every action display name: label -> files
-        hash<string, list<string>> labels;
-        #! the words of every app's display name
-        hash<string, bool> app_words;
+        #! every action display name: label -> module -> files
+        hash<string, hash<string, list<string>>> labels;
+
+        #! the display names of the apps of more than one word
+        hash<string, bool> multi_word_apps;
+
+        #! the display names of the apps of one word: module -> name -> True
+        hash<string, hash<string, bool>> one_word_apps;
     }
 
     constructor() : Test("ActionDisplayNamesSentenceCaseTest", "1.0") {
         addTestCase("the action display names are found", \foundTest());
+        addTestCase("app names are proper names only as a whole or in their own module", \appNameTest());
         addTestCase("every action display name is in sentence case", \sentenceCaseTest());
         set_return_value(main());
     }
@@ -47,29 +56,55 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
             # comments may quote old or example names
             src =~ s/\/\*.*?\*\///sg;
             src =~ s/^[ \t]*#[^\n]*//mg;
+            string mod = ActionDisplayNamesSentenceCaseTest::getModule(root, file);
             foreach string app in (src =~ x/<DataProviderAppInfo>\s*\{.{0,1500}?"display_name"\s*:\s*"([^"]+)"/sg ?? ()) {
-                foreach string word in (app.split(" ")) {
-                    app_words{word} = True;
+                if (app =~ / /) {
+                    multi_word_apps{app} = True;
+                } else {
+                    one_word_apps{mod}{app} = True;
                 }
             }
             foreach string label in (src =~ x/"action"\s*:\s*[^,{}\n]+,[^{}]{0,600}?"display_name"\s*:\s*"([^"\n]+)"/g
                     ?? ()) {
-                labels{label} += (basename(file),);
+                labels{label}{mod} += (basename(file),);
             }
         }
     }
 
     foundTest() {
         assertTrue(labels.size() > 1500, sprintf("action display names found: %d", labels.size()));
-        assertTrue(app_words.size() > 100, sprintf("app name words found: %d", app_words.size()));
+        assertTrue(multi_word_apps.size() + one_word_apps.size() > 100,
+            sprintf("app names found: %d", multi_word_apps.size() + one_word_apps.size()));
+        assertTrue(multi_word_apps."Google Drive", "a multi-word app name is found");
+        assertTrue(one_word_apps.KlaviyoDataProvider.Klaviyo, "a one-word app name is found in its module");
+    }
+
+    appNameTest() {
+        hash<string, hash<string, bool>> apps = {"KlaviyoDataProvider": {"Klaviyo": True}};
+        hash<string, bool> multi = {"Constant Contact": True, "Google Drive": True};
+        # a word of a multi-word app name is an ordinary word on its own
+        assertEq(("Contact",), titleCaseWords("Create a Contact", "X", multi, apps));
+        assertEq((), titleCaseWords("Create a contact", "X", multi, apps));
+        # the whole name is a proper name anywhere
+        assertEq((), titleCaseWords("Sync with Constant Contact", "X", multi, apps));
+        assertEq((), titleCaseWords("Upload to Google Drive", "X", multi, apps));
+        # a one-word app name is a proper name in its own module only
+        assertEq((), titleCaseWords("Get Klaviyo profile", "KlaviyoDataProvider", multi, apps));
+        assertEq(("Klaviyo",), titleCaseWords("Get Klaviyo profile", "X", multi, apps));
+        # acronyms, names with inner capitals, single letters and product names
+        assertEq((), titleCaseWords("Get PDF from OneDrive in Slack (v2) X", "X", multi, apps));
+        # a word in parentheses and after a slash
+        assertEq(("(Admin)", "Inactive"), titleCaseWords("List users (Admin) active/Inactive", "X", multi, apps));
     }
 
     sentenceCaseTest() {
         list<string> offenders = ();
         foreach hash<auto> i in (labels.pairIterator()) {
-            list<string> words = titleCaseWords(i.key);
-            if (words) {
-                offenders += sprintf("%y in %s (%s)", i.key, i.value.join(", "), words.join(", "));
+            foreach hash<auto> m in (i.value.pairIterator()) {
+                list<string> words = titleCaseWords(i.key, m.key, multi_word_apps, one_word_apps);
+                if (words) {
+                    offenders += sprintf("%y in %s (%s)", i.key, m.value.join(", "), words.join(", "));
+                }
             }
         }
         assertEq((), offenders, "action display names in title case; write them in sentence case and change the "
@@ -77,10 +112,24 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     }
 
     #! The words of a label after its first that start with a capital and are neither acronyms nor proper names
-    private list<string> titleCaseWords(string label) {
+    private static list<string> titleCaseWords(string label, string mod, hash<string, bool> multi,
+            hash<string, hash<string, bool>> apps) {
+        # app names, longest first, are replaced by a marker that is not a word
+        list<string> names = keys multi;
+        if (*hash<string, bool> own = apps{mod}) {
+            names += keys own;
+        }
+        names = sort(names, int sub (string l, string r) {
+            return r.length() <=> l.length();
+        });
+        string text = label;
+        foreach string name in (names) {
+            text = ActionDisplayNamesSentenceCaseTest::replaceWord(text, name);
+        }
         list<string> rv = ();
-        list<string> words = label.split(" ");
-        for (int i = 1; i < words.size(); ++i) {
+        list<string> words = text.split(" ");
+        # the first word of the label starts with a capital, unless it is (the start of) an app name
+        for (int i = (words[0] == "\x01" ? 0 : 1); i < words.size(); ++i) {
             foreach string piece in (words[i].split("/")) {
                 string core = piece;
                 core =~ s/[^A-Za-z0-9]//g;
@@ -91,13 +140,45 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
                 if (core.substr(1) != core.substr(1).lwr()) {
                     continue;
                 }
-                if (app_words{piece} || app_words{core} || inlist(core, ProperNames)) {
+                if (inlist(core, ProperNames)) {
                     continue;
                 }
                 rv += piece;
             }
         }
         return rv;
+    }
+
+    #! Replaces every occurrence of a name that is not part of a longer word by a marker word
+    private static string replaceWord(string text, string name) {
+        string rv;
+        int start = 0;
+        while (True) {
+            int pos = text.find(name, start);
+            if (pos < 0) {
+                return rv + text.substr(start);
+            }
+            int end = pos + name.length();
+            bool word_start = !pos || text.substr(pos - 1, 1) !~ /[A-Za-z0-9]/;
+            bool word_end = end >= text.length() || text.substr(end, 1) !~ /[A-Za-z0-9]/;
+            if (word_start && word_end) {
+                rv += text.substr(start, pos - start) + "\x01";
+            } else {
+                rv += text.substr(start, end - start);
+            }
+            start = end;
+        }
+    }
+
+    #! The module of a source file: its directory under qlib, or the name of a module file in qlib
+    private static string getModule(string root, string file) {
+        string rel = file.substr(root.length());
+        rel =~ s/^\/+//;
+        list<string> path = rel.split("/");
+        if (path.size() > 1) {
+            return path[0];
+        }
+        return basename(rel) =~ x/^(.*)\.q[cm]$/[0] ?? rel;
     }
 
     private static list<string> findSources(string dir) {

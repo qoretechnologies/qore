@@ -2475,7 +2475,7 @@
           "message": "Filter metadát určujúci, ktorých záznamov sa to týka, zapísaný vo vlastnom filtrovacom jazyku Pinecone — hash názvov polí a podmienok:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nOperátory sú `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` a `$and` / `$or`.  Pozri [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "Vyhľadať pomocou vektora"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

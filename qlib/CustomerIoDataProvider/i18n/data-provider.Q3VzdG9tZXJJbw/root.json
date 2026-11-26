@@ -664,8 +664,8 @@
           "message": "Number of results per page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
-          "message": "Get Segment"
+          "source": "Get segment",
+          "message": "Get segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
           "source": "Get a segment by ID",
@@ -688,8 +688,8 @@
           "message": "The unique Customer.io segment ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment people",
-          "message": "Get Segment people"
+          "source": "Get segment people",
+          "message": "Get segment people"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
           "source": "Get people in a segment",
@@ -2444,8 +2444,8 @@
           "message": "List of identifier hashes to disconnect from the object"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch email Sent",
-          "message": "Watch email Sent"
+          "source": "Watch email sent",
+          "message": "Watch email sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
           "source": "Watch for email sent events",
@@ -2540,8 +2540,8 @@
           "message": "Receive a notification when a recipient unsubscribes via an email from Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
-          "message": "Watch SMS Sent"
+          "source": "Watch SMS sent",
+          "message": "Watch SMS sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
           "source": "Watch for SMS sent events",
@@ -2588,8 +2588,8 @@
           "message": "Receive a notification when a link in an SMS message is clicked via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch push Sent",
-          "message": "Watch push Sent"
+          "source": "Watch push sent",
+          "message": "Watch push sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
           "source": "Watch for push sent events",
@@ -2636,8 +2636,8 @@
           "message": "Receive a notification when a push notification fails to send via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
-          "message": "Watch Slack Sent"
+          "source": "Watch Slack sent",
+          "message": "Watch Slack sent"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
           "source": "Watch for Slack sent events",

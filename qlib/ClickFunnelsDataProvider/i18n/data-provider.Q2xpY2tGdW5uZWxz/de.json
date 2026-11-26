@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Kontakt erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Kontakt aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Kontakt löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kontakts"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
-          "source": "Upsert a Contact",
+          "source": "Upsert a contact",
           "message": "Kontakt erstellen oder aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Einen Kontakt abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact tag",
+          "source": "Create a contact tag",
           "message": "Kontakt-Tag erstellen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Der Farbcode für den Tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact tag",
+          "source": "Update a contact tag",
           "message": "Einen Kontakt-Tag aktualisieren"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Der neue Farbcode für den Tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact tag",
+          "source": "Delete a contact tag",
           "message": "Kontakt-Tag löschen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Tags"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact tags",
+          "source": "List contact tags",
           "message": "Kontakt-Tags auflisten"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact tag",
+          "source": "Get a contact tag",
           "message": "Kontakt-Tag abrufen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Die abzurufende Tag-ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Tag auf Kontakt anwenden"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Die ID des Tags, der auf den Kontakt angewendet werden soll"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Tag von Kontakt entfernen"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {

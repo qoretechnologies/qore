@@ -1696,7 +1696,7 @@
           "message": "Maksymalna liczba wyników wyszukiwania do pobrania z każdego fragmentu dla każdego podzapytania hybrydowego"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Utwórz indeks wektorowy"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

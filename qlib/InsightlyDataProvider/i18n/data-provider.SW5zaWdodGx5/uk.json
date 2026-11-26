@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Створити контакт"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Назва свята (наприклад, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Оновити контакт"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Назва свята (наприклад, `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Видалити контакт"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Значення для зіставлення з `field_name`. Має використовуватися в парі з `field_name`. Спрямовує запит через кінцеву точку Insightly `/Search`."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Отримати контакт"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Унікальний ідентифікатор події календаря для видалення"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List calendar Events",
+          "source": "List calendar events",
           "message": "Отримати список подій календаря"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "ID електронного листа"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {

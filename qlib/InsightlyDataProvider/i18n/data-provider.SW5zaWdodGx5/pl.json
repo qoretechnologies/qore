@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Utwórz kontakt"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Nazwa okazji (np. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "Nazwa okazji (np. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Usuń kontakt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Wartość do dopasowania do `field_name`. Musi być sparowana z `field_name`. Kieruje żądanie przez punkt końcowy `/Search` systemu Insightly."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Pobierz kontakt"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Unikalny identyfikator wydarzenia z kalendarza do usunięcia"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List calendar Events",
+          "source": "List calendar events",
           "message": "Wyświetl listę wydarzeń z kalendarza"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -8456,7 +8456,7 @@
           "message": "Identyfikator wiadomości e-mail"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nowy kontakt"
         },
         "app.SW5zaWdodGx5.action.bmV3LWNvbnRhY3Q.short_desc": {

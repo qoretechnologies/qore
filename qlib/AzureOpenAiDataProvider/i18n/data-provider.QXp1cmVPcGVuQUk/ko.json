@@ -33328,7 +33328,7 @@
           "message": "페이지네이션에 사용할 커서입니다. `before`는 목록에서 위치를 정의하는 객체 ID입니다.\n예를 들어, 목록 요청을 하여 100개의 객체를 받고 마지막이 obj_foo라면,\n이전 페이지를 가져오기 위해 before=obj_foo를 포함할 수 있습니다."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "벡터 저장소 목록"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "페이지네이션에 사용할 커서입니다. `before`는 목록에서 위치를 정의하는 객체 ID입니다.\n예를 들어, 목록 요청을 하여 100개의 객체를 받고 마지막이 obj_foo라면,\n이전 페이지를 가져오기 위해 before=obj_foo를 포함할 수 있습니다."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "벡터 저장소 생성"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

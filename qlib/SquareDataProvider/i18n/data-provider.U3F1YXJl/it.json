@@ -2204,7 +2204,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
+          "source": "New events",
           "message": "Nuovi eventi"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {

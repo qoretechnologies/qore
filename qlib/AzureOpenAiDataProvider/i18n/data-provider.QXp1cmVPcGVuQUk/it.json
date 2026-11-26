@@ -33328,7 +33328,7 @@
           "message": "Un cursore per l'uso nella paginazione. `before` è un ID oggetto che definisce la tua posizione nella lista.\nAd esempio, se fai una richiesta di lista e ricevi 100 oggetti, terminando con obj_foo, la tua\nchiamata successiva può includere before=obj_foo per recuperare la pagina precedente della lista."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "Elenca archivi vettoriali"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "Un cursore per l'uso nella paginazione. `before` è un ID oggetto che definisce la tua posizione nella lista.\nAd esempio, se fai una richiesta di lista e ricevi 100 oggetti, terminando con obj_foo, la tua\nchiamata successiva può includere before=obj_foo per recuperare la pagina precedente della lista."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "Crea archivio vettoriale"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

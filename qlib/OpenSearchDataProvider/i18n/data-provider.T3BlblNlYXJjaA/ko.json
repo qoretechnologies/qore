@@ -1696,7 +1696,7 @@
           "message": "각 하이브리드 하위 쿼리에 대해 각 샤드에서 검색할 최대 검색 결과 수"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "벡터 인덱스 생성"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

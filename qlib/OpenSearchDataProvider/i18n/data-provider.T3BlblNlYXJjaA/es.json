@@ -1696,7 +1696,7 @@
           "message": "Número máximo de resultados de búsqueda a recuperar de cada fragmento para cada subconsulta híbrida"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Crear índice vectorial"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

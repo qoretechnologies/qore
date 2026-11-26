@@ -1696,8 +1696,8 @@
           "message": "Maximum number of search results to retrieve from each shard for each hybrid subquery"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
-          "message": "Create Vector index"
+          "source": "Create vector index",
+          "message": "Create vector index"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
           "source": "Create an OpenSearch vector index",

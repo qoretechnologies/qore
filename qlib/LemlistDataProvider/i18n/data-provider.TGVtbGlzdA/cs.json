@@ -1152,7 +1152,7 @@
           "message": "E-mailová adresa kontaktu k načtení. Lemlist v2 API vyžaduje konkrétní e-mailovou adresu k vyhledání kontaktů."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Získat kontakt"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "E-mailová adresa kontaktu k načtení"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Vytvořit kontakt"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "URL webu přidruženého ke kontaktu"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Aktualizovat kontakt"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Aktualizovaná URL adresa webu pro kontakt"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Smazat kontakt"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "E-mailová adresa kontaktu ke smazání"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "E-mail odeslán"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {

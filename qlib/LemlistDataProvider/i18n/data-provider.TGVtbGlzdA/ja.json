@@ -1152,7 +1152,7 @@
           "message": "取得する連絡先のメールアドレス。Lemlist v2 API では連絡先の検索に特定のメールアドレスが必要です。"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "連絡先の取得"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "取得する連絡先のメールアドレス"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "コンタクトを作成"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "連絡先に関連付けられたWebサイトのURL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "連絡先を更新"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "連絡先の更新後のWebサイトURL"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "連絡先を削除"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "削除する連絡先のメールアドレス"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "メール送信完了"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {

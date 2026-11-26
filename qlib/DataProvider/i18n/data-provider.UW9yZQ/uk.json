@@ -732,7 +732,7 @@
           "message": "Якщо ввімкнено, застосовує просте ковзне середнє до вікна перед обчисленням похідних, зменшуючи шум у швидкості зміни; вимкніть для необроблених швидкостей між точками; за замовчуванням: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Моніторинг стабільності процесу"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

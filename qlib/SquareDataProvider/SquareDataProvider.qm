@@ -1654,7 +1654,7 @@ module SquareDataProvider {
             "path": "/events/" + EVENT_NEW_EVENTS,
             "action": EVENT_NEW_EVENTS,
             "groups": "Triggers",
-            "display_name": "New Events",
+            "display_name": "New events",
             "short_desc": "Trigger when new events occur",
             "desc": "Fires when new events are detected via the Square Events API. "
                 "Supports filtering by event type. Uses polling with 28-day event retention.",

@@ -1228,7 +1228,7 @@
           "message": "恢復定期發票"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "建立聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "關於此聯絡人的內部備註（對客戶不可見）"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "更新聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "關於此聯絡人的內部備註（對客戶不可見）"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "刪除聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "取得聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "依電子郵件地址搜尋聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact status",
+          "source": "Mark contact status",
           "message": "標記聯絡人狀態"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -4020,7 +4020,7 @@
           "message": "檢查新發票的頻率（秒）"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "新聯絡人"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWNvbnRhY3Q.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Utwórz kontakt"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Wartość pola kontaktowego niestandardowego"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Wartość pola kontaktowego niestandardowego"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Usuń kontakt"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Malejąco"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Pobierz kontakt"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Identyfikator kontaktu"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign tag to Contact",
+          "source": "Assign tag to contact",
           "message": "Przypisz tag do kontaktu"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Unikalny identyfikator tagu do przypisania do kontaktu"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Usuń tag z kontaktu"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -876,7 +876,7 @@
           "message": "Identyfikator tagu"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact field",
+          "source": "Create contact field",
           "message": "Utwórz pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Unikalny identyfikator typu slug dla pola niestandardowego kontaktu"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact field",
+          "source": "Update contact field",
           "message": "Zaktualizuj pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "Nowa nazwa wyświetlana dla niestandardowego pola kontaktu"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact field",
+          "source": "Delete contact field",
           "message": "Usuń pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Unikalny identyfikator slug niestandardowego pola kontaktu do usunięcia"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact fields",
+          "source": "List contact fields",
           "message": "Wyświetl listę pól kontaktów"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Malejąco"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact field",
+          "source": "Get contact field",
           "message": "Pobierz pole kontaktu"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Malejąco"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nowy kontakt"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {

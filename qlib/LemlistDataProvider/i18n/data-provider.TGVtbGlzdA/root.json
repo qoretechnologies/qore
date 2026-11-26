@@ -1152,8 +1152,8 @@
           "message": "The email address of the contact to retrieve. The Lemlist v2 API requires a specific email address to look up contacts."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a contact by email",
@@ -1176,8 +1176,8 @@
           "message": "The email address of the contact to retrieve"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
-          "message": "Create Contact"
+          "source": "Create contact",
+          "message": "Create contact"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -1272,8 +1272,8 @@
           "message": "The website URL associated with the contact"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -1368,8 +1368,8 @@
           "message": "Updated website URL for the contact"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -1392,8 +1392,8 @@
           "message": "The email address of the contact to delete"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
-          "message": "Email Sent"
+          "source": "Email sent",
+          "message": "Email sent"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
           "source": "Trigger when an email is sent",

@@ -1152,7 +1152,7 @@
           "message": "Adres e-mail kontaktu do pobrania. Lemlist API v2 wymaga określonego adresu e-mail do wyszukiwania kontaktów."
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Pobierz kontakt"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Adres e-mail kontaktu do pobrania"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Utwórz kontakt"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Adres URL witryny internetowej powiązanej z kontaktem"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Zaktualizuj kontakt"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Zaktualizowany adres URL strony internetowej kontaktu"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Usuń kontakt"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Adres e-mail kontaktu do usunięcia"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "Wiadomość e-mail wysłana"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {

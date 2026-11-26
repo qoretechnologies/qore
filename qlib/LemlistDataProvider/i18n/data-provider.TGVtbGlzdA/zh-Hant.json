@@ -1152,7 +1152,7 @@
           "message": "要擷取之聯絡人的電子郵件地址。Lemlist v2 API 需要特定的電子郵件地址來查詢聯絡人。"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "取得聯絡人"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "要擷取的聯絡人電子郵件地址"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "建立聯絡人"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "與該聯絡人關聯的網站 URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "更新聯絡人"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "聯絡人更新後的網站 URL"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "刪除聯絡人"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "要刪除的聯絡人電子郵件地址"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
-          "source": "Email Sent",
+          "source": "Email sent",
           "message": "電子郵件已發送"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {

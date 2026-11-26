@@ -472,7 +472,7 @@
           "message": "Wartość ID z systemu zdalnego / dostawcy"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.display_name": {
-          "source": "Sensor Events",
+          "source": "Sensor events",
           "message": "Zdarzenia czujnika"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.short_desc": {

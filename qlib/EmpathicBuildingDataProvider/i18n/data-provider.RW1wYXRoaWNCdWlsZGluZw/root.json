@@ -472,8 +472,8 @@
           "message": "An ID value from the remote / vendor system"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.display_name": {
-          "source": "Sensor Events",
-          "message": "Sensor Events"
+          "source": "Sensor events",
+          "message": "Sensor events"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.short_desc": {
           "source": "Watch for events on a particular Empathic Building sensor",

@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
+          "source": "Create contact",
           "message": "Crear contacto"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -448,7 +448,7 @@
           "message": "El valor del campo de contacto personalizado"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
+          "source": "Update contact",
           "message": "Actualizar contacto"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -568,7 +568,7 @@
           "message": "El valor del campo de contacto personalizado"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
+          "source": "Delete contact",
           "message": "Eliminar contacto"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Descendente"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
+          "source": "Get contact",
           "message": "Obtener contacto"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -656,7 +656,7 @@
           "message": "El ID del contacto"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign tag to Contact",
+          "source": "Assign tag to contact",
           "message": "Asignar etiqueta a contacto"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "El identificador único de la etiqueta que se asignará al contacto"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Eliminar etiqueta de contacto"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -876,7 +876,7 @@
           "message": "El ID de la etiqueta"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact field",
+          "source": "Create contact field",
           "message": "Crear campo de contacto"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "El identificador slug único para el campo personalizado de contacto"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact field",
+          "source": "Update contact field",
           "message": "Actualizar campo de contacto"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "El nuevo nombre para mostrar para el campo de contacto personalizado"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact field",
+          "source": "Delete contact field",
           "message": "Eliminar campo de contacto"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "El identificador slug único del campo de contacto personalizado que se va a eliminar"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact fields",
+          "source": "List contact fields",
           "message": "Listar campos de contacto"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Descendente"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact field",
+          "source": "Get contact field",
           "message": "Obtener campo de contacto"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "Descendente"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Nuevo contacto"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {

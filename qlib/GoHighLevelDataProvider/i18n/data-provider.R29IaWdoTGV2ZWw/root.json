@@ -388,8 +388,8 @@
           "message": "Maximum number of results to return"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -408,8 +408,8 @@
           "message": "The contact ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -660,8 +660,8 @@
           "message": "The unique identifier of the custom field"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -920,8 +920,8 @@
           "message": "The unique identifier of the custom field"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -940,8 +940,8 @@
           "message": "The contact to delete"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a campaign",
-          "message": "Add a Contact to a campaign"
+          "source": "Add a contact to a campaign",
+          "message": "Add a contact to a campaign"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
           "source": "Add a contact to a campaign",
@@ -972,8 +972,8 @@
           "message": "The ID of the campaign to add the contact to"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a campaign",
-          "message": "Remove a Contact from a campaign"
+          "source": "Remove a contact from a campaign",
+          "message": "Remove a contact from a campaign"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
           "source": "Remove a contact from a campaign",
@@ -1004,8 +1004,8 @@
           "message": "The ID of the campaign to remove the contact from"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a note to the Contact",
-          "message": "Add a note to the Contact"
+          "source": "Add a note to the contact",
+          "message": "Add a note to the contact"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
           "source": "Add a note to a contact",
@@ -1724,8 +1724,8 @@
           "message": "The ID of the task to delete"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",

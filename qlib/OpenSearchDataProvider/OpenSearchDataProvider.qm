@@ -180,7 +180,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/vector-index/create",
             "action": "create-vector-index",
-            "display_name": "Create Vector index",
+            "display_name": "Create vector index",
             "short_desc": "Create an OpenSearch vector index",
             "desc": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add "
                 "optional text and keyword metadata fields for combined lexical, structured, and vector search.",

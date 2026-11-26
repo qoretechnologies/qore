@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create Contact",
-          "message": "Create Contact"
+          "source": "Create contact",
+          "message": "Create contact"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -448,8 +448,8 @@
           "message": "The value of the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update Contact",
-          "message": "Update Contact"
+          "source": "Update contact",
+          "message": "Update contact"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -568,8 +568,8 @@
           "message": "The value of the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete Contact",
-          "message": "Delete Contact"
+          "source": "Delete contact",
+          "message": "Delete contact"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -636,8 +636,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get Contact",
-          "message": "Get Contact"
+          "source": "Get contact",
+          "message": "Get contact"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -656,8 +656,8 @@
           "message": "The contact ID"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign tag to Contact",
-          "message": "Assign tag to Contact"
+          "source": "Assign tag to contact",
+          "message": "Assign tag to contact"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Assign a tag to a contact",
@@ -692,8 +692,8 @@
           "message": "The unique identifier of the tag to assign to the contact"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove tag from Contact",
-          "message": "Remove tag from Contact"
+          "source": "Remove tag from contact",
+          "message": "Remove tag from contact"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Remove a tag from a contact",
@@ -876,8 +876,8 @@
           "message": "The tag ID"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact field",
-          "message": "Create Contact field"
+          "source": "Create contact field",
+          "message": "Create contact field"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Create a custom contact field",
@@ -912,8 +912,8 @@
           "message": "The unique slug identifier for the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact field",
-          "message": "Update Contact field"
+          "source": "Update contact field",
+          "message": "Update contact field"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Update a custom contact field",
@@ -948,8 +948,8 @@
           "message": "The new display name for the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact field",
-          "message": "Delete Contact field"
+          "source": "Delete contact field",
+          "message": "Delete contact field"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Delete a custom contact field",
@@ -972,8 +972,8 @@
           "message": "The unique slug identifier of the custom contact field to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact fields",
-          "message": "List Contact fields"
+          "source": "List contact fields",
+          "message": "List contact fields"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
           "source": "List custom contact fields",
@@ -1016,8 +1016,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact field",
-          "message": "Get Contact field"
+          "source": "Get contact field",
+          "message": "Get contact field"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Get a single contact field by slug",
@@ -1436,8 +1436,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",

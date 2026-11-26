@@ -732,7 +732,7 @@
           "message": "啟用時，在計算導數之前先對視窗套用簡單移動平均線，減少變化率中的雜訊；停用則使用原始點對點變化率；預設值：`True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "監控程序穩定性"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

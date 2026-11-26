@@ -33328,7 +33328,7 @@
           "message": "ページネーションで使用するカーソルです。`before` はリスト内の位置を定義するオブジェクトIDです。\n例えば、リストリクエストで100件のオブジェクトを受け取り、最後が obj_foo の場合、\n次の呼び出しで before=obj_foo を指定するとリストの前のページを取得できます。"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "ベクターストアの一覧"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "ページネーションで使用するカーソルです。`before` はリスト内の位置を定義するオブジェクトIDです。\n例えば、リストリクエストで100件のオブジェクトを受け取り、最後が obj_foo の場合、\n次の呼び出しで before=obj_foo を指定するとリストの前のページを取得できます。"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "ベクトルストアを作成"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

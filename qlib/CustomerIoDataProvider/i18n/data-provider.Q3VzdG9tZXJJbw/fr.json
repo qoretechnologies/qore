@@ -664,7 +664,7 @@
           "message": "Nombre de résultats par page"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Obtenir le segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "L'ID unique de segment Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment people",
+          "source": "Get segment people",
           "message": "Obtenir les personnes du segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "Liste des hachages d'identifiants à déconnecter de l'objet"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch email Sent",
+          "source": "Watch email sent",
           "message": "Surveiller les e-mails envoyés"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Recevoir une notification lorsqu'un destinataire se désabonne via un e-mail de Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
+          "source": "Watch SMS sent",
           "message": "Surveiller les SMS envoyés"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Recevoir une notification lorsqu'un lien dans un message SMS est cliqué via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch push Sent",
+          "source": "Watch push sent",
           "message": "Surveiller les notifications push envoyées"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Recevoir une notification en cas d'échec d'envoi d'une notification push via Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
+          "source": "Watch Slack sent",
           "message": "Surveiller les messages Slack envoyés"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {

@@ -209,7 +209,7 @@ module GoogleCalendarDataProvider {
                 },
             },
             "action": "list-events",
-            "display_name": "List Events",
+            "display_name": "List events",
             "short_desc": "List events in a calendar",
             "desc": "List events in a calendar; the result can be restricted to a time window, filtered with "
                 "free-text search terms, and paged with `maxResults` and `pageToken`",

@@ -732,7 +732,7 @@
           "message": "Při povolení aplikuje před výpočtem derivací na okno jednoduchý klouzavý průměr, což snižuje šum v rychlosti změny; zakažte pro nezpracované bodové rychlosti; výchozí hodnota: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Sledovat stabilitu procesu"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

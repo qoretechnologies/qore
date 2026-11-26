@@ -732,7 +732,7 @@
           "message": "Gdy ta opcja jest włączona, stosuje prostą średnią kroczącą w oknie przed obliczeniem pochodnych, redukując szum w tempie zmian; wyłącz dla surowych wskaźników punkt-punkt; domyślnie: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Monitoruj stabilność procesu"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

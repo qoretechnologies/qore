@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "連絡先を作成"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "連絡先のタイムゾーン"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "連絡先を更新"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "連絡先のタイムゾーン"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "連絡先を削除"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -784,7 +784,7 @@
           "message": "最大結果数"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "連絡先を取得"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "削除するタグ"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "連絡先にタグを適用"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "整数タグIDのリスト"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "連絡先からタグを削除"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {

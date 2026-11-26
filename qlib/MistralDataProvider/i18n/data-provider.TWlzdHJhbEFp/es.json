@@ -11340,7 +11340,7 @@
           "message": "El valor de `schedule_id` para esta operación."
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.display_name": {
-          "source": "Get workflow Events",
+          "source": "Get workflow events",
           "message": "Obtener Eventos del Flujo de Trabajo"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.short_desc": {
@@ -29644,7 +29644,7 @@
           "message": "Devolver el plan de la organización e indicar si el pago por uso está habilitado. Lea el plan y los presupuestos de la organización.\n\n**Vista previa pública:** La disponibilidad depende de tu cuenta y permisos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcXVlcnktdXNhZ2U.display_name": {
-          "source": "Query detailed usage (Admin)",
+          "source": "Query detailed usage (admin)",
           "message": "Consultar Uso Detallado (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tcXVlcnktdXNhZ2U.short_desc": {
@@ -30048,7 +30048,7 @@
           "message": "Incluir el número de llamadas a la API distintas en las filas agrupadas y los agregados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2Vycw.display_name": {
-          "source": "List users (Admin)",
+          "source": "List users (admin)",
           "message": "Listar Usuarios (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2Vycw.short_desc": {
@@ -30108,7 +30108,7 @@
           "message": "Devolver también los miembros desactivados y bloqueados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXJz.display_name": {
-          "source": "Create users (Admin)",
+          "source": "Create users (admin)",
           "message": "Crear Usuarios (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXJz.short_desc": {
@@ -30240,7 +30240,7 @@
           "message": "Puestos de producto que se asignarán al usuario."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4taW52aXRlLXVzZXJz.display_name": {
-          "source": "Invite users (Admin)",
+          "source": "Invite users (admin)",
           "message": "Invitar Usuarios (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4taW52aXRlLXVzZXJz.short_desc": {
@@ -30444,7 +30444,7 @@
           "message": "IDs de los espacios de trabajo a los que deben unirse los usuarios invitados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1pbnZpdGF0aW9ucw.display_name": {
-          "source": "List invitations (Admin)",
+          "source": "List invitations (admin)",
           "message": "Listar Invitaciones (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1pbnZpdGF0aW9ucw.short_desc": {
@@ -30720,7 +30720,7 @@
           "message": "Número máximo de resultados por página."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1yb2xlcw.display_name": {
-          "source": "List roles (Admin)",
+          "source": "List roles (admin)",
           "message": "Listar Roles (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1yb2xlcw.short_desc": {
@@ -30732,7 +30732,7 @@
           "message": "Listar los roles de la organización y de los espacios de trabajo. Gestione los miembros, las invitaciones y los roles de la organización. Requiere una clave de API de administrador.\n\n**Vista previa pública:** La disponibilidad depende de tu cuenta y permisos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List workspaces (Admin)",
+          "source": "List workspaces (admin)",
           "message": "Listar Espacios de Trabajo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC13b3Jrc3BhY2Vz.short_desc": {
@@ -30792,7 +30792,7 @@
           "message": "Término de búsqueda para filtrar los espacios de trabajo por nombre."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create workspace (Admin)",
+          "source": "Create workspace (admin)",
           "message": "Crear Espacio de Trabajo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -31292,7 +31292,7 @@
           "message": "ID de usuario del miembro del espacio de trabajo."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXJhdGUtbGltaXRz.display_name": {
-          "source": "Get rate limits (Admin)",
+          "source": "Get rate limits (admin)",
           "message": "Obtener Límites de Tasa (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXJhdGUtbGltaXRz.short_desc": {
@@ -31304,7 +31304,7 @@
           "message": "Obtener límites de tasa. Lea el uso y gestione los límites de gasto y de tasa de la organización. Requiere una clave de API de administrador.\n\n**Vista previa pública:** La disponibilidad depende de tu cuenta y permisos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNwZW5kLWxpbWl0cw.display_name": {
-          "source": "Get spend limits (Admin)",
+          "source": "Get spend limits (admin)",
           "message": "Obtener Límites de Gasto (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXNwZW5kLWxpbWl0cw.short_desc": {
@@ -31316,7 +31316,7 @@
           "message": "Obtener los límites de uso, de tasa y de trabajos de la organización. Lea el uso y gestione los límites de gasto y de tasa de la organización. Requiere una clave de API de administrador.\n\n**Vista previa pública:** La disponibilidad depende de tu cuenta y permisos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXNwZW5kLWxpbWl0cw.display_name": {
-          "source": "Update spend limits (Admin)",
+          "source": "Update spend limits (admin)",
           "message": "Actualizar Límites de Gasto (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tdXBkYXRlLXNwZW5kLWxpbWl0cw.short_desc": {
@@ -31352,7 +31352,7 @@
           "message": "Indica si se debe eliminar el límite de uso mensual."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LW1vbnRobHktdXNhZ2U.display_name": {
-          "source": "Get monthly usage (Admin)",
+          "source": "Get monthly usage (admin)",
           "message": "Obtener Uso Mensual (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LW1vbnRobHktdXNhZ2U.short_desc": {
@@ -31424,7 +31424,7 @@
           "message": "Unión Europea"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List audit logs (Admin)",
+          "source": "List audit logs (admin)",
           "message": "Listar Registros de Auditoría (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -31540,7 +31540,7 @@
           "message": "Número máximo de resultados que se devolverán."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3Vwcw.display_name": {
-          "source": "List user groups (Admin)",
+          "source": "List user groups (admin)",
           "message": "Listar Grupos de Usuarios (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC11c2VyLWdyb3Vwcw.short_desc": {
@@ -31664,7 +31664,7 @@
           "message": "Miembro"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXItZ3JvdXA.display_name": {
-          "source": "Create user group (Admin)",
+          "source": "Create user group (admin)",
           "message": "Crear Grupo de Usuarios (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLXVzZXItZ3JvdXA.short_desc": {
@@ -32180,7 +32180,7 @@
           "message": "Rol de organización que se asignará al grupo: un nombre de rol (`member`, `billing_manager`, `organization_admin`) o un UUID de rol."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hcGkta2V5cw.display_name": {
-          "source": "List API keys (Admin)",
+          "source": "List API keys (admin)",
           "message": "Listar Claves de API (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tbGlzdC1hcGkta2V5cw.short_desc": {
@@ -32228,7 +32228,7 @@
           "message": "Filtrar las claves de API por una subcadena del nombre o por los últimos 4 caracteres de la clave. La coincidencia no distingue entre mayúsculas y minúsculas ni entre caracteres acentuados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLWFwaS1rZXk.display_name": {
-          "source": "Create API key (Admin)",
+          "source": "Create API key (admin)",
           "message": "Crear Clave de API (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tY3JlYXRlLWFwaS1rZXk.short_desc": {
@@ -32312,7 +32312,7 @@
           "message": "ID de la clave de API."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tc3RhcnQtc2NpbS1zeW5j.display_name": {
-          "source": "Start SCIM synchronization (Admin)",
+          "source": "Start SCIM synchronization (admin)",
           "message": "Iniciar Sincronización SCIM (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tc3RhcnQtc2NpbS1zeW5j.short_desc": {
@@ -32432,7 +32432,7 @@
           "message": "Identificador de la ejecución de sincronización SCIM."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (Admin)",
+          "source": "Get vibe work usage by user (admin)",
           "message": "Obtener Uso de Vibe Work por Usuario (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "Fin de la ventana consultada, como marca de tiempo Unix en segundos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (Admin)",
+          "source": "Get vibe work usage by agent (admin)",
           "message": "Obtener Uso de Vibe Work por Agente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "Fin de la ventana consultada, como marca de tiempo Unix en segundos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (Admin)",
+          "source": "Get vibe work usage over time (admin)",
           "message": "Obtener Uso de Vibe Work a lo Largo del Tiempo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "Mes"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (Admin)",
+          "source": "Get vibe code usage by workspace (admin)",
           "message": "Obtener Uso de Vibe Code por Espacio de Trabajo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "ID del espacio de trabajo para filtrar los resultados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (Admin)",
+          "source": "Get vibe code usage by organization (admin)",
           "message": "Obtener Uso de Vibe Code por Organización (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

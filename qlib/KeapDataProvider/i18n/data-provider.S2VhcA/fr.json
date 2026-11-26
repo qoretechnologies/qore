@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Créer un contact"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -524,7 +524,7 @@
           "message": "Fuseau horaire du contact"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Mettre à jour un contact"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Fuseau horaire du contact"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Supprimer un contact"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Résultats maximums"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Obtenir un contact"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "L'étiquette à supprimer"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply tag to Contact",
+          "source": "Apply tag to contact",
           "message": "Appliquer une étiquette au contact"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Liste d'ID de tag entiers"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove tag from Contact",
+          "source": "Remove tag from contact",
           "message": "Supprimer le tag du contact"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {

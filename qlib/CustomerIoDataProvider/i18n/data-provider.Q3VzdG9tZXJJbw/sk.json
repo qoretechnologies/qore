@@ -664,7 +664,7 @@
           "message": "Počet výsledkov na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Získať segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Jedinečné ID segmentu v Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment people",
+          "source": "Get segment people",
           "message": "Získať ľudí v segmente"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "Zoznam hashov identifikátorov na odpojenie od objektu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch email Sent",
+          "source": "Watch email sent",
           "message": "Sledovať odoslanie e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Prijať oznámenie, keď sa príjemca odhlási prostredníctvom e-mailu z Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
+          "source": "Watch SMS sent",
           "message": "Sledovať odoslanie SMS"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Prijať oznámenie, keď dôjde ku kliknutiu na odkaz v SMS správe cez Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch push Sent",
+          "source": "Watch push sent",
           "message": "Sledovať odoslanie push notifikácie"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Prijatie oznámenia, keď sa nepodarí odoslať push notifikáciu cez Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
+          "source": "Watch Slack sent",
           "message": "Sledovať odoslania v Slacku"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {

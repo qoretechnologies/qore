@@ -732,7 +732,7 @@
           "message": "Wenn aktiviert, wird vor der Berechnung von Ableitungen ein einfacher gleitender Durchschnitt über das Fenster angewendet, wodurch das Rauschen in der Änderungsrate reduziert wird; deaktivieren für rohe Punkt-zu-Punkt-Raten; Standardwert: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Prozessstabilität überwachen"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

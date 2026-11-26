@@ -732,7 +732,7 @@
           "message": "Cuando está habilitado, aplica una media móvil simple sobre la ventana antes de calcular las derivadas, reduciendo el ruido en la tasa de cambio; desactívelo para tasas directas punto a punto; predeterminado: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "Supervisar estabilidad del proceso"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

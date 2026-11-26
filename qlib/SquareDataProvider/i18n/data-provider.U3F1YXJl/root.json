@@ -2204,8 +2204,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
-          "message": "New Events"
+          "source": "New events",
+          "message": "New events"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
           "source": "Trigger when new events occur",

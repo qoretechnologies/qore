@@ -2475,7 +2475,7 @@
           "message": "対象となるレコードを選択するメタデータフィルター。Pinecone 独自のフィルター言語で記述します — フィールド名から条件へのハッシュです:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\n演算子は `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$in`、`$nin`、`$exists`、および `$and` / `$or` です。  [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata) を参照してください。"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "ベクトルで検索"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

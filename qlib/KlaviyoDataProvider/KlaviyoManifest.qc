@@ -789,7 +789,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/segments",
                 "operation_id": "create_segment",
-                "display_name": "Create Segment",
+                "display_name": "Create segment",
                 "short_desc": "Creates a new segment",
                 "desc": "Creates a segment.\n\n"
                     "`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is "
@@ -1231,7 +1231,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/events",
                 "operation_id": "get_events",
-                "display_name": "List Events",
+                "display_name": "List events",
                 "short_desc": "Lists events",
                 "desc": "Lists the events recorded in the account, newest first by default.\n\n"
                     "This listing is exported so that the event picker on other actions has values to "

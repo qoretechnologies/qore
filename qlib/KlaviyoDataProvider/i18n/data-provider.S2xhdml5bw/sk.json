@@ -1936,7 +1936,7 @@
           "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
+          "source": "Create segment",
           "message": "Vytvoriť segment"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
@@ -9784,7 +9784,7 @@
           "message": "ID kampane, ktorá sa má odoslať"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Zobraziť udalosti"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
@@ -10228,7 +10228,7 @@
           "message": "Zoznam, z ktorého sa má štítok odstrániť"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add tag to Segment",
+          "source": "Add tag to segment",
           "message": "Pridať značku do segmentu"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
@@ -10264,7 +10264,7 @@
           "message": "Segment, ktorý sa má označiť"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove tag from Segment",
+          "source": "Remove tag from segment",
           "message": "Odstrániť štítok zo segmentu"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {

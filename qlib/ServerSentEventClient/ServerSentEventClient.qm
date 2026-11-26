@@ -83,7 +83,7 @@ module ServerSentEventClient {
             "app": ServerSentEventClient::AppName,
             "path": "/",
             "action": "msg-received",
-            "display_name": "Server Sent event (SSE) message",
+            "display_name": "Server sent event (SSE) message",
             "short_desc": "A Server Sent Event (SSE) is received",
             "desc": "Receive a Server Sent Event (SSE) message",
             "action_code": DPAT_EVENT,

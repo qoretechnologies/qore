@@ -732,7 +732,7 @@
           "message": "有効にすると、微分を計算する前にウィンドウ全体に単純移動平均を適用して変化率のノイズを低減します。生のポイント間レートを取得する場合は無効にします。デフォルト: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor process Stability",
+          "source": "Monitor process stability",
           "message": "プロセスの安定性を監視"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {

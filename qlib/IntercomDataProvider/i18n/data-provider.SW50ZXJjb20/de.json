@@ -1828,7 +1828,7 @@
           "message": "Optionale Metadaten zum Ereignis."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List data Events",
+          "source": "List data events",
           "message": "Datenereignisse auflisten"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {

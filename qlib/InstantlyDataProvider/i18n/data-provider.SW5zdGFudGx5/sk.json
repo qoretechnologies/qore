@@ -3640,7 +3640,7 @@
           "message": "Získať informácie o aktuálnom pracovnom priestore."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get workspace Admin",
+          "source": "Get workspace admin",
           "message": "Získať správcu pracovného priestoru"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {

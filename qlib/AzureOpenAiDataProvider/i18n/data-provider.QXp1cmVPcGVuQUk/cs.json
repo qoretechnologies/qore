@@ -33328,7 +33328,7 @@
           "message": "Kurzor pro stránkování. `before` je ID objektu, které určuje vaše místo v seznamu.\nNapříklad pokud provedete požadavek na seznam a obdržíte 100 objektů, končících na obj_foo,\nvaše následující volání může obsahovat before=obj_foo pro načtení předchozí stránky seznamu."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "Seznam vektorových úložišť"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "Kurzor pro stránkování. `before` je ID objektu, které určuje vaše místo v seznamu.\nNapříklad pokud provedete požadavek na seznam a obdržíte 100 objektů, končících na obj_foo,\nvaše následující volání může obsahovat before=obj_foo pro načtení předchozí stránky seznamu."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "Vytvořit úložiště vektorů"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

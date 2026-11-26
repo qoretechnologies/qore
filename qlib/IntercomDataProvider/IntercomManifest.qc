@@ -780,7 +780,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/events",
                 "operation_id": "lisDataEvents",
-                "display_name": "List data Events",
+                "display_name": "List data events",
                 "short_desc": "Summarise the data events recorded for one contact",
                 "desc": "Returns a summary of the data events recorded for **one contact**.\n\n"
                     "This is not a listing of the workspace's events: `filter` names the contact - by "

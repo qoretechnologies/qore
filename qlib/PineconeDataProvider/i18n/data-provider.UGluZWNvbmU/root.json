@@ -2476,8 +2476,8 @@
           "message": "A metadata filter selecting which records apply, written in Pinecone's own filter language — a hash of field names to conditions:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nThe operators are `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` and `$and` / `$or`.  See [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
-          "message": "Search with a Vector"
+          "source": "Search with a vector",
+          "message": "Search with a vector"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {
           "source": "Find the records most similar to a query vector",

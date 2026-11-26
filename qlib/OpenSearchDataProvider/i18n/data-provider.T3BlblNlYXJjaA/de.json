@@ -1696,7 +1696,7 @@
           "message": "Maximale Anzahl von Suchergebnissen, die für jede hybride Unterabfrage von jedem Shard abgerufen werden sollen"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Vektorindex erstellen"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

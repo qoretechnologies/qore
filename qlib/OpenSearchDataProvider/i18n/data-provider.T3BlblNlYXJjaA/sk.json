@@ -1696,7 +1696,7 @@
           "message": "Maximálny počet výsledkov vyhľadávania na získanie z každého shardu pre každý hybridný subdopyt"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Vytvoriť vektorový index"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

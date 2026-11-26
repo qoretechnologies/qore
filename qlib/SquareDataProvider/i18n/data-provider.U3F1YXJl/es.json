@@ -2204,7 +2204,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
-          "source": "New Events",
+          "source": "New events",
           "message": "Nuevos eventos"
         },
         "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {

@@ -1828,8 +1828,8 @@
           "message": "Optional metadata about the event."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List data Events",
-          "message": "List data Events"
+          "source": "List data events",
+          "message": "List data events"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
           "source": "Summarise the data events recorded for one contact",

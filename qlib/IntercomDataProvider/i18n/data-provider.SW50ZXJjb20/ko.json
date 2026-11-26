@@ -1828,7 +1828,7 @@
           "message": "이벤트에 대한 선택적 메타데이터입니다."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List data Events",
+          "source": "List data events",
           "message": "데이터 이벤트 목록 조회"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {

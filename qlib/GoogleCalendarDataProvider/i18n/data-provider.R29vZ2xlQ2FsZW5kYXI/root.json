@@ -472,8 +472,8 @@
           "message": "The calendar to add the event to"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
-          "message": "List Events"
+          "source": "List events",
+          "message": "List events"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
           "source": "List events in a calendar",

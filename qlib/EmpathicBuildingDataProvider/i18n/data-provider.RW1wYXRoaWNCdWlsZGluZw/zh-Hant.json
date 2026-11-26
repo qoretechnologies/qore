@@ -472,7 +472,7 @@
           "message": "來自遠端／供應商系統的 ID 值"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.display_name": {
-          "source": "Sensor Events",
+          "source": "Sensor events",
           "message": "感測器事件"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.short_desc": {

@@ -1696,7 +1696,7 @@
           "message": "Nombre maximal de résultats de recherche à récupérer depuis chaque shard pour chaque sous-requête hybride"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "Créer un index vectoriel"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

@@ -1936,8 +1936,8 @@
           "message": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
-          "message": "Create Segment"
+          "source": "Create segment",
+          "message": "Create segment"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
           "source": "Creates a new segment",
@@ -9784,8 +9784,8 @@
           "message": "The ID of the campaign to send"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
-          "message": "List Events"
+          "source": "List events",
+          "message": "List events"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
           "source": "Lists events",
@@ -10228,8 +10228,8 @@
           "message": "The list to remove the tag from"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add tag to Segment",
-          "message": "Add tag to Segment"
+          "source": "Add tag to segment",
+          "message": "Add tag to segment"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
           "source": "Adds an existing tag to a segment",
@@ -10264,8 +10264,8 @@
           "message": "The segment to tag"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove tag from Segment",
-          "message": "Remove tag from Segment"
+          "source": "Remove tag from segment",
+          "message": "Remove tag from segment"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {
           "source": "Removes a tag from a segment",

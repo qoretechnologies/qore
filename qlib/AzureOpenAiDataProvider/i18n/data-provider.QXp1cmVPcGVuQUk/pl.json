@@ -33328,7 +33328,7 @@
           "message": "Kursor do użycia w paginacji. `before` to identyfikator obiektu definiujący Twoje miejsce na liście.\nNa przykład, jeśli wykonasz żądanie listy i otrzymasz 100 obiektów, kończących się na obj_foo,\nTwoje kolejne wywołanie może zawierać before=obj_foo, aby pobrać poprzednią stronę listy."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "Lista sklepów wektorowych"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "Kursor do użycia w paginacji. `before` to identyfikator obiektu definiujący Twoje miejsce na liście.\nNa przykład, jeśli wykonasz żądanie listy i otrzymasz 100 obiektów, kończących się na obj_foo,\nTwoje kolejne wywołanie może zawierać before=obj_foo, aby pobrać poprzednią stronę listy."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "Utwórz magazyn wektorów"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

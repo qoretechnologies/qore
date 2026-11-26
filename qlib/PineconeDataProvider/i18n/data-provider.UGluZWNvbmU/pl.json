@@ -2475,7 +2475,7 @@
           "message": "Filtr metadanych wybierający, których rekordów to dotyczy, zapisany we własnym języku filtrów Pinecone — skrót odwzorowujący nazwy pól na warunki:\n\n```json\n{\"genre\": {\"$in\": [\"comedy\", \"drama\"]}, \"year\": {\"$eq\": 2019}}\n```\n\nOperatory to `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists` oraz `$and` / `$or`.  Zobacz [Understanding metadata](https://docs.pinecone.io/guides/index-data/indexing-overview#metadata)."
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.display_name": {
-          "source": "Search with a Vector",
+          "source": "Search with a vector",
           "message": "Wyszukaj za pomocą wektora"
         },
         "app.UGluZWNvbmU.action.cXVlcnktdmVjdG9ycw.short_desc": {

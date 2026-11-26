@@ -1726,7 +1726,7 @@ module InstantlyDataProvider {
             "path": "/get-workspace-admin",
             "action": "get-workspace-admin",
             "groups": "Workspace",
-            "display_name": "Get workspace Admin",
+            "display_name": "Get workspace admin",
             "short_desc": "Get workspace admin information",
             "desc": "Retrieve administrative information about the workspace.",
             "action_code": DPAT_API,

@@ -2336,8 +2336,8 @@
           "message": "Number of webhooks per page (1-100, default `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search webhook Events",
-          "message": "Search webhook Events"
+          "source": "Search webhook events",
+          "message": "Search webhook events"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
           "source": "List delivery events for a webhook",

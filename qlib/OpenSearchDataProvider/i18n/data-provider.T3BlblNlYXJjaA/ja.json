@@ -1696,7 +1696,7 @@
           "message": "各ハイブリッドサブクエリに対して各シャードから取得する検索結果の最大数"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector index",
+          "source": "Create vector index",
           "message": "ベクトルインデックスの作成"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {

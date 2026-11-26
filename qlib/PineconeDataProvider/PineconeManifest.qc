@@ -1389,7 +1389,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/query",
                 "operation_id": "queryVectors",
-                "display_name": "Search with a Vector",
+                "display_name": "Search with a vector",
                 "short_desc": "Find the records most similar to a query vector",
                 "desc": "Searches a namespace with a query vector and returns the most similar records "
                     "with their scores.\n\n"

@@ -472,7 +472,7 @@
           "message": "L'agenda auquel ajouter l'événement"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Lister les événements"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {

@@ -33328,7 +33328,7 @@
           "message": "Курсор для використання в пагінації. `before` — це ідентифікатор об’єкта, який визначає ваше місце у списку.\nНаприклад, якщо ви робите запит списку і отримуєте 100 об’єктів, останній з яких obj_foo,\nваш наступний виклик може включати before=obj_foo, щоб отримати попередню сторінку списку."
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.display_name": {
-          "source": "List Vector stores",
+          "source": "List vector stores",
           "message": "Список векторних сховищ"
         },
         "app.QXp1cmVPcGVuQUk.action.bGlzdC12ZWN0b3Itc3RvcmVz.short_desc": {
@@ -33416,7 +33416,7 @@
           "message": "Курсор для використання в пагінації. `before` — це ідентифікатор об’єкта, який визначає ваше місце у списку.\nНаприклад, якщо ви робите запит списку і отримуєте 100 об’єктів, останній з яких obj_foo,\nваш наступний виклик може включати before=obj_foo, щоб отримати попередню сторінку списку."
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.display_name": {
-          "source": "Create Vector store",
+          "source": "Create vector store",
           "message": "Створити сховище векторів"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXZlY3Rvci1zdG9yZQ.short_desc": {

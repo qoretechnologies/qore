@@ -1828,7 +1828,7 @@
           "message": "Métadonnées facultatives sur l'événement."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List data Events",
+          "source": "List data events",
           "message": "Lister les événements de données"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
