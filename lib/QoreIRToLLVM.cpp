@@ -20132,9 +20132,9 @@ llvm::Value* QoreIRToLLVM::prepareAutoLocalStringAppend(const QoreIRInstruction&
         }
         llvm::Value* ref_operand;
         if (ir_only && local_allocas.count(key)) {
-            // raw local cache: the reference that an IR-only local holds (see QoreIRFunction::reference_slot_locals)
             auto operand_fn = module.getOrInsertFunction("qore_rt_auto_local_add_operand",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            // raw local cache: the reference that an IR-only local holds (see QoreIRFunction::reference_slot_locals)
             ref_operand = builder->CreateCall(operand_fn,
                 {lhs, builder->CreateLoad(i64_type, local_allocas.find(key)->second.storage())});
         } else if (aot_mode) {
