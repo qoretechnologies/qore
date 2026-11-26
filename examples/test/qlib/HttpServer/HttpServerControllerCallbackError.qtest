@@ -26,9 +26,7 @@
 class HttpServerControllerCallbackErrorTest inherits QUnit::Test {
     private {
         #! The child script; its argument selects how the server and the controller's logger are created
-        const ChildScript = "%%new-style
-%%require-types
-%%strict-args
+        const ChildScript = "%%modern
 %%prepend-module-path \"%s\"
 %%requires Logger
 %%requires HttpServerUtil
@@ -144,7 +142,7 @@ main();
     #! Runs the child script in the given mode; returns its standard output and error output
     private hash<auto> run(string mode) {
         string err_file = sprintf("%s/%s.err", tmp.path, mode);
-        string out = backquote(sprintf("%s %s %s 2>%s", qore_bin, script, mode, err_file));
+        string out = backquote(sprintf("'%s' --enable-debug '%s' %s 2>'%s'", qore_bin, script, mode, err_file));
         return {
             "out": out,
             "err": ReadOnlyFile::readTextFile(err_file),

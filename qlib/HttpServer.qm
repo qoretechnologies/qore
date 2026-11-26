@@ -949,12 +949,12 @@ public hashdecl HttpServerOptionInfo {
     date ttl = 0s;
 
     #! HTTP server logger
-    /** The process-wide async I/O controller (see @ref AsyncSocketIo::getGlobalAsyncIoController()) also logs through
-        this logger while the server runs (see
+    /** If given, the process-wide async I/O controller (see @ref AsyncSocketIo::getGlobalAsyncIoController()) also
+        logs through this logger while the server runs (see
         @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()"); when the server stops, the
         controller gets back the logger it had before, unless its logger has been replaced since.  The controller has
         one logger for the whole process: with more than one server running, it logs through the logger of the server
-        created last of them.
+        created last of those created with a logger.
 
         Without a logger, the server logs through a logger that has no appender, which discards its messages, and the
         controller's logger is left as it is, so that the controller's messages, such as the exception of a callback,
