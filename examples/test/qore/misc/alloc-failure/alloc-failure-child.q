@@ -169,6 +169,13 @@ int sub index_objects(int n) {
     return l.size();
 }
 
+#! stores a new object in a new key of a hash
+int sub hash_objects(int n) {
+    hash<auto> h = {};
+    h."key" = new Counted();
+    return h.size() + n - 1;
+}
+
 #! grows a list in a method
 class Grower {
     int grow(int n) {
@@ -314,14 +321,21 @@ class AllocFailureChild {
             push_objects(10);
             map_objects(10);
             index_objects(10);
+            hash_objects(10);
         }
-        foreach string name in (("push", "map", "index")) {
+        foreach string name in (("push", "map", "index", "hash")) {
             try {
-                fail_next_allocation();
+                if (name == "hash") {
+                    # the member of the key is the first allocation that follows
+                    call_function("dbg_fail_allocation", 1, 1);
+                } else {
+                    fail_next_allocation();
+                }
                 switch (name) {
                     case "push": push_objects(100000); break;
                     case "map": map_objects(100000); break;
                     case "index": index_objects(100000); break;
+                    case "hash": hash_objects(100000); break;
                 }
                 printf("%s: no exception\n", name);
             } catch (hash<ExceptionInfo> ex) {

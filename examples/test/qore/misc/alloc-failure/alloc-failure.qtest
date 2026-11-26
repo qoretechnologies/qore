@@ -181,7 +181,7 @@ class AllocFailureTest inherits QUnit::Test {
             }
         }
         string expected;
-        foreach string name in (("push", "map", "index")) {
+        foreach string name in (("push", "map", "index", "hash")) {
             expected += sprintf("%s: caught MEMORY-ALLOCATION-ERROR\n%s: balanced: True\n", name, name);
         }
         foreach hash<auto> c in (runs) {
