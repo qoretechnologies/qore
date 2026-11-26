@@ -394,7 +394,7 @@ module GmailDataProvider {
                 "plain": {"content": "body", "subject": "subject", "selector": "body-mime-type",
                     "selector_value": "text/plain", "plain_alternative": False},
                 "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
-                    "selector_value": "text/html", "plain_alternative": False},
+                    "selector_value": "text/html", "fallback": "plain-body", "plain_alternative": True},
             }},
             "display_name": "Send a Message",
             "short_desc": "Create and transmit a new outgoing email through Gmail",
@@ -764,6 +764,8 @@ module GmailDataProvider {
     @section gmaildataprovider_relnotes Release Notes
 
     @subsection gmaildataprovider_v1_2 GmailDataProvider v1.2
+    - The \c send-message action accepts \c plain-body with a \c text/html body to send both representations
+      with @ref MailMessage::Message::addPlainAlternative().
     - the \c charset of a watched message's attachment selects only an encoding that %Qore knows or a standard
       character set (@ref Qore::get_known_encoding() "get_known_encoding()"), and is ignored otherwise
       (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)

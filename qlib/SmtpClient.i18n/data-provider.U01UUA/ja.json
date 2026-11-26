@@ -187,6 +187,18 @@
           "source": "One or more `Bcc:` addresses for the email",
           "message": "メール用の1つ以上の `Bcc:` アドレス"
         },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "プレーンテキストの代替"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "HTML 本文のプレーンテキスト表現"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "本文が空でない text/html 文字列の場合、この空でないプレーンテキストを multipart/alternative メッセージの最初に送信します。本文のみを送信するには省略してください。"
+        },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "本文のエンコーディング"
@@ -226,6 +238,14 @@
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
           "source": "The MIME type of the message body",
           "message": "メッセージ本文のMIMEタイプ"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
           "source": "CC",

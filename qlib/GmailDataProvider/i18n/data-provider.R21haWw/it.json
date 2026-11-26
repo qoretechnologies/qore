@@ -1139,6 +1139,18 @@
           "source": "Optional headers to send with the attachment",
           "message": "Intestazioni opzionali da inviare con l'allegato"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "Alternativa in testo normale"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "Rappresentazione in testo normale del corpo HTML"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "Con un corpo stringa text/html non vuoto, invia prima questo testo normale non vuoto in un messaggio multipart/alternative. Omettilo per inviare solo il corpo."
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "Codifica corpo"
@@ -1862,6 +1874,18 @@
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.field.aGRy.desc": {
           "source": "Optional headers to send with the attachment",
           "message": "Intestazioni opzionali da inviare con l'allegato"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "Alternativa in testo normale"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "Rappresentazione in testo normale del corpo HTML"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "Con un corpo stringa text/html non vuoto, invia prima questo testo normale non vuoto in un messaggio multipart/alternative. Omettilo per inviare solo il corpo."
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
