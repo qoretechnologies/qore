@@ -6285,6 +6285,10 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         on_exit if (done) {
             DataProviderActionCatalog::exitInit(app, done);
         }
+        # the cycle check of a lazy value that the initialization reads (see readLazyValue()); exitInit() removes it
+        if (done) {
+            DataProviderActionCatalog::pushFrame("a:" + app);
+        }
         if (what & InitPendingApp) {
             if (initmap{app} && DataProviderActionCatalog::selects(filter, initmap{app})) {
                 if (*hash<auto> h = remove initmap{app}) {
@@ -6353,8 +6357,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         threads would wait for each other, the one in LazySharedValue::get(), the other in the catalog (see
         enterInit())
 
-        @throw SHARED-INIT-ERROR the thread building the value waits, directly or through others, for an app that
-        this thread initializes
+        @throw SHARED-INIT-CYCLE the thread building the value waits, directly or through others, for this thread, or
+        this thread builds the value and needs it through the initialization of an app that it started since
     */
     private:internal static auto readLazyValue(string key, LazySharedValue v) {
         DataProviderActionCatalog::checkFork();
@@ -6379,7 +6383,6 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             frames = (value_reads{tkey} ?? ()) + key;
             value_reads{tkey} = frames;
         }
-        DataProviderActionCatalog::pushFrame("v:" + key);
         # removing the read takes no lock and cannot fail, however the read ends
         on_exit {
             pop frames;
@@ -6390,6 +6393,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             }
             DataProviderActionCatalog::popFrame("v:" + key);
         }
+        DataProviderActionCatalog::pushFrame("v:" + key);
         return v.get();
     }
 
@@ -6404,9 +6408,13 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
 
     #! Removes the last frame of this thread that is the given one; raises no exception
     private:internal static popFrame(string frame) {
-        *int i = DataProviderActionCatalog::lastIndex(Priv::_lazy_frames, frame);
-        if (exists i) {
-            splice Priv::_lazy_frames, i, 1;
+        try {
+            *int i = DataProviderActionCatalog::lastIndex(Priv::_lazy_frames, frame);
+            if (exists i) {
+                splice Priv::_lazy_frames, i, 1;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a frame left behind can only make a later read of the same value raise SHARED-INIT-CYCLE on this thread
         }
     }
 
@@ -6435,6 +6443,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         end, so that the registration it runs ends for every reader
 
         @throw DATA-PROVIDER-LAZY-INIT-ERROR there is no worker and none can be started
+        @throw SHARED-INIT-CYCLE a catalog worker waits, directly or through others, for this thread
         @throw DATA-PROVIDER-LAZY-WORKER-STOPPED the worker was stopped before it ran the job
     */
     private:internal static auto runOnWorker(hash<auto> job) {
@@ -6449,9 +6458,10 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         # directly or through others, for an app that this thread initializes would never run the job
         {
             AutoLock al(init_lck);
+            # a cycle of waits, which another order of the threads avoids (qore#7712)
             if (DataProviderActionCatalog::lazyWorkerWaitsFor(gettid())) {
-                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("%s cannot be initialized: a catalog worker waits "
-                    "for an initialization that this thread runs", DataProviderActionCatalog::describeJob(job));
+                throw "SHARED-INIT-CYCLE", sprintf("%s cannot be initialized: a catalog worker waits, directly or "
+                    "through others, for this thread", DataProviderActionCatalog::describeJob(job));
             }
             init_waits{tkey} = LazyWorkerKey + id;
         }
@@ -6881,8 +6891,6 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 if (!owner) {
                     Counter done(1);
                     init_owners{app} = {"tid": tid, "pid": getpid(), "done": done, "what": what};
-                    # the cycle check of a lazy value that the initialization reads (see readLazyValue())
-                    DataProviderActionCatalog::pushFrame("a:" + app);
                     return done;
                 }
                 if (owner.tid == tid || get_module_context_path()
@@ -6971,8 +6979,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         if (init_owners{app}.done == done) {
             remove init_owners{app};
         }
-        DataProviderActionCatalog::popFrame("a:" + app);
         done.dec();
+        DataProviderActionCatalog::popFrame("a:" + app);
     }
 
     #! Returns the code that runs a deferred registration in the context of the module that makes it

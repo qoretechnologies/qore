@@ -347,7 +347,11 @@ class LazyValueAppCycleTest inherits QUnit::Test {
 
     workerWaitsForValueTest() {
 %ifdef QoreDebug
-        # one catalog worker: when it waits, no other worker can run a job
+        # one catalog worker: when it waits, no other worker can run a job; the test runs first, before any worker
+        # starts, as a worker running already is not stopped
+        if (DataProviderActionCatalog::getLazyWorkers().size() > 1) {
+            testSkip("more than one catalog worker runs already");
+        }
         DataProviderActionCatalog::setMaxLazyWorkers(1);
         # DataProviderActionCatalog::MaxLazyWorkers
         on_exit DataProviderActionCatalog::setMaxLazyWorkers(4);
@@ -401,7 +405,7 @@ class LazyValueAppCycleTest inherits QUnit::Test {
         # S needs a worker now: the only one waits for S, so its wait is refused instead of a deadlock
         go.dec();
         hash<string, auto> r = LazyValueAppCycleTest::collect(results, 2);
-        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", r.s);
+        assertEq("SHARED-INIT-CYCLE", r.s);
         # the worker built the value then, and ran the registrations
         assertEq(("read",), r.r);
         assertEq("private", DataProviderActionCatalog::getLazyValue(id));
