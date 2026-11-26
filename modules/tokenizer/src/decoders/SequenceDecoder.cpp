@@ -20,12 +20,12 @@ namespace QoreTokenizer {
 
 // --- FuseDecoder ---
 
-std::string FuseDecoder::decode(const std::vector<std::string>& tokens) const {
+std::vector<std::string> FuseDecoder::decodeChain(std::vector<std::string> tokens) const {
     std::string result;
     for (const auto& tok : tokens) {
         result += tok;
     }
-    return result;
+    return {std::move(result)};
 }
 
 // --- StripDecoder ---
@@ -53,13 +53,8 @@ StripDecoder::StripDecoder(const QoreHashNode* config, ExceptionSink* xsink)
     }
 }
 
-std::string StripDecoder::decode(const std::vector<std::string>& tokens) const {
-    std::vector<std::string> result;
-    result.reserve(tokens.size());
-
-    for (const auto& tok : tokens) {
-        std::string s = tok;
-
+std::vector<std::string> StripDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (auto& s : tokens) {
         // Strip 'start' occurrences of 'content' from the beginning
         if (!content.empty() && start > 0) {
             for (int i = 0; i < start; ++i) {
@@ -82,71 +77,46 @@ std::string StripDecoder::decode(const std::vector<std::string>& tokens) const {
                 }
             }
         }
-
-        result.push_back(s);
     }
-
-    // Join the stripped tokens with no separator (caller provides context)
-    std::string output;
-    for (const auto& s : result) {
-        output += s;
-    }
-    return output;
+    return tokens;
 }
 
-// --- ReplaceDecoder ---
-
-ReplaceDecoder::ReplaceDecoder(const QoreHashNode* config, ExceptionSink* xsink) {
-    assert(config);
-
-    std::string pattern_str = configStringKey(config, "pattern", xsink);
-    if (*xsink) {
-        return;
-    }
-    if (!pattern_str.empty()) {
-        pattern = pattern_str;
-    }
-
-    std::string content_val = configStringKey(config, "content", xsink);
-    if (*xsink) {
-        return;
-    }
-    if (!content_val.empty()) {
-        content = content_val;
-    }
+ReplaceDecoder::ReplaceDecoder(const QoreHashNode* config, ExceptionSink* xsink)
+        : replace(config, xsink, "TOKENIZER-DECODER-ERROR") {
 }
 
-std::string ReplaceDecoder::decode(const std::vector<std::string>& tokens) const {
-    std::vector<std::string> result;
-    result.reserve(tokens.size());
+std::vector<std::string> ReplaceDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (auto& token : tokens) {
+        token = replace.normalize(token);
+    }
+    return tokens;
+}
 
-    for (const auto& tok : tokens) {
-        if (pattern.empty()) {
-            result.push_back(tok);
+std::vector<std::string> BPESuffixDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        auto& token = tokens[i];
+        bool space = i + 1 < tokens.size();
+        if (suffix.empty()) {
+            // The empty suffix matches before and after each Unicode character.
+            if (space) {
+                std::string separated;
+                for (unsigned char c : token) {
+                    if ((c & 0xc0) != 0x80) {
+                        separated += ' ';
+                    }
+                    separated += static_cast<char>(c);
+                }
+                token = separated + ' ';
+            }
             continue;
         }
-
-        std::string s;
         size_t pos = 0;
-        while (pos < tok.size()) {
-            size_t found = tok.find(pattern, pos);
-            if (found == std::string::npos) {
-                s += tok.substr(pos);
-                break;
-            }
-            s += tok.substr(pos, found - pos);
-            s += content;
-            pos = found + pattern.size();
+        while ((pos = token.find(suffix, pos)) != std::string::npos) {
+            token.replace(pos, suffix.size(), space ? " " : "");
+            pos += space;
         }
-        result.push_back(s);
     }
-
-    // Join tokens
-    std::string output;
-    for (const auto& s : result) {
-        output += s;
-    }
-    return output;
+    return tokens;
 }
 
 // --- SequenceDecoder ---
@@ -184,26 +154,11 @@ SequenceDecoder::SequenceDecoder(std::vector<std::unique_ptr<AbstractDecoder>> d
         : decoders(std::move(decoders)) {
 }
 
-std::string SequenceDecoder::decode(const std::vector<std::string>& tokens) const {
-    if (decoders.empty()) {
-        // No decoders: just join tokens
-        std::string result;
-        for (const auto& tok : tokens) {
-            result += tok;
-        }
-        return result;
+std::vector<std::string> SequenceDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (const auto& decoder : decoders) {
+        tokens = decoder->decodeChain(std::move(tokens));
     }
-
-    // First decoder gets the full token list
-    std::string result = decoders[0]->decode(tokens);
-
-    // Subsequent decoders get a single-element list with the result
-    for (size_t i = 1; i < decoders.size(); ++i) {
-        std::vector<std::string> single = {result};
-        result = decoders[i]->decode(single);
-    }
-
-    return result;
+    return tokens;
 }
 
 } // namespace QoreTokenizer

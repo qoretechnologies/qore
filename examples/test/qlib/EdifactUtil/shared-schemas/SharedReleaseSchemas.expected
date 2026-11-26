@@ -1,0 +1,10 @@
+the registry returns the loaded schema: True
+release: SHARED-OBJECT-ERROR, unchanged
+meta: SHARED-OBJECT-ERROR, unchanged
+segment definition: SHARED-OBJECT-ERROR, unchanged
+new message definition: SHARED-OBJECT-ERROR, unchanged
+remove segment definitions: SHARED-OBJECT-ERROR, unchanged
+code lists: SHARED-OBJECT-ERROR, unchanged
+delete: SHARED-OBJECT-ERROR, unchanged
+the tenant's own schema: changed, shared: False
+trusted code changes the schema: changed

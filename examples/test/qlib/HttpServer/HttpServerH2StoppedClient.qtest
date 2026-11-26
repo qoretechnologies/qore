@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH2StoppedClient.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - the async I/O thread's waits for an HTTP/2 socket whose peer does not read
+# A server whose HTTP/2 client does not read waits for the client's socket to become writable instead of running its
+# I/O operation continuously (qoretechnologies/qore#7641).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+%requires ../../TestCpuTime.qm
+%requires FsUtil
+
+%exec-class HttpServerH2StoppedClientTest
+
+#! how long the client does not read, in seconds
+const StopSecs = 6;
+
+#! the size of the body: far larger than the socket buffers
+const BodySize = 64 * 1024 * 1024;
+
+#! responds with a large file body, which the I/O thread sends
+class FileBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the path of the body
+        string path;
+        #! reports that the request was received
+        Queue received();
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        received.push(True);
+        return makeResponse(200, new FileInputStream(path), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class HttpServerH2StoppedClientTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerH2StoppedClient", "1.0") {
+        addTestCase("an HTTP/2 client that does not read does not make the I/O thread run continuously",
+            \testStoppedClient());
+        set_return_value(main());
+    }
+
+    testStoppedClient() {
+        TmpDir dir("h2-stopped-");
+        # a sparse file
+        string path = dir.path + "/body";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.setPos(BodySize - 1);
+            f.write(<00>);
+            f.close();
+        }
+        FileBodyHandler h(path);
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("file", h);
+        hs.waitForAsyncIo();
+        on_exit hs.stop();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            # no minimum rate: the client that does not read is not reset, so the server waits for it the whole time
+            "stream_send_min_rate": 0,
+        }).port;
+        hs.waitForAsyncIo();
+
+        # a client that grants the largest windows, so that the server waits for the socket rather than for the
+        # client's flow-control credit, and that reads nothing until the end of the stop
+        RawHttp2Client c(port);
+        on_exit c.close();
+        int stream_id = c.get("/");
+        assertEq(True, h.received.get(30s), "the request was received");
+        # the socket's buffers fill at once; then the server only waits
+        usleep(1s);
+        hash<string, int> start = TestCpuTime::cpuSnapshot();
+        usleep(StopSecs * 1000000);
+        float used = TestCpuTime::cpuTimeSince(start);
+        # an idle server uses a few milliseconds (under 0.05 s under valgrind); one that runs its operation
+        # continuously uses a whole CPU core for the whole stop
+        assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the client did not read for "
+            "%d s", used, StopSecs));
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
+        assertEq(BodySize, r.data_bytes, "the whole body arrived once the client read");
+        assertTrue(r.ended, "the stream ended");
+        assertNothing(r.reset_code, "the stream was not reset");
+    }
+}

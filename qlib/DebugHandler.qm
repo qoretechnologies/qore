@@ -216,7 +216,10 @@ public namespace DebugHandler {
          */
         hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
             hash<auto> rv = WebSocketHandler::handleRequest(cx, hdr, b);
-            rv.hdr{QoreDebugWsProtocolHeader} = QoreDebugProtocolVersion;
+            # the protocol header only for a request that opens a connection
+            if (rv.code == 101 || rv.code == 200) {
+                rv.hdr{QoreDebugWsProtocolHeader} = QoreDebugProtocolVersion;
+            }
             return rv;
         }
     }
