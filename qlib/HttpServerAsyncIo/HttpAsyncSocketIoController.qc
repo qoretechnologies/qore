@@ -148,6 +148,10 @@ public class HttpAsyncSocketIoController {
         #! the test hook that the destructor calls first (see dbgSetDestructorHook()): not readable by subclasses
         static *code<nothing(HttpAsyncSocketIoController)> dbg_destructor_hook;
 
+        #! the test hook that the completion of an accept calls before the connection is registered (see
+        #! dbgSetAcceptHook()): not readable by subclasses
+        static *code<nothing(HttpAsyncSocketIoController, string)> dbg_accept_hook;
+
         #! Thread pool configuration for recreation after stop(); internal, as it selects functionality such as the
         #! reverse lookup of peers (qore#7056)
         hash<auto> pool_opts;
@@ -205,9 +209,35 @@ public class HttpAsyncSocketIoController {
         #! True if the handler pool has been stopped and needs recreation in start()
         bool pool_stopped = False;
 
+        #! True while the server or a listener drains: from startDrain() or startListenerDrain() until the
+        #! controller stops
+        /** Every write of a connection's entry tests only this flag (see withDrainToken()), so that a server that
+            does not drain pays nothing more; whether the connection's own drain runs is decided with drainsConn()
+        */
+        bool draining = False;
+
         #! True from startDrain() until the controller stops: no new connection or request is taken, and each
         #! connection closes when it has answered the requests that it has (see design/http-server-drain.md)
-        bool draining = False;
+        bool server_draining = False;
+
+        #! The number of listeners whose drain has started (see startListenerDrain(), qore#7692)
+        int listener_drains = 0;
+
+        #! The drain states of the registered listeners: listener hash (the key of #listeners) -> state (qore#7692)
+        /** Kept out of the listeners' registrations and the connections' entries, which are copied on every request: a
+            connection's listener is found by its \c listener member on the paths of a drain (see
+            stateOfListenerUnlocked()), and the dispatch Counter of a request by its listener
+            (@ref HttpServer::HttpListenerInterface::dispatch_counter "HttpListenerInterface::dispatch_counter")
+        */
+        hash<string, HttpListenerDrainState> listener_states = {};
+
+        #! The drain states of the connections whose \c listener member is not the listener that accepted them (the
+        #! WebSocket connections, whose member is the listener's view for its handlers): connection key -> state
+        hash<string, HttpListenerDrainState> conn_states = {};
+
+        #! The number of HTTP/3 listeners that stopped accepting and whose operation has not ended yet (see
+        #! HttpListenerDrainState::h3_token)
+        int h3_stop_tokens = 0;
 
         #! Counts the connections that a drain waits for: one per live drain token (see HttpDrainToken)
         Counter drain_conns();
@@ -391,6 +421,29 @@ public class HttpAsyncSocketIoController {
         }
         dbg_destructor_hook = hook;
     }
+
+    #! Sets the test hook that the completion of an accept calls before the connection is registered (debug builds of
+    #! the library only)
+    /** For tests: the hook runs after the completion has checked that the listener accepts connections, so that a test
+        can have the stop of the listener run before the connection is registered (qore#7692).  It is process-wide
+        (it is called by every controller in the process), so only trusted code with process control can set it, and
+        the method exists only in a debug build of the library
+
+        @param hook the hook, called with the controller and the unique hash of the connection in the thread of the
+        completion, or @ref nothing to remove it; an exception that it raises is ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetAcceptHook(*code<nothing(HttpAsyncSocketIoController, string)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the accept hook of HTTP servers");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the accept hook of HTTP servers from a context with restricted "
+                "process control";
+        }
+        dbg_accept_hook = hook;
+    }
     #! @endcond
 %endif
 
@@ -516,15 +569,14 @@ public class HttpAsyncSocketIoController {
     startDrain() {
         list<string> accept_owners = ();
         list<Socket> accept_socks = ();
-        list<Http2PollOperation> h2ops = ();
-        list<Socket> idle_socks = ();
-        list<Socket> fused_socks = ();
         list<Socket> h3_socks = ();
+        hash<auto> snap;
         {
             AutoWriteLock al(m);
-            if (draining || stopping) {
+            if (server_draining || stopping) {
                 return;
             }
+            server_draining = True;
             draining = True;
             foreach hash<auto> i in (listeners.pairIterator()) {
                 if (i.value.http_version != HttpVersionMode::H3) {
@@ -536,48 +588,7 @@ public class HttpAsyncSocketIoController {
                     push h3_socks, i.value.listener;
                 }
             }
-            foreach string uh in (keys connections) {
-                hash<HttpActiveConnectionInfo> ci = connections{uh};
-                if (ci.state == HttpConnectionState::Http3 || ci.state == HttpConnectionState::Http3Sending) {
-                    continue;
-                }
-                if (!ci.drain_token) {
-                    ci.drain_token = new HttpDrainToken(drain_conns);
-                    (connections{uh} @= (draining ? withDrainToken(uh, ci) : ci));
-                }
-                if (ci.stream_op instanceof Http2PollOperation) {
-                    push h2ops, cast<Http2PollOperation>(ci.stream_op);
-                    continue;
-                }
-                # an HTTP/1.1 keep-alive operation of a connection that carries requests ends after the response that
-                # it sends instead of waiting for another request; not a long-lived connection (WebSocket, SSE, or a
-                # response that starts one), which the server closes with its protocol's close
-                switch (ci.state) {
-                    # a connection that waits for a request (or will after its response) is closed if none has
-                    # arrived, even one that has not had a request yet
-                    case HttpConnectionState::KeepAlive:
-                    case HttpConnectionState::ReadHeader:
-                    case HttpConnectionState::SendAndReadHeader:
-                    case HttpConnectionState::SendStreamAndReadHeader:
-                        ci.sock.drainHttpConnection(True);
-                        break;
-                    # a connection with a request in progress is closed after its response
-                    case HttpConnectionState::ReadBody:
-                    case HttpConnectionState::ResponseDelay:
-                        ci.sock.drainHttpConnection();
-                        break;
-                }
-                if (ci.state == HttpConnectionState::Idle) {
-                    push idle_socks, ci.sock;
-                } else if (ci.state == HttpConnectionState::KeepAlive
-                        || ci.state == HttpConnectionState::ReadHeader
-                        || ci.state == HttpConnectionState::SendAndReadHeader
-                        || ci.state == HttpConnectionState::SendStreamAndReadHeader) {
-                    # an operation that waits for a request is woken to see the drain: it closes the connection if no
-                    # request has arrived, and reads it otherwise
-                    push fused_socks, ci.sock;
-                }
-            }
+            snap = takeDrainSnapshotUnlocked(NOTHING, drain_conns);
         }
         # test hook (a debug build of the library only): between the snapshot of the connections and the cancel of the
         # accept operations (qore#7438)
@@ -588,7 +599,7 @@ public class HttpAsyncSocketIoController {
             }
         }
         log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle, %d HTTP/3 "
-            "listener(s)", drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size(),
+            "listener(s)", drain_conns.getCount(), snap.h2ops.size(), snap.idle_socks.size() + snap.fused_socks.size(),
             h3_socks.size());
         # stop accepting: the accept operations of the TCP listeners are canceled, and none is submitted again; then
         # the listening sockets are closed, so that a client that connects now is refused at once instead of waiting
@@ -608,17 +619,97 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("closing listening socket " + lsock.uniqueHash(), ex);
             }
         }
-        map startH2Drain($1), h2ops;
-        foreach Socket sock in (fused_socks) {
-            wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
-        }
+        startSnapshotDrain(snap);
         # HTTP/3: each session is sent a GOAWAY notice and is closed when its requests end; the operation is woken to
         # start at once
         foreach Socket sock in (h3_socks) {
             sock.drainHttpConnection();
             wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
         }
-        foreach Socket sock in (idle_socks) {
+    }
+
+    #! Counts the connections of a drain and marks them as draining; the write lock (m) must be held
+    /** Each connection gets a drain token that counts it for the drain (or the drain's Counter is added to the token
+        that it has from another drain); an HTTP/1.1 connection is marked so that its keep-alive operation ends after
+        its response (one that waits for a request: also at once if none has arrived)
+
+        @param lds the state of the listener whose connections are drained, or @ref nothing for every connection (the
+        server's drain)
+        @param c the Counter of the drain
+
+        @return a hash with the connections that the caller drains outside the lock: \c h2ops (the operations of the
+        HTTP/2 connections), \c idle_socks (the idle connections to close), \c fused_socks (the operations that wait
+        for a request, to wake), and \c keys (the keys of the connections)
+    */
+    private hash<auto> takeDrainSnapshotUnlocked(*HttpListenerDrainState lds, Counter c) {
+        list<Http2PollOperation> h2ops = ();
+        list<Socket> idle_socks = ();
+        list<Socket> fused_socks = ();
+        list<string> conn_keys = ();
+        foreach string uh in (keys connections) {
+            hash<HttpActiveConnectionInfo> ci = connections{uh};
+            if (lds && stateOfEntryUnlocked(uh, ci) !== lds) {
+                continue;
+            }
+            if (ci.state == HttpConnectionState::Http3 || ci.state == HttpConnectionState::Http3Sending) {
+                continue;
+            }
+            push conn_keys, uh;
+            if (!ci.drain_token) {
+                ci.drain_token = new HttpDrainToken(c);
+                (connections{uh} @= (draining ? withDrainToken(uh, ci) : ci));
+            } else if (!ci.drain_token.counts(c)) {
+                # the token is shared by every copy of the entry
+                ci.drain_token.add(c);
+            }
+            if (ci.stream_op instanceof Http2PollOperation) {
+                push h2ops, cast<Http2PollOperation>(ci.stream_op);
+                continue;
+            }
+            # an HTTP/1.1 keep-alive operation of a connection that carries requests ends after the response that
+            # it sends instead of waiting for another request; not a long-lived connection (WebSocket, SSE, or a
+            # response that starts one), which the server closes with its protocol's close
+            switch (ci.state) {
+                # a connection that waits for a request (or will after its response) is closed if none has
+                # arrived, even one that has not had a request yet
+                case HttpConnectionState::KeepAlive:
+                case HttpConnectionState::ReadHeader:
+                case HttpConnectionState::SendAndReadHeader:
+                case HttpConnectionState::SendStreamAndReadHeader:
+                    ci.sock.drainHttpConnection(True);
+                    break;
+                # a connection with a request in progress is closed after its response
+                case HttpConnectionState::ReadBody:
+                case HttpConnectionState::ResponseDelay:
+                    ci.sock.drainHttpConnection();
+                    break;
+            }
+            if (ci.state == HttpConnectionState::Idle) {
+                push idle_socks, ci.sock;
+            } else if (ci.state == HttpConnectionState::KeepAlive
+                    || ci.state == HttpConnectionState::ReadHeader
+                    || ci.state == HttpConnectionState::SendAndReadHeader
+                    || ci.state == HttpConnectionState::SendStreamAndReadHeader) {
+                # an operation that waits for a request is woken to see the drain: it closes the connection if no
+                # request has arrived, and reads it otherwise
+                push fused_socks, ci.sock;
+            }
+        }
+        return {
+            "h2ops": h2ops,
+            "idle_socks": idle_socks,
+            "fused_socks": fused_socks,
+            "keys": conn_keys,
+        };
+    }
+
+    #! Starts the drain of the connections taken by takeDrainSnapshotUnlocked(); called without the lock
+    private startSnapshotDrain(hash<auto> snap) {
+        map startH2Drain($1), snap.h2ops;
+        foreach Socket sock in (snap.fused_socks) {
+            wakeSocketIfPresent(sock, sock.uniqueHash(), "drain");
+        }
+        foreach Socket sock in (snap.idle_socks) {
             try {
                 controller.cancelAndClose(sock);
             } catch (hash<ExceptionInfo> ex) {
@@ -638,51 +729,103 @@ public class HttpAsyncSocketIoController {
         @since HttpServerAsyncIo 1.0
     */
     bool waitDrain(timeout timeout_ms) {
-        if (!draining) {
+        if (!server_draining) {
             return False;
+        }
+        # the HTTP/1.1 requests in handlers are counted by their listeners (qore#7692)
+        list<Counter> dispatches = (dispatch_count,);
+        {
+            AutoReadLock al(m);
+            foreach HttpListenerDrainState lds in (listener_states.iterator()) {
+                if (lds.dispatch_count !== dispatch_count) {
+                    push dispatches, lds.dispatch_count;
+                }
+            }
         }
         # a drain that waits in the thread of an HTTP/1.1 request that the controller dispatched (the stop of a server
         # that the request stops or releases) does not wait for that request, which ends only when this wait has
         # returned: its dispatch ends here (qore#6508)
-        if (*Counter own = Priv::running_dispatch) {
-            if (own === dispatch_count) {
-                Priv::running_dispatch = NOTHING;
-                own.dec();
-            }
-        }
-        if (timeout_ms <= 0) {
-            dispatch_count.waitForZero();
-            drain_conns.waitForZero();
-            return True;
-        }
-        int deadline = clock_get_monotonic_us() + timeout_ms * 1000;
+        endOwnDispatch(dispatches);
         # the requests in handlers first: a connection that has one has no entry, and so no drain token, until its
         # dispatch ends, which gives it one
-        if (dispatch_count.waitForZero(timeout_ms)) {
-            return False;
+        return waitCounters(dispatches + (drain_conns,),
+            timeout_ms > 0 ? clock_get_monotonic_us() + timeout_ms * 1000 : 0);
+    }
+
+    #! Ends the count of the HTTP/1.1 dispatch that the current thread runs if one of the given Counters counts it
+    /** A wait for a drain in the thread of a dispatch (the stop of a server or of a listener that the request stops
+        or releases) does not wait for that dispatch, which ends only when the wait has returned (qore#6508)
+    */
+    private static endOwnDispatch(list<Counter> dispatches) {
+        *Counter own = Priv::running_dispatch;
+        if (!own) {
+            return;
         }
-        int remaining_ms = (deadline - clock_get_monotonic_us()) / 1000;
-        if (remaining_ms <= 0) {
-            return !drain_conns.getCount();
+        foreach Counter c in (dispatches) {
+            if (own === c) {
+                Priv::running_dispatch = NOTHING;
+                own.dec();
+                return;
+            }
         }
-        return !drain_conns.waitForZero(remaining_ms);
+    }
+
+    #! Waits for each of the given Counters to reach zero, in order, until the deadline
+    /** @param cs the Counters
+        @param deadline_us the monotonic deadline in microseconds; 0 waits indefinitely
+
+        @return @ref True if every Counter reached zero, @ref False if the deadline passed first
+    */
+    private static bool waitCounters(list<Counter> cs, int deadline_us) {
+        foreach Counter c in (cs) {
+            if (!deadline_us) {
+                c.waitForZero();
+                continue;
+            }
+            int remaining_ms = (deadline_us - clock_get_monotonic_us()) / 1000;
+            if (remaining_ms <= 0) {
+                if (c.getCount()) {
+                    return False;
+                }
+                continue;
+            }
+            if (c.waitForZero(remaining_ms)) {
+                return False;
+            }
+        }
+        return True;
     }
 
     #! Ends the drain of an HTTP/3 listener whose operation completed while draining
-    /** @return @ref True if the server drains, in which case the listener's operation is not submitted again
+    /** Releases the drain token of the server's drain and that of a listener that stopped accepting (qore#7692)
+
+        @return @ref True if the server or the listener drains, in which case the listener's operation is not
+        submitted again
     */
     private bool endH3Drain(string owner) {
-        if (!draining) {
+        if (!draining && !h3_stop_tokens) {
             return False;
         }
         *HttpDrainToken token;
+        *HttpDrainToken listener_token;
+        bool rv = False;
         {
             AutoWriteLock al(m);
             token = remove h3_drain_tokens{owner};
+            *HttpListenerDrainState lds = listener_states{owner};
+            if (lds) {
+                if (lds.h3_token) {
+                    listener_token = remove lds.h3_token;
+                    --h3_stop_tokens;
+                }
+                rv = lds.draining;
+            }
+            rv = rv || server_draining;
         }
-        # the token is released here, outside the lock: its destructor decrements the drain's Counter
+        # the tokens are released here, outside the lock: their destructors decrement the drains' Counters
         delete token;
-        return True;
+        delete listener_token;
+        return rv;
     }
 
     #! Drains an HTTP/1.x connection that was registered after the drain started (qore#7438)
@@ -714,7 +857,7 @@ public class HttpAsyncSocketIoController {
     /** @since HttpServerAsyncIo 1.0
     */
     bool isDraining() {
-        return draining;
+        return server_draining;
     }
 
     #! Returns the entry of a connection to write while the server drains; the lock (m) must be held
@@ -727,6 +870,11 @@ public class HttpAsyncSocketIoController {
         @return the entry to write
     */
     private hash<HttpActiveConnectionInfo> withDrainToken(string uh, hash<HttpActiveConnectionInfo> ci) {
+        # a connection of a listener that does not drain, while only other listeners drain (qore#7692)
+        *HttpListenerDrainState lds = stateOfEntryUnlocked(uh, ci);
+        if (!drainsConnUnlocked(lds)) {
+            return ci;
+        }
         switch (ci.state) {
             # an HTTP/3 listener's entry is counted by the listener's token (see h3_drain_tokens)
             case HttpConnectionState::Http3:
@@ -744,9 +892,83 @@ public class HttpAsyncSocketIoController {
                 break;
         }
         if (!ci.drain_token) {
-            ci.drain_token = connections{uh}.drain_token ?? new HttpDrainToken(drain_conns);
+            ci.drain_token = connections{uh}.drain_token ?? new HttpDrainToken();
         }
+        addDrainCountersUnlocked(ci.drain_token, lds, uh);
         return ci;
+    }
+
+    #! Returns @ref True if a connection of a listener with the given drain state drains: the server drains, or its
+    #! listener (qore#7692); only called while #draining is set
+    private bool drainsConnUnlocked(*HttpListenerDrainState lds) {
+        return server_draining || (lds && lds.draining);
+    }
+
+    #! Returns @ref True if a connection of the given listener drains; only called while #draining is set, without the
+    #! lock (see drainsConnUnlocked())
+    private bool drainsConn(*HttpServer::HttpListenerInterface listener) {
+        if (server_draining) {
+            return True;
+        }
+        AutoReadLock al(m);
+        *HttpListenerDrainState lds = stateOfListenerUnlocked(listener);
+        return lds && lds.draining;
+    }
+
+    #! Returns the drain state of the listener of a connection's entry; the lock must be held; only called on the paths
+    #! of a drain or of a stop of a listener, which search the few listeners
+    private *HttpListenerDrainState stateOfEntryUnlocked(string uh, hash<HttpActiveConnectionInfo> ci) {
+        return conn_states{uh} ?? stateOfListenerUnlocked(ci.listener);
+    }
+
+    #! Returns the drain state of a listener (the listener object of a connection's entry); the lock must be held; only
+    #! called on the paths of a drain or of a stop of a listener
+    private *HttpListenerDrainState stateOfListenerUnlocked(*HttpServer::HttpListenerInterface listener) {
+        if (!listener) {
+            return;
+        }
+        foreach HttpListenerDrainState lds in (listener_states.iterator()) {
+            if (lds.listener_obj == listener) {
+                return lds;
+            }
+        }
+    }
+
+    #! Returns @ref True if the connections of the given listener were closed (see closeListenerConnections()); the
+    #! lock must be held
+    private bool listenerClosedUnlocked(*HttpServer::HttpListenerInterface listener) {
+        *HttpListenerDrainState lds = stateOfListenerUnlocked(listener);
+        return lds && lds.closed;
+    }
+
+    #! Returns the drain state of a listener (a TCP listener or the HttpListenerInterface of a QUIC listener) by its
+    #! registration; the lock must be held
+    private *HttpListenerDrainState lookupListenerStateUnlocked(*HttpServer::HttpListenerInterface listener) {
+        if (!listener) {
+            return;
+        }
+        string lh = listener.uniqueHash();
+        if (listener_states{lh}) {
+            return listener_states{lh};
+        }
+        if (*string qh = quic_listener_hash_by_http_listener{lh}) {
+            return listener_states{qh};
+        }
+    }
+
+    #! Makes a drain token count the connection for every drain that runs for it; the write lock must be held
+    /** @param token the connection's token, shared by every copy of its entry
+        @param lds the drain state of the connection's listener
+        @param uh the key of the connection
+    */
+    private addDrainCountersUnlocked(HttpDrainToken token, *HttpListenerDrainState lds, string uh) {
+        if (server_draining && !token.counts(drain_conns)) {
+            token.add(drain_conns);
+        }
+        # not for a connection that the listener's drain does not count (see endOwnStreamConnection())
+        if (lds && lds.draining && !lds.exempt{uh} && !token.counts(lds.drain_conns)) {
+            token.add(lds.drain_conns);
+        }
     }
 
     #! Ends the dispatch of an HTTP/1.1 request to a handler while the server drains (see dispatch_count)
@@ -759,8 +981,7 @@ public class HttpAsyncSocketIoController {
         if (draining) {
             AutoWriteLock al(m);
             *hash<HttpActiveConnectionInfo> ci = connections{uh};
-            if (ci && !ci.drain_token) {
-                ci.drain_token = new HttpDrainToken(drain_conns);
+            if (ci && !ci.drain_token && drainsConnUnlocked(stateOfEntryUnlocked(uh, ci))) {
                 (connections{uh} @= (draining ? withDrainToken(uh, ci) : ci));
             }
         }
@@ -778,6 +999,9 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             stopping = False;
             draining = False;
+            server_draining = False;
+            listener_drains = 0;
+            h3_stop_tokens = 0;
             h3_drain_tokens = {};
         } catch (hash<ExceptionInfo> ex) {
             logShutdownException("resetting shutdown flag", ex);
@@ -810,6 +1034,11 @@ public class HttpAsyncSocketIoController {
         # after the handler's body_queue.get() times out 30s later, blocking
         # handler_pool.stopWait() for that full duration).
         *list<AbstractPollOperation> stream_ops_to_abort;
+        # the drain tokens of HTTP/3 listeners that stopped accepting
+        list<HttpDrainToken> h3_listener_tokens = ();
+        # the dispatch Counters of the listeners, whose remaining counts are ended at the end of the stop
+        list<Counter> stale_dispatch_counts = ();
+        list<Counter> detached_dispatch_counts = ();
         {
             AutoWriteLock al(m);
             # Guard against multiple stop() calls (e.g., explicit stop + destructor)
@@ -836,6 +1065,20 @@ public class HttpAsyncSocketIoController {
                 }
             }
             detached_listeners = listeners;
+            # the drains of the listeners end with the stop: their HTTP/3 tokens are released below, outside the
+            # lock, so that a wait for the drain of a listener returns (qore#7692)
+            foreach HttpListenerDrainState lds in (listener_states.iterator()) {
+                lds.closed = True;
+                if (lds.h3_token) {
+                    push h3_listener_tokens, remove lds.h3_token;
+                }
+                if (lds.dispatch_count !== dispatch_count) {
+                    push detached_dispatch_counts, lds.dispatch_count;
+                }
+            }
+            listener_states = {};
+            conn_states = {};
+            h3_stop_tokens = 0;
             detached_connections = connections;
             if (delayed_responses) {
                 delayed_response_timer_ids = ();
@@ -852,6 +1095,8 @@ public class HttpAsyncSocketIoController {
             connections = {};
             accept_counts = {};
         }
+        # released outside the lock: their destructors decrement the Counters of the drains
+        h3_listener_tokens = ();
         log(LoggerLevel::INFO, "Async HTTP controller stopping: closing %d connection(s)", conn_keys.size());
         foreach int timer_id in (delayed_response_timer_ids) {
             try {
@@ -986,6 +1231,12 @@ public class HttpAsyncSocketIoController {
             } catch (hash<ExceptionInfo> ex) {
                 logShutdownException("stopping handler pool", ex);
             }
+            # no task of the pool runs any more: a dispatch that is still counted at the end of the stop was canceled
+            # by the pool before its task ran, and a stop of its listener that waits for it must not wait forever
+            # (qore#7692)
+            if (pool_stopped) {
+                stale_dispatch_counts = detached_dispatch_counts;
+            }
         }
         # NOTE: We don't recreate the pool here anymore. The pool will be recreated
         # in start() if the controller is restarted. Recreating here would leave
@@ -1080,6 +1331,34 @@ public class HttpAsyncSocketIoController {
             } catch (hash<ExceptionInfo> ex) {
                 logShutdownException("closing an HTTP/3 listener socket", ex);
             }
+        }
+        # after the last flush of the callbacks (see above)
+        map endStaleDispatches($1), stale_dispatch_counts;
+    }
+
+    #! Ends the count of the dispatches of a listener whose tasks never ran (qore#7692)
+    /** Called at the end of the stop of the controller, after its handler pool has stopped with stopWait(), which
+        runs the queued tasks, and the callbacks have been flushed: a count left then is that of a task that the pool
+        canceled (an outside ThreadPool::stop(), or a worker that could not be started), of a task whose target's
+        saveDispatchContext() raised an exception, or of the dispatch that the
+        current thread runs (a stop in a request), whose count ends here too.  Not done when the pool is stopped in
+        the background by one of its own threads (it may still run its queued tasks), or when its stopWait() failed;
+        a stop of a listener that waits for a task that such a pool cancels later still waits for it (see
+        waitListenerDispatches())
+    */
+    private endStaleDispatches(Counter c) {
+        if (Priv::running_dispatch === c) {
+            Priv::running_dispatch = NOTHING;
+        }
+        int n = c.getCount();
+        try {
+            while (n-- > 0) {
+                c.dec();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # not expected: no dispatch can end any more (see above)
+            @assert(False, sprintf("%s: %s", ex.err, ex.desc));
+            logShutdownException("ending the counts of the canceled dispatches", ex);
         }
     }
 
@@ -1515,6 +1794,7 @@ public class HttpAsyncSocketIoController {
                     sprintf("cannot add listener %s: controller has been stopped", lhash);
             }
             @assert(!listeners{lhash}, "listener already registered: %s", lhash);
+            listener_states{lhash} = newDrainState(http_listener ?? listener, http_listener);
             listeners{lhash} = <HttpListenerInfo>{
                 "listener": listener,
                 "target": target,
@@ -1598,6 +1878,7 @@ public class HttpAsyncSocketIoController {
                     sprintf("cannot add QUIC listener %s: controller has been stopped", lhash);
             }
             @assert(!listeners{lhash}, "listener already registered: %s", lhash);
+            listener_states{lhash} = newDrainState(http_listener, http_listener);
             listeners{lhash} = <HttpListenerInfo>{
                 "listener": listener,
                 "target": target,
@@ -1620,6 +1901,7 @@ public class HttpAsyncSocketIoController {
         on_error {
             AutoWriteLock al(m);
             remove listeners{lhash};
+            remove listener_states{lhash};
             remove quic_listener_hash_by_http_listener{http_listener.uniqueHash()};
         }
 
@@ -1627,6 +1909,18 @@ public class HttpAsyncSocketIoController {
         submitQuicAcceptOp(listener, target, lhash);
 
         log(LoggerLevel::INFO, "Added QUIC/HTTP/3 listener %y", lhash);
+    }
+
+    #! Returns the drain state of a listener that is registered (qore#7692)
+    /** @param listener_obj the listener object of the listener's connections
+        @param http_listener the listener interface, whose dispatch Counter counts the listener's HTTP/1.1 dispatches;
+        without one (or if it has none), the dispatches are counted by the controller's Counter
+    */
+    private HttpListenerDrainState newDrainState(object listener_obj, *HttpServer::HttpListenerInterface http_listener) {
+        HttpListenerDrainState lds();
+        lds.listener_obj = listener_obj;
+        lds.dispatch_count = (http_listener ? http_listener.dispatch_counter : NOTHING) ?? dispatch_count;
+        return lds;
     }
 
     #! Stops accepting new connections and sessions on the given listener, whose stop has started (qore#7690)
@@ -1655,6 +1949,13 @@ public class HttpAsyncSocketIoController {
                 return;
             }
             stopped_accepting{lhash} = True;
+            # the operation of an HTTP/3 listener ends when its sessions have been drained: it is counted for the drain
+            # of the listener from here on, before the operation can end (qore#7692)
+            *HttpListenerDrainState lds = listener_states{lhash};
+            if (linfo.http_version == HttpVersionMode::H3 && lds && !lds.h3_token) {
+                lds.h3_token = new HttpDrainToken(lds.drain_conns);
+                ++h3_stop_tokens;
+            }
         }
         if (linfo.http_version != HttpVersionMode::H3) {
             # an accept operation that is being replenished is either submitted before the cancel, or sees the flag set
@@ -1691,10 +1992,397 @@ public class HttpAsyncSocketIoController {
         return stopped_accepting{lhash} ?? False;
     }
 
+    #! Starts the drain of a listener whose stop has started; returns at once (qore#7692)
+    /** The listener stops accepting (see stopAccepting()) if it has not already, and each of its connections closes
+        when it has answered the requests that it has:
+        - HTTP/1.1: an idle keep-alive connection is closed at once; a request in progress is answered with
+          \c Connection: \c close and the connection is closed after the response; a request that arrived on a
+          persistent connection before its response was sent is answered too, with \c Connection: \c close
+        - HTTP/2: a \c GOAWAY frame tells the client the last stream that the server processed; the connection is
+          closed when its open streams have ended
+        - HTTP/3: each session is sent a \c GOAWAY notice and is closed when its requests have ended; the listener's
+          operation ends after its last session
+
+        The persistent handler sessions of the listener's connections are told to end.  The connections of the other
+        listeners are not affected.  Use waitListenerDrain() to wait for the drain to end, and
+        closeListenerConnections() afterwards to close the connections that are left.
+
+        Does nothing for a listener that is not registered, whose drain has started already (its timeout is not
+        changed), whose connections were closed, or while the controller stops.
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+        @param drain_timeout the maximum time that waitListenerDrain() waits for the drain, from now
+
+        @return @ref True if the drain of the listener runs (started now or before), @ref False if it does not
+
+        @since HttpServerAsyncIo 1.0
+    */
+    bool startListenerDrain(Socket listener, timeout drain_timeout) {
+        # no new connection or session is accepted first; for an HTTP/3 listener, this sends the GOAWAY notices
+        stopAccepting(listener);
+        string lhash;
+        hash<auto> snap;
+        bool h3 = False;
+        {
+            AutoWriteLock al(m);
+            *hash<HttpListenerInfo> linfo = resolveListenerUnlocked(listener, \lhash);
+            *HttpListenerDrainState lds = listener_states{lhash};
+            if (!linfo || !lds || stopping) {
+                return False;
+            }
+            if (lds.draining || lds.closed) {
+                return lds.draining && !lds.closed;
+            }
+            lds.draining = True;
+            lds.deadline_us = clock_get_monotonic_us() + drain_timeout * 1000;
+            ++listener_drains;
+            draining = True;
+            # an HTTP/3 listener's connections are its sessions, which its operation drains; the operation is counted
+            # by its token (stopAccepting())
+            h3 = (linfo.http_version == HttpVersionMode::H3);
+            if (!h3) {
+                snap = takeDrainSnapshotUnlocked(lds, lds.drain_conns);
+            }
+        }
+        log(LoggerLevel::INFO, "Async HTTP drain of listener %y started: %d connection(s) to drain", lhash,
+            h3 ? 1 : snap.keys.size());
+        if (snap) {
+            startSnapshotDrain(snap);
+        }
+        # the persistent handler sessions of the listener's connections end, as they have no end that a drain could
+        # wait for
+        if (h3) {
+            signalPersistentQueuesForPrefix(lhash + ":");
+        } else {
+            foreach string uh in (snap.keys) {
+                signalPersistentQueuesForConnection(uh);
+            }
+        }
+        return True;
+    }
+
+    #! Waits for the drain of a listener started with startListenerDrain() to end (qore#7692)
+    /** The drain ends when every HTTP/1.1 request of the listener dispatched to a handler has been answered and every
+        connection of the listener that the drain counts has been closed (for an HTTP/3 listener: when its operation
+        has ended after its last session); the wait is woken by the last of these events.  It waits at most until the
+        drain timeout given to startListenerDrain() has passed since the drain started.
+
+        A wait in the thread of an HTTP/1.1 request of the listener (a stop of the listener that the request runs)
+        does not wait for that request, which ends only when the stop has returned.
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+
+        A wait in the thread of an HTTP/2 or HTTP/3 request of the listener does not wait for the request's own
+        connection (for HTTP/3: for the listener's sessions, which are counted together).
+
+        @return @ref True if the drain ended, or if the listener is no longer registered (the controller stopped,
+        which closed its connections); @ref False if the timeout expired first, or if no drain of the listener was
+        started
+
+        @since HttpServerAsyncIo 1.0
+    */
+    bool waitListenerDrain(Socket listener) {
+        *HttpListenerDrainState lds;
+        {
+            AutoReadLock al(m);
+            string lhash;
+            *hash<HttpListenerInfo> linfo = resolveListenerUnlocked(listener, \lhash);
+            if (!linfo) {
+                # the listener is no longer registered: the controller stopped, which closed its connections
+                return True;
+            }
+            lds = listener_states{lhash};
+        }
+        if (!lds || !lds.draining) {
+            return False;
+        }
+        endOwnDispatch((lds.dispatch_count,));
+        # an HTTP/2 or HTTP/3 request that waits for the drain of its own listener does not wait for its own
+        # connection
+        if (*string own_uh = Priv::running_stream_conn) {
+            endOwnStreamConnection(lds, own_uh);
+        }
+        # the requests in handlers first: a connection that has one has no entry, and so no drain token, until its
+        # dispatch ends, which gives it one
+        return waitCounters((lds.dispatch_count, lds.drain_conns), lds.deadline_us);
+    }
+
+    #! Exempts the HTTP/2 or HTTP/3 connection of the calling request from the drain of its own listener
+    /** The connection ends only when the wait for the drain has returned: an HTTP/2 connection is no longer counted
+        by the listener's drain; for HTTP/3, whose sessions are counted together by the listener's token, the drain
+        no longer waits for the listener's operation
+    */
+    private endOwnStreamConnection(HttpListenerDrainState lds, string uh) {
+        *HttpDrainToken h3_token;
+        {
+            AutoWriteLock al(m);
+            *hash<HttpActiveConnectionInfo> ci = connections{uh};
+            if (!ci || stateOfEntryUnlocked(uh, ci) !== lds) {
+                return;
+            }
+            if (ci.state == HttpConnectionState::Http3 || ci.state == HttpConnectionState::Http3Sending) {
+                if (lds.h3_token) {
+                    h3_token = remove lds.h3_token;
+                    --h3_stop_tokens;
+                }
+            } else {
+                # also when the entry gets another token later (see addDrainCountersUnlocked())
+                lds.exempt{uh} = True;
+                if (ci.drain_token) {
+                    ci.drain_token.exempt(lds.drain_conns);
+                }
+            }
+        }
+        # released outside the lock
+        delete h3_token;
+    }
+
+    #! Closes the connections of a listener whose stop has started (qore#7692)
+    /** Every connection of the listener that is left is closed at once: its operation is canceled and its socket is
+        closed before this method returns (the sessions of an HTTP/3 listener are sent a \c CONNECTION_CLOSE); its
+        delayed responses, SSE streams and persistent handler sessions are ended.  An accept of the listener whose
+        completion is in progress ends first, and a connection accepted afterwards is closed, not registered.  The
+        response of a request of the listener whose handler returns after this may be answered partially or not at
+        all; its connection is closed (qore#5991).  The drain of the listener ends; the listener stays registered
+        until removeListener() is called.
+
+        Can be called more than once: a call closes the connections of the listener that were registered after the
+        previous one (by requests whose handlers returned since then).
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+
+        @since HttpServerAsyncIo 1.0
+    */
+    closeListenerConnections(Socket listener) {
+        string lhash;
+        *hash<HttpListenerInfo> linfo;
+        {
+            AutoReadLock al(m);
+            linfo = resolveListenerUnlocked(listener, \lhash);
+        }
+        if (!linfo) {
+            return;
+        }
+        # the accept completions of a TCP listener that are in progress (their accept operations were canceled when
+        # the listener stopped accepting, after they completed) end first, so that a connection that one of them
+        # registers is closed below, and none is registered after this call (see acceptRefusedUnlocked()); a
+        # completion that has not started is discarded, which closes its socket.  Not for an HTTP/3 listener, whose
+        # operation's completions can run requests: its sessions are ended with its operation below
+        if (linfo.http_version != HttpVersionMode::H3) {
+            try {
+                controller.flushCallbacksByOwner(lhash);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("waiting for the accept completions of listener " + lhash, ex);
+            }
+        }
+        hash<string, hash<HttpActiveConnectionInfo>> conns = {};
+        list<Socket> socks = ();
+        list<AbstractPollOperation> stream_ops = ();
+        {
+            AutoWriteLock al(m);
+            linfo = resolveListenerUnlocked(listener, \lhash);
+            *HttpListenerDrainState lds = listener_states{lhash};
+            if (!linfo || !lds) {
+                return;
+            }
+            lds.closed = True;
+            # the drain of the listener has ended: its connections are closed below; lds.closed stays set for the
+            # results of the requests that return later (L3, qore#7692)
+            if (lds.draining) {
+                lds.draining = False;
+                --listener_drains;
+                draining = server_draining || listener_drains > 0;
+            }
+            # a request that returns from now on closes its connection, and a connection submitted from now on is
+            # canceled (see handleRequestResult() and submitConnectionOpIntern(), qore#5991)
+            object conn_listener = linfo.http_listener ?? linfo.listener;
+            purgeRemovedListeners();
+            removed_listeners{conn_listener.uniqueHash()} := conn_listener;
+            have_removed_listeners = True;
+            foreach string uh in (keys connections) {
+                hash<HttpActiveConnectionInfo> ci = connections{uh};
+                if (stateOfEntryUnlocked(uh, ci) !== lds) {
+                    continue;
+                }
+                conns{uh} = ci;
+                # an HTTP/3 entry's operation is the listener's (HttpListenerInfo::h3op), aborted below
+                if (ci.state != HttpConnectionState::Http3 && ci.state != HttpConnectionState::Http3Sending) {
+                    push socks, ci.sock;
+                    if (ci.stream_op) {
+                        push stream_ops, ci.stream_op;
+                    }
+                }
+                remove connections{uh};
+                remove conn_states{uh};
+            }
+        }
+        log(LoggerLevel::INFO, "Async HTTP listener %y: closing %d connection(s)", lhash, conns.size());
+        bool h3 = (linfo.http_version == HttpVersionMode::H3);
+        # the operation of an HTTP/3 listener, which has its sessions
+        if (h3 && linfo.h3op) {
+            push stream_ops, linfo.h3op;
+        }
+        # the operations of the multiplexed connections are aborted, so that the handler threads that wait for their
+        # streams are woken: an HTTP/2 client is sent a GOAWAY first (if the drain did not send it, RFC 9113 section
+        # 6.8), and an HTTP/3 session is sent a GOAWAY and a CONNECTION_CLOSE
+        foreach AbstractPollOperation sop in (stream_ops) {
+            if (sop instanceof Http2PollOperation) {
+                try {
+                    cast<Http2PollOperation>(sop).sendShutdownGoaway();
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::DEBUG, "Async HTTP listener %y: no HTTP/2 GOAWAY sent: %s: %s", lhash, ex.err,
+                        ex.desc);
+                }
+            } else if (!(sop instanceof Http3ServerPollOperation)) {
+                continue;
+            }
+            try {
+                sop.abort();
+            } catch (hash<ExceptionInfo> ex) {
+                # an operation that has ended already
+                log(LoggerLevel::DEBUG, "Async HTTP listener %y: abort: %s: %s", lhash, ex.err, ex.desc);
+            }
+        }
+        if (h3) {
+            # the accept operation of the HTTP/3 listener
+            try {
+                controller.cancelByOwner(lhash);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("canceling the operation of HTTP/3 listener " + lhash, ex);
+            }
+        }
+        list<string> conn_keys = keys conns;
+        foreach string uh in (conn_keys) {
+            try {
+                controller.cancelByOwner(uh);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("canceling connection owner " + uh, ex);
+            }
+        }
+        foreach Socket sock in (socks) {
+            try {
+                controller.cancelAndClose(sock);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("closing connection " + sock.uniqueHash(), ex);
+            }
+        }
+        cancelDelayedResponses(conn_keys);
+        # the streams of the connections have ended
+        endSseStreams(conns);
+        if (h3) {
+            notifyH3StreamsEnded(linfo);
+            signalPersistentQueuesForPrefix(lhash + ":");
+        }
+        foreach string uh in (conn_keys) {
+            signalPersistentQueuesForConnection(uh);
+        }
+        # the entries are released here, outside the lock: their drain tokens decrement the drains' Counters
+        conns = {};
+    }
+
+    #! Waits for the HTTP/1.1 requests of a listener that are dispatched to a handler to end (qore#7692)
+    /** Called after closeListenerConnections(): each such request ends when its handler returns, and its connection
+        is then closed.  A wait in the thread of a request of the listener does not wait for that request.
+
+        The wait has no timeout, and a request whose handler never runs stays counted:
+        - a request whose handler-pool task cannot run its body because the target's saveDispatchContext() raises an
+          exception (a target that saves its thread-local state there, on an internal failure): the wait returns only
+          when the controller stops (see stop(), which ends the counts that are left)
+        - a request whose queued task the handler pool cancels: the pool cancels a task only when the controller
+          stops it and a worker cannot be started (a thread limit), or when the pool is destroyed with queued tasks (a
+          stop of the server in one of its own requests whose background thread to stop the pool cannot be started);
+          the stop of the controller then ends the count when it stopped the pool itself, but not when the pool was
+          stopped by one of its own threads or its stopWait() failed: a stop of the listener that runs at the same
+          time and waits here then does not return, nor does the server's stop, which waits for it
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+
+        @since HttpServerAsyncIo 1.0
+    */
+    waitListenerDispatches(Socket listener) {
+        *Counter dc;
+        {
+            AutoReadLock al(m);
+            string lhash;
+            resolveListenerUnlocked(listener, \lhash);
+            dc = listener_states{lhash}.dispatch_count;
+        }
+        if (!dc) {
+            return;
+        }
+        endOwnDispatch((dc,));
+        dc.waitForZero();
+    }
+
+    #! @cond nodoc
+    #! Returns @ref True if the calling thread runs a request of the given listener (qore#7692)
+    /** An HTTP/1.1 request that the controller dispatched (also an inline request or the preparation of a request on
+        a callback dispatcher worker), or an HTTP/2 or HTTP/3 request on a connection of the listener: a call in such
+        a thread does not wait for a stop of the listener, which waits for the request
+
+        @param listener the listener (an HttpListener, or the UDP socket of an HTTP/3 listener)
+    */
+    bool isCallerRequestOf(Socket listener) {
+        *Counter own = Priv::running_dispatch;
+        *string own_uh = Priv::running_stream_conn;
+        if (!own && !own_uh) {
+            return False;
+        }
+        AutoReadLock al(m);
+        string lhash;
+        resolveListenerUnlocked(listener, \lhash);
+        *HttpListenerDrainState lds = listener_states{lhash};
+        if (!lds) {
+            return False;
+        }
+        if (own && own === lds.dispatch_count && own !== dispatch_count) {
+            return True;
+        }
+        return own_uh && connections{own_uh} && stateOfEntryUnlocked(own_uh, connections{own_uh}) === lds;
+    }
+
+    #! Returns the number of connections of the given listener that the controller has (for tests)
+    /** A connection whose HTTP/1.1 request is dispatched to a handler is not counted until its result has been
+        handled; the sessions of an HTTP/3 listener count as one connection while its operation runs.
+
+        @param listener the listener object that the connections were accepted for (an HttpListener; the
+        HttpListenerInterface of a QUIC listener): a connection is counted if its entry refers to this object, or, while
+        the listener is registered, to its drain state (such as a WebSocket connection, whose entry refers to the
+        listener's view for its handlers)
+    */
+    int getListenerConnectionCount(HttpServer::HttpListenerInterface listener) {
+        AutoReadLock al(m);
+        *HttpListenerDrainState lds = lookupListenerStateUnlocked(listener);
+        int rv = 0;
+        foreach hash<auto> i in (connections.pairIterator()) {
+            hash<HttpActiveConnectionInfo> ci = i.value;
+            if (ci.listener == listener || (lds && stateOfEntryUnlocked(i.key, ci) === lds)) {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+    #! @endcond
+
+    #! Returns the registration of a listener (a TCP listener, or the UDP socket or the HttpListenerInterface of a
+    #! QUIC listener); the lock must be held
+    private *hash<HttpListenerInfo> resolveListenerUnlocked(Socket listener, *reference<string> lhash) {
+        string lh = listener.uniqueHash();
+        *hash<HttpListenerInfo> linfo = listeners{lh};
+        if (!linfo && quic_listener_hash_by_http_listener.hasKey(lh)) {
+            lh = quic_listener_hash_by_http_listener{lh};
+            linfo = listeners{lh};
+        }
+        lhash = lh;
+        return linfo;
+    }
+
     #! Removes a listener
     /** @param listener the listener to remove
     */
     removeListener(Socket listener) {
+        # the drain token of an HTTP/3 listener that stopped accepting and whose operation has not ended
+        *HttpDrainToken h3_token;
         string listener_hash = listener.uniqueHash();
         string lhash = listener_hash;
         string conn_listener_hash = listener_hash;
@@ -1767,10 +2455,29 @@ public class HttpAsyncSocketIoController {
             if (linfo && linfo.http_listener) {
                 remove quic_listener_hash_by_http_listener{linfo.http_listener.uniqueHash()};
             }
+            # the drain of the listener has ended (qore#7692)
+            if (*HttpListenerDrainState lds = remove listener_states{lhash}) {
+                foreach string k in (keys conn_states) {
+                    if (conn_states{k} === lds) {
+                        remove conn_states{k};
+                    }
+                }
+                if (lds.draining) {
+                    lds.draining = False;
+                    --listener_drains;
+                    draining = server_draining || listener_drains > 0;
+                }
+                if (lds.h3_token) {
+                    h3_token = remove lds.h3_token;
+                    --h3_stop_tokens;
+                }
+            }
             remove listeners{lhash};
             remove accept_counts{lhash};
             remove stopped_accepting{lhash};
         }
+        # released outside the lock: its destructor decrements the Counter of the listener's drain
+        delete h3_token;
         log(LoggerLevel::INFO, "Removed listener %y", lhash);
     }
 
@@ -1920,8 +2627,8 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
-            # a draining server closes a connection when it has no request left
-            if (stopping || draining) {
+            # a draining server, or a draining listener, closes a connection when it has no request left (qore#7692)
+            if (stopping || (draining && drainsListenerUnlocked(listener))) {
                 try { sock.close(); } catch () {}
                 return;
             }
@@ -1958,9 +2665,12 @@ public class HttpAsyncSocketIoController {
         @param target the target for callbacks
         @param listener the listener interface for logging
         @param cx connection context
+        @param conn_listener the listener that accepted the connection, if \a listener is another object (the view of
+        the listener for its handlers): the connection is drained and closed with this listener (qore#7692)
     */
     registerH1WebSocketConnection(Socket sock, HttpWebSocketPollOperation poll_op,
-            HttpAsyncTarget target, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+            HttpAsyncTarget target, *HttpServer::HttpListenerInterface listener, hash<auto> cx,
+            *HttpServer::HttpListenerInterface conn_listener) {
         string uh = sock.uniqueHash();
         hash<HttpActiveConnectionInfo> cinfo;
         {
@@ -1980,6 +2690,13 @@ public class HttpAsyncSocketIoController {
                 "stream_op": poll_op,
                 "ssl": cx.ssl ?? False,
             };
+            # the entry's listener is the listener's view for its handlers: the connection is drained and closed with
+            # the listener that accepted it (qore#7692)
+            if (conn_listener) {
+                if (*HttpListenerDrainState lds = stateOfListenerUnlocked(conn_listener)) {
+                    conn_states{uh} = lds;
+                }
+            }
             cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_entry2) : new_entry2));
         }
         submitConnectionOp(uh, cinfo);
@@ -1994,6 +2711,7 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             remove connections{uh};
+            remove conn_states{uh};
         }
         try {
             controller.cancelAndClose(sock);
@@ -2143,7 +2861,7 @@ public class HttpAsyncSocketIoController {
             has_listener = exists listeners{owner};
             cnt_check = accept_counts{owner} ?? 0;
             # a draining server, and a listener whose stop has started, accepts no new connections (qore#7690)
-            if (has_listener && !draining && !stopped_accepting{owner}) {
+            if (has_listener && !server_draining && !stopped_accepting{owner}) {
                 if (cnt_check < DefaultAcceptOps) {
                     do_replenish = True;
                 }
@@ -2286,6 +3004,12 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        # test hook (a debug build of the library only): an accept that completes after the listener's stop checked
+        # it above (qore#7692)
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_accept_hook) {
+            callAcceptHook(uh);
+        }
+
         # the size limit of the header of a request, and of the trailer section of a chunked body (qore#6867)
         if (max_header_size > 0) {
             sock.setMaxHeaderSize(max_header_size);
@@ -2353,6 +3077,10 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
+                # not for a listener whose connections were closed: the socket is closed (qore#7692)
+                if (have_removed_listeners && acceptRefusedUnlocked(new_cinfo.listener, sock)) {
+                    return;
+                }
                 cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
             }
 
@@ -2382,8 +3110,12 @@ public class HttpAsyncSocketIoController {
             bool drain_new;
             {
                 AutoWriteLock al(m);
+                # not for a listener whose connections were closed: the socket is closed (qore#7692)
+                if (have_removed_listeners && acceptRefusedUnlocked(new_cinfo.listener, sock)) {
+                    return;
+                }
                 cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
-                drain_new = draining;
+                drain_new = draining && drainsListenerUnlocked(new_cinfo.listener);
             }
 
             log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
@@ -2424,8 +3156,12 @@ public class HttpAsyncSocketIoController {
         bool drain_new;
         {
             AutoWriteLock al(m);
+            # not for a listener whose connections were closed: the socket is closed (qore#7692)
+            if (have_removed_listeners && acceptRefusedUnlocked(new_cinfo.listener, sock)) {
+                return;
+            }
             cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
-            drain_new = draining;
+            drain_new = draining && drainsListenerUnlocked(new_cinfo.listener);
         }
 
         log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
@@ -2433,6 +3169,60 @@ public class HttpAsyncSocketIoController {
         if (drain_new) {
             drainNewH1Connection(sock, uh);
         }
+    }
+
+    #! Refuses the registration of an accepted connection whose listener's connections were closed: the socket is
+    #! closed (qore#7692); the lock must be held; only called while #have_removed_listeners is set
+    private bool acceptRefusedUnlocked(*HttpServer::HttpListenerInterface listener, Socket sock) {
+        if (!listenerClosedUnlocked(listener)) {
+            return False;
+        }
+        try { sock.close(); } catch () {}
+        return True;
+    }
+
+    #! Calls the test hook of accept completions (see dbgSetAcceptHook()); an exception that it raises is ignored
+    private callAcceptHook(string uh) {
+        try {
+            dbg_accept_hook(self, uh);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! Returns @ref True if a connection of the given listener drains (see drainsConnUnlocked()); the lock must be held;
+    #! only called while #draining is set
+    private bool drainsListenerUnlocked(*HttpServer::HttpListenerInterface listener) {
+        return server_draining || drainsConnUnlocked(stateOfListenerUnlocked(listener));
+    }
+
+    #! Refuses the registration of a connection whose entry is gone (the controller stopped) or whose listener's
+    #! connections were closed: the socket is closed (qore#7692); the lock must be held; only called while
+    #! #have_removed_listeners is set, so that the request path pays only that test
+    private bool connectionRefusedUnlocked(string uh, Socket sock) {
+        *hash<HttpActiveConnectionInfo> ci = connections{uh};
+        if (ci && !(stateOfEntryUnlocked(uh, ci) && stateOfEntryUnlocked(uh, ci).closed)) {
+            return False;
+        }
+        try { sock.close(); } catch () {}
+        return True;
+    }
+
+    #! Refuses the dispatch of a request of a listener whose connections were closed: the socket is closed
+    #! (qore#7692); the lock must be held; only called while #have_removed_listeners is set
+    private bool dispatchRefusedUnlocked(*HttpServer::HttpListenerInterface listener, Socket sock) {
+        if (!listenerClosedUnlocked(listener)) {
+            return False;
+        }
+        try { sock.close(); } catch () {}
+        return True;
+    }
+
+    #! Returns @ref True if a result that returns its connection to the idle state closes the connection instead: the
+    #! server or the connection's listener drains, or the listener was removed or its connections closed (qore#5899,
+    #! qore#5991, qore#7692); only called while one of these may hold
+    private bool closesAfterResult(auto linfo) {
+        return (draining && drainsConn(linfo.listener))
+            || (have_removed_listeners && linfo.listener && listenerRemoved(linfo.listener));
     }
 
     #! Returns the settings of the bound of a listener's streams, for the header info of a request (qore#7280)
@@ -2910,18 +3700,27 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(target, sub () {
-                # the hold of the request's result is released last, after the stream has been cleaned up (see
-                # HttpRequestResultInfo::request_hold)
+                # the connection of the request that this thread runs (see running_stream_conn, qore#7692), cleared
+                # when the task ends, in the cleanup block below
+                Priv::running_stream_conn = uh;
+                # the hold of the request's result (see HttpRequestResultInfo::request_hold), released in the cleanup
+                # block below once the stream has been cleaned up, while the thread's connection is still set, so that
+                # the stop of a destructor of the server that the release runs does not wait for this request
+                # (qore#7509)
                 *object request_hold;
-                on_exit remove request_hold;
                 # Clean up dispatched stream state after handler completes
                 # (applies to all headers-only dispatched streams, not just body_streaming)
                 # NOTE: on_exit must be at closure scope (not inside if-block), otherwise
                 # the cleanup fires immediately when the if-block exits
-                on_exit if (request.hdr) {
-                    try {
-                        listener.cleanupQuicStream(session_id, stream_id);
-                    } catch () {}
+                on_exit {
+                    # the connection is cleared last, also when the release of the hold raises an error
+                    on_exit Priv::running_stream_conn = NOTHING;
+                    if (request.hdr) {
+                        try {
+                            listener.cleanupQuicStream(session_id, stream_id);
+                        } catch () {}
+                    }
+                    remove request_hold;
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
@@ -3269,7 +4068,7 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
-                    drain_new = draining;
+                    drain_new = draining && drainsListenerUnlocked(conn_info.listener);
                 }
             } else {
                 # the listener has fast routes: the first request is read by the fused idle + read header operation,
@@ -3306,7 +4105,7 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
-                    drain_new = draining;
+                    drain_new = draining && drainsListenerUnlocked(conn_info.listener);
                 }
             }
 
@@ -4417,8 +5216,8 @@ public class HttpAsyncSocketIoController {
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
         # a draining server answers the request and closes the connection: the handler's own response (one that it
-        # sends itself, too) says so (RFC 9112 section 9.6)
-        if (draining) {
+        # sends itself, too) says so (RFC 9112 section 9.6); also a draining listener (qore#7692)
+        if (draining && drainsConn(cinfo.listener)) {
             output.info.close = True;
         }
         string dispatch_uh = uh;
@@ -4483,6 +5282,10 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> new_cinfo;
                     {
                         AutoWriteLock al(m);
+                        # a connection whose listener's connections were closed is not registered again (qore#7692)
+                        if (have_removed_listeners && connectionRefusedUnlocked(dispatch_uh, dispatch_sock)) {
+                            return;
+                        }
                         hash<HttpActiveConnectionInfo> upd =
                             cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
                         upd.state = HttpConnectionState::ReadBody;
@@ -4517,7 +5320,13 @@ public class HttpAsyncSocketIoController {
                 dispatch_cinfo.drain_token = connections{dispatch_uh}.drain_token;
             }
             remove connections{dispatch_uh};
-            dispatch_counter = dispatch_count;
+            # a request of a listener whose connections were closed is not dispatched (qore#7692)
+            if (have_removed_listeners && dispatchRefusedUnlocked(cinfo.listener, cinfo.sock)) {
+                return;
+            }
+            # the dispatch is counted by its listener, whose stop waits for it (qore#7692); read from the parameter,
+            # not from the locals that the request's closure captures, whose access costs more
+            dispatch_counter = (cinfo.listener ? cinfo.listener.dispatch_counter : NOTHING) ?? dispatch_count;
             dispatch_counter.inc();
         }
         # until it is handed to the handler pool, the dispatch runs in this thread (the callback dispatcher worker),
@@ -4697,7 +5506,7 @@ public class HttpAsyncSocketIoController {
     */
     private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
         # a draining server answers the request and closes the connection (see handleHeaderComplete())
-        if (draining) {
+        if (draining && drainsConn(cinfo.listener)) {
             cinfo.pending_header_info.close = True;
         }
         string dispatch_uh = uh;
@@ -4756,7 +5565,13 @@ public class HttpAsyncSocketIoController {
                 dispatch_cinfo.drain_token = connections{dispatch_uh}.drain_token;
             }
             remove connections{dispatch_uh};
-            dispatch_counter = dispatch_count;
+            # a request of a listener whose connections were closed is not dispatched (qore#7692)
+            if (have_removed_listeners && dispatchRefusedUnlocked(cinfo.listener, cinfo.sock)) {
+                return;
+            }
+            # the dispatch is counted by its listener, whose stop waits for it (qore#7692); read from the parameter,
+            # not from the locals that the request's closure captures, whose access costs more
+            dispatch_counter = (cinfo.listener ? cinfo.listener.dispatch_counter : NOTHING) ?? dispatch_count;
             dispatch_counter.inc();
         }
         # until it is handed to the handler pool, the dispatch runs in this thread (the callback dispatcher worker),
@@ -4882,14 +5697,18 @@ public class HttpAsyncSocketIoController {
         # the drain started was made for a persistent connection.  Only a result that returns the connection to the
         # idle state is changed: a connection handed to a dedicated handler (WebSocket, SSE) or one that closes after
         # the response is not, as the server closes a long-lived connection with its protocol's close
-        # The same holds for a request that returns after its listener was removed: the connection is not kept for
-        # another request on the removed listener (qore#5991).
+        # The same holds for a draining listener (qore#7692), and for a request that returns after its listener was
+        # removed, or its connections closed: the connection is not kept for another request on the removed listener
+        # (qore#5991).
         if (result.return_to_idle && (draining
                 || (have_removed_listeners && linfo.listener && listenerRemoved(linfo.listener)))) {
-            result.close = True;
-            result.return_to_idle = False;
-            if (result.code) {
-                result.hdr.Connection = "close";
+            # while only other listeners drain, the connection is kept (see closesAfterResult())
+            if (closesAfterResult(linfo)) {
+                result.close = True;
+                result.return_to_idle = False;
+                if (result.code) {
+                    result.hdr.Connection = "close";
+                }
             }
         }
 
@@ -5322,6 +6141,10 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             remove connections{uh};
+            # a WebSocket connection's drain state (see registerH1WebSocketConnection())
+            if (conn_states) {
+                remove conn_states{uh};
+            }
         }
         # an SSE stream whose response headers could not be sent has ended; checked here, as every connection ends here
         if (cinfo.pending_stream_op || cinfo.state == HttpConnectionState::Sse) {
@@ -5906,12 +6729,21 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(dispatch_target, sub () {
-                # the hold of the request's result is released last, after the stream has been cleaned up (see
-                # HttpRequestResultInfo::request_hold)
+                # the connection of the request that this thread runs (see running_stream_conn, qore#7692), cleared
+                # when the task ends, in the cleanup block below
+                Priv::running_stream_conn = dispatch_uh;
+                # the hold of the request's result (see HttpRequestResultInfo::request_hold), released in the cleanup
+                # block below once the stream has been cleaned up, while the thread's connection is still set, so that
+                # the stop of a destructor of the server that the release runs does not wait for this request
+                # (qore#7509)
                 *object request_hold;
-                on_exit remove request_hold;
                 # NOTE: on_exit must be at closure scope, so that it runs when the request has been handled
-                on_exit cleanup_stream();
+                on_exit {
+                    # the connection is cleared last, also when the cleanup or the release of the hold raise an error
+                    on_exit Priv::running_stream_conn = NOTHING;
+                    cleanup_stream();
+                    remove request_hold;
+                }
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                     request_hold = result.request_hold;
@@ -6170,6 +7002,8 @@ public class HttpAsyncSocketIoController {
         # Dispatch to handler thread pool
         try {
             submitToHandlerPool(dispatch_target, sub () {
+                # the connection of the request that this thread runs (see running_stream_conn, qore#7692)
+                Priv::running_stream_conn = dispatch_uh;
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                     if (result.persistent_request_end) {
@@ -6191,6 +7025,8 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(dispatch_sock, dispatch_uh,
                         "HTTP/2 extended CONNECT handler error response");
                 }
+                # the task ends: every exception is caught above
+                Priv::running_stream_conn = NOTHING;
             });
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 extended CONNECT handler for stream=%d "
@@ -6615,6 +7451,7 @@ class HttpHandlerHandoff {
         task = {"target": target, "body": body};
     }
 
+
     #! Returns the work item and releases the handoff's reference to it; the worker calls it once
     *hash<auto> take() {
         *hash<auto> rv = remove task;
@@ -6634,6 +7471,14 @@ thread_local *ThreadPool running_handler_pool;
     when the drain has returned (see HttpAsyncSocketIoController::waitDrain(), qore#6508)
 */
 thread_local *Counter running_dispatch;
+
+#! The key of the HTTP/2 or HTTP/3 connection whose request the current thread runs in the handler pool
+/** Set by the request's task (the thread-local variables of a pool thread are cleared after each task); a wait for
+    the drain of the request's own listener (a stop of the listener that the request runs) does not wait for this
+    connection, which ends only when the wait has returned (see HttpAsyncSocketIoController::waitListenerDrain(),
+    qore#7692)
+*/
+thread_local *string running_stream_conn;
 
 #! Returns the character sets and the media type of a request for its header information
 /** HTTP/1.x requests get them from Socket::readHTTPHeader() (\c "charset", \c "body-content-type" and
@@ -6676,16 +7521,100 @@ hash<auto> sub http_request_header_info(hash<auto> hdr) {
 */
 class HttpDrainToken {
     private {
-        Counter c;
+        #! the Counters of the drains that count the connection: that of the server's drain, that of the drain of
+        #! the connection's listener, or both (qore#7692)
+        list<Counter> cs = ();
+        #! the Counters of the drains that do not count the connection (see exempt())
+        list<Counter> exempt_cs = ();
     }
 
-    constructor(Counter c) {
-        self.c = c;
+    constructor(*Counter c) {
+        if (c) {
+            add(c);
+        }
+    }
+
+    #! Counts the connection for another drain; the controller's lock must be held
+    add(Counter c) {
         c.inc();
+        push cs, c;
+    }
+
+    #! Returns @ref True if the connection is counted by the drain of the given Counter, or exempt from it
+    bool counts(Counter c) {
+        foreach Counter i in (cs) {
+            if (i === c) {
+                return True;
+            }
+        }
+        foreach Counter i in (exempt_cs) {
+            if (i === c) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Stops counting the connection for the drain of the given Counter, which no longer counts it either when the
+    #! entry is written again; the controller's lock must be held
+    /** For the connection of a request that waits for the drain of its own listener: the drain does not wait for the
+        connection, which ends only when the wait has returned (qore#7692)
+    */
+    exempt(Counter c) {
+        for (int i = 0; i < cs.size(); ++i) {
+            if (cs[i] === c) {
+                splice cs, i, 1;
+                c.dec();
+                break;
+            }
+        }
+        push exempt_cs, c;
     }
 
     destructor() {
-        c.dec();
+        foreach Counter c in (cs) {
+            c.dec();
+        }
+    }
+}
+
+#! The state of the drain of a listener whose stop has started (qore#7692)
+/** Created for every listener that the controller registers (HttpAsyncSocketIoController::listener_states), and found
+    by its listener object on the paths of a drain; a request's dispatch is counted by the Counter of its listener
+    (HttpListenerInterface::dispatch_counter), so that the connections' entries, which are copied on every request,
+    carry nothing for it.  Its fields are written with the controller's lock held
+*/
+class HttpListenerDrainState {
+    public {
+        #! The listener object of the listener's connections (their entries' \c listener member)
+        object listener_obj;
+
+        #! Counts the HTTP/1.1 requests of the listener that are dispatched to a handler: such a connection has no
+        #! entry until the request's result has been handled; the Counter of the listener
+        #! (@ref HttpServer::HttpListenerInterface::dispatch_counter "HttpListenerInterface::dispatch_counter"),
+        #! or the controller's own one
+        Counter dispatch_count;
+
+        #! Counts the connections of the listener that the drain of the listener waits for (see HttpDrainToken)
+        Counter drain_conns();
+
+        #! Set when the drain of the listener starts: each of its connections closes when it has answered its
+        #! requests
+        bool draining = False;
+
+        #! Set when the connections of the listener that are left have been closed
+        bool closed = False;
+
+        #! The monotonic time (microseconds) at which the drain of the listener stops waiting
+        int deadline_us = 0;
+
+        #! The drain token of an HTTP/3 listener, released when the listener's operation ends after its last session
+        #! has been drained
+        *HttpDrainToken h3_token;
+
+        #! The connections that the drain does not count: those of the HTTP/2 requests that wait for the drain of
+        #! their own listener (see HttpAsyncSocketIoController::endOwnStreamConnection()): key -> True
+        hash<string, bool> exempt = {};
     }
 }
 
@@ -6734,6 +7663,7 @@ hashdecl HttpListenerInfo {
         udp_sock's mutex.
     */
     *Http3ServerPollOperation h3op;
+
 }
 
 #! Internal hashdecl for active connection info
@@ -6741,8 +7671,10 @@ hashdecl HttpActiveConnectionInfo {
     #! The socket
     Socket sock;
 
-    #! Set while the server drains: counts the connection until its last copy of this entry is released
+    #! Set while the server or the connection's listener drains: counts the connection until its last copy of this
+    #! entry is released
     *HttpDrainToken drain_token;
+
 
     #! The listener interface for handler dispatch and logging
     *HttpServer::HttpListenerInterface listener;
