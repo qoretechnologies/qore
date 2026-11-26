@@ -309,6 +309,16 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq(<TabularRowRange>{"first": 1, "last": 2}, sheet.header_rows);
         assertEq(("Pos", "Artikel", "Bezeichnung", "Lieferant", "Menge bestätigt", "Menge offen", "Preis"),
             (map $1.header, sheet.columns));
+        # a header row that the caller gives is one row
+        hash<TabularSheetProfile> given = TabularProfiler::profile(<TabularWorkbookGrid>{
+            "format": "xlsx",
+            "sheets": (grid,),
+        }, <TabularProfileOptions>{"header_row": 2}).sheets[0];
+        assertEq(2, given.header_row);
+        assertNothing(given.header_rows, "a header row given by the caller");
+        assertNothing(finding(given, "multi_row_header"));
+        assertEq((1,), given.title_rows);
+        assertEq(("bestätigt", "offen"), (map $1.header, given.columns)[4..5]);
         assertNothing(finding(sheet, "merged_cells_in_data"));
         assertNothing(finding(sheet, "no_header_row"));
         assertEq(6, sheet.header_merged.size());
