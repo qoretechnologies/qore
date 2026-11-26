@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedLimitersTest
+
+#! Regression test for issue #7686: sandboxed code shares rate limiters only with its own Program
+/** A tenant that uses the same provider account as the host gets a limiter of its own Program from
+    EmbedderRateLimiter::getShared() (through VoyageRestClientBase::getRateLimiter()): its limits and blocks do not
+    reach the host's limiter, nor a limiter of the host whose key has the form of its own, the code of its Program
+    shares its limiter, another tenant has its own, and the limiters that a sandboxed Program keeps are bounded per
+    Program, so that one tenant does not reach the bound of another.
+
+    SharedLimiters.q makes the checks; its output must be the one in SharedLimiters.expected in every
+    execution mode.
+*/
+class SharedLimitersTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedLimiters.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedLimiters.expected");
+    }
+
+    constructor() : QUnit::Test("rate limiters shared by sandboxed code", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, which choose their own execution
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        # the modules of the environment, which report on stderr, are not loaded
+        return sprintf("env -u QORE_DATA_PROVIDERS -u QORE_FILE_LOCATION_HANDLERS %s --exec-mode=%s %s",
+            shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

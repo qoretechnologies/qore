@@ -40,6 +40,11 @@ class BedrockAsyncWireFixture {
         int status;
         string content_type;
         bool stopping = False;
+        #! the responses of the requests in turn (hashes with status, content_type and chunks); the last one answers
+        #! the later requests; when not set, every request gets the response of the constructor's arguments
+        *list<hash<auto>> responses;
+        #! the number of requests answered
+        int served = 0;
     }
 
     #! Creates the fixture
@@ -60,6 +65,11 @@ class BedrockAsyncWireFixture {
         port = listener.getSocketInfo().port;
         running.inc();
         background serve();
+    }
+
+    #! Sets the responses of the requests in turn: hashes with \c status, \c content_type and \c chunks
+    setResponses(list<hash<auto>> responses) {
+        self.responses = responses;
     }
 
     #! Stops the fixture: the gates are opened and the listener is woken and closed
@@ -103,10 +113,24 @@ class BedrockAsyncWireFixture {
                 if (gate_after === -1) {
                     gate.get(30s);
                 }
-                conn.send(sprintf("HTTP/1.1 %d Test\r\n%sx-amzn-requestid: async-fixture\r\nConnection: close\r\n\r\n",
-                    status, content_type.val() ? sprintf("Content-Type: %s\r\n", content_type) : ""));
+                int r_status = status;
+                string r_content_type = content_type;
+                list<binary> r_chunks = chunks;
+                string extra = "";
+                if (responses) {
+                    hash<auto> r = responses[min(served, responses.size() - 1)];
+                    r_status = r.status;
+                    r_content_type = r.content_type;
+                    r_chunks = r.chunks;
+                    foreach hash<auto> h in (r.headers.pairIterator()) {
+                        extra += sprintf("%s: %s\r\n", h.key, h.value);
+                    }
+                }
+                ++served;
+                conn.send(sprintf("HTTP/1.1 %d Test\r\n%s%sx-amzn-requestid: async-fixture\r\nConnection: close\r\n\r\n",
+                    r_status, r_content_type.val() ? sprintf("Content-Type: %s\r\n", r_content_type) : "", extra));
                 int index = 0;
-                foreach binary chunk in (chunks) {
+                foreach binary chunk in (r_chunks) {
                     conn.send(chunk);
                     if (index++ === gate_after) {
                         gate.get(30s);
@@ -164,7 +188,9 @@ class BedrockAsyncChatTest inherits QUnit::Test {
         addTestCase("a callback failure keeps its exception", \callbackFailureTest());
         addTestCase("chatAsync() errors are those of chat()", \chatErrorTest());
         addTestCase("cancellation", \cancellationTest());
-        addTestCase("the start of a stream is not retried, as in chatStream()", \noStreamRetryTest());
+        addTestCase("the start of a stream is retried as chat() retries its request", \streamRetryTest());
+        addTestCase("a stream that has started is not retried", \startedStreamNoRetryTest());
+        addTestCase("a Converse request is retried", \chatRetryTest());
         addTestCase("the calls hold no thread while they wait", \noThreadHeldTest());
         on_exit executor.shutdown();
         set_return_value(main());
@@ -597,17 +623,108 @@ class BedrockAsyncChatTest inherits QUnit::Test {
         assertEq(("first",), deltas);
     }
 
-    noStreamRetryTest() {
-        # a throttled start is retried by neither call, while a Converse request is retried
-        BedrockAsyncWireFixture sync_server((binary("{}"),), NOTHING, 429, "application/json");
-        on_exit sync_server.stop();
-        assertThrows("LLM-ERROR", sub () {
-            provider(sync_server.port, "test:model:0", 2).chatStream(messages(), sub (hash<ChatStreamEvent> e) {});
-        });
-        assertEq(1, sync_server.requests.size());
-        hash<auto> r = asyncStream((binary("{}"),), NOTHING, NOTHING, NOTHING, 429, "application/json", 2);
-        assertEq("LLM-ERROR", r.err);
-        assertEq(1, r.requests, "the start of the stream is sent once");
+    #! the events or the error of chatStream() and chatStreamAsync() for a sequence of responses
+    private hash<auto> retryOutcome(bool async, list<hash<auto>> responses, int max_retries = 2,
+            *hash<LlmRequestOptions> opts) {
+        BedrockAsyncWireFixture server((), NOTHING);
+        server.setResponses(responses);
+        on_exit server.stop();
+        BedrockLlmProvider p = provider(server.port, "test:model:0", max_retries);
+        list<hash<ChatStreamEvent>> events = ();
+        hash<auto> rv = {};
+        try {
+            code cb = sub (hash<ChatStreamEvent> e) { events += e; };
+            if (async) {
+                p.chatStreamAsync(messages(), cb, NOTHING, opts, asyncOpts()).get(60000);
+            } else {
+                p.chatStream(messages(), cb, NOTHING, opts);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+            # the record of the attempts, in the argument of the error of the start (the argument of the LLM-ERROR)
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.arg.typeCode() == NT_HASH && exists ex.arg.arg.retry) {
+                hash<auto> retry = ex.arg.arg.retry;
+                rv.retry = {
+                    "attempts": retry.attempts,
+                    "waits_ms": retry.waits_ms,
+                    "stopped": retry.stopped,
+                    "statuses": map $1.status, retry.failures,
+                };
+            }
+        }
+        return rv + {"events": events, "requests": server.requests.size()};
+    }
+
+    private static hash<auto> reply(int status, *list<binary> chunks) {
+        return {
+            "status": status,
+            "content_type": status == 200 ? "application/vnd.amazon.eventstream" : "application/json",
+            "chunks": chunks ?? (binary("{\"message\": \"slow down\"}"),),
+        };
+    }
+
+    #! the start of a stream is retried by both calls on HTTP 429 and 5xx, as chat() retries its request
+    streamRetryTest() {
+        list<binary> ok = (textStream(),);
+        foreach bool async in ((False, True)) {
+            string name = async ? "async" : "sync";
+            # throttled, then the stream
+            hash<auto> r = retryOutcome(async, (reply(429), reply(200, ok)));
+            assertNothing(r.err, name + ": a throttled start is retried");
+            assertEq(2, r.requests, name);
+            assertEq("Hello 日本", (map $1.delta ?? "", r.events).join(""), name);
+            assertEq(1, (select r.events, $1.done).size(), name);
+            # a server error twice, then the stream
+            r = retryOutcome(async, (reply(503), reply(500), reply(200, ok)));
+            assertNothing(r.err, name + ": server errors are retried");
+            assertEq(3, r.requests, name);
+            # a client error is not retried
+            r = retryOutcome(async, (reply(403), reply(200, ok)));
+            assertEq("LLM-ERROR", r.err, name);
+            assertEq("Bedrock ConverseStream failed: AWS event stream returned HTTP 403", r.desc, name);
+            assertEq(1, r.requests, name + ": a client error fails at once");
+            # the retries are bounded by max_retries
+            r = retryOutcome(async, (reply(429),), 2);
+            assertEq("LLM-ERROR", r.err, name);
+            assertEq("Bedrock ConverseStream failed: AWS event stream returned HTTP 429", r.desc, name);
+            assertEq(3, r.requests, name + ": one request and two retries");
+            assertEq({"attempts": 3, "waits_ms": (10, 20), "stopped": "retries_spent", "statuses": (429, 429, 429)},
+                r.retry, name + ": the record of the attempts");
+            r = retryOutcome(async, (reply(503),), 0);
+            assertEq(1, r.requests, name + ": no retry with max_retries 0");
+            assertEq((), r.events, name);
+            r = retryOutcome(async, (reply(403),));
+            assertEq({"attempts": 1, "waits_ms": (), "stopped": "not_retryable", "statuses": (403,)}, r.retry, name);
+            # a 429 is retried up to rate_limit_retries when it is given
+            r = retryOutcome(async, (reply(429),), 3, <LlmRequestOptions>{"rate_limit_retries": 1});
+            assertEq(2, r.requests, name + ": rate_limit_retries bounds the retries of a 429");
+            # a Retry-After is waited for instead of the delay
+            r = retryOutcome(async, (reply(429) + {"headers": {"Retry-After": "1"}},), 1);
+            assertEq(2, r.requests, name);
+            assertEq((1000,), r.retry.waits_ms, name + ": Retry-After is the wait");
+        }
+    }
+
+    #! a stream whose response has started is not retried: an exception event of the service fails the call
+    startedStreamNoRetryTest() {
+        list<binary> throttled = (event("throttlingException", {"message": "slow down"}, "exception"),);
+        foreach bool async in ((False, True)) {
+            string name = async ? "async" : "sync";
+            hash<auto> r = retryOutcome(async, (reply(200, throttled), reply(200, (textStream(),))));
+            assertEq("LLM-ERROR", r.err, name);
+            assertEq("Bedrock ConverseStream failed: throttlingException: slow down", r.desc, name);
+            assertEq(1, r.requests, name + ": a started stream is not sent again");
+            # an error after an event was delivered
+            binary delta = event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "partial"}});
+            r = retryOutcome(async, (reply(200, (delta + throttled[0],)), reply(200, (textStream(),))));
+            assertEq("Bedrock ConverseStream failed: throttlingException: slow down", r.desc, name);
+            assertEq(1, r.requests, name + ": a partially delivered generation is not retried");
+            assertEq(("partial",), map $1.delta, r.events, name);
+        }
+    }
+
+    chatRetryTest() {
         BedrockAsyncWireFixture server((binary("{}"),), NOTHING, 429, "application/json");
         on_exit server.stop();
         assertThrows("LLM-ERROR", sub () {
