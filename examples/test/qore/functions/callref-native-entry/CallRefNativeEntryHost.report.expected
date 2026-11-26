@@ -5,3 +5,7 @@ module's reference given back: native
 script's reference called by the module: generic
 module's reference called by the script: generic
 another Program: native
+sandboxed Program's module calls: generic
+script's module reference called in the sandboxed Program: native
+sandboxed Program's module reference called by the script: generic
+module reference made for a governed call: generic

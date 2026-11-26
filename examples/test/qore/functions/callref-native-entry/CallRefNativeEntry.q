@@ -23,6 +23,7 @@ const N = 200;
 
 const UserFunctions = {
     "thrower": True, "deep": True, "loop_int": True, "catch_loop": True, "fib_ref": True, "call1": True,
+    "divide": True, "call_int": True, "catch_div": True,
 };
 
 bool report = ARGV[0] == "report";
@@ -135,6 +136,15 @@ int sub deep(int x) {
     return thrower(x) + 1;
 }
 
+# raises an exception in its native code (DIVISION-BY-ZERO)
+int sub divide(int x) {
+    return 1000 / x;
+}
+
+int sub depth(int n) {
+    return n ? depth(n - 1) + 1 : 0;
+}
+
 int sub with_default(int x = 5) {
     return x * 3;
 }
@@ -235,6 +245,22 @@ int sub catch_loop(code f, int n) {
     return caught;
 }
 
+# calls in a try block, the invoke form of the call
+int sub catch_div(code<int(int)> f, int n) {
+    int caught = 0;
+    int sum = 0;
+    for (int i = -n; i < n; ++i) {
+        try {
+            sum += f(i);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DIVISION-BY-ZERO") {
+                ++caught;
+            }
+        }
+    }
+    return sum * 10 + caught;
+}
+
 string sub stack_of(hash<ExceptionInfo> ex) {
     list<string> l = ();
     foreach hash<auto> frame in (ex.callstack) {
@@ -331,6 +357,37 @@ run_case("nested exception", string sub () {
     } catch (hash<ExceptionInfo> ex) {
         return err(ex) + " at " + stack_of(ex);
     }
+});
+run_case("native exception", string sub () {
+    try {
+        call_int(\divide(), 0);
+        return "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + " at " + stack_of(ex);
+    }
+});
+run_case("native exception in a loop", string sub () {
+    int caught = 0;
+    for (int i = 0; i < N; ++i) {
+        try {
+            int v = loop_int(\divide(), 1, i % 3);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DIVISION-BY-ZERO" && stack_of(ex) =~ /^divide:[0-9]+ <- loop_int:[0-9]+$/) {
+                ++caught;
+            }
+        }
+    }
+    return sprintf("%d", caught);
+});
+run_case("native exceptions in a try block", string sub () { return sprintf("%d", catch_div(\divide(), N)); });
+run_case("recursion in the callee", string sub () {
+    string deep;
+    try {
+        deep = sprintf("%d", call_int(\depth(), 100000000));
+    } catch (hash<ExceptionInfo> ex) {
+        deep = ex.err;
+    }
+    return sprintf("%d %s", call_int(\depth(), 1000), deep);
 });
 run_case("exceptions in a loop", string sub () { return sprintf("%d", catch_loop(\thrower(), N)); });
 run_case("return type", string sub () {
@@ -520,4 +577,14 @@ run_case("concurrent first use", string sub () {
         ++seen{q.get()};
     }
     return seen.keys().join("|") + sprintf(" x%d", seen.firstValue());
+});
+# a reference that sandboxed code made to a function of the program, called by the program's code: the creator's
+# context applies, so the generic call path makes the call
+run_case("sandboxed reference called by the program", string sub () {
+    SandboxManager manager();
+    Program sandboxed(PO_NEW_STYLE);
+    sandboxed.setSandboxManager(manager);
+    sandboxed.importFunction("step");
+    sandboxed.parse("code sub mk() { return \\step(); }", "sandboxed");
+    return sprintf("%d", loop_int(sandboxed.callFunction("mk"), N, 7));
 });

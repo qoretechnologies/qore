@@ -17,6 +17,10 @@ int as auto: native
 float as auto: native
 exception: fast
 nested exception: fast
+native exception: native
+native exception in a loop: native
+native exceptions in a try block: native
+recursion in the callee: fast
 exceptions in a loop: fast
 return type: fast
 auto return to int: fast
@@ -35,3 +39,4 @@ runtime reference: native
 reference in a hash: generic
 recursion: fast
 concurrent first use: native
+sandboxed reference called by the program: generic

@@ -67,3 +67,27 @@ run_case("another Program", string sub () {
     p.parse("int sub t(int n) { return mod_loop(n, 7) + mod_apply(mod_ref(), n, 9); }", "child");
     return sprintf("%d", p.callFunction("t", N));
 });
+
+# the sandbox: a Program with a sandbox manager that loads the module, references handed between it and the script,
+# and a reference that the module's code makes for a governed call; the module's own references in the sandboxed
+# Program are made and called in the same context, the others take the generic call path
+SandboxManager manager();
+Program sandboxed(PO_NEW_STYLE);
+sandboxed.setSandboxManager(manager);
+sandboxed.loadModule("CallRefNativeEntryModule");
+sandboxed.parse("int sub sb_loop(int n) { return mod_loop(n, 7) + mod_apply(mod_ref(), n, 9); }
+int sub sb_apply(code<int(int)> f, int n) { return mod_apply(f, n, 7); }
+code<int(int)> sub sb_ref() { return mod_ref(); }", "sandboxed");
+run_case("sandboxed Program's module calls", string sub () {
+    return sprintf("%d", sandboxed.callFunction("sb_loop", N));
+});
+run_case("script's module reference called in the sandboxed Program", string sub () {
+    return sprintf("%d", sandboxed.callFunction("sb_apply", mod_ref(), N));
+});
+run_case("sandboxed Program's module reference called by the script", string sub () {
+    return sprintf("%d", mod_apply(sandboxed.callFunction("sb_ref"), N, 7));
+});
+run_case("module reference made for a governed call", string sub () {
+    code<int(int)> f = SandboxManager::callGoverned(\mod_ref(), sandboxed);
+    return sprintf("%d", mod_apply(f, N, 7));
+});

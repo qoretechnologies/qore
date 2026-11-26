@@ -69,7 +69,9 @@ int sub fast_calls() {
 }
 
 # the warm-up compiles the code in the compiled execution modes and takes the facts of the fast path
+int warm_before = fast_calls();
 int warm = run_loop(\step(), 500, -1);
+int warm_fast = fast_calls() - warm_before;
 
 EntryRecorder dbg();
 ProgramControl pc = ProgramControl::getProgram();
@@ -87,5 +89,6 @@ int after = fast_calls();
 dbg.removeProgram(pc);
 printf("warm %d result %d entries after attach %d\n", warm, r, dbg.entries);
 if (report) {
+    printf("fast path before attach: %s\n", warm_fast ? "yes" : "no");
     printf("fast calls after attach: %d\n", after - before);
 }

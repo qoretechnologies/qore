@@ -141,10 +141,15 @@ class CallRefNativeEntryTest inherits QUnit::Test {
                 "QORE_AOT_EH=1")) {
             program = compile(tmp, fixture, opt, env);
             assertEq(expected, runProgram(program), env);
-            if (can_report && env != "QORE_AOT_EH=1") {
-                string generic = (map regex_subst($1, ": native$", ": fast"), report_aot_expected.split("\n"),
-                    $1 != "").join("\n") + "\n";
-                assertEq(generic, runProgram(program, "--enable-debug report"), env + ": no entry taken");
+            if (can_report) {
+                if (env == "QORE_AOT_EH=1") {
+                    assertEq(report_aot_expected, runProgram(program, "--enable-debug report"),
+                        env + ": entries taken");
+                } else {
+                    string generic = (map regex_subst($1, ": native$", ": fast"), report_aot_expected.split("\n"),
+                        $1 != "").join("\n") + "\n";
+                    assertEq(generic, runProgram(program, "--enable-debug report"), env + ": no entry taken");
+                }
             }
         }
     }
@@ -226,7 +231,9 @@ class CallRefNativeEntryTest inherits QUnit::Test {
         string program = compile(tmp, debugger_fixture, 3);
         assertEq(DebuggerExpected, runProgram(program));
         if (can_report) {
-            assertEq(DebuggerExpected + "fast calls after attach: 0\n", runProgram(program, "--enable-debug report"));
+            # the warm-up takes the entry, so the test of the calls after the attach is not vacuous
+            assertEq(DebuggerExpected + "fast path before attach: yes\nfast calls after attach: 0\n",
+                runProgram(program, "--enable-debug report"));
         }
     }
 
