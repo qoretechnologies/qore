@@ -39,7 +39,7 @@
 module CsvUtil {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     domains = "PROCESS_CONTROL";
-    version = "1.12";
+    version = "1.13";
     desc = "user module for working with CSV files";
     author = "Petr Vanek <petr@yarpen.cz>, David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -230,6 +230,10 @@ module CsvUtil {
 */
 /** @page csvutil_relnotes Release Notes
 
+
+    @section csvutil_v1_13 Version 1.13
+    - the CSV \c profile action takes the \c "header_row" option: the 1-based row holding the column names, or \c 0
+      if the data has none, for when the person who knows the file says where the column names are
 
     @section csvutil_v1_12 Version 1.12
     - the readers take the \c "encoding_errors" option, which says what a line that is not valid in its encoding gives:

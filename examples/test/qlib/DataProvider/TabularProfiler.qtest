@@ -77,6 +77,7 @@ public class TabularProfilerTest inherits QUnit::Test {
         addTestCase("duplicate and empty headers", \headers());
         addTestCase("wide period columns", \widePeriods());
         addTestCase("sheets without a header, empty sheets, and partial reads", \noHeader());
+        addTestCase("the header row the caller gives, or none", \givenHeaderRow());
         addTestCase("hidden sheets, formulas, named ranges, and text formats", \workbook());
         addTestCase("text-only and single-column sheets", \textOnly());
         addTestCase("redaction", \redaction());
@@ -646,6 +647,63 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq({"Rates": "Data!$A$1:$B$4"}, grid.named_ranges);
         assertNothing(grid.text_format);
         assertEq(4, TabularProfiler::profile(grid).sheets[0].data_region.last_row);
+    }
+
+    givenHeaderRow() {
+        # a plan whose column names are on row 3 under a note, and whose first data row is all text
+        hash<TabularWorkbookGrid> grid({
+            "format": "xlsx",
+            "sheets": (<TabularSheetGrid>{
+                "name": "Plan",
+                "rows": (
+                    ("Plan 2026",),
+                    ("Article", "Store", "Week"),
+                    ("Code", "Location", "Qty"),
+                    ("A-1", "Plzeň", 480),
+                    ("A-2", "Brno", 12),
+                ),
+            },),
+        });
+        # found: the label row with data under it is the header
+        hash<TabularSheetProfile> sheet = TabularProfiler::profile(grid).sheets[0];
+        assertEq(3, sheet.header_row, "the profiler's own guess");
+
+        # given: the rows above are title rows, the data starts on the next row, the columns are named from it
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 2}).sheets[0];
+        assertEq(2, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq(3, sheet.data_region.first_row);
+        assertEq(("Article", "Store", "Week"), (map $1.header, sheet.columns));
+        assertEq(3, sheet.samples.size(), "row 3 is data now");
+        assertNothing(finding(sheet, "no_header_row"));
+
+        # none: every row from the first with content is data, and no finding says none was found
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 0}).sheets[0];
+        assertNothing(sheet.header_row);
+        assertEq((), sheet.title_rows);
+        assertEq(1, sheet.data_region.first_row);
+        assertEq((NOTHING, NOTHING, NOTHING), (map $1.header, sheet.columns));
+        assertNothing(finding(sheet, "no_header_row"), "the caller said the sheet has none");
+
+        # below every row with content: no data, and no column
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 9}).sheets[0];
+        assertEq(9, sheet.header_row);
+        assertNothing(sheet.data_region);
+        assertEq((), sheet.columns);
+
+        assertThrows("TABULAR-PROFILE-ERROR", "header_row", \TabularProfiler::profile(), (grid,
+            <TabularProfileOptions>{"header_row": -1}));
+
+        # the profile action takes it too
+        PipeProfileDataProvider prov();
+        binary data = binary("Stock list\nSKU|Qty\nA|5\nB|6");
+        assertEq(2, prov.doRequest({"data": data}).sheets[0].header_row);
+        hash<auto> profile = prov.doRequest({"data": data, "header_row": 0});
+        assertNothing(profile.sheets[0].header_row);
+        assertEq(1, profile.sheets[0].data_region.first_row);
+        assertEq(3, prov.doRequest({"data": data, "header_row": "3"}).sheets[0].header_row,
+            "a soft integer, as a JSON caller may send it");
+        assertTrue(prov.getRequestType().getFields().hasKey("header_row"));
     }
 
     profileProvider() {

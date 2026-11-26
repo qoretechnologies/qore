@@ -116,6 +116,16 @@ public hashdecl TabularProfileOptions {
 
     #! The number of leading rows searched for the header row
     int header_search_rows = 20;
+
+    #! The 1-based row holding the column names, or 0 if the sheets have none
+    /** When not set, the header row is found as described in @ref TabularProfiler::profile(); when set, it is used
+        for every sheet, as the user who knows the file says it: the rows above it are title rows, the data starts
+        on the next row, and the columns are named from it; with 0, every row from the first row with content is
+        data, and no @c no_header_row finding is reported
+
+        @since %DataProvider 3.13
+    */
+    *int header_row;
 }
 
 #! A finding about a sheet: a structural feature or a problem that affects how the data is read
@@ -554,9 +564,15 @@ public class TabularProfiler {
         @param opts profile options
 
         @return the profile
+
+        @throw TABULAR-PROFILE-ERROR the @c header_row option is negative
     */
     static hash<TabularWorkbookProfile> profile(hash<TabularWorkbookGrid> grid, *hash<TabularProfileOptions> opts) {
         hash<TabularProfileOptions> options = opts ?? <TabularProfileOptions>{};
+        if (options.header_row < 0) {
+            throw "TABULAR-PROFILE-ERROR", sprintf("header_row must be a 1-based row number or 0 for none; got %d",
+                options.header_row);
+        }
         hash<TabularWorkbookProfile> rv({
             "format": grid.format,
             "named_ranges": grid.named_ranges,
@@ -956,7 +972,20 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             return rv;
         }
 
-        *int header = findHeaderRow(types, last_row, options.header_search_rows);
+        # the header row the caller gave (0: none), else the one found
+        *int header;
+        if (exists options.header_row) {
+            if (options.header_row > 0) {
+                header = options.header_row - 1;
+                # below every row with content: no data
+                if (header > last_row) {
+                    rv.header_row = options.header_row;
+                    return rv;
+                }
+            }
+        } else {
+            header = findHeaderRow(types, last_row, options.header_search_rows);
+        }
         int first_data;
         if (exists header) {
             rv.header_row = header + 1;
@@ -973,7 +1002,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                 };
             }
         } else {
-            rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            # the caller said the sheet has none
+            if (!exists options.header_row) {
+                rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            }
             first_data = 0;
             while (!nonEmptyCount(types[first_data])) {
                 ++first_data;
