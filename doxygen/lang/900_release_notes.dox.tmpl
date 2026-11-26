@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Object Merged Into Another Object Gives the Members That the Merging Code May Read
+    The @ref plus_equals_operator "+= operator" with an object operand gives the target the source object's private
+    members only in the code of its class or of a class with private access to it, as the other reads of a whole object
+    do; code outside the class that relied on copying them gets the public members only
+    (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>).
+
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -2986,6 +2992,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the @ref plus_equals_operator "+= operator" merges only the members of an object that the merging code may read
+      into another object, where it gave code outside the class the source object's private members
+      (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)

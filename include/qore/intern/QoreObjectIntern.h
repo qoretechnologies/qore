@@ -1015,19 +1015,6 @@ public:
     //! see getWholeObjectReadContextHeld()
     DLLLOCAL bool heldReaderDeniedIntern(const qore_class_private& class_ctx) const;
 
-    //! Returns true if the calling code may read the public members of this object only, when it merges the object
-    //! into another object (qore#7033)
-    /** The code of a class that sandboxed code declared, as sandboxedReaderDenied() decides, and code that the owner
-        rules apply to (qore_caller_tenant_isolated()) without private access to the object's class, which the merge
-        would otherwise give the non-public members of the object; must be called without the object's lock
-    */
-    DLLLOCAL bool mergeSourcePublicOnly(const qore_class_private* reader_ctx) const {
-        return qore_sandboxed_code_active() && mergeSourcePublicOnlyIntern(reader_ctx);
-    }
-
-    //! see mergeSourcePublicOnly()
-    DLLLOCAL bool mergeSourcePublicOnlyIntern(const qore_class_private* reader_ctx) const;
-
     //! Returns true if the calling code may read the non-public members of the object as a whole (qore#7033)
     /** For the reads of the whole object that do not depend on a class context (formatting with \c %%y,
         serialization): trusted code, and sandboxed code whose sandbox created the object; a load and a branch while

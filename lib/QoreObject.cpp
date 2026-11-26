@@ -818,6 +818,9 @@ QoreHashNode* qore_object_private::copyData(ExceptionSink* xsink, bool throw_exc
     return data->copy();
 }
 
+static bool qore_object_runtime_member_visible(const qore_class_private* theclass_priv,
+        const qore_class_private* class_ctx, const char* key);
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
@@ -835,9 +838,16 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         class_ctx = nullptr;
     }
 
-    // the public members of the source object only if the calling code may not read its non-public members as a whole
-    // (qore#7033); decided before the source object's lock is taken
-    bool src_public_only = o.mergeSourcePublicOnly(reader_ctx);
+    // the members of the source object that the calling code may read, as by the other reads of a whole object
+    // (qore#7657): every member for the code of the source object's class, those that it can use for a class context
+    // with private access to the source object's class, the public members otherwise; the public members only also if
+    // the sandboxed read rule refuses the code the non-public members of the source object (qore#7033), which is
+    // decided before the source object's lock is taken
+    const qore_class_private* src_ctx = reader_ctx;
+    if (src_ctx && (!qore_class_private::runtimeCheckPrivateClassAccess(*o.theclass, src_ctx)
+            || o.sandboxedReaderDenied(src_ctx))) {
+        src_ctx = nullptr;
+    }
 
     // saves internal source data to merge
     ReferenceHolder<QoreHashNode> new_internal_data(xsink);
@@ -852,13 +862,15 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         if (!o.data->empty()) {
-            if (!src_public_only) [[likely]] {
+            const qore_class_private* src_priv = qore_class_private::get(*o.theclass);
+            if (src_ctx == src_priv) {
                 new_data = o.data->copy();
             } else {
                 new_data = new QoreHashNode(autoTypeInfo);
                 ConstHashIterator hi(o.data);
                 while (hi.next()) {
-                    if (!o.theclass->isPrivateMember(hi.getKey())) {
+                    if (src_ctx ? qore_object_runtime_member_visible(src_priv, src_ctx, hi.getKey())
+                            : !o.theclass->isPrivateMember(hi.getKey())) {
                         // not possible for an exception to happen here
                         qore_hash_private::get(**new_data)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
                     }
@@ -866,7 +878,7 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
             }
         }
 
-        if (class_ctx && o.cdmap && !src_public_only) {
+        if (class_ctx && o.cdmap && src_ctx) {
             cdmap_t::iterator i = o.cdmap->find(class_ctx->classID);
             if (i != o.cdmap->end()) {
                 // see if the current object supports this class's data: the class itself, by identity (qore#7036)
@@ -2453,16 +2465,6 @@ bool qore_object_private::heldReaderDeniedIntern(const qore_class_private& class
     }
     // the owner is not decided with the object's lock held: fails closed
     return true;
-}
-
-bool qore_object_private::mergeSourcePublicOnlyIntern(const qore_class_private* reader_ctx) const {
-    // the code of a class with private access to the object's class: the sandboxed read rule decides
-    if (reader_ctx && qore_class_private::runtimeCheckPrivateClassAccess(*theclass, reader_ctx)) {
-        return sandboxedWriterDeniedIntern(*reader_ctx);
-    }
-    // code without private access to the object's class, which reads its public members only as a whole: code that the
-    // owner rules apply to does so in a merge too
-    return qore_caller_tenant_isolated();
 }
 
 int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
