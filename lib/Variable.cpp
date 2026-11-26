@@ -4718,14 +4718,6 @@ QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_type, con
         "as a 'list<auto>'", op_desc, op, value_type, target_type, op_desc, value_type);
 }
 
-void qore_weak_store_wrap_raise(bool weak, const QoreTypeInfo* value_type, bool no_value,
-        const QoreTypeInfo* target_ti, ExceptionSink* xsink) {
-    xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_wrap_desc(weak, QoreTypeInfo::getName(value_type),
-        QoreTypeInfo::getName(target_ti), no_value ? QoreWeakWrapKind::NoValue : QoreWeakWrapKind::Value));
-    // the context that QoreTypeSpec::acceptInputImpl() adds to an error of a conversion
-    xsink->appendLastDescription(" (while converting types for type '%s')", QoreTypeInfo::getName(target_ti));
-}
-
 QoreStringNode* qore_weak_store_iterator_desc(bool weak, const char* value_type, const char* target_type) {
     return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
         "in an lvalue of type '%s': the lvalue's type builds a new list from the iterator, so the %s reference would "

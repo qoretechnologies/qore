@@ -1035,14 +1035,15 @@ public:
     }
 
     //! As acceptAssignment(), for the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
-    /** The conversion itself refuses to wrap a value that is not a list in a new list (a softlist lvalue), or to
-        convert no value (NOTHING or NULL) to a new empty list: it raises RUNTIME-TYPE-ERROR, as the weak or opaque
+    /** The conversion itself refuses to wrap a value that is not a list in a new list (a softlist type, also as the
+        member of a union), to convert no value (NOTHING or NULL) to a new empty list, or to materialize an iterator to
+        a new list (a list type), before the iterator is iterated: it raises RUNTIME-TYPE-ERROR, as the weak or opaque
         reference would designate the new list, a temporary, instead of the value assigned.  A value that needs no
-        conversion is accepted as by acceptAssignment(), at the same cost.
+        conversion is accepted as by acceptAssignment(), at the same cost: always inlined, as acceptAssignment() is.
 
         @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
     */
-    DLLLOCAL static void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, bool weak, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
@@ -1053,7 +1054,7 @@ public:
     }
 
     //! As above, with the immutable compatibility policy of the operation
-    DLLLOCAL static void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, LexicalSemanticPolicy policy, bool weak, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {

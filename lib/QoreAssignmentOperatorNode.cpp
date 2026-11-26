@@ -270,7 +270,7 @@ static bool qore_parse_weak_store_converts(const QoreTypeInfo* target_ti, const 
     @param kind set to what the lvalue makes of the value: no value only (the value's type is NOTHING or NULL), a
     value that is not a list only, or either (ex: a \c *int value)
 */
-static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
+static bool qore_parse_weak_store_wraps_type(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
         QoreWeakWrapKind& kind) {
     if (!QoreTypeInfo::hasType(value_ti) || !QoreTypeInfo::isSoftListType(target_ti)
             || QoreTypeInfo::isReference(value_ti)) {
@@ -301,6 +301,39 @@ static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const Qor
         kind = QoreWeakWrapKind::Either;
     }
     return true;
+}
+
+//! as qore_parse_weak_store_wraps_type(), also for a union type with softlist members (qore#7619)
+/** A union wraps the value if each of its members that can accept the value wraps it (and one can); a member that
+    can accept it as it is, or a union that takes NOTHING for a value that can be NOTHING or NULL, leaves the store to
+    the run-time check, which refuses the conversion that runs
+*/
+static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
+        QoreWeakWrapKind& kind) {
+    const QoreUnionTypeInfo* u = QoreTypeInfo::getUnionType(target_ti);
+    if (!u) {
+        return qore_parse_weak_store_wraps_type(target_ti, value_ti, kind);
+    }
+    if (!QoreTypeInfo::hasType(value_ti) || QoreTypeInfo::isReference(value_ti)) {
+        return false;
+    }
+    if (u->isOrNothing() && (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) != QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(value_ti, NT_NULL) != QTI_NOT_EQUAL)) {
+        return false;
+    }
+    bool wraps = false;
+    for (const QoreTypeInfo* member : u->getMemberTypes()) {
+        if (QoreTypeInfo::parseAccepts(member, value_ti) == QTI_NOT_EQUAL) {
+            continue;
+        }
+        QoreWeakWrapKind member_kind = QoreWeakWrapKind::Value;
+        if (!qore_parse_weak_store_wraps_type(member, value_ti, member_kind)) {
+            return false;
+        }
+        kind = wraps && kind != member_kind ? QoreWeakWrapKind::Either : member_kind;
+        wraps = true;
+    }
+    return wraps;
 }
 
 //! returns the type that a weak or opaque assignment to \a left assigns the value with, for its parse-time checks

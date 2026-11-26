@@ -106,6 +106,14 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
                 "if (exists h.k) { throw \"X\"; }", "ok"),
             ("maybe NOTHING into softlist", "*int n; softlist v; v := n;", "either", "softlist"),
             ("NULL into softlist", "softlist v; v := NULL;", "empty", "softlist"),
+            ("float into union<softlist, string>", "union<softlist, string> v = \"a\"; v := 1.5;", "wrap",
+                "union<softlist, string>"),
+            ("object into union<softlist, int>, opaque", "PcObj c(); union<softlist, int> v = 1; v @= c;", "wrap",
+                "union<softlist, int>"),
+            ("string into union<softlist, string> keeps", "union<softlist, string> v = \"a\"; v := \"b\";", "ok"),
+            ("int into union<softlist, string> is left to run time", "any i = 1; union<softlist, string> v = \"a\"; "
+                "try { v := i; throw \"X\"; } catch (hash<ExceptionInfo> ex) { if (ex.err != \"RUNTIME-TYPE-ERROR\") "
+                "{ rethrow; } }", "ok"),
             ("NULL into softlist<*int>, which wraps it", "softlist<*int> v; v := NULL;", "wrap", "softlist<*int>"),
             ("maybe NOTHING into a hash key", "*int n; hash<string, softlist> h = {}; h.k @= n;", "either",
                 "softlist"),

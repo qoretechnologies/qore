@@ -2012,6 +2012,15 @@ uint64_t qore_rt_coerce_value_weak_aot(QoreAOTContext* ctx, int32_t local_idx, u
         uint64_t* cleanup_ptr, ExceptionSink* xsink);
 uint64_t qore_rt_coerce_value_weak_aot_throwing(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink);
+// the coercion of the value of an opaque assignment to a local, as of a weak one (qore#7619)
+uint64_t qore_rt_coerce_value_opaque(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_opaque_throwing(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_opaque_aot(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_opaque_aot_throwing(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
 
 // the store helpers of the assignment of an element to the variable of a foreach loop (see JITRuntime.cpp)
 uint64_t qore_rt_coerce_value_foreach(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,

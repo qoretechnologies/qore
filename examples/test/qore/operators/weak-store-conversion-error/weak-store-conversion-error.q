@@ -584,3 +584,174 @@ string sub null_plain_nsl(any v, bool opaque) {
     any dit = new ListIterator((1, 2));
     try_store("iterator description", sub () { dl := dit; }, auto sub () { return dl; });
 }
+
+# a union type with a softlist member wraps a value that only that member accepts: refused as the conversion that runs
+# (qore#7619); a list<T> local refuses an iterator before it is iterated, in every mode and in native code, also with
+# @=; an object that is not an iterator, and an iterator, given to a union with a softlist member are wrapped
+class WscCountIter inherits AbstractIterator {
+    public {
+        int calls = 0;
+        int pos = -1;
+    }
+
+    bool next() {
+        ++calls;
+        if (pos < 2) {
+            ++pos;
+            return True;
+        }
+        return False;
+    }
+
+    auto getValue() {
+        return pos;
+    }
+
+    bool valid() {
+        return pos >= 0 && pos <= 2;
+    }
+}
+
+string sub deleted_list(any it, bool opaque) {
+    list<int> x = (9,);
+    try {
+        if (opaque) {
+            x @= it;
+        } else {
+            x := it;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s (%s); after: %y", ex.err, iter_kind(ex.desc), x);
+    }
+    return sprintf("stored: %y", x);
+}
+
+string sub union_sl_str(any v, bool opaque) {
+    union<softlist, string> x = "x";
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return sprintf("stored: %y (%s)", x, x.type());
+}
+
+string sub union_int_sli(any v, bool opaque) {
+    union<int, softlist<int>> x = 1;
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return sprintf("stored: %y (%s)", x, x.type());
+}
+
+string sub union_nsl_str(any v, bool opaque) {
+    *union<softlist, string> x = "x";
+    try {
+        if (opaque) {
+            x @= v;
+        } else {
+            x := v;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return iter_result(ex, x);
+    }
+    return sprintf("stored: %y (%s)", x, x.type());
+}
+
+string sub count_list(WscCountIter it, bool opaque) {
+    list<int> x = (9,);
+    try {
+        if (opaque) {
+            x @= it;
+        } else {
+            x := it;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s (%s); after: %y; next() calls: %d", ex.err, iter_kind(ex.desc), x, it.calls);
+    }
+    return sprintf("stored: %y; next() calls: %d", x, it.calls);
+}
+
+string sub count_list_any(any it, bool opaque) {
+    *list<int> x = (9,);
+    try {
+        if (opaque) {
+            x @= it;
+        } else {
+            x := it;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s (%s); after: %y; next() calls: %d", ex.err, iter_kind(ex.desc), x, it.calls);
+    }
+    return sprintf("stored: %y; next() calls: %d", x, it.calls);
+}
+
+string sub count_list_string(any it, bool opaque) {
+    list<string> x = ("a",);
+    try {
+        if (opaque) {
+            x @= it;
+        } else {
+            x := it;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s (%s); after: %y; next() calls: %d", ex.err, iter_kind(ex.desc), x, it.calls);
+    }
+    return sprintf("stored: %y; next() calls: %d", x, it.calls);
+}
+
+{
+    foreach bool opaque in ((False, True)) {
+        string op = opaque ? "@=" : ":=";
+        for (int i = 0; i < 3; ++i) {
+            printf("int %s union<softlist, string> (%d): %s\n", op, i, union_sl_str(12, opaque));
+            printf("float %s union<softlist, string> (%d): %s\n", op, i, union_sl_str(1.5, opaque));
+            printf("string %s union<softlist, string> (%d): %s\n", op, i, union_sl_str("s", opaque));
+            printf("list %s union<softlist, string> (%d): %s\n", op, i, union_sl_str((1, 2), opaque));
+            printf("object %s union<softlist, string> (%d): %s\n", op, i, union_sl_str(new WscWrapObj(), opaque));
+            printf("iterator %s union<softlist, string> (%d): %s\n", op, i,
+                union_sl_str(new ListIterator((1,)), opaque));
+            printf("string %s union<int, softlist<int>> (%d): %s\n", op, i, union_int_sli("5", opaque));
+            printf("int %s union<int, softlist<int>> (%d): %s\n", op, i, union_int_sli(5, opaque));
+            printf("NULL %s *union<softlist, string> (%d): %s\n", op, i, union_nsl_str(NULL, opaque));
+            printf("NOTHING %s *union<softlist, string> (%d): %s\n", op, i, union_nsl_str(NOTHING, opaque));
+            printf("float %s *union<softlist, string> (%d): %s\n", op, i, union_nsl_str(1.5, opaque));
+            printf("iterator %s list<int>, counted (%d): %s\n", op, i, count_list(new WscCountIter(), opaque));
+            printf("iterator %s *list<int>, counted (%d): %s\n", op, i, count_list_any(new WscCountIter(), opaque));
+            printf("iterator %s list<string>, counted (%d): %s\n", op, i,
+                count_list_string(new WscCountIter(), opaque));
+        }
+        # a deleted iterator: the store is refused for the iterator's class before it is iterated, not for its
+        # deleted state
+        WscCountIter dit();
+        any adit = dit;
+        delete dit;
+        printf("deleted iterator %s list<int>: %s\n", op, deleted_list(adit, opaque));
+        # a local that a closure captures
+        WscCountIter cit();
+        list<int> cl = (9,);
+        code c = sub () { cl = (9,); };
+        try {
+            if (opaque) {
+                cl @= cit;
+            } else {
+                cl := cit;
+            }
+            printf("iterator %s closure local list<int>, counted: stored: %y\n", op, cl);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("iterator %s closure local list<int>, counted: %s (%s); next() calls: %d\n", op, ex.err,
+                iter_kind(ex.desc), cit.calls);
+        }
+        c();
+    }
+}

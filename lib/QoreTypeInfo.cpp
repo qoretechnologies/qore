@@ -6077,7 +6077,9 @@ struct WeakStoreFilterPolicy : Base {
         // type converts a string to the element of its list)
         const QoreTypeInfo* vti = n.getTypeInfo();
         Base::map(accept, n, xsink);
-        if (n.getType() == NT_LIST && QoreTypeInfo::isSoftListType(target) && !(xsink && *xsink)) {
+        // the conversion that ran made a new list of a value that is not a list: it is the conversion of a softlist
+        // type, also as the member of a union, which no other conversion does
+        if (n.getType() == NT_LIST && !(xsink && *xsink)) {
             assert(xsink);
             // the caller adds the context of the conversion to the error (QoreTypeSpec::acceptInputImpl()); the list
             // is empty if no value was converted to it, and holds the value otherwise, also NULL for a softlist<T>

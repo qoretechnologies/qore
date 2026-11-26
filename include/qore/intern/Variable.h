@@ -2881,20 +2881,6 @@ enum class QoreWeakWrapKind {
 DLLLOCAL QoreStringNode* qore_weak_store_wrap_desc(bool weak, const char* value_type, const char* target_type,
         QoreWeakWrapKind kind);
 
-//! Raises the error of a weak (:=) or opaque (@=) assignment of a value that the lvalue's type wraps in a new list
-//! (qore#7619)
-/** As the conversion of the value raises it (QoreTypeInfo::acceptAssignmentWeak()), with the context that the
-    conversion adds to its errors, so that every execution mode gives the same error
-
-    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
-    @param value_type the type of the value assigned, read before its conversion
-    @param no_value true if the new list is empty: no value (NOTHING or NULL) was converted to it
-    @param target_ti the type of the lvalue
-    @param xsink the exception sink
-*/
-DLLLOCAL void qore_weak_store_wrap_raise(bool weak, const QoreTypeInfo* value_type, bool no_value,
-        const QoreTypeInfo* target_ti, ExceptionSink* xsink);
-
 //! Returns the description of the error of a weak (:=) or opaque (@=) assignment of an iterator that the lvalue's
 //! list type would materialize to a new list (qore#7619)
 /** The reference would designate the new list, a temporary, instead of the value assigned
