@@ -85,6 +85,7 @@ Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
 }
 
 void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
+    max_request_body_size = size;
     if (read_op) {
         read_op->setMaxRequestBodySize(size);
     }
@@ -561,12 +562,14 @@ void Http3ServerPollOperationPriv::startSendResponse(int status_code,
         return;
     }
     int64_t session_id = cached_request->getKeyValue("session_id").getAsBigInt();
-    int64_t stream_id = cached_request->getKeyValue("stream_id").getAsBigInt();
+    // stream 0 is the first request stream of a connection (RFC 9000 section 2.1): only a missing ID is an error
+    QoreValue stream_id_val = cached_request->getKeyValue("stream_id");
+    int64_t stream_id = stream_id_val.getAsBigInt();
     if (!session_id) {
         xsink->raiseException("HTTP3-ERROR", "no session_id available for response");
         return;
     }
-    if (!stream_id) {
+    if (stream_id_val.isNothing()) {
         xsink->raiseException("HTTP3-ERROR", "no stream_id available for response");
         return;
     }
@@ -609,12 +612,14 @@ void Http3ServerPollOperationPriv::startSendStreamingResponse(int status_code,
         return;
     }
     int64_t session_id = cached_request->getKeyValue("session_id").getAsBigInt();
-    int64_t stream_id = cached_request->getKeyValue("stream_id").getAsBigInt();
+    // stream 0 is the first request stream of a connection (RFC 9000 section 2.1): only a missing ID is an error
+    QoreValue stream_id_val = cached_request->getKeyValue("stream_id");
+    int64_t stream_id = stream_id_val.getAsBigInt();
     if (!session_id) {
         xsink->raiseException("HTTP3-ERROR", "no session_id available for response");
         return;
     }
-    if (!stream_id) {
+    if (stream_id_val.isNothing()) {
         xsink->raiseException("HTTP3-ERROR", "no stream_id available for response");
         return;
     }
@@ -754,6 +759,10 @@ void Http3ServerPollOperationPriv::startReadRequest(ExceptionSink* xsink) {
 
     if (headers_only) {
         reinterpret_cast<SocketQuicServerPollOperation*>(*new_op)->setHeadersOnly(true);
+    }
+    // the connections that the new operation accepts have the request body limit too
+    if (max_request_body_size > 0) {
+        new_op->setMaxRequestBodySize(max_request_body_size);
     }
 
     // Set self on the inner op so it can build SocketPollInfo hashes
