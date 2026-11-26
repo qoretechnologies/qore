@@ -379,3 +379,49 @@ with the optimizer's statistics and the compiled code's calls to build hashes an
 keys.
 `IRWeakAssignedNativeRead.qtest` checks the reads of weak-assigned locals in
 the same way.
+
+### Native float accumulation
+
+`local += value` on a local declared exactly `float` (not `*float`,
+`softfloat`, an enum or a union type) of the current frame (not a closure
+variable, and not one that `delete` or `remove` can leave without a value or
+whose reference is taken, `LocalVar::everDeleted()`; nor a shared, foreach,
+weakly assigned or weakly designated variable, which
+`QoreIRLowering::changesThroughLValue()` sends to the lvalue path) is lowered
+as a load of the local, `AddAssignFloat` and a store of the sum
+(`QoreIRLowering::lowerPlusEquals()`), instead of the generic
+`LValuePathCompound` (`qore_rt_lv_path_compound()`), when its right operand is
+proven to be a float, an int or a bool whatever the code executed
+(`QoreIRLowering::isExactFloatAddOperand()`):
+
+- the facts that the builder gave the lowered operand say `float`, `int` or
+  `bool` exactly, assigned and never `NOTHING`: a constant, the result of a
+  typed arithmetic, comparison or conversion opcode, or the read of a variable
+  of that type whose facts say so (a local that the parse knows to be
+  assigned; the read of a global or thread-local variable normally has no such
+  facts), which holds no other value (a `float` or `int` variable refuses a
+  char, and a `bool` variable converts it);
+- or the operand is the call of a user function or static method of the same
+  Program whose variant is fixed at parse time (not chosen at runtime, not
+  generic, no receiver type) and returns `float`: the variant converts or
+  rejects its return value in every execution mode, so the call gives a float.
+
+The AST operator adds `qore_plus_equals_float_operand()` of the operand to the
+value of the lvalue (`LValueHelper::plusEqualsFloat()`); for any value but a
+char that is `QoreValue::getAsFloat()`, which `AddAssignFloat` applies, so the
+sum is the same IEEE 754 double add of the same two values (signed zeros,
+infinities, NaN and overflow included; an int is rounded to the nearest double
+in both).  The operand is lowered before the local is read, as the AST operator
+evaluates it first.  A local that the parse does not know to be assigned where
+it is read gets its type's default value `0.0` first (the `NOTHING` to default
+coercion of `lowerPlusEquals()`), as the AST operator assigns it.  The add is a
+plain `fadd`: the IR has no fast-math or contraction flags, so a product in the
+operand is rounded before the add, as the AST operators compute it.  A
+call reference's result is not proven by its signature: a `code<float()>`
+value can return an int, a string, `NOTHING`, an object or a char, and
+`getAsFloat()` converts a char to its code point where `+=` converts it as its
+one-character string; such an operand, an untyped one, and any other float
+lvalue keep the lvalue path.  `QORE_DISABLE_IR_FLOAT_LOCAL_ADD` disables it.
+`IRFloatLocalAdd.qtest` checks the native and the generic cases, with edge
+values, in every execution mode and compiled code (`qcc -O0` and `-O3`), with
+the compiled code's calls of the lvalue helper.

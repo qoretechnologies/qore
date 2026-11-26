@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the native float add of += on float locals
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRFloatLocalAddTest
+
+#! += on float locals in native code
+/** <tt>local += value</tt> on a local declared \c float of the frame is a native float add (AddAssignFloat) when the
+    value is proven to be a float, an int or a bool: a constant, a typed arithmetic result, a typed local, or the call
+    of a user function or static method whose variant is fixed at parse time and returns float.  Every other float
+    lvalue and operand takes the generic lvalue path (qore_rt_lv_path_compound()).  The scenario must print in every
+    tier and as a compiled executable what the AST tier prints, with and without the native add (including -0.0,
+    infinities, NaN, overflow, int rounding and no fused multiply-add); the LLVM IR of the functions shows where the
+    lvalue path is used.
+*/
+class IRFloatLocalAddTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! disables the native add
+        const Gate = "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ";
+
+        #! the generic lvalue helper
+        const Helper = "qore_rt_lv_path_compound";
+
+        #! the functions whose += is a native float add
+        const Native = ("localAdd", "constantAdd", "intAdd", "boolAdd", "falseAdd", "productAdd", "callAdd",
+            "loopAdd", "resultAdd", "unassignedAdd", "unassignedLoopAdd", "selfAdd", "badReturnAdd",
+            "unassignedResult", "tryAdd");
+
+        #! the functions whose += takes the lvalue path: operands read from a global and a thread-local variable,
+        #! whose parse does not prove them assigned, a call whose variant is chosen at runtime, a call of another
+        #! Program's function, a local that remove leaves without a value, an optional and a soft float, an untyped
+        #! operand, a callback's result (its signature does not prove the value), a reference, a thread-local
+        #! variable, a local passed by reference in the operand; the += of capturedAdd() and otherThreadAdd() is in a
+        #! closure, whose LLVM function has no name of its own to look for
+        const Generic = ("variableAdd", "overloadAdd", "moduleAdd", "removedAdd", "optionalAdd", "softAdd",
+            "mixedAdd", "callbackAdd", "referenceAdd", "threadLocalAdd", "rhsChangesLocal");
+    }
+
+    constructor() : QUnit::Test("IRFloatLocalAddTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
+        fixture = get_script_dir() + "/IRFloatLocalAddScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (ExecModeHarness::ExecModes[1..]) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+                assertEq(astOutput(), run(mode, Gate), sprintf("exec-mode=%s output without the native add matches "
+                    "AST", mode));
+            });
+        }
+        addTestCase("jit native add", \testJitNativeAdd());
+        addTestCase("reflection", \testReflection());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        list<string> lines = astOutput().split("\n");
+        assertEq("local -0.0: 0.0 -0.0 1.5 -1.5 1.7976931348623157e+308 -1.7976931348623157e+308 "
+            "4.9406564584124654e-324 inf.0 -inf.0 nan", lines[1]);
+        assertEq("local 1.7976931348623157e+308: 1.7976931348623157e+308 1.7976931348623157e+308 "
+            "1.7976931348623157e+308 1.7976931348623157e+308 inf.0 0.0 1.7976931348623157e+308 inf.0 -inf.0 nan",
+            lines[4]);
+        assertEq("local inf.0: inf.0 inf.0 inf.0 inf.0 inf.0 inf.0 inf.0 inf.0 nan nan", lines[7]);
+        assertEq("local nan: nan nan nan nan nan nan nan nan nan nan", lines[9]);
+        assertEq("constant: 2.5 2.5 4.0 1.0 1.7976931348623157e+308 -1.7976931348623157e+308 2.5 inf.0 "
+            "-inf.0 nan", lines[10]);
+        assertEq("int: 6.0 6.0 7.5 4.5 1.7976931348623157e+308 -1.7976931348623157e+308 6.0 inf.0 -inf.0 "
+            "nan 9007199254740992.0 -9.2233720368547758e+18", lines[11]);
+        assertEq("zero: 0.0 0.0 -0.0", lines[12]);
+        assertEq("bool: 1.0 1.0 2.5 -0.5 1.7976931348623157e+308 -1.7976931348623157e+308 1.0 inf.0 -inf.0 "
+            "nan", lines[13]);
+        assertEq("product: 0.0 0.0", lines[14]);
+        assertEq("call: 65542.75 65542.75 65544.25 65541.25 1.7976931348623157e+308 "
+            "-1.7976931348623157e+308 65542.75 inf.0 -inf.0 nan", lines[15]);
+        assertEq("loop: -0.0 32923.199999999924 inf.0", lines[16]);
+        assertEq("result: 1.75 3.0 2.0 -0.0 1.0 -0.0", lines[17]);
+        assertEq("unassigned: 0.0 2.5 0.0 <nothing null>", lines[18]);
+        assertEq("self: 3.0 6.0 5.0 -0.0 6.0 2.0", lines[19]);
+        assertEq("variables: 2.0 4.5 1.5 0.5 3.0 -0.0", lines[20]);
+        assertEq("bad-return: 3.5 <string \"ok\"> 2.0 <string \"ok\"> 1.5 <string \"RUNTIME-TYPE-ERROR\"> "
+            "1.5 <string \"RUNTIME-TYPE-ERROR\">", lines[21]);
+        assertEq("unassigned-result: 0.0 0.0 2.5 2.5", lines[22]);
+        assertEq("try: 5.5 <string \"ok\"> 1.5 <string \"FLOAT-ADD-STEP\">", lines[23]);
+        assertEq("overload: 4.0 2.5", lines[24]);
+        assertEq("module: 3.0 1.5", lines[25]);
+        assertEq("removed: 0.0 2.5", lines[26]);
+        assertEq("optional: 0.0 2.5 4.0", lines[27]);
+        assertEq("soft: 4.0 6.5 0.0", lines[28]);
+        assertEq("mixed: 3.5 4.0 4.0 6.5 0.0 2.5", lines[29]);
+        assertEq("callback: 1.75 3.5 6.5 0.0", lines[30]);
+        assertEq("reference: 4.0 4.0", lines[31]);
+        assertEq("captured: 6.5", lines[32]);
+        assertEq("thread-local: 4.0 4.0", lines[33]);
+        assertEq("other-thread: 1000.0", lines[34]);
+        assertEq("rhs-changes-local: 10.0", lines[35]);
+        assertEq(36, lines.size());
+    }
+
+    testJitNativeAdd() {
+        checkHelper(run("jit", "QORE_DUMP_LLVM_IR=1 "), True, "jit");
+        checkHelper(run("jit", Gate + "QORE_DUMP_LLVM_IR=1 "), False, "jit without the native add");
+    }
+
+    #! a call in the operand that changes the local through reflection: the local is read after it in every tier
+    testReflection() {
+        string reflection = get_script_dir() + "/IRFloatLocalAddReflection.qr";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            foreach string env in (("", Gate)) {
+                assertEq("reflected: 10.0\n", run(mode, env, reflection), sprintf("exec-mode=%s%s", mode,
+                    env ? " without the native add" : ""));
+            }
+        }
+        string ir = run("jit", "QORE_DUMP_LLVM_IR=1 ", reflection);
+        *list<*string> bodies = regex_extract(ir, "(?s)define [^\n]*@\"?reflectedAdd[_@][^\n]*\n(.*?)\n\\}");
+        assertTrue(exists bodies[0], "reflectedAdd has an LLVM definition");
+        assertTrue(adds(ir, "reflectedAdd"), "reflectedAdd adds natively");
+        assertFalse(callsHelper(ir, "reflectedAdd"), "reflectedAdd does not call the lvalue helper");
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-float-local-add-");
+        foreach hash<auto> i in ((("level": 0, "env": ""), ("level": 3, "env": ""), ("level": 3, "env": Gate))) {
+            string exe = sprintf("%s/scenario-O%d%s", tmp.path, i.level, i.env ? "-disabled" : "");
+            string out = ExecModeHarness::run_any(sprintf("%sQORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s", i.env, shellQuote(libqore_dir),
+                shellQuote(libqore_dir), shellQuote(qcc_bin), i.level, shellQuote(exe), shellQuote(fixture)));
+            string label = sprintf("AOT -O%d%s", i.level, i.env ? " disabled" : "");
+            assertTrue(is_file(exe), sprintf("%s compile produced an executable: %s", label, out.substr(-2000)));
+            checkHelper(out, !i.env, label);
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))), label + " output matches AST");
+        }
+    }
+
+    #! checks which functions of the LLVM IR call the lvalue helper
+    private checkHelper(string ir, bool enabled, string label) {
+        foreach string name in (Native) {
+            assertEq(!enabled, callsHelper(ir, name), sprintf("%s: %s calls %s", label, name, Helper));
+            if (enabled) {
+                assertTrue(adds(ir, name), sprintf("%s: %s adds natively", label, name));
+            }
+        }
+        foreach string name in (Generic) {
+            assertTrue(callsHelper(ir, name), sprintf("%s: %s calls %s", label, name, Helper));
+        }
+    }
+
+    #! returns True if an LLVM definition of the function has a native float add
+    private bool adds(string ir, string name) {
+        *list<*string> bodies = regex_extract(ir, "(?s)define [^\n]*@\"?" + name + "[_@][^\n]*\n(.*?)\n\\}",
+            Qore::RE_Global);
+        return exists (select bodies, regex($1 ?? "", "= fadd [^\n]*double"))[0];
+    }
+
+    #! returns True if an LLVM definition of the function calls the helper (in any of its variants)
+    private bool callsHelper(string ir, string name) {
+        *list<*string> bodies = regex_extract(ir, "(?s)define [^\n]*@\"?" + name + "[_@][^\n]*\n(.*?)\n\\}",
+            Qore::RE_Global);
+        assertTrue(exists bodies[0], name + " has an LLVM definition");
+        return exists (select bodies, regex($1 ?? "", "(?:call|invoke) [^\n]*@" + Helper + "[a-z_]*\\(")
+            )[0];
+    }
+
+    private string run(string mode, string env = "", *string script) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(script ?? fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

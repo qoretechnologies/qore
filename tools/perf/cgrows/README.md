@@ -167,6 +167,7 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-temporary.q` | `tl` `th` `thc` | a temporary `list<int>` pair read with an index of `(x & 1)`, a temporary `hash<string, int>` read with a key that a conditional chooses from two literals, and with a constant key (qore#5578) |
 | `bench-owning.q` | `sf_try_w` `s_try_w` `m_try_w` `mf_try_w` `sf_w` `sf_try_r` | a call that owns a temporary list argument that the method writes: a final static, a static, an instance and a final instance method in a try block, a final static method outside one, a final static method that only reads it (qore#7043, #6860) |
 | `bench-listmut.q` | `lm` `lms` `lp` | a `list<int>` local built with `push` and changed with `+=` and with `-=` on the element pushed, as in the `list_mutate` kernel of `bench/runtime-comparison`, and the same loop reading the element without changing it (qore#5578) |
+| `bench-floatacc.q` | `fl` `fi` `fd` `fs` `fr` | `+=` on a `float` local (qore#5578) with a `float` local, an `int`, a `float` function's call and a `float` static method's call as operand, which native code adds natively, and a `code<float()>` call reference's result, which takes the lvalue path |
 
 A new bench script follows the same form, which `examples/test/runner/test_cgrows_tool.py` checks: its first line is
 `%modern`; it defines `int sub f(int a)` (which the dead statements call); each loop function starts with
