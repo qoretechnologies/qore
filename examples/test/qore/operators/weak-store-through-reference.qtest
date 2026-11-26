@@ -21,7 +21,9 @@
     assigned to the referenced lvalue as the AST interpreter does: a container that the referenced lvalue's type
     converts to a copy is refused with RUNTIME-TYPE-ERROR (issue #7572), a weak or opaque assignment into an auto lvalue
     stores a reference to the value assigned, and a Normal assignment keeps the value's type in an auto lvalue (issue
-    #7617).  The cases (weak-store-through-reference/weak-store-through-reference.q) run in every execution mode and
+    #7617); the referenced lvalue is a local, a global, a member or a container element, and the reference is held by
+    a local, a parameter or a local that a closure captures, also into hash<auto!> and list<auto!> lvalues, which keep
+    a plain container (issue #7572).  The cases (weak-store-through-reference/weak-store-through-reference.q) run in every execution mode and
     compiled with AOT at optimization levels 0 and 3 against the same expected output
     (weak-store-through-reference.expected).
 */
