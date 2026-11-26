@@ -21,12 +21,21 @@ class FailingQuicServer inherits HttpServer {
         int fails;
         #! the system error number of the failures
         *int err_no;
-        #! the number of the bind that fails (from 1), if only one does
-        *int fail_at;
+        #! fails the first bind after a real bind succeeded, with \a err_no, and no other
+        bool fail_after_bound;
         #! the number of binds of paired QUIC listeners so far
         int binds;
         #! the ports of the QUIC binds tried
         list<int> ports = ();
+        #! the ports of the real binds that failed because the port was in use, such as by another test (qore#7743)
+        list<int> in_use_ports = ();
+        #! the next real bind finds its port held by a UDP socket of the test
+        bool hold_next;
+    }
+
+    private {
+        #! a real bind succeeded
+        bool bound;
     }
 
     constructor(hash<HttpServerOptionInfo> opts, int fails, *int err_no = EADDRINUSE) : HttpServer(opts) {
@@ -37,18 +46,44 @@ class FailingQuicServer inherits HttpServer {
     hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
         push ports, port;
         ++binds;
-        if (fail_at) {
-            if (binds == fail_at) {
+        if (fail_after_bound) {
+            if (bound) {
+                fail_after_bound = False;
                 throw "SOCKET-BIND-ERROR", sprintf("forced failure of the bind on UDP port %d", port), err_no;
             }
-            return HttpServer::addQuicListener(opts, port);
+            return realBind(opts, port);
         }
         if (fails > 0) {
             --fails;
             # the error of a bind, with its system error number as a bind gives it
             throw "SOCKET-BIND-ERROR", sprintf("forced failure of the bind on UDP port %d", port), err_no;
         }
-        return HttpServer::addQuicListener(opts, port);
+        return realBind(opts, port);
+    }
+
+    #! Binds the QUIC listener; records the port if it is in use
+    private hash<auto> realBind(hash<HttpListenerOptionInfo> opts, int port) {
+        *Socket holder;
+        on_exit if (holder) {
+            holder.close();
+        }
+        try {
+            if (hold_next) {
+                hold_next = False;
+                # the port is in use: a UDP socket of the test holds it on the address of the bind; if something else
+                # holds it already, the bind of this socket fails as the bind of the listener would
+                holder = new Socket();
+                holder.bindINET(opts.node, port, False, opts.family, SOCK_DGRAM);
+            }
+            hash<auto> rv = HttpServer::addQuicListener(opts, port);
+            bound = True;
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg === EADDRINUSE) {
+                push in_use_ports, port;
+            }
+            rethrow;
+        }
     }
 
     #! Adds listeners on the given resolved addresses, as a listener on a host name with several addresses does
@@ -103,6 +138,11 @@ class LogRecorder inherits LoggerAppenderWithLayout {
 }
 
 class HttpServerH3BindFailureTest inherits QUnit::Test {
+    private {
+        #! the most adds of a listener whose last attempt is the first real bind (each one a port in use is very rare)
+        const MaxRounds = 10;
+    }
+
     constructor() : QUnit::Test("HttpServerH3BindFailure", "1.0") {
         addTestCase("a random-port listener whose QUIC binds all fail is not added", \allFailTest());
         addTestCase("a random-port listener is created again until its QUIC bind succeeds", \retryTest());
@@ -112,6 +152,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         addTestCase("a failed add on several addresses stops the listeners it started", \multiAddressRollbackTest());
         addTestCase("the stop notification is called only for listeners that started", \stopNotificationTest());
         addTestCase("the failure of a real bind has its system error number", \realBindErrnoTest());
+        addTestCase("a random port that is in use at the last attempt fails the add", \lastAttemptInUseTest());
         set_return_value(main());
     }
 
@@ -133,6 +174,37 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         logger.addAppender(rec);
         FailingQuicServer srv(<HttpServerOptionInfo>{"logger": logger}, fails, err_no);
         return {"srv": srv, "rec": rec};
+    }
+
+    #! Adds a listener on a new server whose first 9 QUIC binds fail, so that the tenth and last attempt binds it
+    /** Returns the server, its log recorder and the listener: {"srv": FailingQuicServer, "rec": LogRecorder,
+        "li": hash<auto>}.
+
+        The bind of the tenth attempt is real: when its port is in use, such as by another test that runs at the same
+        time, the attempts are exhausted and the listener is not added; that is checked, and the add is made again with
+        a new server, as the server takes a fresh random port for an attempt for the same reason (qore#7743)
+    */
+    private hash<auto> addOnLastAttempt(hash<HttpListenerOptionInfo> info) {
+        for (int round = 1; round <= MaxRounds; ++round) {
+            hash<auto> s = getServer(9);
+            FailingQuicServer srv = s.srv;
+            try {
+                hash<auto> li = srv.addListener(info);
+                return {"srv": srv, "rec": s.rec, "li": li};
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "HTTPSERVER-H3-BIND-ERROR" || srv.ports.size() != 10
+                    || srv.in_use_ports != (srv.ports.last(),) || round == MaxRounds) {
+                    delete srv;
+                    rethrow;
+                }
+                # the port of the last attempt was in use: the add failed after all of its attempts and kept nothing
+                assertRegex("in 10 attempt", ex.desc);
+                assertRegex(sprintf("\\(errno %d\\)$", EADDRINUSE), ex.arg.attempts.last());
+                assertEq({}, srv.getListeners(), "no listener was kept");
+                delete srv;
+            }
+        }
+        throw "TEST-ERROR", "not reached";
     }
 
     #! Adds a listener on an explicit \a port, which was free a moment ago; another program can take it before the
@@ -221,13 +293,12 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
     }
 
     retryTest() {
-        hash<auto> s = getServer(9);
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+        hash<auto> s = addOnLastAttempt(h3Options());
         FailingQuicServer srv = s.srv;
         on_exit delete srv;
         LogRecorder rec = s.rec;
-
-        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
-        hash<auto> li = srv.addListener(h3Options());
+        hash<auto> li = s.li;
         assertEq(10, srv.ports.size(), "the tenth attempt was bound");
         assertEq(srv.ports.last(), li.port, "the listener is on the port of the last attempt");
         assertEq(9, rec.get("retrying with a fresh random port").size());
@@ -301,7 +372,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         FailingQuicServer srv = s.srv;
         on_exit delete srv;
         # the bind of the second listener's QUIC listener fails, with an error that is not retried
-        srv.fail_at = 2;
+        srv.fail_after_bound = True;
         StopRecorder stops();
 
         hash<HttpListenerOptionInfo> info = h3Options();
@@ -313,7 +384,8 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
             {"address": "127.0.0.1", "address_desc": "ipv4(127.0.0.1)", "port": 0, "family": AF_INET},
         );
         assertThrows("HTTPSERVER-H3-BIND-ERROR", \srv.addResolved(), (info, addresses));
-        assertEq(2, srv.binds, "both addresses were tried");
+        # a port of the first address that was in use was tried again with a fresh one
+        assertEq(2 + srv.in_use_ports.size(), srv.binds, "both addresses were tried");
         # the listener started for the first address was stopped: no listener is left running
         assertEq({}, srv.getListeners(), "no listener was kept");
         assertEq(0, srv.getRunningListenerCount(), "no listener is running");
@@ -323,20 +395,43 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
     }
 
     stopNotificationTest() {
-        hash<auto> s = getServer(9);
-        FailingQuicServer srv = s.srv;
-        on_exit delete srv;
         StopRecorder stops();
 
         hash<HttpListenerOptionInfo> info = h3Options();
         info.stopc = stops.getCallback();
         # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
-        srv.addListener(info);
+        FailingQuicServer srv = addOnLastAttempt(info).srv;
+        on_exit delete srv;
         assertEq(10, srv.ports.size(), "the tenth attempt was bound");
         # the nine listeners that were created and stopped again because their QUIC listener could not be bound did
         # not start: their stop is not notified
         assertEq((), stops.names, "no stop notification for the failed attempts");
         srv.stop();
         assertEq(1, stops.names.size(), "the listener that started notified its stop once");
+    }
+
+    lastAttemptInUseTest() {
+        hash<auto> s = getServer(9);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        # the bind of the tenth attempt, the first real one, finds its port in use
+        srv.hold_next = True;
+
+        hash<ExceptionInfo> ex;
+        try {
+            # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+            srv.addListener(h3Options());
+            assertTrue(False, "the listener was added");
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        assertEq("HTTPSERVER-H3-BIND-ERROR", ex.err);
+        assertRegex("in 10 attempt", ex.desc);
+        assertEq(10, srv.ports.size(), "10 attempts");
+        assertEq((srv.ports.last(),), srv.in_use_ports, "the port of the last attempt was in use");
+        assertRegex(sprintf("^attempt 10/10 on port %d: SOCKET-BIND-ERROR: .*Address already in use.* \\(errno %d\\)$",
+            srv.ports.last(), EADDRINUSE), ex.arg.attempts.last(), "the system error of the real bind");
+        assertEq({}, srv.getListeners(), "no listener was kept");
+        assertEq(0, srv.getRunningListenerCount(), "no listener is running");
     }
 }
