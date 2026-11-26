@@ -81,6 +81,8 @@ public hashdecl RawHttp2StreamResult {
     *int reset_code;
     #! the error code of a GOAWAY that the connection received, if one did
     *int goaway_code;
+    #! True if the server closed the connection before the stream ended
+    bool closed = False;
 }
 
 #! An HTTP/2 client that sends requests and reads frames only when asked to
@@ -155,17 +157,24 @@ public class RawHttp2Client {
         while (True) {
             *hash<auto> f = readFrame(read_timeout);
             if (!f) {
+                rv.closed = True;
                 return rv;
             }
             switch (f.type) {
                 case FrameSettings:
                     if (!(f.flags & FlagAck)) {
-                        sock.send(frame(FrameSettings, FlagAck, 0, binary()), io_timeout);
+                        if (!sendOrClosed(frame(FrameSettings, FlagAck, 0, binary()))) {
+                            rv.closed = True;
+                            return rv;
+                        }
                     }
                     break;
                 case FramePing:
                     if (!(f.flags & FlagAck)) {
-                        sock.send(frame(FramePing, FlagAck, 0, f.payload), io_timeout);
+                        if (!sendOrClosed(frame(FramePing, FlagAck, 0, f.payload))) {
+                            rv.closed = True;
+                            return rv;
+                        }
                     }
                     break;
                 case FrameGoaway:
@@ -182,8 +191,11 @@ public class RawHttp2Client {
                         rv.data_bytes += f.payload.size();
                     }
                     if (f.payload.size() && !(f.flags & FlagEndStream)) {
-                        sock.send(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
-                            + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())), io_timeout);
+                        if (!sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
+                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())))) {
+                            rv.closed = True;
+                            return rv;
+                        }
                     }
                     if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
                         rv.ended = True;
@@ -206,7 +218,7 @@ public class RawHttp2Client {
         try {
             hdr = sock.recvBinary(9, read_timeout);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CLOSED") {
+            if (isPeerClose(ex)) {
                 return;
             }
             rethrow;
@@ -218,6 +230,29 @@ public class RawHttp2Client {
             "stream_id": u32val(hdr, 5) & 0x7fffffff,
             "payload": len ? sock.recvBinary(len, read_timeout) : binary(),
         };
+    }
+
+    #! Sends @p data; returns False if the server has closed or reset the connection
+    private bool sendOrClosed(binary data) {
+        try {
+            sock.send(data, io_timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that closes the connection with data of the client unread resets it
+            if (!isPeerClose(ex)) {
+                rethrow;
+            }
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns True if the exception is that of a connection that the server closed or reset
+    /** A server that closes the connection while data of the client is unread makes its TCP stack reset it
+    */
+    private static bool isPeerClose(hash<ExceptionInfo> ex) {
+        # a send after the reset fails with EPIPE on macOS
+        return ex.err == "SOCKET-CLOSED" || (ex.arg.typeCode() == NT_INT && inlist(ex.arg, (ECONNRESET, EPIPE,
+            ECONNABORTED)));
     }
 
     #! Returns a serialized frame

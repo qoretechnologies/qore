@@ -1,0 +1,5 @@
+a lazy shared value (TogetherDataProvider): set shared: True, operation shared: True, request type shared: True, actions: True; the tenant changes the request type: SANDBOX-REGISTRATION-ERROR; copies the set: shared: False, its operation shared: True; deletes the operation: SHARED-OBJECT-ERROR; deletes the set: SHARED-OBJECT-ERROR
+a lazy value of the action catalog (ExaDataProvider): set shared: True, operation shared: True, request type shared: True, actions: True; the tenant changes the request type: SANDBOX-REGISTRATION-ERROR; copies the set: shared: False, its operation shared: True; deletes the operation: SHARED-OBJECT-ERROR; deletes the set: SHARED-OBJECT-ERROR
+the tenant builds a deferred output type: type: "HashDataType", still pending: True
+trusted code builds it: still pending: False, the type is shared: True; the tenant changes it: SANDBOX-REGISTRATION-ERROR
+trusted code uses the sets: True, True

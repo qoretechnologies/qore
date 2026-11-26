@@ -1,0 +1,194 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a library module that builds process-wide values lazily, with LazySharedMap and with the plain lazy pattern that it
+# replaces, for LazySharedValues.q (qore#7684)
+
+%modern
+
+module LazySharedProbe {
+    version = "1.0";
+    desc = "test module: lazily built process-wide values";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace LazySharedProbe {
+#! an object that the module shares with every caller: marked as shared when trusted code creates it
+public class Built {
+    public {
+        string name;
+    }
+
+    #! whether the code that calls the method is restricted from the file system: an object that is a capability
+    #! lends it to its caller (qore#7052)
+    bool callerRestricted() {
+        return SandboxManager::isCallerRestricted(DOM_FILESYSTEM);
+    }
+
+    constructor(string name) {
+        self.name = name;
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(self);
+        }
+    }
+}
+
+public class Probe {
+    public {
+        #! the keys that the builder knows
+        const Keys = ("tenant", "restricted", "trusted", "deputy", "hidden", "module-thread", "race", "fail-once",
+            "self", "tenant-object", "cycA", "cycB");
+    }
+
+    private:internal {
+        static LazySharedMap values(\Probe::build());
+        static LazySharedMap limited(\Probe::build(), 1);
+        static LazySharedValue single(\Probe::buildSingle());
+        #! the values of the plain lazy pattern that LazySharedMap replaces
+        static hash<string, hash<auto>> legacy;
+        static Mutex legacy_lck();
+        #! the number of builds of each key
+        static hash<string, int> builds;
+        static Mutex builds_lck();
+        #! the race build: started, then released
+        static Counter race_started(1);
+        static Counter race_release(1);
+        static bool failed_once;
+        #! the cycle: the build of cycA started, then released
+        static Counter cyc_a_started(1);
+        static Counter cyc_a_release(1);
+        #! an object that a tenant gave, which the builder returns for "tenant-object"
+        static *object tenant_object;
+    }
+
+    #! the value of a key, built once for every caller
+    static hash<auto> get(string key, timeout timeout_ms = 0) {
+        return values.get(key, timeout_ms);
+    }
+
+    #! the value of a key, first needed by a thread of the module's own code, with no code of a Program that is not a
+    #! module's on its stack: there the barrier of a trusted build would hide nothing
+    static hash<auto> getInModuleThread(string key) {
+        Queue q();
+        background q.push({
+            "hides_nothing": call_function("dbg_trusted_build_hides_nothing"),
+            "value": Probe::get(key),
+        });
+        return q.get();
+    }
+
+    #! the value of a key with the plain lazy pattern
+    static hash<auto> getLegacy(string key) {
+        AutoLock al(legacy_lck);
+        return legacy{key} ?? (legacy{key} = Probe::build(key));
+    }
+
+    #! the value of the map limited to one entry
+    static hash<auto> getLimited(string key) {
+        return limited.get(key);
+    }
+
+    #! creates a lazy value later than the module's initialization, for whichever caller needs it first, and returns
+    #! whether it is process-shared, and the state of its value, or the exception
+    static string createLazily(bool require_shared) {
+        try {
+            LazySharedValue v(\Probe::buildSingle(), require_shared);
+            hash<auto> r = v.get();
+            return sprintf("process-shared: %y, obj shared: %y", v.isProcessShared(),
+                SandboxManager::isSharedObject(r.obj));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static hash<auto> getSingle() {
+        return single.get();
+    }
+
+    static bool isSingleBuilt() {
+        return single.isBuilt();
+    }
+
+    static int size() {
+        return values.size();
+    }
+
+    static int limitedSize() {
+        return limited.size();
+    }
+
+    static bool isBuilt(string key) {
+        return values.isBuilt(key);
+    }
+
+    static int builds(string key) {
+        return builds{key} ?? 0;
+    }
+
+    static waitRaceStarted() {
+        race_started.waitForZero();
+    }
+
+    static releaseRace() {
+        race_release.dec();
+    }
+
+    static waitCycAStarted() {
+        cyc_a_started.waitForZero();
+    }
+
+    static releaseCycA() {
+        cyc_a_release.dec();
+    }
+
+    static setTenantObject(object o) {
+        tenant_object = o;
+    }
+
+    #! builds the value of a key from the module's own data; raises an exception for a key that it does not know
+    private:internal static hash<auto> build(string key) {
+        if (!inlist(key, Keys)) {
+            throw "UNKNOWN-KEY", sprintf("no value for key %y", key);
+        }
+        {
+            AutoLock al(builds_lck);
+            ++builds{key};
+        }
+        switch (key) {
+            case "race":
+                race_started.dec();
+                race_release.waitForZero();
+                break;
+            case "fail-once":
+                if (!failed_once) {
+                    failed_once = True;
+                    throw "BUILD-FAILED", "the first build fails";
+                }
+                break;
+            case "self":
+                return values.get("self");
+            case "tenant-object":
+                return {"obj": tenant_object};
+            case "cycA":
+                if (cyc_a_started.getCount()) {
+                    cyc_a_started.dec();
+                }
+                cyc_a_release.waitForZero();
+                return values.get("cycB");
+            case "cycB":
+                return values.get("cycA");
+        }
+        return {
+            "obj": new Built(key),
+            "creates_shared": SandboxManager::createsSharedObjects(),
+            # code that the value's users run later
+            "closure": bool sub () { return SandboxManager::isCallerRestricted(DOM_FILESYSTEM); },
+        };
+    }
+
+    private:internal static hash<auto> buildSingle() {
+        return {"obj": new Built("single"), "creates_shared": SandboxManager::createsSharedObjects()};
+    }
+}
+}
