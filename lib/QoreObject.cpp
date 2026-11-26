@@ -3869,16 +3869,19 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
         // object has been deleted
         return Nothing.getAsString(str, foff, xsink);
     }
-    // the calling code is shown the members that it would get by serialization: not the non-public members that a class
-    // declared by trusted code declares, unless it is the code of a class with private access to the object's class
+    // the calling code is shown the members that serialization would give it: not the non-public members that a class
+    // declared by trusted code declares, unless the code is that of a class with private access to the declaring class
     // or no sandboxed code is in the chain of its callers (qore#7146)
     {
         const qore_class_private* cls = qore_class_private::get(*priv->theclass);
-        if (cls->hasSandboxSerialState() && h->size() && QoreSerializationCaller().restricts(*cls)) {
+        if (cls->hasSandboxSerialState() && h->size()) {
+            QoreSerializationCaller caller;
             std::vector<std::string> hidden;
             ConstHashIterator hi(*h);
             while (hi.next()) {
-                if (cls->sandboxSerialProtectsMember(hi.getKey())) {
+                bool internal = false;
+                const qore_class_private* decl = cls->sandboxSerialProtectedDecl(hi.getKey(), internal);
+                if (decl && caller.restricts(*decl, internal)) {
                     hidden.push_back(hi.getKey());
                 }
             }

@@ -167,3 +167,13 @@ public class SsValidator {
         return Serializable::serializeToData(v);
     }
 }
+
+#! a class with a non-public member that has no value
+public class SsUnset inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        *string opt;
+    }
+}

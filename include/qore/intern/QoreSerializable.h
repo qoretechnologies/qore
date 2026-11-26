@@ -41,6 +41,7 @@
 #include <string>
 #include <set>
 #include <utility>
+#include <vector>
 
 // maps from index strings to containers
 typedef std::map<std::string, QoreValue> oimap_t;
@@ -179,8 +180,20 @@ public:
     DLLLOCAL explicit QoreSerializationCaller(bool unrestricted) : unrestricted(unrestricted) {
     }
 
-    //! returns true if the protected non-public state of an object of class \a cls is withheld
-    DLLLOCAL bool restricts(const qore_class_private& cls);
+    //! returns true if the non-public declarations of class \a decl are withheld from the calling code
+    /** The code of a class that trusted code declared gets the \c private:internal declarations of its own class and
+        the \c private declarations of the classes that it has private access to (its parent and child classes), not
+        those of other classes, such as the sibling base classes of an object's class; any other code does not get them
+        if sandboxed code is in the chain of callers
+
+        @param decl the class that declares the member or static variable
+        @param internal true for a \c private:internal declaration
+    */
+    DLLLOCAL bool restricts(const qore_class_private& decl, bool internal);
+
+    //! returns true if the non-public declarations of \a decl are withheld: \a decl is protected (it was declared by
+    //! trusted code and does not inherit Qore::SandboxSerializable) and restricts() is true
+    DLLLOCAL bool withholds(const qore_class_private& decl, bool internal);
 
     //! returns true if all state is given (a trusted API)
     DLLLOCAL bool isUnrestricted() const {
@@ -247,9 +260,9 @@ public:
         svars->setKeyValue(str, v, xsink);
     }
 
-    //! serializes the static variables of \a cls; \a restricted: its protected non-public static variables are
-    //! withheld (qore#7146)
-    DLLLOCAL int serializeStaticVars(const QoreClass& cls, bool restricted, ExceptionSink* xsink);
+    //! serializes the static variables of \a cls; a non-public static variable that is withheld from the calling code
+    //! and that has a value raises SERIALIZATION-ERROR (qore#7146)
+    DLLLOCAL int serializeStaticVars(const QoreClass& cls, ExceptionSink* xsink);
 };
 
 class ObjectIndexMap : public oimap_t {
@@ -270,16 +283,23 @@ public:
     //! the code that deserializes, which decides for each object whether it may set the non-public state of the
     //! classes that trusted code declared (qore#7146)
     QoreSerializationCaller caller;
-    //! for Program::deserialize(): the Program of the trusted calling code, whose classes the names of the data must
-    //! not name in the target Program as classes of sandboxed code (qore#7146)
-    QoreProgram* caller_pgm = nullptr;
+    //! for Program::deserialize(): the Programs of the trusted calling code (the Program of its class, such as a library
+    //! module's, and the Programs of the thread's stack, such as the application's that it runs for), whose classes
+    //! the names of the data must not name in the target Program as classes of sandboxed code (qore#7146)
+    std::vector<QoreProgram*> caller_pgms;
 
     DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags) : oimap(xsink), flags(flags) {
     }
 
     //! for Program::deserialize(): all state is set
-    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags, QoreProgram* caller_pgm)
-            : oimap(xsink), flags(flags), caller(true), caller_pgm(caller_pgm) {
+    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags,
+            std::vector<QoreProgram*>&& caller_pgms) : oimap(xsink), flags(flags), caller(true),
+            caller_pgms(std::move(caller_pgms)) {
+    }
+
+    //! returns true if the names of the data are checked against the classes of the calling code (Program::deserialize())
+    DLLLOCAL bool checksCallerClasses() const {
+        return !caller_pgms.empty();
     }
 
     DLLLOCAL QoreValue deserializeContainer(const char* index_str, ExceptionSink* xsink);
@@ -403,7 +423,17 @@ protected:
 
         @return 0 if OK, -1 if an exception was raised
     */
-    DLLLOCAL static int checkProgramDeserializeClass(QoreProgram* caller_pgm, const char* cname,
+    DLLLOCAL static int checkProgramDeserializeClass(QoreInternalDeserializationContext& context, const char* cname,
+            ExceptionSink* xsink);
+
+    //! Raises DESERIALIZATION-ERROR if the hierarchy of \a cls has a non-transient non-public member of a protected
+    //! class that is withheld from the calling code (qore#7146); returns -1 if an exception was raised
+    DLLLOCAL static int checkDeserializationRefused(QoreInternalDeserializationContext& context, const QoreClass& cls,
+            ExceptionSink* xsink);
+
+    //! Raises SERIALIZATION-ERROR for a non-public member or static variable of class \a cls with a value that is
+    //! withheld from the calling code (qore#7146)
+    DLLLOCAL static void raiseWithheldError(const QoreClass& cls, const char* kind, const char* name,
             ExceptionSink* xsink);
 
     DLLLOCAL static int deserializeStaticClassVars(ExceptionSink* xsink, const QoreHashNode& svars,

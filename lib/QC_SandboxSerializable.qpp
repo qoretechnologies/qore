@@ -52,9 +52,9 @@ static void SandboxSerializable_deserializer(QoreObject& self, const QoreHashNod
 
 //! Marks a class whose non-public members sandboxed code may serialize and set by deserialization
 /** The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: when an
-    object is serialized for code that a sandbox governs, the non-public members (\c private, \c private:hierarchy
-    and \c private:internal) and static variables that a class declared by trusted code declares are left out and its
-    \c serializeMembers() method is not called; deserialization by such code into such a class is refused with a
+    object is serialized for code that a sandbox governs, a non-public member (\c private, \c private:hierarchy or
+    \c private:internal) or static variable with a value that a class declared by trusted code declares raises a
+    \c SERIALIZATION-ERROR exception and the class's \c serializeMembers() method is not called; deserialization by such code into such a class is refused with a
     \c DESERIALIZATION-ERROR exception when the class's hierarchy has non-transient non-public members, when the data
     sets a non-public member or static variable, or when the class has a \c deserializeMembers() method.  Formatting
     an object with \c %%y and the other formats that show an object's members follows the same rule (see

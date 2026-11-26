@@ -9630,14 +9630,42 @@ void qore_class_private::initSandboxSerialization() {
     }
 }
 
-bool qore_class_private::sandboxSerialProtectsMember(const char* mname) const {
+const qore_class_private* qore_class_private::sandboxSerialProtectedDecl(const char* mname, bool& internal) const {
     const QoreMemberInfo* mi = members.find(mname);
     if (!mi || !mi->declaredNonPublic()) {
-        return false;
+        return nullptr;
     }
+    internal = mi->isLocalInternal();
     // a local member is declared by this class
     const qore_class_private* decl = mi->getClass();
-    return (decl ? decl : this)->sandboxSerializationProtected();
+    if (!decl) {
+        decl = this;
+    }
+    return decl->sandboxSerializationProtected() ? decl : nullptr;
+}
+
+bool qore_class_private::hasNonPublicState() const {
+    QoreClassHierarchyIterator ci(*cls);
+    while (ci.next()) {
+        if (ci.isVirtual()) {
+            continue;
+        }
+        {
+            QoreClassMemberIterator mi(ci.get());
+            while (mi.next()) {
+                if (mi.getMember().getAccess() != Public) {
+                    return true;
+                }
+            }
+        }
+        QoreClassStaticMemberIterator si(ci.get());
+        while (si.next()) {
+            if (si.getMember().getAccess() != Public) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
@@ -14032,7 +14060,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(Lexical
     }
     // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
     // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
-    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
     else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
@@ -14068,7 +14096,7 @@ QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
     }
     // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
     // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
-    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -14203,7 +14231,7 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
     }
     // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
     // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
-    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     // a legacy AST call runs a builtin variant with its own semantic policy
     return policy.isDefault() ? METHV_const(variant)->evalMethod(nullptr, ceh, xsink)
         : METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);

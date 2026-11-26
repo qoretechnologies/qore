@@ -648,6 +648,13 @@ DLLLOCAL QoreProgram* qore_builtin_caller_program();
 */
 DLLLOCAL bool qore_innermost_frame_is_builtin();
 
+//! Adds the current Program and the Programs of the thread's stack of Program contexts to \a pgms, each once
+//! (qore#7146)
+/** The Programs whose views of the names of classes the code on the thread uses, such as the application's for library
+    code that runs for it
+*/
+DLLLOCAL void qore_thread_program_stack(std::vector<QoreProgram*>& pgms);
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
@@ -3700,6 +3707,12 @@ private:
 
 public:
    DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c);
+
+   //! As the constructor above, but keeps the current class context if \a keep_class is true (\a c is then ignored)
+   /** For a static method call that gives no class context (a variant resolved at run time), which keeps the caller's,
+       without a second lookup of the thread data (qore#7146)
+   */
+   DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, bool keep_class);
 
    //! Substitutes the object and class context of a method of \a c run with \a obj and sets the call Program context
    //! of its frame (see QoreSetCallProgramContext)

@@ -5444,9 +5444,15 @@ public:
         return sandbox_deserial_refused;
     }
 
-    //! Returns true if the member \a mname of the object's data, if it is a member that the class or a base class
-    //! declares non-public and that sandboxed code may not serialize (qore#7146)
-    DLLLOCAL bool sandboxSerialProtectsMember(const char* mname) const;
+    //! Returns the class that declares the member \a mname non-public, as the class or a base class sees it, if that
+    //! class is protected from sandboxed serialization (see sandboxSerializationProtected(), qore#7146), else nullptr
+    /** @param internal set to true if the member is a \c private:internal member of this class
+    */
+    DLLLOCAL const qore_class_private* sandboxSerialProtectedDecl(const char* mname, bool& internal) const;
+
+    //! Returns true if the class or a base class has a non-public static variable or a non-public member that the
+    //! class declares (qore#7146)
+    DLLLOCAL bool hasNonPublicState() const;
 
     //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
     /** A class that sandboxed code declared has no private access to the members, methods and static variables that

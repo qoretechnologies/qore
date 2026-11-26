@@ -103,10 +103,12 @@ class SqlUtilCallerDatabaseTest inherits QUnit::Test {
                 : (restricted ? "PERMISSION-DENIED" : Allowed);
             rv{caller + ".runtime.getDatabase"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
             foreach string call in (("dbdataprovider", "deserialize", "connection", "deserialize-connection")) {
-                # sandboxed code cannot deserialize the classes of the modules, whose non-public members it would set
-                # (qore#7146)
-                string err = (sandboxed && call =~ /^deserialize/) ? "DESERIALIZATION-ERROR"
-                    : (restricted ? "PERMISSION-DENIED" : Allowed);
+                # sandboxed code cannot deserialize the classes of the modules, whose non-public members it would set,
+                # and the host's function that serializes its connection for sandboxed code cannot give it the
+                # connection's non-public state (qore#7146)
+                string err = (sandboxed && call == "deserialize-connection") ? "SERIALIZATION-ERROR"
+                    : ((sandboxed && call == "deserialize") ? "DESERIALIZATION-ERROR"
+                        : (restricted ? "PERMISSION-DENIED" : Allowed));
                 rv{sprintf("%s.module.%s", caller, call)} = err;
                 rv{sprintf("%s.callback.%s", caller, call)} = err;
             }

@@ -80,3 +80,85 @@ public string sub ssl_fmt(auto v) {
 public hash<SerializationInfo> sub ssl_ser(auto v) {
     return Serializable::serializeToData(v);
 }
+
+#! a class with methods that format, serialize and deserialize its own objects
+public class SslFmt inherits Serializable {
+    public {
+        string fpub = "FPUB";
+    }
+
+    string fmtSelf() {
+        return sprintf("%y", self);
+    }
+
+    hash<SerializationInfo> serSelf(*int flags) {
+        return Serializable::serializeToData(self, flags);
+    }
+
+    static object deser(hash<SerializationInfo> h, *int flags) {
+        return Serializable::deserialize(h, flags);
+    }
+}
+
+#! a class with non-public state that a sibling base class has no private access to
+public class SslHolder inherits Serializable {
+    public {
+        string hpub = "HPUB";
+    }
+    private {
+        string secret = "SIBLING-STATE";
+    }
+    private:internal {
+        string isecret = "SIBLING-INTERNAL";
+    }
+
+    string getSecret() {
+        return secret;
+    }
+}
+
+#! a class whose only non-public state is a static variable
+public class SslStaticHolder inherits Serializable {
+    public {
+        string spub = "SPUB";
+    }
+    private {
+        static string hs = "SIBLING-STATIC";
+    }
+
+    static string getStatic() {
+        return hs;
+    }
+}
+
+#! classes of the module that inherit sibling base classes, for the deserialization by SslFmt::deser()
+public class SslMix inherits SslFmt, SslHolder {
+}
+
+public class SslMixS inherits SslFmt, SslStaticHolder {
+}
+
+#! a class of the module that the module does not export
+class SslHidden inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "HIDDEN-STATE";
+    }
+}
+
+#! the module's code that deserializes into a Program
+public class SslProgramApi {
+    static object deserHidden(Program p) {
+        return p.deserialize(Serializable::serializeToData(new SslHidden()));
+    }
+
+    static auto deser(Program p, auto data, *int flags) {
+        return p.deserialize(data, flags);
+    }
+
+    static code serRef(Program p) {
+        return \p.serializeToData();
+    }
+}

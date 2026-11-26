@@ -75,6 +75,7 @@ object sub make(string cls) {
         case \"SsLocal\": return new SsLocal();
         case \"SsSub\": return new SsSub();
         case \"SsTransient\": return new SsTransient();
+        case \"SsUnset\": return new SsUnset();
         case \"SsTransientSub\": return new SsTransientSub();
         case \"SsHookStatic\": return new SsHookStatic();
         case \"SsDeserHook\": return new SsDeserHook();
@@ -175,50 +176,31 @@ auto sub program_ser(auto v) {
     }
 
     serializeTest() {
-        foreach string func in ("ser_data", "ser_method") {
-            hash<auto> m = members(p.callFunction(func, "SsTrusted"));
-            assertEq("PUB", m.pub, func);
-            assertFalse(exists m.priv, func);
-            assertFalse(exists m.intern, func);
-            assertFalse(exists m.tpriv, func);
+        # a non-public member with a value of a class that trusted code declared raises an exception, in every form
+        foreach string func in ("ser_data", "ser_method", "ser_bin", "ser_bin_method", "ser_in_hash") {
+            assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), (func, "SsTrusted"), func);
         }
+        # also for an object that the host created, and for the trusted parent class of a class of sandboxed code
+        assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), ("ser_object", new SsTrusted()));
+        assertThrows("SERIALIZATION-ERROR", "SsTrusted::priv", \p.callFunction(), ("ser_data", "SsSub"));
 
-        foreach string func in ("ser_bin", "ser_bin_method") {
-            hash<auto> m = members(Serializable::deserializeToData(p.callFunction(func, "SsTrusted")));
-            assertEq("PUB", m.pub, func);
-            assertFalse(exists m.priv, func);
-            assertFalse(exists m.intern, func);
-        }
+        # non-public members without a value, and transient members, are not serialized
+        hash<auto> m = members(p.callFunction("ser_data", "SsUnset"));
+        assertEq("PUB", m.pub);
+        assertFalse(exists m.opt);
+        m = members(p.callFunction("ser_data", "SsTransient"));
+        assertEq("PUB", m.pub);
 
-        # an object in a container, and an object that the host created
-        {
-            hash<auto> m = members(p.callFunction("ser_in_hash", "SsTrusted"));
-            assertEq("PUB", m.pub);
-            assertFalse(exists m.priv);
-            m = members(p.callFunction("ser_object", new SsTrusted()));
-            assertEq("PUB", m.pub);
-            assertFalse(exists m.priv);
-        }
-
-        # a class that sandboxed code declared keeps its non-public members; those of its trusted parent are left out
-        {
-            hash<auto> m = members(p.callFunction("ser_data", "SsSub"));
-            assertEq("OWN-STATE", m.own);
-            assertEq("PUB", m.pub);
-            assertFalse(exists m.priv);
-            assertFalse(exists m.intern);
-
-            m = members(p.callFunction("ser_data", "SsLocal"));
-            assertEq("LOCAL-STATE", m.lpriv);
-        }
+        # a class that sandboxed code declared keeps its non-public members
+        m = members(p.callFunction("ser_data", "SsLocal"));
+        assertEq("LOCAL-STATE", m.lpriv);
     }
 
     hookTest() {
-        # the hook of a class with non-public state is not called for sandboxed code
-        hash<auto> m = members(p.callFunction("ser_data", "SsHook"));
-        assertEq("PUB", m.pub);
-        assertFalse(exists m.leak);
-        assertFalse(exists m.priv);
+        # the hook of a class with non-public state is not called for sandboxed code: its members are serialized,
+        # which raises an exception for the non-public member with a value
+        assertThrows("SERIALIZATION-ERROR", "SsHook::priv", \p.callFunction(), ("ser_data", "SsHook"));
+        hash<auto> m;
 
         # the hook of a class declared by trusted code is not called for sandboxed code, also if the class has no
         # non-public members
@@ -236,11 +218,11 @@ auto sub program_ser(auto v) {
     }
 
     staticVarTest() {
-        hash<SerializationInfo> h = p.callFunction("ser_data", "SsTrusted", QSF_INCLUDE_STATIC_CLASS_VARS);
+        # a non-public static var with a value raises an exception
+        assertThrows("SERIALIZATION-ERROR", "spriv", \p.callFunction(), ("ser_data", "SsTrusted",
+            QSF_INCLUDE_STATIC_CLASS_VARS));
+        hash<SerializationInfo> h;
         hash<auto> svars;
-        map svars += $1, h._sdata.iterator();
-        assertEq("SPUB", svars.spub);
-        assertFalse(exists svars.spriv);
 
         # the host's data with a non-public static var cannot be deserialized by sandboxed code
         h = Serializable::serializeToData(new SsTrusted(), QSF_INCLUDE_STATIC_CLASS_VARS);
@@ -304,7 +286,9 @@ auto sub program_ser(auto v) {
         }
 
         # also without non-public data: the object would be created without its constructor
-        hash<SerializationInfo> pub = p.callFunction("ser_data", "SsTrusted");
+        hash<SerializationInfo> pub = h;
+        remove pub._index."0"._class_data.SsTrusted.priv;
+        remove pub._index."0"._class_data.SsTrusted.intern;
         assertThrows("DESERIALIZATION-ERROR", "SsTrusted", \p.callFunction(), ("deser", pub));
 
         # a hook with non-public state
@@ -312,8 +296,12 @@ auto sub program_ser(auto v) {
             Serializable::serializeToData(new SsHook())));
 
         # a class that sandboxed code declared that inherits a trusted class with non-public state
-        assertThrows("DESERIALIZATION-ERROR", "SsSub", \p.callFunction(), ("deser",
-            p.callFunction("ser_data", "SsSub")));
+        {
+            hash<SerializationInfo> subdata = pub;
+            subdata._index."0"._class = "SsSub";
+            subdata._index."0"._class_data.SsSub = {"own": "OWN-STATE"};
+            assertThrows("DESERIALIZATION-ERROR", "SsSub", \p.callFunction(), ("deser", subdata));
+        }
 
         # a trusted class with public and transient members only
         {
@@ -336,9 +324,7 @@ auto sub program_ser(auto v) {
         assertEq("SET-BY-DATA", p.callFunction("deser_priv", h));
 
         # the marker of the parent class does not open the members of a subclass
-        m = members(p.callFunction("ser_data", "SsOptInSub"));
-        assertEq("OPT-STATE", m.priv);
-        assertFalse(exists m.sub_priv);
+        assertThrows("SERIALIZATION-ERROR", "SsOptInSub::sub_priv", \p.callFunction(), ("ser_data", "SsOptInSub"));
         assertThrows("DESERIALIZATION-ERROR", "SsOptInSub", \p.callFunction(), ("deser",
             Serializable::serializeToData(new SsOptInSub())));
 
