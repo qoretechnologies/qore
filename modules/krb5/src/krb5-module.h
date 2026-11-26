@@ -212,6 +212,9 @@ class QoreKrb5CredentialCache : public AbstractPrivateData {
 public:
     krb5_context ctx = nullptr;
     krb5_ccache cache = nullptr;
+    //! the prefix of the names of the caches of the isolation domain of the code that a sandbox governs that opened
+    //! the cache, which the names that it gives leave out (qore#7671)
+    std::string visible_prefix;
 
     DLLLOCAL QoreKrb5CredentialCache(const char* cache_name, bool use_default, ExceptionSink* xsink);
     DLLLOCAL ~QoreKrb5CredentialCache() override;

@@ -390,6 +390,192 @@ static bool krb5_cache_backend_is_non_filesystem(const char* type) {
         || !strcmp(type, "KEYRING") || !strcmp(type, "MSLSA");
 }
 
+//! The namespace of the credential caches that are not file based of the code that calls the module (qore#7671)
+/** Such caches (\c MEMORY, \c KEYRING) are shared by name in the process or by the OS user: the caches of code that a
+    sandbox governs are kept per isolation domain, with names that start with a prefix of its own, and the caches of
+    other code are not visible to it.  The domain is the isolation domain of the caller (qore_caller_isolation_domain())
+    or, for a sandbox without one, the caller's Program, whose ID is never reused.
+*/
+struct Krb5CacheNamespace {
+    //! true if a sandbox governs the caller
+    bool sandboxed = false;
+    //! the prefix of the names of the caller's caches
+    std::string prefix;
+};
+
+static void krb5_append_hex(std::string& out, const std::string& in) {
+    static const char digits[] = "0123456789abcdef";
+    for (unsigned char c : in) {
+        out += digits[c >> 4];
+        out += digits[c & 0xf];
+    }
+}
+
+//! Gets the namespace of the caches of the caller; returns -1 if an exception was raised
+static int krb5_cache_namespace(Krb5CacheNamespace& ns, ExceptionSink* xsink, const char* context) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return 0;
+    }
+    ns.sandboxed = true;
+    std::string domain = qore_caller_isolation_domain();
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the code belongs to more than one isolation domain, which "
+            "have no credential caches in common", context);
+        return -1;
+    }
+    ns.prefix = "qore-sandbox-";
+    if (!domain.empty()) {
+        ns.prefix += 'd';
+        krb5_append_hex(ns.prefix, domain);
+    } else {
+        qore_program_id_t id;
+        if (qore_get_caller_program_id(id)) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the code that calls the module is not known, so its "
+                "credential caches cannot be kept apart from those of other code", context);
+            return -1;
+        }
+        ns.prefix += 'p';
+        ns.prefix += std::to_string(id);
+    }
+    ns.prefix += '-';
+    return 0;
+}
+
+//! Splits a credential cache name into its type and residual, as MIT Kerberos does (a name without a type is a file)
+static void krb5_split_cache_name(const char* name, std::string& type, std::string& residual) {
+    const char* colon = strchr(name, ':');
+    if (colon && colon != name && !memchr(name, '/', colon - name)) {
+        type.assign(name, colon - name);
+        residual = colon + 1;
+    } else {
+        type = "FILE";
+        residual = name;
+    }
+}
+
+//! The index of the collection name in a \c KEYRING residual of a keyring that only the process has, or npos
+/** The \c process and \c thread keyrings belong to the process; the \c session, \c user and \c persistent
+    keyrings, and a legacy name (a cache in the session keyring, which MIT Kerberos gives as \c legacy:name:name), are
+    shared with the other processes of the session or of the OS user, where a name of an isolation domain does not
+    keep a cache apart: they are not used for code that a sandbox governs
+*/
+static size_t krb5_keyring_name_offset(const std::string& residual) {
+    size_t colon = residual.find(':');
+    if (colon == std::string::npos) {
+        return std::string::npos;
+    }
+    std::string kind = residual.substr(0, colon);
+    if (kind == "process" || kind == "thread") {
+        return colon + 1;
+    }
+    return std::string::npos;
+}
+
+//! Gives the name of the cache of the caller's namespace that the name that it gives refers to
+/** File based caches keep their names (the filesystem sandbox applies); the caches that cannot be kept apart per
+    isolation domain (\c API, \c KCM, \c MSLSA, persistent \c KEYRING caches) are refused
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int krb5_map_cache_name(const char* name, const Krb5CacheNamespace& ns, std::string& out, ExceptionSink* xsink,
+        const char* context) {
+    if (!ns.sandboxed) {
+        out = name;
+        return 0;
+    }
+    std::string type, residual;
+    krb5_split_cache_name(name, type, residual);
+    if (type == "FILE" || type == "DIR") {
+        out = name;
+        return 0;
+    }
+    if (type == "MEMORY") {
+        out = "MEMORY:" + ns.prefix + residual;
+        return 0;
+    }
+    if (type == "KEYRING") {
+        size_t off = krb5_keyring_name_offset(residual);
+        if (off != std::string::npos) {
+            out = "KEYRING:" + residual.substr(0, off) + ns.prefix + residual.substr(off);
+            return 0;
+        }
+    }
+    xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: credential cache '%s' cannot be kept apart for the isolation "
+        "domain of the code that a sandbox governs: only file, memory and process or thread keyring caches can be "
+        "used", context, name);
+    return -1;
+}
+
+//! Returns true if a cache that is not file based belongs to the namespace of the caller
+static bool krb5_cache_in_namespace(const char* type, const char* name, const Krb5CacheNamespace& ns) {
+    if (!strcmp(type, "MEMORY")) {
+        return !strncmp(name, ns.prefix.c_str(), ns.prefix.size());
+    }
+    if (!strcmp(type, "KEYRING")) {
+        std::string residual(name);
+        size_t off = krb5_keyring_name_offset(residual);
+        return off != std::string::npos && !residual.compare(off, ns.prefix.size(), ns.prefix);
+    }
+    return false;
+}
+
+//! Removes a leading prefix from \a s at \a pos
+static void krb5_strip_at(std::string& s, size_t pos, const std::string& prefix) {
+    if (!s.compare(pos, prefix.size(), prefix)) {
+        s.erase(pos, prefix.size());
+    }
+}
+
+//! Gives the name of a cache of the namespace \a prefix as the code of that namespace named it
+/** \a name is a residual (\a full false) or a full name (\c TYPE:residual); only \c MEMORY and \c KEYRING names
+    have the prefix: at the start of a \c MEMORY residual, and at the start of the collection and of the cache name of
+    a \c KEYRING residual (\c kind:coll:name: MIT Kerberos gives \c kind:coll as \c kind:coll:coll)
+*/
+static std::string krb5_visible_cache_name(const char* type, const std::string& name, const std::string& prefix,
+        bool full) {
+    if (prefix.empty() || !type) {
+        return name;
+    }
+    std::string rv = name;
+    size_t start = 0;
+    if (full) {
+        size_t colon = rv.find(':');
+        if (colon == std::string::npos) {
+            return rv;
+        }
+        start = colon + 1;
+    }
+    if (!strcmp(type, "MEMORY")) {
+        krb5_strip_at(rv, start, prefix);
+    } else if (!strcmp(type, "KEYRING")) {
+        size_t off = krb5_keyring_name_offset(rv.substr(start));
+        if (off != std::string::npos) {
+            krb5_strip_at(rv, start + off, prefix);
+            size_t colon = rv.find(':', start + off);
+            if (colon != std::string::npos) {
+                krb5_strip_at(rv, colon + 1, prefix);
+            }
+        }
+    }
+    return rv;
+}
+
+//! The prefix to leave out of the names of a cache that code of the namespace \a opened opened: that of the caller
+//! if it is the same namespace, or none (another caller sees the real name of the cache)
+static std::string krb5_caller_visible_prefix(const std::string& opened) {
+    if (opened.empty()) {
+        return opened;
+    }
+    Krb5CacheNamespace ns;
+    ExceptionSink xsink;
+    if (krb5_cache_namespace(ns, &xsink, "getting a credential cache name")) {
+        xsink.clear();
+        return std::string();
+    }
+    return ns.prefix == opened ? opened : std::string();
+}
+
 static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mode, ExceptionSink* xsink,
         const char* context) {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
@@ -409,7 +595,17 @@ static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mod
     }
 
     if (krb5_cache_backend_is_non_filesystem(type)) {
-        return true;
+        // only a cache of the caller's isolation domain (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, context)) {
+            return false;
+        }
+        if (krb5_cache_in_namespace(type, name, ns)) {
+            return true;
+        }
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the %s credential cache belongs to other code than the "
+            "code that a sandbox governs, and is not visible to it", context, type);
+        return false;
     }
 
     xsink->raiseException("KRB5-SANDBOX-ERROR",
@@ -869,6 +1065,17 @@ QoreHashNode* QoreGssClientContext::step(const char* token_hex, ExceptionSink* x
     }
     if (!krb5_network_sandbox_allows_unmanaged_library_io(xsink, "initializing GSSAPI security context")) {
         return nullptr;
+    }
+    // the default credentials are those of the default cache of the process, which is not visible to code that a
+    // sandbox governs (qore#7671): it gives a credential of a cache of its own
+    if (!cred_ref) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "initializing GSSAPI security context: the default credentials "
+                "of the process are not visible to code that a sandbox governs; give a credential of a cache of its "
+                "own (GssCredential::fromCredentialCache())");
+            return nullptr;
+        }
     }
 
     gss_buffer_desc input_token = GSS_C_EMPTY_BUFFER;
@@ -1645,6 +1852,28 @@ QoreKrb5CredentialCache::QoreKrb5CredentialCache(const char* cache_name, bool us
         return;
     }
 
+    // the caches of code that a sandbox governs are those of its isolation domain (qore#7671): the default cache
+    // is a memory cache of the domain, and a name refers to a cache of the domain
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "opening credential cache")) {
+        return;
+    }
+    std::string mapped;
+    if (ns.sandboxed) {
+        visible_prefix = ns.prefix;
+        if (use_default) {
+            mapped = "MEMORY:" + ns.prefix + "default";
+            use_default = false;
+        } else if (cache_name && *cache_name) {
+            if (krb5_map_cache_name(cache_name, ns, mapped, xsink, "opening credential cache")) {
+                return;
+            }
+        }
+        if (!mapped.empty()) {
+            cache_name = mapped.c_str();
+        }
+    }
+
     if (use_default) {
         rc = krb5_cc_default(ctx, &cache);
         if (rc) {
@@ -1674,7 +1903,9 @@ QoreKrb5CredentialCache::~QoreKrb5CredentialCache() {
 }
 
 QoreStringNode* QoreKrb5CredentialCache::getName() const {
-    return new QoreStringNode(krb5_cc_get_name(ctx, cache));
+    // the name that the code of a sandbox gave, for that code (qore#7671)
+    return new QoreStringNode(krb5_visible_cache_name(krb5_cc_get_type(ctx, cache), krb5_cc_get_name(ctx, cache),
+        krb5_caller_visible_prefix(visible_prefix), false));
 }
 
 QoreStringNode* QoreKrb5CredentialCache::getType() const {
@@ -1689,7 +1920,8 @@ QoreStringNode* QoreKrb5CredentialCache::getFullName(ExceptionSink* xsink) const
         return nullptr;
     }
 
-    QoreStringNode* rv = new QoreStringNode(full_name);
+    QoreStringNode* rv = new QoreStringNode(krb5_visible_cache_name(krb5_cc_get_type(ctx, cache), full_name,
+        krb5_caller_visible_prefix(visible_prefix), true));
     krb5_free_string(ctx, full_name);
     return rv;
 }
@@ -1998,6 +2230,14 @@ QoreStringNode* QoreKrb5Context::getDefaultRealm(ExceptionSink* xsink) const {
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xsink) const {
+    // the default cache of code that a sandbox governs is a memory cache of its isolation domain (qore#7671)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "getting the default credential cache name")) {
+        return nullptr;
+    }
+    if (ns.sandboxed) {
+        return new QoreStringNode("MEMORY:default");
+    }
     const char* name = krb5_cc_default_name(ctx);
     if (!name || !*name) {
         xsink->raiseException("KRB5-CACHE-ERROR", "the default credential cache name is not available");
@@ -2155,7 +2395,16 @@ private:
     DLLLOCAL int addCcacheOption(krb5_context ctx, const char* key, const char* name, int access_mode,
             ExceptionSink* xsink) {
         krb5_ccache ccache = nullptr;
-        krb5_error_code rc = krb5_cc_resolve(ctx, name, &ccache);
+        // a cache of the isolation domain of code that a sandbox governs (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, "using initial-credential cache option")) {
+            return -1;
+        }
+        std::string mapped;
+        if (krb5_map_cache_name(name, ns, mapped, xsink, "using initial-credential cache option")) {
+            return -1;
+        }
+        krb5_error_code rc = krb5_cc_resolve(ctx, mapped.c_str(), &ccache);
         if (rc) {
             return krb5_raise_exception(xsink, ctx, rc, "KRB5-INIT-CREDS-ERROR",
                 "resolving credential cache option");
@@ -2538,6 +2787,11 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclKrb5CredentialCacheInfo->getTypeInfo()), xsink);
     Krb5CccolCursorHolder cursor(ctx);
+    // the caches of code that a sandbox governs are listed with the names that it gave them (qore#7671)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "listing credential caches")) {
+        return nullptr;
+    }
 
     krb5_error_code rc = cursor.start();
     if (rc) {
@@ -2574,6 +2828,12 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
             "listing credential cache collection entry");
         if (!accessible) {
             xsink->clear();
+            // the caches that are not file based of other code are not visible to code that a sandbox governs
+            // (qore#7671)
+            if (type && krb5_cache_backend_is_non_filesystem(type)) {
+                krb5_cc_close(ctx, cc);
+                continue;
+            }
         }
 
         info->setKeyValue("type", new QoreStringNode(type ? type : ""), xsink);
@@ -2585,12 +2845,14 @@ QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const 
             info->setKeyValue("has_principal", false, xsink);
             info->setKeyValue("principal", QoreValue(), xsink);
         } else {
-            info->setKeyValue("name", new QoreStringNode(name ? name : ""), xsink);
+            info->setKeyValue("name", new QoreStringNode(krb5_visible_cache_name(type, name ? name : "", ns.prefix,
+                false)), xsink);
 
             char* full_name = nullptr;
             rc = krb5_cc_get_full_name(ctx, cc, &full_name);
             if (!rc && full_name) {
-                info->setKeyValue("full_name", new QoreStringNode(full_name), xsink);
+                info->setKeyValue("full_name", new QoreStringNode(krb5_visible_cache_name(type, full_name, ns.prefix,
+                    true)), xsink);
                 krb5_free_string(ctx, full_name);
             } else {
                 info->setKeyValue("full_name", new QoreStringNode(""), xsink);

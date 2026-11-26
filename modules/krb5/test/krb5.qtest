@@ -120,6 +120,12 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("empty credential cache reports no principal", \testEmptyCredentialCache());
         addTestCase("empty cache name rejected", \testEmptyCacheNameRejected());
         addTestCase("file cache sandbox deny", \testFileCacheSandboxDeny());
+        addTestCase("memory caches are kept per isolation domain", \testMemoryCacheIsolation());
+        addTestCase("the default cache of sandboxed code is its own", \testSandboxDefaultCache());
+        addTestCase("caches that cannot be kept apart are refused to sandboxed code",
+            \testSandboxSharedCacheTypesRefused());
+        addTestCase("keyring caches are kept per isolation domain", \testKeyringCacheIsolation());
+        addTestCase("sandboxed code does not use the default GSS credentials", \testSandboxGssDefaultCredentials());
         addTestCase("file cache sandbox allow", \testFileCacheSandboxAllow());
         addTestCase("memory keytab roundtrip", \testMemoryKeytabRoundtrip());
         addTestCase("memory keytab highest kvno", \testMemoryKeytabHighestKvno());
@@ -1064,6 +1070,161 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         assertThrows("KRB5-CACHE-ERROR", sub() {
             ctx.createMemoryCredentialCache(p, "");
         });
+    }
+
+    #! a Program governed by a sandbox with the given isolation domain (or none), whose code uses credential caches
+    private Program cacheTenant(*string domain, bool network = False) {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            *string sub principal_of(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openCredentialCache(name);
+                return cc.hasPrimaryPrincipal() ? cc.getPrimaryPrincipal().toString() : NOTHING;
+            }
+            string sub init_cache(string name, string principal) {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openCredentialCache(name);
+                cc.initialize(new Qore::Krb5::Krb5Principal(principal));
+                return cc.getFullName();
+            }
+            hash<auto> sub default_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                auto cc = ctx.openDefaultCredentialCache();
+                return {\"name\": ctx.getDefaultCredentialCacheName(), \"full_name\": cc.getFullName(),
+                    \"type\": cc.getType()};
+            }
+            *string sub cache_principal(Qore::Krb5::Krb5CredentialCache cc) {
+                return cc.getPrimaryPrincipal().toString();
+            }
+            list<auto> sub list_names() {
+                Qore::Krb5::Krb5Context ctx();
+                return map $1.full_name, ctx.listCredentialCaches();
+            }
+            Qore::Krb5::Krb5CredentialCache sub open_cache(string name) {
+                Qore::Krb5::Krb5Context ctx();
+                return ctx.openCredentialCache(name);
+            }
+            hash<auto> sub gss_default() {
+                try {
+                    Qore::Krb5::GssClientContext c(\"HTTP@host.example.com\");
+                    c.step();
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+        ", "krb5_cache_tenant");
+        SandboxManager sm();
+        if (domain) {
+            sm.setIsolationDomain(domain);
+        }
+        if (network) {
+            # an unrestricted network policy: the module's KDC operations are allowed
+            sm.setNetworkDefaultPolicy(True);
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! a memory cache of the host is not visible to sandboxed code, which has a cache of its own of the same name
+    #! (qore#7671)
+    private testMemoryCacheIsolation() {
+        string name = "MEMORY:module-krb5-isolation-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        auto host = ctx.openCredentialCache(name);
+        host.initialize(new Qore::Krb5::Krb5Principal("host/trusted.example.com@EXAMPLE.COM"));
+
+        Program a = cacheTenant("tenant-a");
+        Program b = cacheTenant("tenant-b");
+        Program b2 = cacheTenant("tenant-b");
+        Program none = cacheTenant();
+
+        # the tenants do not see the host's cache
+        assertNothing(a.callFunction("principal_of", name), "the host's cache is not visible to a tenant");
+        assertNothing(none.callFunction("principal_of", name), "nor to a sandbox without a domain");
+
+        # each tenant has a cache of its own of that name, under the name that it gave
+        assertEq(name, a.callFunction("init_cache", name, "a/tenant.example.com@EXAMPLE.COM"));
+        assertEq("a/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertNothing(b.callFunction("principal_of", name), "tenant b does not see tenant a's cache");
+        b.callFunction("init_cache", name, "b/tenant.example.com@EXAMPLE.COM");
+        assertEq("b/tenant.example.com@EXAMPLE.COM", b2.callFunction("principal_of", name),
+            "the Programs of one isolation domain share its caches");
+        assertEq("a/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertNothing(none.callFunction("principal_of", name), "a sandbox without a domain has caches of its own");
+
+        # two sandboxes without a domain do not share caches either
+        Program none2 = cacheTenant();
+        none.callFunction("init_cache", name, "n/tenant.example.com@EXAMPLE.COM");
+        assertNothing(none2.callFunction("principal_of", name), "each sandbox without a domain has caches of its own");
+
+        # the host's cache is unchanged
+        assertEq("host/trusted.example.com@EXAMPLE.COM", ctx.openCredentialCache(name).getPrimaryPrincipal().toString());
+
+        # a cache object of tenant a that is given to tenant b cannot be used by it
+        auto a_cache = a.callFunction("open_cache", name);
+        assertThrows("KRB5-SANDBOX-ERROR", \b.callFunction(), ("cache_principal", a_cache));
+        # a call of a method of tenant a's cache object runs under tenant a's sandbox, also from the host: it gives the
+        # name that tenant a gave
+        assertEq(name, a_cache.getFullName());
+
+
+        # a cache object of the host that is given to sandboxed code cannot be used by it
+        assertThrows("KRB5-SANDBOX-ERROR", \a.callFunction(), ("cache_principal", host));
+
+        # (MIT Kerberos does not list memory caches in a cache collection, so the listing is not checked here)
+    }
+
+    #! the default cache of sandboxed code is a memory cache of its isolation domain, not the default of the process
+    private testSandboxDefaultCache() {
+        Program a = cacheTenant("tenant-default");
+        hash<auto> d = a.callFunction("default_cache");
+        assertEq("MEMORY:default", d.name);
+        assertEq("MEMORY:default", d.full_name);
+        assertEq("MEMORY", d.type);
+        a.callFunction("init_cache", "MEMORY:default", "d/tenant.example.com@EXAMPLE.COM");
+        assertEq("d/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", "MEMORY:default"));
+        # the process's own MEMORY:default cache is not the tenant's
+        Qore::Krb5::Krb5Context ctx();
+        assertFalse(ctx.openCredentialCache("MEMORY:default").hasPrimaryPrincipal());
+    }
+
+    #! the caches that the OS shares by user cannot be kept apart, and are refused to sandboxed code
+    private testSandboxSharedCacheTypesRefused() {
+        Program a = cacheTenant("tenant-refused");
+        foreach string name in (("KCM:", "API:", "KEYRING:persistent:0", "MSLSA:", "KEYRING:user:x", "KEYRING:session:x",
+                "KEYRING:legacy-name")) {
+            assertThrows("KRB5-SANDBOX-ERROR", \a.callFunction(), ("principal_of", name), name);
+        }
+    }
+
+    #! keyring caches are kept per isolation domain where the kernel has keyrings
+    private testKeyringCacheIsolation() {
+        string name = "KEYRING:process:module-krb5-isolation-" + getpid();
+        Qore::Krb5::Krb5Context ctx();
+        try {
+            ctx.openCredentialCache(name).initialize(new Qore::Krb5::Krb5Principal("host/trusted.example.com@EXAMPLE.COM"));
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("keyring credential caches are not available: " + ex.desc);
+        }
+        Program a = cacheTenant("tenant-keyring");
+        assertNothing(a.callFunction("principal_of", name), "the host's keyring cache is not visible to a tenant");
+        # the full name of the tenant's cache is the one that MIT Kerberos gives for the name (kind:coll:coll), as
+        # for the host's
+        assertEq(ctx.openCredentialCache(name).getFullName(),
+            a.callFunction("init_cache", name, "k/tenant.example.com@EXAMPLE.COM"));
+        assertEq("k/tenant.example.com@EXAMPLE.COM", a.callFunction("principal_of", name));
+        assertEq("host/trusted.example.com@EXAMPLE.COM", ctx.openCredentialCache(name).getPrimaryPrincipal().toString());
+    }
+
+    #! a GSS initiator of sandboxed code without a credential would use the default cache of the process
+    private testSandboxGssDefaultCredentials() {
+        # with an unrestricted network policy, so that the network check of the module does not refuse it first
+        Program a = cacheTenant("tenant-gss", True);
+        hash<auto> r = a.callFunction("gss_default");
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("default credentials", r.desc);
     }
 
     private testFileCacheSandboxDeny() {
