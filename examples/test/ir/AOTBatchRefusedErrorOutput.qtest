@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc and the executables that it links in child processes
+# test-platform: macos - the link of qcc script objects into an executable with the system linker
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTBatchRefusedErrorOutputTest
+
+#! a qcc-linked executable whose AOT script batch is refused reports the error once (qore#7700)
+/** The startup code that qcc links into an executable printed a second line, "batch flush failed: (null)", after the
+    error of a batch that qore_aot_script_end_batch() refused: that function reports its error itself and records
+    none for qore_last_error(), whose null message was printed with "%s".  It prints the recorded error only, and the
+    error of an entry function only when there is one.
+*/
+class AOTBatchRefusedErrorOutputTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string env;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBatchRefusedErrorOutputTest", "1.0", \ARGV) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        foreach int opt in ((0, 3)) {
+            addTestCase(sprintf("a refused batch reports its error once (-O%d)", opt), \testRefusedBatch(), opt);
+        }
+        set_return_value(main());
+    }
+
+    private hash<auto> run(string cmd) {
+        string out = backquote(sprintf("%s %s 2>&1; echo rc=$?", env, cmd));
+        *list<*string> m = out =~ x/rc=([0-9]+)\n$/;
+        return {
+            "rc": m ? m[0].toInt() : -1,
+            "out": m ? out.substr(0, out.size() - (m[0].size() + 4)) : out,
+        };
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    #! a class whose base class is in an object that is not linked: the batch cannot resolve it (it fails in
+    #! resolveAll(); a batch with an object of another runtime fails in the same place of the glue)
+    testRefusedBatch(int opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        FsUtil::TmpDir tmp("qore-aot-batch-refused-");
+        string obj_dir = tmp.path + "/o";
+        mkdir(obj_dir);
+        write(tmp.path + "/b.qr", "class B {\n    string name() { return \"B\"; }\n}\n");
+        write(tmp.path + "/a.qr", "class A inherits B {\n}\n"
+            "sub main() {\n    A a();\n    printf(\"name: %s\\n\", a.name());\n}\n");
+        hash<auto> r = run(sprintf("%s -O%d -c -o %s/b.qo %s/b.qr", qcc_bin, opt, obj_dir, tmp.path));
+        assertEq(0, r.rc, "b compiles: " + r.out);
+        r = run(sprintf("%s -O%d -c -L %s -o %s/a.qo %s/a.qr", qcc_bin, opt, obj_dir, obj_dir, tmp.path));
+        assertEq(0, r.rc, "a compiles: " + r.out);
+
+        # both objects: the program runs
+        r = run(sprintf("%s -O%d -o %s/app %s/a.qo %s/b.qo", qcc_bin, opt, tmp.path, obj_dir, obj_dir));
+        assertEq(0, r.rc, "the objects link: " + r.out);
+        r = run(sprintf("%s/app", tmp.path));
+        assertEq(0, r.rc, r.out);
+        assertEq("name: B\n", r.out);
+
+        # only the object of A: the batch is refused, and its error is reported once, with no null message
+        r = run(sprintf("%s -O%d -o %s/app-missing %s/a.qo", qcc_bin, opt, tmp.path, obj_dir));
+        assertEq(0, r.rc, "the object of A links alone: its base class is resolved when the batch loads: " + r.out);
+        r = run(sprintf("%s/app-missing", tmp.path));
+        assertEq(1, r.rc, "the refused batch ends the executable with exit status 1: " + r.out);
+        assertRegex("cannot resolve base class '::B' for class 'A'", r.out, "the error of the batch");
+        assertEq(1, (r.out =~ x/(cannot resolve base class)/g).size(), "the error is reported once: " + r.out);
+        assertFalse(r.out =~ /batch flush failed/, "no second line: " + r.out);
+        assertFalse(r.out =~ /\(null\)/, "no null message: " + r.out);
+    }
+}

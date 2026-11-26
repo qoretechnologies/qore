@@ -10000,10 +10000,10 @@ static int link_script_objects_to_executable(const std::string& output,
             san.c_str(), san.c_str());
     }
     fprintf(glue,
+        // qore_aot_script_end_batch() prints the error of a batch that fails itself, and records none for
+        // qore_last_error(): nothing more is printed (qore#7700)
         "    int rc = qore_aot_script_end_batch(pgm);\n"
         "    if (rc != 0) {\n"
-        "        fprintf(stderr, \"batch flush failed: %%s\\n\",\n"
-        "            qore_last_error(pgm));\n"
         "        qore_destroy_program(pgm);\n"
         "        qore_cleanup();\n"
         "        qore_fork_child_quick_exit(1);\n"
@@ -10011,8 +10011,9 @@ static int link_script_objects_to_executable(const std::string& output,
         "    }\n"
         "    rc = qore_run_callable(pgm, \"%s\", NULL);\n"
         "    if (rc != 0) {\n"
-        "        fprintf(stderr, \"entry %s returned %%d: %%s\\n\",\n"
-        "            rc, qore_last_error(pgm));\n"
+        "        const char* entry_err = qore_last_error(pgm);\n"
+        "        fprintf(stderr, \"entry %s returned %%d%%s%%s\\n\",\n"
+        "            rc, entry_err ? \": \" : \"\", entry_err ? entry_err : \"\");\n"
         "    }\n"
         "    qore_destroy_program(pgm);\n"
         "    qore_cleanup();\n"

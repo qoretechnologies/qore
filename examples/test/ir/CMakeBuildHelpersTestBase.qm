@@ -758,7 +758,7 @@ int main(int, char**) {
         rc = qore_run_callable(pgm, \"main\", nullptr);
     }
     if (rc) {
-        fprintf(stderr, \"AOT host failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+        fprintf(stderr, \"AOT host failed rc=%d: %s\\n\", rc, qore_last_error(pgm) ? qore_last_error(pgm) : \"(reported above)\");
     }
     qore_destroy_program(pgm);
     qore_cleanup();
