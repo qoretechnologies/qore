@@ -1,8 +1,8 @@
 %modern
 # pseudo-method call loops: L=pv (a pseudo-method without an intrinsic: <string>::isEncodingValid()), L=pl (one with
 # an intrinsic: <string>::length()), L=pt (<int>::typeCode(), an intrinsic of every type), L=ps (<string>::split() of a
-# string local, qore#5578), L=tr (trim() of a string local), L=lw (<string>::lwr() of a string local, qore#7711);
-# N iterations
+# string local, qore#5578), L=tr (trim() of a string local), L=lw (<string>::lwr() of a string local, qore#7711),
+# L=ix (index() of a string local), L=il (index() of the lwr() of a string local); N iterations
 int sub f(int a) { return a; }
 int sub run_pv(int n) {
     string s = "abc";
@@ -53,6 +53,22 @@ int sub run_lw(int n) {
     }
     return t;
 }
+int sub run_ix(int n) {
+    string s = " a b c ";
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += index(s, "c");
+    }
+    return t;
+}
+int sub run_il(int n) {
+    string s = " A B C ";
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += index(s.lwr(), "c");
+    }
+    return t;
+}
 int n = ENV.N.toInt();
 switch (ENV.L) {
     case "pv": run_pv(n); break;
@@ -61,4 +77,6 @@ switch (ENV.L) {
     case "ps": run_ps(n); break;
     case "tr": run_tr(n); break;
     case "lw": run_lw(n); break;
+    case "ix": run_ix(n); break;
+    case "il": run_il(n); break;
 }
