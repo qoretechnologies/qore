@@ -50,6 +50,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QC_SandboxSerializable.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 
 #include <algorithm>
@@ -1729,6 +1730,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         sandbox_ctx(old.sandbox_ctx),
         sandbox_private_members(old.sandbox_private_members),
+        sandbox_serial_state(old.sandbox_serial_state),
+        sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
     // the bare references option of the declaration (issue #3286)
@@ -1878,6 +1881,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
                 || (ns && ns->getProgram() != old.spgm.load()))),
         sandbox_ctx(old.sandbox_ctx),
         sandbox_private_members(old.sandbox_private_members),
+        sandbox_serial_state(old.sandbox_serial_state),
+        sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
     // the import copy of a builtin class is owned by the importing Program's namespace and freed with it: it is mortal
@@ -3895,6 +3900,8 @@ void qore_class_private::parseCommit() {
     // the class's Program is now (qore#6843)
     if (!sys) {
         initSandboxAccess();
+        // the declarations that sandboxed code may not serialize (qore#7146)
+        initSandboxSerialization();
     }
     // the committed class is visible to running code, which reads its members without a lock (#6272); a module cannot
     // add members to it (#6422)
@@ -10222,6 +10229,81 @@ void qore_class_private::initSandboxAccess() {
     }
 }
 
+bool qore_class_private::isSandboxSerializable() const {
+    if (!scl || !QC_SANDBOXSERIALIZABLE) {
+        return false;
+    }
+    for (const BCNode* bc : *scl) {
+        if (bc->sclass && qore_class_private::get(*bc->sclass) == qore_class_private::get(*QC_SANDBOXSERIALIZABLE)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void qore_class_private::initSandboxSerialization() {
+    QoreClassHierarchyIterator ci(*cls);
+    while (ci.next()) {
+        if (ci.isVirtual()) {
+            continue;
+        }
+        const qore_class_private* qc = qore_class_private::get(ci.get());
+        if (qc->sys || !qc->sandboxSerializationProtected()) {
+            continue;
+        }
+        QoreClassMemberIterator mi(ci.get());
+        while (mi.next()) {
+            const QoreExternalNormalMember& m = mi.getMember();
+            if (m.getAccess() == Public) {
+                continue;
+            }
+            sandbox_serial_state = true;
+            if (!m.isTransient()) {
+                sandbox_deserial_refused = true;
+                return;
+            }
+        }
+    }
+}
+
+const qore_class_private* qore_class_private::sandboxSerialProtectedDecl(const char* mname, bool& internal) const {
+    const QoreMemberInfo* mi = members.find(mname);
+    if (!mi || !mi->declaredNonPublic()) {
+        return nullptr;
+    }
+    internal = mi->isLocalInternal();
+    // a local member is declared by this class
+    const qore_class_private* decl = mi->getClass();
+    if (!decl) {
+        decl = this;
+    }
+    return decl->sandboxSerializationProtected() ? decl : nullptr;
+}
+
+bool qore_class_private::hasNonPublicState() const {
+    QoreClassHierarchyIterator ci(*cls);
+    while (ci.next()) {
+        if (ci.isVirtual()) {
+            continue;
+        }
+        {
+            QoreClassMemberIterator mi(ci.get());
+            while (mi.next()) {
+                if (mi.getMember().getAccess() != Public) {
+                    return true;
+                }
+            }
+        }
+        QoreClassStaticMemberIterator si(ci.get());
+        while (si.next()) {
+            if (si.getMember().getAccess() != Public) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(self);
     //printd(5, "qore_class_private::execDestructor() %s::destructor() o: %p scl: %p sml: %p, self: %p, "
@@ -14682,8 +14764,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(Lexical
     if (check_self && qore_check_static_call_receiver(check_self, variant, mname, xsink)) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
     else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
@@ -14717,8 +14800,9 @@ QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
     if (*xsink) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -14851,8 +14935,9 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
     if (check_self && qore_check_static_call_receiver(check_self, variant, f.getName(), xsink)) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx), !cctx);
     // a legacy AST call runs a builtin variant with its own semantic policy
     return policy.isDefault() ? METHV_const(variant)->evalMethod(nullptr, ceh, xsink)
         : METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);

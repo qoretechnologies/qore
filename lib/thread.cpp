@@ -104,6 +104,7 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -5573,6 +5574,21 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     rc.cls = c;
 }
 
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, bool keep_class)
+        : td(thread_data.get()) {
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    td->current_obj = obj;
+    td->current_class = keep_class ? old_class : c;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    if (!keep_class) {
+        rc.cls = c;
+    }
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
         QoreSetCallProgramContext, ExceptionSink* xsink) : td(thread_data.get()), call_pgm_xsink(xsink) {
     // as the constructor without the call Program context, in one call
@@ -8021,6 +8037,31 @@ QoreProgram* qore_builtin_caller_program() {
         return nullptr;
     }
     return own->getProgram();
+}
+
+bool qore_innermost_frame_is_builtin() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    return own && own->getCallType() == CT_BUILTIN;
+}
+
+void qore_thread_program_stack(std::vector<QoreProgram*>& pgms) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    auto add = [&pgms] (QoreProgram* pgm) {
+        if (pgm && std::find(pgms.begin(), pgms.end(), pgm) == pgms.end()) {
+            pgms.push_back(pgm);
+        }
+    };
+    add(td->current_pgm);
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        add(ch->getOldProgram());
+    }
 }
 
 bool qore_caller_in_untrusted_module_init() {
