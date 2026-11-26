@@ -31,6 +31,7 @@
     information.
 */
 
+#include <climits>
 #include <optional>
 #include "qore/intern/QoreThreadScratch.h"
 #include <qore/Qore.h>
@@ -74,6 +75,7 @@ static bool http2DebugEnabled() {
 #include <nghttp2/nghttp2ver.h>
 
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/FileStreamIo.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/qore_string_private.h"
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
@@ -2370,6 +2372,11 @@ bool Http2Session::wantWrite() const {
     return nghttp2_session_want_write(session) != 0 || send_offset < send_buffer.size();
 }
 
+bool Http2Session::wantWriteNow() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    return send_offset >= send_buffer.size() && nghttp2_session_want_write(session) != 0;
+}
+
 // nghttp2 callbacks
 
 int Http2Session::onFrameSendCallback(nghttp2_session* session,
@@ -3145,6 +3152,7 @@ ssize_t Http2Session::dataProviderReadCallbackIntern(nghttp2_session* session, i
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
         h2->stream_taken_total[stream_id] += to_copy;
+        h2->conn_taken_total += to_copy;
     }
 
     // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
@@ -4191,6 +4199,8 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
             }
             // If SQ full (rv == -1), try again next iteration
         }
+        // while the file is read, the body waits for its source, not for its client (qore#7280)
+        info.source_waiting = info.iouring_read_pending;
         // Data delivery happens in handleAsyncReadCompletion()
         return;
     }
@@ -4198,17 +4208,30 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
 
     // Read one chunk per stream per iteration
     if (info.is_pollable) {
+        // readNonBlock() returns 0 both at the end and when a read would block, so a descriptor that can wait is
+        // read only when it is readable; one that is not is waited for through getExtraFds() (qore#7628)
+        if (info.is_epoll_compatible) {
+            int ready = qore_file_stream_ready_now(info.stream_fd, POLLIN);
+            if (ready < 0) {
+                xsink->raiseErrnoException("HTTP2-ERROR", errno, "poll() on the response body's descriptor failed");
+                return;
+            }
+            if (!ready) {
+                // the body waits for its source, not for its client (qore#7280)
+                info.source_waiting = true;
+                return;
+            }
+        }
+        info.source_waiting = false;
         SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
         chunk->preallocate(65536);
         int64 count = info.input_stream->readNonBlock(
             const_cast<void*>(chunk->getPtr()), 65536, xsink);
+        // a negative count comes with an exception (InputStream::readNonBlock())
         if (*xsink) {
             return;
         }
-        if (count < 0) {
-            // EAGAIN — not ready yet, event loop will wake us
-            return;
-        }
+        assert(count >= 0);
         if (count == 0) {
             // EOF — if Content-Length was declared and we are short,
             // send RST_STREAM instead of END_STREAM so the client
@@ -4281,6 +4304,8 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
 
 void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
+    // the bounds of the bodies are checked first, so that a body that ends is cleaned up in this pass (qore#7280)
+    checkInputStreamSendBound();
     printd(5, "Http2Session::processStreamInputStreams() count=%zu\n", stream_input_streams_.size());
     for (auto& [stream_id, info] : stream_input_streams_) {
         if (!info.eof) {
@@ -4315,6 +4340,107 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     // Update atomic flag after cleanup
     if (stream_input_streams_.empty()) {
         has_active_input_streams_.store(false, std::memory_order_release);
+    }
+}
+
+void Http2Session::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (pump_bound_set) {
+        return;
+    }
+    pump_bound_set = true;
+    if (min_rate > 0 && window_ms > 0) {
+        pump_send_rate = SendRateWindow(min_rate, window_ms);
+        // the transport shows a client's progress in steps of its flow-control window and of TCP's; the I/O thread
+        // checks at least every check interval, so a longer time between checks is its own delay
+        pump_send_rate.enableProgressSteps();
+        pump_send_rate.setMaxWaitCharge(2 * pump_send_rate.getCheckIntervalMs());
+    }
+    if (stall_ms > 0) {
+        pump_stall_ms = stall_ms;
+    }
+}
+
+bool Http2Session::isInputStreamWaiting(const StreamInputStreamInfo& info) const {
+    // a body that has not ended has more to send; unless its own source has no data ready, what it waits for is the
+    // client: the client's data can be in the stream's buffer, in the connection's output, or in the kernel's socket
+    // buffers, which a client that stops reading leaves full while Qore's own buffers are empty
+    return !info.eof && !info.source_waiting;
+}
+
+int Http2Session::getInputStreamPollTimeoutMs() const {
+    if (!hasActiveStreamInputStreams()) {
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!pump_bound_set) {
+        return -1;
+    }
+    int64_t now = q_clock_getmicros_monotonic() / 1000;
+    int64_t rv = -1;
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof || !isInputStreamWaiting(info)) {
+            continue;
+        }
+        // a body that waits but was not seen yet is seen at the next check, not a whole stall time later
+        int64_t t = info.bound_progress_ms ? info.bound_progress_ms + pump_stall_ms - now : 1;
+        if (pump_send_rate.enabled() && pump_send_rate.getCheckIntervalMs() < t) {
+            t = pump_send_rate.getCheckIntervalMs();
+        }
+        if (rv < 0 || t < rv) {
+            rv = t;
+        }
+    }
+    if (rv < 0) {
+        return -1;
+    }
+    return rv < 1 ? 1 : (rv > INT_MAX ? INT_MAX : static_cast<int>(rv));
+}
+
+void Http2Session::checkInputStreamSendBound() {
+    if (!pump_bound_set) {
+        return;
+    }
+    int64_t now = q_clock_getmicros_monotonic() / 1000;
+    bool waiting = false;
+    // the no-progress bound of each body
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+        if (!isInputStreamWaiting(info)) {
+            info.bound_progress_ms = 0;
+            continue;
+        }
+        waiting = true;
+        auto tit = stream_taken_total.find(stream_id);
+        int64_t taken = tit == stream_taken_total.end() ? 0 : static_cast<int64_t>(tit->second);
+        if (!info.bound_progress_ms || taken > info.bound_taken) {
+            info.bound_taken = taken;
+            info.bound_progress_ms = now;
+            continue;
+        }
+        if (now - info.bound_progress_ms >= pump_stall_ms) {
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 response body on stream %d ended: the client took no data "
+                "for %lld ms", stream_id, (long long)(now - info.bound_progress_ms));
+            info.eof = true;
+            submitRstStream(stream_id, NGHTTP2_CANCEL, nullptr);
+        }
+    }
+    // the minimum rate of the connection, across its streams, while a body waits for the client
+    if (pump_send_rate.enabled()
+            && pump_send_rate.update(static_cast<int64_t>(conn_taken_total), waiting, now) && waiting) {
+        for (auto& [stream_id, info] : stream_input_streams_) {
+            if (info.eof || !isInputStreamWaiting(info)) {
+                continue;
+            }
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 response body on stream %d ended: the client took less "
+                "than the minimum rate of %lld bytes/s", stream_id, (long long)pump_send_rate.getMinRate());
+            info.eof = true;
+            submitRstStream(stream_id, NGHTTP2_CANCEL, nullptr);
+        }
+        // the next waits start a new measurement: they are not charged for the ended bodies
+        pump_send_rate.restart();
     }
 }
 
@@ -4371,10 +4497,20 @@ bool Http2Session::needsInputStreamPass() const {
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0
-                && info.is_epoll_compatible) {
-            extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
+        if (info.eof || !info.is_pollable || info.stream_fd < 0 || !info.is_epoll_compatible) {
+            continue;
         }
+        // a stream that cannot read its source now (a full send buffer, or a chunk that the send refused) waits for
+        // the peer's credit, which comes as a frame on the socket; waiting for its readable source as well would wake
+        // the operation at once, again and again, without a read (qoretechnologies/qore#7654)
+        if (info.retained_chunk) {
+            continue;
+        }
+        auto it = pending_body_data.find(stream_id);
+        if (it != pending_body_data.end() && it->second.data.size() - it->second.offset > MAX_STREAM_BUFFER) {
+            continue;
+        }
+        extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
     }
 }
 
@@ -4393,6 +4529,7 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
 
     auto& info = it->second;
     info.iouring_read_pending = false;
+    info.source_waiting = false;
 
     if (info.eof) {
         return;

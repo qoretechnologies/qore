@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# qore#7624: the key of an operation is unique in the controller, not only on one I/O thread
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoKeyAcrossThreadsTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The number of I/O threads: operations on different sockets run on different threads
+const IoThreads = 4;
+
+#! A poll operation that waits for its notifier until it is canceled
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! True if abort() was called
+        bool aborted = False;
+    }
+
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        aborted = True;
+    }
+}
+
+#! A waiting operation that keeps its result
+class ProbeOperation inherits WaitingOperation {
+    public {
+        Queue done();
+    }
+
+    constructor(EventNotifier notifier) : WaitingOperation(notifier) {
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        done.push(result);
+    }
+}
+
+#! Code of the sandboxed Program that submits an operation of the host
+const SandboxedCode = "
+%modern
+sub submit_op(AbstractPollOperation op, string owner, string key, EventNotifier n, bool replace) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": op,
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    }, replace);
+}
+";
+
+#! An operation key is unique in the controller, whatever the I/O threads of the sockets of the operations
+/** Operations are routed to an I/O thread by their socket, not by their key, so that every operation on a socket runs
+    on one thread.  The key collision checks of a submission (the refusal without replace_existing of qore#7108, the
+    replacement with it) used to look at the operations of the thread of the submission's socket only: two operations
+    on sockets of different threads could have the same key (qore#7624).  The test needs a library with debugging, for
+    dbg_async_io_route_thread().
+*/
+class AsyncIoKeyAcrossThreadsTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoKeyAcrossThreadsTest", "1.0") {
+        # the thread count is set once, while the controller has no operation
+        if (Option::HAVE_LIBRARY_DEBUGGING && exists_function("dbg_async_io_route_thread")) {
+            AsyncIoController::setMaxIoThreads(IoThreads);
+        }
+        addTestCase("a submission under a key in use on another I/O thread is refused", \testRefused());
+        addTestCase("a replacing submission cancels the operation on another I/O thread", \testReplaced());
+        addTestCase("the key is free again when its operation has ended", \testKeyFreed());
+        addTestCase("an operation replaced on its own thread has the key of its replacement's owner",
+            \testReplacedOnOwnThread());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_async_io_route_thread")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! Returns two notifiers whose operations run on different I/O threads
+    private list<EventNotifier> getNotifiers() {
+        EventNotifier first();
+        int first_thread = call_function("dbg_async_io_route_thread", first);
+        for (int i = 0; i < 1000; ++i) {
+            EventNotifier second();
+            if (call_function("dbg_async_io_route_thread", second) != first_thread) {
+                return (first, second);
+            }
+        }
+        fail("no two notifiers are routed to different I/O threads");
+    }
+
+    #! Submits an operation under the key
+    private Queue<hash<SocketPollResultInfo>> submitOp(string owner, string key, EventNotifier n,
+            WaitingOperation op, *bool replace_existing) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        }, replace_existing);
+    }
+
+    testRefused() {
+        skipIfNoDebugging();
+        foreach auto replace in (False, NOTHING) {
+            string owner = sprintf("key-across-refused-%y-%d", replace, getpid());
+            on_exit AsyncIoController::cancelByOwner(owner);
+            string key = owner + "-key";
+            list<EventNotifier> n = getNotifiers();
+
+            WaitingOperation op1(n[0]);
+            Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n[0], op1);
+            # another operation under the key, on a socket of another I/O thread, without the request to replace it
+            WaitingOperation op2(n[1]);
+            Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n[1], op2, replace);
+
+            hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+            assertTrue(r2.canceled, sprintf("%y: the refused operation is reported canceled", replace));
+            assertEq("ASYNC-IO-ERROR", r2.ex.err, "with the reason");
+            assertTrue(r2.ex.desc =~ /already exists/, "which names the collision: " + r2.ex.desc);
+            assertTrue(op2.aborted, "the refused operation was aborted");
+
+            # the operation that was there is not touched
+            assertEq(0, rq1.size(), "the first operation has no result");
+            assertFalse(op1.aborted, "the first operation was not aborted");
+            AsyncIoController::cancelByOwner(owner);
+            hash<SocketPollResultInfo> r1 = rq1.get(HangGuard);
+            assertTrue(r1.canceled, "the first operation is canceled by the cancellation");
+            assertEq(NOTHING, r1.ex, "without an error");
+        }
+    }
+
+    testReplaced() {
+        skipIfNoDebugging();
+        string owner = sprintf("key-across-replaced-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        list<EventNotifier> n = getNotifiers();
+
+        WaitingOperation op1(n[0]);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n[0], op1);
+        WaitingOperation op2(n[1]);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n[1], op2, True);
+
+        # the first operation is canceled by the replacing one, which keeps the key
+        hash<SocketPollResultInfo> r1 = rq1.get(HangGuard);
+        assertTrue(r1.canceled, "the first operation is canceled");
+        assertEq(NOTHING, r1.ex, "without an error");
+        assertTrue(op1.aborted, "and aborted");
+        assertEq(0, rq2.size(), "the replacing operation has no result");
+        assertFalse(op2.aborted, "the replacing operation was not aborted");
+
+        # the key has one operation: the cancellation of the owner cancels the replacing one only
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the cancellation finds one operation");
+        hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+        assertTrue(r2.canceled, "the replacing operation is canceled by the cancellation");
+        assertEq(NOTHING, r2.ex);
+    }
+
+    testReplacedOnOwnThread() {
+        skipIfNoDebugging();
+        string owner = sprintf("key-across-own-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        list<EventNotifier> n = getNotifiers();
+
+        # a sandboxed Program submits an operation on the thread of the first notifier
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxedCode, "own-thread");
+        ProbeOperation op1(n[0]);
+        p.callFunction("submit_op", op1, owner, key, n[0], False);
+
+        # the host replaces it on the same thread: its result says that it was replaced
+        WaitingOperation op2(n[0]);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n[0], op2, True);
+        assertTrue(op1.done.get(HangGuard).canceled, "the sandboxed operation is replaced by the host's");
+
+        # the key is the host's now: the sandboxed code does not replace it from another thread, as it would not
+        # from the same thread
+        ProbeOperation op3(n[1]);
+        p.callFunction("submit_op", op3, owner, key, n[1], True);
+        hash<SocketPollResultInfo> r3 = op3.done.get(HangGuard);
+        assertTrue(r3.canceled, "the sandboxed submission is refused");
+        assertEq("ASYNC-IO-KEY-ERROR", r3.ex.err, "with the reason");
+        assertEq(0, rq2.size(), "the host's operation has no result");
+        assertFalse(op2.aborted, "the host's operation was not aborted");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the host's operation is the only one with the key");
+        assertTrue(rq2.get(HangGuard).canceled, "the host's operation is canceled by the cancellation");
+    }
+
+    testKeyFreed() {
+        skipIfNoDebugging();
+        string owner = sprintf("key-across-freed-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        list<EventNotifier> n = getNotifiers();
+
+        WaitingOperation op1(n[0]);
+        Queue<hash<SocketPollResultInfo>> rq1 = submitOp(owner, key, n[0], op1);
+        AsyncIoController::cancelByOwner(owner);
+        assertTrue(rq1.get(HangGuard).canceled, "the first operation is canceled");
+
+        # the key is not in use any more: another I/O thread's operation takes it without replace_existing
+        WaitingOperation op2(n[1]);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n[1], op2);
+        assertEq(0, rq2.size(), "the second operation was not refused");
+        assertFalse(op2.aborted, "and not aborted");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "it is the only operation of the owner");
+        hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+        assertTrue(r2.canceled, "the second operation is canceled by the cancellation");
+        assertEq(NOTHING, r2.ex, "without an error");
+    }
+}

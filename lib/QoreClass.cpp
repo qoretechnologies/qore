@@ -9713,7 +9713,10 @@ bool qore_class_private::isRestrictedCode() const {
         QoreProgram* p;
     } ref(getReferencedSourceProgram());
     if (!ref.p) {
-        return released_sandboxed.load();
+        // a Program that is being deleted (no reference can be taken while spgm is still set) fails closed; a
+        // released one has its recorded state
+        std::lock_guard<std::mutex> al(dataLock());
+        return spgm.load() ? true : released_sandboxed.load();
     }
     return qore_program_is_restricted(ref.p);
 }

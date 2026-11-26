@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SelfOperandMutationTest
+
+#! An operator that changes an lvalue uses the value that its operand had when it was evaluated
+/** <tt>push l, l</tt> pushes the list as it was before the push: the push separates \c l from the value pushed
+    (copy-on-write), so the list never contains itself.  The interpreter borrowed the value of a local variable for
+    the operand and made the lvalue unique before taking its reference, so the list was pushed into itself, creating
+    a recursive reference.
+
+    The cases run in a function called three times, so that tiered execution also runs them as native code; the
+    test is run in each execution mode by the test runner's modes.
+*/
+class SelfOperandMutationTest inherits QUnit::Test {
+    public {
+        list member_list = (1, 2);
+    }
+
+    constructor() : QUnit::Test("SelfOperandMutation", "1.0", \ARGV) {
+        addTestCase("push and unshift of the lvalue's own value", \pushUnshift());
+        addTestCase("compound assignments with the lvalue's own value", \compound());
+        addTestCase("assignments with the lvalue's own value", \assignments());
+        addTestCase("the original value is not changed", \original());
+        set_return_value(main());
+    }
+
+    pushUnshift() {
+        for (int i = 0; i < 3; ++i) {
+            string label = sprintf("run %d", i);
+            {
+                list l = (1, 2);
+                push l, l;
+                assertEq((1, 2, (1, 2)), l, label + ": push list");
+                # negative: the element pushed is not the list itself
+                assertEq(2, l[2].size(), label + ": push list element size");
+            }
+            {
+                list l = (1, 2);
+                unshift l, l;
+                assertEq(((1, 2), 1, 2), l, label + ": unshift list");
+                assertEq(2, l[0].size(), label + ": unshift list element size");
+            }
+            {
+                list<auto> l = (1, "x");
+                push l, l;
+                assertEq((1, "x", (1, "x")), l, label + ": push list<auto>");
+            }
+            {
+                auto l = (1, "x");
+                unshift l, l;
+                assertEq(((1, "x"), 1, "x"), l, label + ": unshift auto");
+            }
+            {
+                softlist<auto> l = (1, "x");
+                push l, l;
+                assertEq((1, "x", (1, "x")), l, label + ": push softlist<auto>");
+            }
+            {
+                list l = (1, 2);
+                push l, (l,);
+                assertEq((1, 2, ((1, 2),)), l, label + ": push list containing the list");
+            }
+            {
+                list l = ();
+                push l, l;
+                assertEq(((),), l, label + ": push empty list");
+            }
+            {
+                hash<auto> h = {"a": (1, "x")};
+                push h.a, h.a;
+                assertEq((1, "x", (1, "x")), h.a, label + ": push hash member");
+            }
+            {
+                list l = ((1, "x"),);
+                push l[0], l[0];
+                assertEq(((1, "x", (1, "x")),), l, label + ": push element");
+            }
+            {
+                member_list = (1, 2);
+                push member_list, member_list;
+                assertEq((1, 2, (1, 2)), member_list, label + ": push member");
+                member_list = (1, 2);
+                unshift member_list, member_list;
+                assertEq(((1, 2), 1, 2), member_list, label + ": unshift member");
+            }
+            {
+                list l = (1, 2);
+                push l, l;
+                push l, l;
+                assertEq((1, 2, (1, 2), (1, 2, (1, 2))), l, label + ": repeated push");
+            }
+        }
+    }
+
+    compound() {
+        for (int i = 0; i < 3; ++i) {
+            string label = sprintf("run %d", i);
+            {
+                list l = (1, 2);
+                l += l;
+                assertEq((1, 2, 1, 2), l, label + ": list += list");
+            }
+            {
+                list l = (1, 2);
+                l += (l,);
+                assertEq((1, 2, (1, 2)), l, label + ": list += (list,)");
+            }
+            {
+                hash<auto!> h = {"a": 1};
+                h += {"b": h};
+                assertEq({"a": 1, "b": {"a": 1}}, h, label + ": hash += {key: hash}");
+            }
+            {
+                string s = "ab";
+                s += s;
+                assertEq("abab", s, label + ": string += string");
+            }
+            {
+                binary b = binary("ab");
+                b += b;
+                assertEq(binary("abab"), b, label + ": binary += binary");
+            }
+            {
+                int n = 3;
+                n += n;
+                assertEq(6, n, label + ": int += int");
+            }
+        }
+    }
+
+    assignments() {
+        for (int i = 0; i < 3; ++i) {
+            string label = sprintf("run %d", i);
+            {
+                list l = (1, 2);
+                l[0] = l;
+                assertEq(((1, 2), 2), l, label + ": element assignment");
+            }
+            {
+                list l = (1, 2);
+                l[2] = l;
+                assertEq((1, 2, (1, 2)), l, label + ": element assignment past the end");
+            }
+            {
+                hash<auto!> h = {"a": 1};
+                h.b = h;
+                assertEq({"a": 1, "b": {"a": 1}}, h, label + ": hash member assignment");
+            }
+            {
+                list l = (1, 2);
+                splice l, 0, 0, l;
+                assertEq((1, 2, 1, 2), l, label + ": splice");
+            }
+        }
+    }
+
+    original() {
+        for (int i = 0; i < 3; ++i) {
+            string label = sprintf("run %d", i);
+            list l = (1, 2);
+            list alias = l;
+            push l, l;
+            assertEq((1, 2), alias, label + ": an alias of the original value");
+            unshift alias, alias;
+            assertEq(((1, 2), 1, 2), alias, label + ": unshift to the alias");
+            assertEq((1, 2, (1, 2)), l, label + ": the pushed list is not changed by the alias");
+        }
+    }
+}

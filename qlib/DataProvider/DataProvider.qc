@@ -306,6 +306,7 @@ public class DataProvider {
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
+            "pdf": "PdfDataProvider",
             "pdfco": "PdfCoDataProvider",
             "convertapi": "ConvertApiDataProvider",
             "segment": "SegmentDataProvider",
@@ -963,6 +964,10 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData($1),
     DataProvider::listKnownFactories()), exists $1;
         @endcode
+
+        The optional native PDF factory (\c pdf) exposes form actions when \c PdfDataProvider is installed.
+        Its render and text-extraction actions also require PDFium. Regenerate the provider index after changing
+        these installed capabilities. The PDF.co service uses its own factory, \c pdfco.
 
         @note Without an index recording factory info, a returned factory may not be available, as when the module
         of a known factory is not installed; @ref tryGetFactoryInfoAsData() then returns @ref nothing for it

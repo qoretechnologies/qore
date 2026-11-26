@@ -113,6 +113,12 @@
     @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
     sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
     <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+    @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
+    The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
+    tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
+    elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
+    @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
+
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -162,12 +168,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
-    A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
-    while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
-    taking data is no longer cut off after a fixed number of retries.  The rate applies to each stream, so a listener
-    that serves clients with many concurrent streams on a slow connection may need a lower value.  Set the
-    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option to \c 0 to
-    disable the check (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
+    A streamed HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, also
+    one that the I/O thread sends, so that a very slow client cannot hold it; see
+    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate", which \c 0 disables
+    (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
 
     @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
     Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
@@ -355,8 +359,8 @@
     The description of the pool passed to a
     @ref Qore::SQL::DatasourcePool::setWarningCallback() "DatasourcePool warning callback" shows the driver name, host
     and port of the pool with its user name, password and database name masked as \c "****" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of the pool
-    with its password;
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of
+    the pool with its password;
     @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
     configuration (issue #6961).
 
@@ -366,9 +370,9 @@
     @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()" and
     @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()", is the masked description of
     @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the database name;
-    so it no longer identifies a connection, and the names of the database data providers, which are the
-    description, are the same for all the connections of a driver to a host and port; the key of the
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the
+    database name; so it no longer identifies a connection, and the names of the database data providers, which are
+    the description, are the same for all the connections of a driver to a host and port; the key of the
     @ref SqlUtil::TableCache "SqlUtil table cache" is given by the new
     @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" (issue #6988).
 
@@ -886,6 +890,10 @@
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
     in the operation info, and \c exec() is removed: wait on the Queue that \c submit() returns instead.  See
     @ref asyncsocketio_3_0.
+
+    @par The Interpreter Prints One Line per Parse Diagnostic
+    The interpreter now prints @ref cli_parse_diagnostics "compiler-style parse diagnostics" by default.
+    Use <tt>\--diag-format=legacy</tt> or <tt>QORE_DIAG_FORMAT=legacy</tt> for the previous multi-line reports.
 
     @par The Short Command-Line Options -M and -G Have New Meanings
     \c -M is \c --modern and \c -G is \c --enable-debug; use \c --no-namespace-defs and \c --no-global-vars for the
@@ -1489,7 +1497,6 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
-
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as
@@ -2712,7 +2719,7 @@
     - @ref protobufintro "protobuf": dynamic <a href="https://protobuf.dev/">Protocol Buffers</a> schemas and
       encoding
     - @ref tokenizerintro "tokenizer": <a href="https://huggingface.co/">HuggingFace</a>-compatible text
-      tokenization
+      tokenization with Unicode normalization, UTF-8 byte offsets and decoder sequences
     - @ref yamlintro "yaml": YAML parsing and serialization, formerly an external module, with its companion
       modules; the standard modules require it
 
@@ -2782,7 +2789,8 @@
     - @ref customeriodataproviderintro "CustomerIoDataProvider": data provider for Customer.io marketing automation
     - @ref customeriorestclientintro "CustomerIoRestClient": REST client for the Customer.io App and Track APIs
     - @ref dataproviderdataframeintro "DataProviderDataFrame": data provider integration for the dataframe module
-    - @ref dataprovidermlintro "DataProviderML": data pipeline processors for the ml module
+    - @ref dataprovidermlintro "DataProviderML": data pipeline processors for the ml module, including
+      structured extraction with preset or custom schemas
     - @ref datastreamclientintro "DataStreamClient": synchronous HTTP data stream clients (from module-yaml)
     - @ref datastreamclientiointro "DataStreamClientIo": asynchronous HTTP data stream clients
     - @ref datastreamrequesthandlerintro "DataStreamRequestHandler": server-side HTTP data streams (from module-yaml)
@@ -3031,15 +3039,19 @@
       object or variable: the references are bound with no lock held (issue #7391)
     - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
       (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
+    - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
+      extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
     - the @ref push "push" and @ref unshift "unshift" operators whose operand is the lvalue's own list (\c push l, l)
       add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
       assertion of a debug build (<a href="https://github.com/qoretechnologies/qore/issues/7622">issue 7622</a>)
-    - fixed a memory-safety issue with the builtin declarations in a namespace that a binary module adds to a Program
-      at run time, which are now freed with their Program only once nothing uses them
-      (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>)
+    - fixed a memory-safety issue with the builtin declarations that a binary module adds to a Program at run time,
+      in a namespace or one at a time, which are now freed with their Program only once nothing uses them
+      (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7649">issue 7649</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - fixed a memory-safety issue with a child @ref Qore::Program "Program" that outlives its parent: the parent's
@@ -4971,6 +4983,19 @@
       raises \c OBJECT-ALREADY-DELETED when another call takes the object over or deletes it before or at the same
       time, instead of using or releasing the Program again
       (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
+    - the key of an @ref Qore::AsyncIoController "AsyncIoController" operation is unique in the controller, not only
+      on one I/O thread: @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
+      @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()" with \c replace_existing, and the checks of a
+      submission that is refused or replaces another application's operation, now see an operation with the key on the
+      I/O thread of another socket, which left two operations with one key
+      (<a href="https://github.com/qoretechnologies/qore/issues/7624">issue 7624</a>)
+    - the process-wide standard I/O objects @ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and
+      @ref Qore::stderr "stderr" cannot be changed by code that a sandbox governs, also when the sandbox allows terminal
+      I/O: the methods of @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile" that reopen, close or redirect
+      them or change their encoding, position, locks, terminal attributes, owner or event queue raise
+      \c SHARED-OBJECT-ERROR for it, as for an object marked with
+      @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
+      affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

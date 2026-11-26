@@ -273,6 +273,25 @@ class ExecModeHarnessTest inherits QUnit::Test {
             {"lines": ("err", fallback_parse), "rest": ("err", fallback_parse), "warnings": ()},
             # a location line followed by another warning is kept
             {"lines": (header, other), "rest": (header, other), "warnings": ()},
+            # the one-line format of parse diagnostics, with a location, with a column and without a location
+            {"lines": ("script.q:2:11: warning: " + fallback_parse,), "rest": (), "warnings": (fallback_parse,)},
+            {"lines": ("/tmp/a b/s.q:2: warning: " + stale_parse, "script.q:5:1: warning: " + other),
+                "rest": ("script.q:5:1: warning: " + other,), "warnings": (stale_parse,)},
+            {"lines": ("qore: warning: " + fallback_parse,), "rest": (), "warnings": (fallback_parse,)},
+            # the notice that the report stopped at its limit after loader warnings, in both formats
+            {"lines": ("script.q:2:11: warning: " + fallback_parse,
+                "qore: note: maximum exception count reached (10); suppressing further output"), "rest": (),
+                "warnings": (fallback_parse, "qore: note: maximum exception count reached (10); suppressing further output")},
+            {"lines": (header, fallback_parse, "*** maximum exception count reached (10); suppressing further output"),
+                "rest": (), "warnings": (fallback_parse,
+                "*** maximum exception count reached (10); suppressing further output")},
+            # without a loader warning before it, the notice is kept
+            {"lines": ("qore: note: maximum exception count reached (10); suppressing further output",),
+                "rest": ("qore: note: maximum exception count reached (10); suppressing further output",),
+                "warnings": ()},
+            # another one-line warning, and the one-line form of a code that is not a loader warning, are kept
+            {"lines": ("script.q:2:11: warning: BINARY-MODULE-SOURCE-FALLBACK: something else",),
+                "rest": ("script.q:2:11: warning: BINARY-MODULE-SOURCE-FALLBACK: something else",), "warnings": ()},
         );
         foreach hash<auto> c in (cases) {
             hash<auto> h = LoaderWarnings::split_loader_warning_lines(c.lines);

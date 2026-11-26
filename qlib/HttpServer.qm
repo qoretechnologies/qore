@@ -9765,6 +9765,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (header_info.http3) {
             int session_id = header_info.session_id;
             if (response.input_stream) {
+                # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                s.setQuicInputStreamSendBound(session_id, header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+                    header_info.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow,
+                    StreamStallTimeout);
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
@@ -9784,6 +9788,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         } else {
             # HTTP/2
             if (response.input_stream) {
+                # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                s.setHttp2InputStreamSendBound(header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+                    header_info.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow,
+                    StreamStallTimeout);
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
@@ -10924,6 +10932,11 @@ class Http3HandlerSocket inherits Qore::Socket {
         return real.submitQuicStreamData(session_id, stream_id, body, end_stream);
     }
 
+    nothing setQuicInputStreamSendBound(int session_id, int min_rate, timeout window, timeout stall_timeout = 30m) {
+        checkSession(session_id);
+        real.setQuicInputStreamSendBound(session_id, min_rate, window, stall_timeout);
+    }
+
     int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
             InputStream body) {
         checkStream(session_id, stream_id);
@@ -11435,6 +11448,10 @@ class Http2HandlerSocket inherits Qore::Socket {
     nothing setHttp2StreamSendLimit(int stream_id, int limit) {
         checkStream(stream_id);
         real.setHttp2StreamSendLimit(stream_id, limit);
+    }
+
+    nothing setHttp2InputStreamSendBound(int min_rate, timeout window, timeout stall_timeout = 30m) {
+        real.setHttp2InputStreamSendBound(min_rate, window, stall_timeout);
     }
 
     int submitHttp2StreamingResponseWithStream(int stream_id, int status_code, *hash<auto> headers, InputStream body) {

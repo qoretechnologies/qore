@@ -1,0 +1,12 @@
+the process-wide wrapper is shared: True
+its own setLogger(): SANDBOX-REGISTRATION-ERROR, the tenant's logger is set: False
+the inherited LoggerWrapper::setLogger() through Reflection: SHARED-OBJECT-ERROR, the tenant's logger is set: False
+Reflection NormalMember::setValue() of the private member: REFLECTION-ACCESS-ERROR, the tenant's logger is set: False
+delete: SHARED-OBJECT-ERROR, the tenant's logger is set: False
+the tenant uses the host's logger: no exception, info enabled: False; host level: WARN, messages: 0
+the tenant uses the host's logger through a copy: no exception, copy shared: False; host level: WARN, messages: 0
+the tenant calls isLogger() with the host's logger: False
+the host's code logs for the tenant: messages: 0
+the host logs through the wrapper: messages: 1, uses its logger: True
+the tenant's own wrapper: shared: False, own logger: True
+trusted code sets and clears the logger: set: True, cleared: True

@@ -588,6 +588,13 @@ bool qore_has_debug() {
 }
 
 int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    // the library's initialization finalizes its builtin classes with no Program (qore_init()): there is no parse to
+    // report the error to, and their hierarchies are fixed and shallow; with a small main thread stack (RLIMIT_STACK
+    // of 192K or less), whose limit leaves less than QORE_PARSE_STACK_RESERVE above the depth of the initialization,
+    // the error crashed the process instead of letting the parse of the program's code fail (qore#7663)
+    if (!getProgram()) {
+        return 0;
+    }
     parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
 }
