@@ -1111,11 +1111,11 @@ class QoreCachedDeclRefs {
 public:
     std::vector<QoreTypeOwner*> owners;
 
-    DLLLOCAL QoreCachedDeclRefs() = default;
-    DLLLOCAL QoreCachedDeclRefs(const QoreCachedDeclRefs&) = delete;
-    DLLLOCAL QoreCachedDeclRefs& operator=(const QoreCachedDeclRefs&) = delete;
+    QoreCachedDeclRefs() = default;
+    QoreCachedDeclRefs(const QoreCachedDeclRefs&) = delete;
+    QoreCachedDeclRefs& operator=(const QoreCachedDeclRefs&) = delete;
 
-    DLLLOCAL ~QoreCachedDeclRefs() {
+    ~QoreCachedDeclRefs() {
         for (QoreTypeOwner* o : owners) {
             o->derefTypeOwner();
         }
@@ -1412,7 +1412,7 @@ void qore_ns_private::checkSharedVariant(const char* fname, const BuiltinFunctio
     getPath(path);
     throw QoreStandardException("RUNTIME-DECLARATION-ERROR", "cannot add a variant of builtin function %s::%s() "
         "that names '%s', a declaration that a binary module added to a Program at run time, to a namespace that no "
-        "Program owns or to a function that it shares with one: the declaration is freed with its Program; add the "
+        "Program owns: the declaration is freed with its Program; add the "
         "variant to that Program's own namespace", path.c_str(), fname, name.c_str());
 }
 

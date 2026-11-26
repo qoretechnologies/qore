@@ -79,15 +79,17 @@ switch (which) {
         break;
     }
     case "shared": {
-        # a variant of the static system namespace that names a class added at run time is refused (qore#7680)
+        # a variant of the static system namespace itself that names a class added at run time is refused (qore#7680)
         Program a(PO_NEW_STYLE);
         a.parse("sub add() { dbg_add_runtime_namespace(\"DbgRtNs\", 1); }
 sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "shared");
         a.callFunction("add");
         Program q(PO_NEW_STYLE);
         q.parse("sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "q");
+        # a variant added through q's copy of the function is q's (copy on write, qore#7588), and keeps the class
+        q.callFunction("naming", a, 3);
         try {
-            q.callFunction("naming", a, 3);
+            q.callFunction("naming", a, 8);
             printf("the variant was not refused\n");
             exit(6);
         } catch (hash<ExceptionInfo> ex) {

@@ -1061,9 +1061,11 @@ pipeline.append(new QoreFilterRecordsProcessor({
     @anchor dpql_exists
     @par Fields That a Record Does Not Have
     A field reference to a field that the record does not have raises an error; <tt>exists \@field</tt> is \c true
-    when the record has the field, also when its value is \c null, and \c false when it does not, so records of
-    different shapes can be told apart: <tt>exists \@type && \@type == &quot;return&quot;</tt> is \c false for a record
-    without \c type, while <tt>\@type == &quot;return&quot;</tt> raises an error for it.  \c exists binds tighter than any
+    when the record has the field with a value, and \c false when it does not have it or its value is \c null (as
+    with Qore's \c exists operator; an SQL \c NULL is a value), so records of different shapes can be told apart,
+    and a record gives the same result on its own and in a block, where every record has every field:
+    <tt>exists \@type && \@type == &quot;return&quot;</tt> is \c false for a record without \c type, while
+    <tt>\@type == &quot;return&quot;</tt> raises an error for it.  \c exists binds tighter than any
     other operator (<tt>!exists \@type</tt>, <tt>exists \@type == false</tt>), and its field reference can be in
     parentheses (<tt>exists(\@type)</tt>).  Its field reference is a path:
     - <tt>exists \@a.b</tt> and <tt>exists \@a{b}</tt>: the record has \c a, which is a hash with the key \c b
@@ -1074,8 +1076,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
     - the field reference is a path as everywhere else (@ref dpql_field_paths): <tt>exists \@&quot;x.y&quot;</tt> is the
       path \c x, \c y, and <tt>exists \@&quot;a\\.b&quot;</tt> is the key <tt>a.b</tt>
 
-    Whether a field has a value is tested with <tt>isNotNull(\@field)</tt>, which needs the record to have the
-    field.  A database cannot search with \c exists, as every row has every column: it is not pushed down, and is
+    <tt>isNotNull(\@field)</tt> is also \c false for an SQL \c NULL, and needs the record to have the field.  A
+    database cannot search with \c exists, as every row has every column: it is not pushed down, and is
     evaluated on the records read where the provider filters on the client (such as a database table with the
     \c allow_client_side_filter search option); a provider that searches only on its server reports it with
     \c DPQL-E041.
@@ -1825,6 +1827,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       PDF provider and its installed actions
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
+    - fixed a bug where @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface" built a block
+      from records that do not all have the same fields with columns of different lengths, misaligning the values
+      of later records; a field that a record lacks is now @ref nothing in that record's row
+      (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and

@@ -16,9 +16,10 @@
     the class, the copy of an enum in a child Program, a global variable imported from the Program, and builtin classes
     and hashdecls of its own whose member, static variable and signature types name it; the naming declaration or copy
     keeps it, so that the other Program checks values against valid types after the Program is deleted (qore#7680).  A
-    declaration added to a namespace that no Program owns does not keep it, and a builtin variant added to one that
-    names it is refused (either would keep it until library cleanup); two Programs whose declarations name each other
-    keep each other's until library cleanup.  The declarations are added with debug functions (dbg_add_runtime_namespace(),
+    variant added through the Program's copy of a shared function is the Program's (copy on write, qore#7588) and keeps
+    it too.  A declaration added to a namespace that no Program owns does not keep it, and a builtin variant added to
+    one that names it is refused (either would keep it until library cleanup); two Programs whose declarations name
+    each other keep each other's until library cleanup.  The declarations are added with debug functions (dbg_add_runtime_namespace(),
     dbg_add_runtime_naming()), so the test needs a library with debugging; each case runs in each execution mode, which
     the Programs that it creates set (a Program created at run time does not take the mode of the process).
 */
@@ -65,6 +66,8 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
             \sameProgramCycleTest());
         addTestCase("a variant of a namespace that no Program owns is refused if it names a Program's declaration",
             \sharedVariantTest());
+        addTestCase("a variant added through a Program's copy of a shared function is the Program's",
+            \copyOnWriteVariantTest());
         addTestCase("a refused variant of a binary module's namespace initialization", \moduleContextTest());
         set_return_value(main());
     }
@@ -353,29 +356,54 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
 
     sharedVariantTest() {
         skipIfNoDebugging();
-        # a variant that names a declaration of a Program is refused when it is added to the function of the static
-        # system namespace that every Program shares (kind 3, through a Program's copy of the function) or to the static
-        # system namespace (kind 8): it would keep the declaration until library cleanup
+        # a variant that names a declaration of a Program is refused when it is added to the static system namespace
+        # itself (kind 8): it would be shared by every Program and keep the declaration until library cleanup
         checkFreed(sub () {
-            foreach int kind in (3, 8) {
-                int refused = dbg_refused_shared_variants();
-                Program q = newp();
-                Program p = getSource();
-                assertThrows("RUNTIME-DECLARATION-ERROR", "DbgRtClass.*Program's own namespace",
-                    \dbg_add_runtime_naming(), (p, kind, q), sprintf("kind %d: the variant is refused", kind));
-                assertEq(refused + 1, dbg_refused_shared_variants(), sprintf("kind %d: the refusal is counted", kind));
-                delete p;
-                # the declarations retired with p are freed
-                liveDecls();
-                # the function has only its own variant
-                hash<auto> c = callCode("dbg_rt_shared");
-                q.parse(c.code, "q");
-                assertThrows("RUNTIME-OVERLOAD-ERROR", "dbg_rt_shared\\(string\\)", \q.callFunction(),
-                    "call_wrong_" + c.n, sprintf("kind %d: a wrong argument", kind));
-                assertThrows("RUNTIME-OVERLOAD-ERROR", \q.callFunction(), "call_nothing_" + c.n,
-                    sprintf("kind %d: no variant takes NOTHING", kind));
-            }
+            int refused = dbg_refused_shared_variants();
+            Program q = newp();
+            Program p = getSource();
+            assertThrows("RUNTIME-DECLARATION-ERROR", "DbgRtClass.*Program's own namespace",
+                \dbg_add_runtime_naming(), (p, 8, q), "the variant is refused");
+            assertEq(refused + 1, dbg_refused_shared_variants(), "the refusal is counted");
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            # the function has only its own variant
+            hash<auto> c = callCode("dbg_rt_shared");
+            q.parse(c.code, "q");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "dbg_rt_shared\\(string\\)", \q.callFunction(),
+                "call_wrong_" + c.n, "a wrong argument");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \q.callFunction(), "call_nothing_" + c.n, "no variant takes NOTHING");
         }, "shared variant");
+    }
+
+    copyOnWriteVariantTest() {
+        skipIfNoDebugging();
+        # a variant added through a Program's copy of a function of the static system namespace (kind 3) is not refused:
+        # the Program's entry gets its own copy of the function (copy on write, qore#7588), and the variant is the
+        # Program's: it references the declarations of the other Program that it names, which are kept while it is used
+        # after that Program is deleted and freed with its own Program
+        checkFreed(sub () {
+            int refused = dbg_refused_shared_variants();
+            Program q = newp();
+            Program p = getSource();
+            dbg_add_runtime_naming(p, 3, q);
+            assertEq(refused, dbg_refused_shared_variants(), "the variant is not refused");
+            delete p;
+            # the declarations retired with p are freed: the class is kept by the variant
+            liveDecls();
+            hash<auto> c = callCode("dbg_rt_shared");
+            q.parse(c.code, "q");
+            checkCall(q, c, "DbgRtNs::DbgRtClass");
+            # another Program shares the function of the static system namespace, which has only its own variant
+            Program r = newp();
+            hash<auto> cr = callCode("dbg_rt_shared");
+            r.parse(cr.code, "r");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "dbg_rt_shared\\(string\\)", \r.callFunction(),
+                "call_wrong_" + cr.n, "another Program: a wrong argument");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \r.callFunction(), "call_nothing_" + cr.n,
+                "another Program: no variant takes NOTHING");
+        }, "copy-on-write variant");
     }
 
     moduleContextTest() {

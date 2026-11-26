@@ -70,9 +70,14 @@ Program's namespace data.
     references the source of a user class from another Program;
   - the copy of such an enum references its original (`orig_ref`), as the copy of a binary
     module's enum does;
-  - a builtin variant added to a namespace that no Program owns (the static system namespace or
-    a module's), or to a function that a Program's namespace shares with one, is shared by every
-    Program and lives until library cleanup or until its module is deleted: if its signature names
+  - a builtin variant added to a function that a Program's namespace shares with a namespace that
+    no Program owns (or with another Program's) is the Program's: the entry gets its own copy of the
+    function first (copy on write, qore#7588), and the variant is a run-time variant of the Program
+    (`qore_root_ns_private::addRuntimeVariant()`, `refMortalDecls()`), which references the mortal
+    declarations that it names and is freed with the Program;
+  - a builtin variant added to a namespace that no Program owns itself (the static system namespace
+    or a module's) is shared by every Program and lives until library cleanup or until its module
+    is deleted: if its signature names
     such a declaration (as `QoreTypeDeclRefs::addMortal()` finds them), it is refused before
     anything is changed, with a `QoreStandardException` (`RUNTIME-DECLARATION-ERROR`) that names
     the variant and the declaration and says to add the variant to that Program's own namespace
