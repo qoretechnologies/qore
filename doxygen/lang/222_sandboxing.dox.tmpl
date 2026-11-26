@@ -1795,6 +1795,12 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     policy decision, and is deliberately distinct from the \c FILESYSTEM-ACCESS-DENIED raised
     when the sandbox rules deny an access.
 
+    The sandbox root is a directory of the host that the host configured, so the denial of a path outside it names
+    the root only to unrestricted code.  Sandboxed code (whose access the policy decides) and code restricted from
+    external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") are told only that the checked path
+    is outside the sandbox root.  The same holds for the \c SANDBOX-CONFIG-ERROR of an allowed path outside the root,
+    which gives such code the path that it passed instead of its canonical form.
+
     @subsection path_nul_characters Paths With NUL Characters
 
     An operating system path is a NUL-terminated string, so a string with a NUL character cannot

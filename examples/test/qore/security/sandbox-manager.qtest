@@ -2286,7 +2286,9 @@ nothing sub probeSymlink(string target, string link_path) {
                 caught = True;
                 assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
                     "a missing path outside the sandbox root is denied by policy");
-                assertRegex("outside sandbox root", ex.desc, "the denial names the sandbox root");
+                # the sandbox root, a directory of the host, is not named to the sandboxed code (qore#7507)
+                assertRegex("outside the sandbox root$", ex.desc, "the denial is for a path outside the sandbox root");
+                assertEq(-1, ex.desc.find(root), "the denial does not name the sandbox root");
             }
             assertTrue(caught, "a missing path outside the sandbox root is denied");
         }
