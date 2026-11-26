@@ -3775,17 +3775,20 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
             for (QoreIRValue& rv : next.release_values) {
                 qore_ir_rewrite_value(rv, replacements);
             }
+            // compacted in place, so that the rewrite allocates nothing (a pass that must complete its rewrite once it
+            // has started, such as qore_ir_elide_fresh_aggregate_arg_copies(), relies on it)
             {
-                std::vector<QoreIRValue> kept;
-                kept.reserve(next.release_values.size());
-                for (const QoreIRValue& rv : next.release_values) {
-                    if (rv.id == next.result.id || std::any_of(kept.begin(), kept.end(),
+                std::vector<QoreIRValue>& values = next.release_values;
+                size_t kept = 0;
+                for (size_t i = 0; i < values.size(); ++i) {
+                    const QoreIRValue rv = values[i];
+                    if (rv.id == next.result.id || std::any_of(values.begin(), values.begin() + kept,
                             [&rv](const QoreIRValue& k) { return k.id == rv.id; })) {
                         continue;
                     }
-                    kept.push_back(rv);
+                    values[kept++] = rv;
                 }
-                next.release_values.swap(kept);
+                values.erase(values.begin() + kept, values.end());
             }
             break;
         }
@@ -13914,9 +13917,11 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
     // fails) gives the rewritten producers their operands back, so that nothing is changed.
     bool cancelled = false;
     std::vector<std::pair<QoreIRInstruction*, std::vector<QoreIRValue>>> rewritten_calls;
+    // in reverse, so that a call rewritten more than once would get its original operands back (each producer is
+    // rewritten once, as its copy is visited once)
     QoreIRRollback restore_calls([&rewritten_calls]() noexcept {
-        for (auto& [call, operands] : rewritten_calls) {
-            call->operands.swap(operands);
+        for (size_t i = rewritten_calls.size(); i > 0; --i) {
+            rewritten_calls[i - 1].first->operands.swap(rewritten_calls[i - 1].second);
         }
     });
     for (QoreIRInstruction* copy : copies) {
@@ -13949,6 +13954,8 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
         if (!replacements.empty() && std::any_of(call->operands.begin(), call->operands.end(),
                 [&replacements](QoreIRValue operand) { return replacements.count(operand.id) != 0; })) {
             // the operands of a call are its only values (qore_ir_rewrite_value_operands())
+            assert(std::none_of(rewritten_calls.begin(), rewritten_calls.end(),
+                [call](const auto& rewritten) { return rewritten.first == call; }));
             rewritten_calls.emplace_back(call, call->operands);
             for (QoreIRValue& operand : call->operands) {
                 auto replacement = replacements.find(operand.id);
@@ -13978,8 +13985,9 @@ static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
     }
     // a call is rewritten only with the value of a copy that is taken, so no call is rewritten if none is
     assert(!removed.empty() || rewritten_calls.empty());
-    // the removal below allocates nothing (an erasure, and the operands rewritten in place), so it cannot be
-    // interrupted
+    // the removal below allocates nothing, so it cannot be interrupted: it erases instructions, and
+    // qore_ir_rewrite_value_operands() rewrites the values of every kind of instruction in place (an iterator's
+    // release_values are compacted in place); its cancellation checks are ignored here
     restore_calls.dismiss();
     if (removed.empty()) {
         return !cancelled;
