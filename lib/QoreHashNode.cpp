@@ -632,6 +632,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
 }
 
 QoreListNode* qore_hash_private::getKeys() const {
+    assertNotReleasing();
     QoreListNode* list = new QoreListNode(stringTypeInfo);
     qore_list_private::get(*list)->reserve(size());
 
@@ -642,6 +643,7 @@ QoreListNode* qore_hash_private::getKeys() const {
 }
 
 QoreListNode* qore_hash_private::getValues() const {
+    assertNotReleasing();
     ReferenceHolder<QoreListNode> list(new QoreListNode(getValueTypeInfo()), nullptr);
     qore_list_private* l = qore_list_private::get(**list);
     l->reserve(size());

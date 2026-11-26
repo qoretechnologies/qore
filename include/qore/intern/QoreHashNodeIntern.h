@@ -654,7 +654,10 @@ public:
     /** In freeMembers() the members are deleted while the key map and the member list still link them, until both
         are emptied at its end; a read through a weak reference gets an empty stand-in during the release
         (lockWeak()), so no access path reaches the members then.  A new access path that did not would read freed
-        members: assertNotReleasing() makes it fail in debug builds; release builds have no flag.
+        members: assertNotReleasing() makes it fail in debug builds; release builds have no flag.  It is asserted by
+        the member lookups (findMember(), and so the lvalue helpers, hash_assignment_priv, findCreateMember()), the
+        hash iterators, the copies (copy(), copyIntern(), evalImpl()), membersEqual(), getKeys(), getValues(), the
+        first and last key and value accessors, and the JIT's hashdecl slot access.
     */
     bool releasing = false;
 #endif
@@ -1101,10 +1104,12 @@ public:
     }
 
     DLLLOCAL const char* getFirstKey() const  {
+        assertNotReleasing();
         return member_list.empty() ? nullptr : member_list.front()->key.c_str();
     }
 
     DLLLOCAL const char* getLastKey() const {
+        assertNotReleasing();
         return member_list.empty() ? nullptr : member_list.back()->key.c_str();
     }
 
@@ -1215,6 +1220,7 @@ public:
             copyFreedState(*h->priv);
             return h;
         }
+        assertNotReleasing();
         QoreHashNode* h = new QoreHashNode;
         qore_hash_private& hp = *h->priv;
         bool copy_layout = hp.reserveForCopy(*this);
@@ -1299,6 +1305,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
+        assertNotReleasing();
         QoreHashNodeHolder h(getCopy(), xsink);
         qore_hash_private& hp = *h->priv;
         bool copy_layout = hp.reserveForCopy(*this);
@@ -1740,10 +1747,12 @@ public:
     }
 
     DLLLOCAL static QoreValue getFirstKeyValue(const QoreHashNode* h) {
+        h->priv->assertNotReleasing();
         return h->priv->member_list.empty() ? QoreValue() : h->priv->member_list.front()->val;
     }
 
     DLLLOCAL static QoreValue getLastKeyValue(const QoreHashNode* h) {
+        h->priv->assertNotReleasing();
         return h->priv->member_list.empty() ? QoreValue() : h->priv->member_list.back()->val;
     }
 };

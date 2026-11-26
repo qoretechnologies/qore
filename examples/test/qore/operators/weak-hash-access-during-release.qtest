@@ -22,7 +22,7 @@
     reference gets an empty stand-in during the release.  The programs are in \c weak-hash-access-during-release/:
     - \c weak-hash-access-during-release.q releases hashes that hold an object whose destructor reads, iterates and
       changes the hash through a weak reference, directly (\c freeMembers()) and nested in lists more deeply than the
-      recursive release goes (\c freeNextMember()); every mode, the JIT also with synchronous compilation, and qcc
+      recursive release goes (\c freeNextMember()); every mode (jit and tiered running native code) and qcc
       executables must print the output of the AST, in which the destructor sees an empty hash that cannot be changed
     - \c release-access-assert.q looks up, takes as an lvalue or iterates the members of a hash during its release
       with a debug hook (dbg_hash_access_during_release()): a debug build ends the process with an assertion
@@ -73,10 +73,12 @@ class WeakHashAccessDuringReleaseTest inherits QUnit::Test {
         return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
     }
 
-    private string run(string mode, string env = "") {
-        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s%s -b --enable-debug "
-            "--exec-mode=%s %s/%s.q", env, kill_after, qore_bin, mode, dir, Name));
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", kill_after, qore_bin, mode, dir, Name));
         assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        # jit and tiered compile the code synchronously (ExecModeHarness::TraceEnv) and run it as native code
+        ExecModeHarness::check_native(r);
         return r.stdout;
     }
 
@@ -91,8 +93,6 @@ class WeakHashAccessDuringReleaseTest inherits QUnit::Test {
             }
             assertEq(expected(), run(mode), mode);
         }
-        # the functions compiled before they run
-        assertEq(expected(), run("jit", "QORE_JIT_SYNC_COMPILE=1 "), "jit (synchronous)");
     }
 
     testCompiled() {
@@ -124,13 +124,14 @@ class WeakHashAccessDuringReleaseTest inherits QUnit::Test {
         foreach string access in (Accesses) {
             foreach string path in (("shallow", "deep")) {
                 int rc;
-                # no core file is written for the assertion
-                string out = backquote(sprintf("ulimit -c 0; %s%s -b %s/release-access-assert.q %s %s 2>&1",
+                # no core file is written for the assertion; the shell's report of the abort is in the output too
+                string out = backquote(sprintf("(ulimit -c 0; %s%s -b %s/release-access-assert.q %s %s) 2>&1",
                     kill_after, qore_bin, dir, access, path), \rc);
                 string label = sprintf("%s %s", access, path);
                 assertNeq(0, rc, sprintf("%s: the process ends with the assertion (output: %y)", label, out));
                 assertNeq(137, rc, sprintf("%s: the process is not killed by the timeout (output: %y)", label, out));
-                assertRegex("Assertion.*releasing", out, sprintf("%s: the assertion of the release fails", label));
+                assertRegex("Assertion.*\\(!releasing\\)", out,
+                    sprintf("%s: the assertion of the release fails", label));
                 assertFalse(out =~ /no assertion/, sprintf("%s: the program does not go on", label));
             }
         }

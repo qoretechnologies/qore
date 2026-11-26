@@ -33389,7 +33389,8 @@ void dbg_hash_release_access_hook(qore_hash_private* p) {
             p->findMember("b");
             break;
         case HashReleaseAccess::LVALUE: {
-            hash_assignment_priv ha(*p, "b", true);
+            // the lvalue of an assignment, which can create the member (findCreateMember())
+            hash_assignment_priv ha(*p, "b");
             break;
         }
         case HashReleaseAccess::ITERATE: {
