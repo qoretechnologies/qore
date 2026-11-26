@@ -61,6 +61,8 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
         addTestCase("repeated Programs naming each other's declarations", \flatTest());
         addTestCase("a declaration of the static system namespace keeps nothing", \staticNamespaceTest());
         addTestCase("two Programs whose declarations name each other", \cycleTest());
+        addTestCase("declarations of one Program attached one after the other that name each other",
+            \sameProgramCycleTest());
         # last: the variant of the static system namespace keeps the declaration until library cleanup
         addTestCase("a variant of a namespace that no Program owns keeps what it names", \sharedVariantTest());
         set_return_value(main());
@@ -279,6 +281,8 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
             assertFalse(h.taken1, "the failure took nothing");
             assertEq(0, h.pending2, "nothing pending after the next event");
             assertTrue(h.taken2, "the next event took the references");
+            assertEq(0, h.pending3, "nothing pending after the completion of the event");
+            assertTrue(h.taken3, "the completion took the references of the instance of the generic hashdecl");
         }, "marking failure");
     }
 
@@ -334,6 +338,20 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
             assertEq(before + 2, liveDecls(), i.key + ": the classes are kept");
             assertEq(cycles + 2, dbg_cross_program_cycles(), i.key + ": a cycle of two");
         }
+    }
+
+    sameProgramCycleTest() {
+        skipIfNoDebugging();
+        # the first class referenced the second as a module's class before the second attach marked it: its Program
+        # decides both, so they are freed with it
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = newp();
+            dbg_add_runtime_naming(p, 7, q);
+            q.parse("int sub seta(auto v) { DbgRtSB::DbgRtSB o(); o.a = v; return 1; }", "q");
+            assertThrows("RUNTIME-TYPE-ERROR", "DbgRtSA", \q.callFunction(), ("seta", "x"), "a wrong value");
+            assertEq(1, q.callFunction("seta", NOTHING), "NOTHING");
+        }, "same Program cycle");
     }
 
     sharedVariantTest() {

@@ -676,10 +676,12 @@ static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, Exce
     - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
     - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
       each other's types (\a src needs no namespace of its own)
+    - kind 7: as kind 5, with both namespaces (DbgRtSA, DbgRtSB) attached to Q, one after the other
     - kind 6: attaches the namespace DbgRtF to Q and adds the class DbgRtFOne to it with the next two takes of the
       references failing: returns a hash with the number of pending declarations and whether the class's references
       are taken after the failure (\c pending1, \c taken1) and after the attach of an empty namespace (\c pending2,
-      \c taken2)
+      \c taken2), then adds a generic hashdecl with an instance made before, with the next take failing: the
+      number pending and whether the instance's references are taken after that (\c pending3, \c taken3)
 */
 static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -708,6 +710,21 @@ static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeCon
         root->addNamespace(nq.release());
         return QoreValue();
     }
+    if (kind == 7) {
+        // as kind 5, with both namespaces attached to the target, one after the other: the first class references the
+        // second as a module's class, which the second attach marks in the same Program
+        QoreClass* a = new QoreClass("DbgRtSA", "::DbgRtSA::DbgRtSA");
+        QoreClass* b = new QoreClass("DbgRtSB", "::DbgRtSB::DbgRtSB");
+        a->addMember("b", Public, b->getOrNothingTypeInfo());
+        b->addMember("a", Public, a->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> na(new QoreNamespace("DbgRtSA"));
+        std::unique_ptr<QoreNamespace> nb(new QoreNamespace("DbgRtSB"));
+        na->addSystemClass(a);
+        nb->addSystemClass(b);
+        root->addNamespace(na.release());
+        root->addNamespace(nb.release());
+        return QoreValue();
+    }
     if (kind == 6) {
         root->addNamespace(new QoreNamespace("DbgRtF"));
         QoreNamespace* fns = root->findLocalNamespace("DbgRtF");
@@ -732,6 +749,20 @@ static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeCon
         root->addNamespace(new QoreNamespace("DbgRtFE"));
         rv->setKeyValue("pending2", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
         rv->setKeyValue("taken2", o->type_owner_module_refs_taken, xsink);
+        // a generic hashdecl with an instance made before it is added: the take fails once, and the completion of the
+        // event finds the instance in the cache of the generic hashdecl
+        TypedHashDecl* g = new TypedHashDecl("DbgRtFGen", "::DbgRtF::DbgRtFGen");
+        g->addTypeParameter("T");
+        g->addMember("m", mc->getOrNothingTypeInfo(), QoreValue());
+        const TypedHashDecl* inst = typed_hash_decl_private::get(*g)->getParameterizedHashDecl(
+            type_vec_t{bigIntTypeInfo});
+        assert(inst);
+        qore_dbg_fail_next_runtime_refs(1);
+        fns->addSystemHashDecl(g);
+        qore_dbg_fail_next_runtime_refs(0);
+        rv->setKeyValue("pending3", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken3", typed_hash_decl_private::get(*inst)->type_owner.type_owner_module_refs_taken,
+            xsink);
         // the module class is kept by the class
         mns.reset();
         return rv.release();

@@ -92,10 +92,14 @@ Program's namespace data.
     Program inherits are covered by the references of `refLeftOutDecls()` (qore#7607).
   The references are all or nothing: the lists are made before any reference is taken.  When an
   allocation fails, the declarations are flagged (`type_owner_refs_pending`, counted by the root
-  namespace without an allocation) and the next marking event of the Program takes them
-  (`qore_root_ns_private::retryPendingRuntimeRefs()`, which fails that event if it fails again); an
-  instance of a mortal generic hashdecl takes them before it is published, and a failure fails its
-  creation.  Two Programs whose declarations name each other (a module can make two such classes
+  namespace without an allocation) and the completion of a marking event of the Program takes them:
+  that of the event itself, or, if it fails too (the event then fails), the next one
+  (`qore_root_ns_private::retryPendingRuntimeRefs()`, which also finds the instances of generic
+  hashdecls in their caches); an instance of a mortal generic hashdecl takes them before it is
+  published, and a failure fails its creation, unless its base is marked while it is made, when a
+  failure is recorded as above.  A builtin declaration that another declaration of the same Program
+  referenced as a module's before a later attach marked it is left to the Program's batch, which
+  releases that reference.  Two Programs whose declarations name each other (a module can make two such classes
   before it attaches them to two Programs) keep each other's until library cleanup:
   `delete_qore_types()` lists these references among those held inside a cycle of survivors and
   releases them with the cycle (`qore_dbg_cross_program_cycle_count()` counts such cycles in a debug

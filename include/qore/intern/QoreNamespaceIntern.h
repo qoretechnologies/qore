@@ -1557,11 +1557,13 @@ protected:
     //! every marking event then refreshes every variant
     bool unmarked_index_incomplete = false;
     //! the number of declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be
-    //! taken (QoreTypeOwner::type_owner_refs_pending), which the next marking event takes (qore#7680)
-    /** A count, not a list, so that recording a failure allocates nothing: the next event finds them in the namespace
-        tree (retryPendingRuntimeRefs()); one that is freed before (with a namespace whose attach failed) is not found
+    //! taken (QoreTypeOwner::type_owner_refs_pending), which the completion of a marking event takes (qore#7680)
+    /** A count, not a list, so that recording a failure allocates nothing: the completion finds them in the namespace
+        tree and in the caches of its generic hashdecls (retryPendingRuntimeRefs()); one that is freed before (with a
+        namespace whose attach failed) is not found.  Atomic, as an instance of a generic hashdecl is recorded without
+        the runtime namespace lock (addPendingRuntimeRefs())
     */
-    size_t pending_runtime_refs = 0;
+    std::atomic<size_t> pending_runtime_refs{0};
     //! true from the start of a marking event until its upgrade of the derived types and its refresh of
     //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
     //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
@@ -2797,9 +2799,15 @@ public:
     //! which case they stay pending; called under the runtime namespace write lock
     DLLLOCAL void retryPendingRuntimeRefs();
 
+    //! Records declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be taken,
+    //! for retryPendingRuntimeRefs(); does not allocate or throw, and needs no lock (qore#7680)
+    DLLLOCAL void addPendingRuntimeRefs(const std::vector<QoreTypeOwner*>& owners) {
+        pending_runtime_refs.fetch_add(qore_type_owner_set_refs_pending(owners), std::memory_order_release);
+    }
+
     //! Returns the number of declarations whose references are pending (pending_runtime_refs; qore#7680)
     DLLLOCAL size_t pendingRuntimeRefs() const {
-        return pending_runtime_refs;
+        return pending_runtime_refs.load(std::memory_order_acquire);
     }
 
     //! Returns true if a marking event did not complete (runtime_refresh_pending)

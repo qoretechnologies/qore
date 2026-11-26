@@ -2229,6 +2229,27 @@ void qore_dbg_check_unowned_names(const QoreTypeOwner* owner) {
 }
 #endif
 
+size_t qore_type_owner_set_refs_pending(const std::vector<QoreTypeOwner*>& owners) {
+    size_t count = 0;
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_module_refs_taken && !o->type_owner_refs_pending) {
+            o->type_owner_refs_pending = true;
+            ++count;
+        }
+    }
+    return count;
+}
+
+void qore_type_owner_get_refs_pending(const std::vector<QoreTypeOwner*>& all, std::vector<QoreTypeOwner*>& pending) {
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : all) {
+        if (o->type_owner_refs_pending) {
+            pending.push_back(o);
+        }
+    }
+}
+
 //! Returns the root namespace of a declaration, or nullptr if it has no namespace or one that is not attached
 static const qore_root_ns_private* type_owner_root(const QoreTypeOwner* o) {
     const qore_ns_private* ns = o->getTypeOwnerNamespace();
@@ -2322,6 +2343,17 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             owners.push_back(o);
         }
     }
+    // the references to declarations of this batch that a declaration took as module references before a later
+    // attach marked them, released after the lock is released: this batch references each of them, so no release
+    // frees one (qore#7680)
+    struct SameBatchRefs {
+        std::vector<QoreTypeOwner*> refs;
+        ~SameBatchRefs() {
+            for (QoreTypeOwner* n : refs) {
+                n->derefTypeOwner();
+            }
+        }
+    } same_batch;
     // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
     // (one that survived another Program sharing it) keeps them
     AutoLocker al(ctl);
@@ -2351,6 +2383,20 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             // references them itself, does not list them (qore#7533)
             std::vector<QoreTypeOwner*> mod_names = type_owner_module_names(names, &module_class_names);
             type_owner_set_module_refs(o, mod_names);
+        }
+    }
+    // a builtin declaration that another declaration referenced as a module's while it was not marked yet, and that a
+    // later attach marked in the same Program, is decided with it by this batch: the reference is released, so that
+    // two such declarations that name each other do not keep each other until library cleanup (qore#7680)
+    for (QoreTypeOwner* o : owners) {
+        std::vector<QoreTypeOwner*>& mod = o->type_owner_module_refs;
+        for (auto i = mod.begin(); i != mod.end();) {
+            if (!(*i)->isTypeOwnerSystem() && seen.count(*i)) {
+                same_batch.refs.push_back(*i);
+                i = mod.erase(i);
+            } else {
+                ++i;
+            }
         }
     }
 }

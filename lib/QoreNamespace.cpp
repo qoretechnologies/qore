@@ -1099,32 +1099,49 @@ void qore_root_ns_private::takeRuntimeRefs(const std::vector<QoreTypeOwner*>& ow
     if (qore_type_owner_take_runtime_refs(owners, this)) {
         return;
     }
-    // recorded without an allocation; the next marking event takes them (retryPendingRuntimeRefs())
-    for (QoreTypeOwner* o : owners) {
-        if (!o->type_owner_module_refs_taken && !o->type_owner_refs_pending) {
-            o->type_owner_refs_pending = true;
-            ++pending_runtime_refs;
+    // recorded without an allocation; the completion of the marking event retries them, and if that fails, the next
+    // one (retryPendingRuntimeRefs())
+    addPendingRuntimeRefs(owners);
+}
+
+namespace {
+//! Releases the references of the declarations that getTypeOwnerCachedDecls() returned, also if an exception is thrown
+class QoreCachedDeclRefs {
+public:
+    std::vector<QoreTypeOwner*> owners;
+
+    DLLLOCAL QoreCachedDeclRefs() = default;
+    DLLLOCAL QoreCachedDeclRefs(const QoreCachedDeclRefs&) = delete;
+    DLLLOCAL QoreCachedDeclRefs& operator=(const QoreCachedDeclRefs&) = delete;
+
+    DLLLOCAL ~QoreCachedDeclRefs() {
+        for (QoreTypeOwner* o : owners) {
+            o->derefTypeOwner();
         }
     }
+};
 }
 
 void qore_root_ns_private::retryPendingRuntimeRefs() {
-    if (!pending_runtime_refs) {
+    size_t count = pending_runtime_refs.load(std::memory_order_acquire);
+    if (!count) {
         return;
     }
     std::vector<QoreTypeOwner*> all;
     getTypeOwners(all);
-    std::vector<QoreTypeOwner*> pending;
-    for (QoreTypeOwner* o : all) {
-        if (o->type_owner_refs_pending) {
-            pending.push_back(o);
-        }
+    // the instances of the generic hashdecls, which are in their caches, not in the namespaces
+    QoreCachedDeclRefs cached;
+    for (size_t i = 0, e = all.size(); i < e; ++i) {
+        all[i]->getTypeOwnerCachedDecls(cached.owners);
     }
+    std::vector<QoreTypeOwner*> pending;
+    qore_type_owner_get_refs_pending(all, pending);
+    qore_type_owner_get_refs_pending(cached.owners, pending);
     if (!qore_type_owner_take_runtime_refs(pending, this)) {
         throw std::bad_alloc();
     }
-    // a declaration not found was freed with a namespace whose attach failed
-    pending_runtime_refs = 0;
+    // a declaration not found was freed with a namespace whose attach failed; one recorded since is kept
+    pending_runtime_refs.fetch_sub(count, std::memory_order_acq_rel);
 }
 
 void qore_root_ns_private::completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full) {

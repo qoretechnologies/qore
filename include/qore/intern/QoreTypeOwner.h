@@ -226,7 +226,8 @@ public:
     */
     std::vector<QoreTypeOwner*> type_owner_xrefs;
     //! true if the references of qore_type_owner_take_runtime_refs() could not be taken (an allocation failed) and are
-    //! taken by the next marking event of the root namespace of its Program (qore#7680)
+    //! taken by the completion of a marking event of the root namespace of its Program (qore#7680); guarded by the type
+    //! lock
     bool type_owner_refs_pending = false;
     //! the group of survivors of a Program that the declaration is a member of, if any
     QoreTypeOwnerGroup* type_owner_group = nullptr;
@@ -397,6 +398,15 @@ DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_
 */
 DLLLOCAL bool qore_type_owner_take_runtime_refs(const std::vector<QoreTypeOwner*>& owners,
         const qore_root_ns_private* root);
+
+//! Flags the declarations of \a owners whose references of qore_type_owner_take_runtime_refs() are not taken as
+//! pending (QoreTypeOwner::type_owner_refs_pending) and returns the number flagged now; takes the type lock, does not
+//! allocate or throw (qore#7680)
+DLLLOCAL size_t qore_type_owner_set_refs_pending(const std::vector<QoreTypeOwner*>& owners);
+
+//! Appends the declarations of \a all that are flagged as pending to \a pending; takes the type lock (qore#7680)
+DLLLOCAL void qore_type_owner_get_refs_pending(const std::vector<QoreTypeOwner*>& all,
+        std::vector<QoreTypeOwner*>& pending);
 
 #ifdef DEBUG
 //! Makes the next \a count calls of qore_type_owner_take_runtime_refs() fail as an allocation failure would (debug
