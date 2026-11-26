@@ -139,6 +139,23 @@
       keytab of the process is not visible to it; a \c GssCredential object that trusted
       code made and gives to it is a credential that it was given, which it
       can use
+    - the replay cache of a GSSAPI acceptor, to which the library writes every
+      authenticator that it accepts, is that of its domain: the credential that
+      it gets from a keytab names the file
+      <tt><i>tmp</i>/qore-sandbox-<i>domain</i>-krb5-rcache</tt>
+      (a \c file2 replay cache), where <i>tmp</i> is the temporary directory of
+      the process (\c TMPDIR, \c TMP, \c TEMP, \c TEMPDIR or \c /tmp, as
+      \c Util::tmp_location() finds it) and <i>domain</i> names the isolation
+      domain, not the replay cache of the process (the default one in the
+      system's temporary directory, or that of \c KRB5RCACHENAME,
+      \c KRB5RCACHETYPE and \c KRB5RCACHEDIR, which do not apply to it); the
+      filesystem policy of the sandbox must allow the file to be read, written
+      and created, or the credential raises \c FILESYSTEM-ACCESS-DENIED; this
+      needs \c gss_acquire_cred_from() in the GSSAPI library, and raises
+      \c KRB5-SANDBOX-ERROR without it; an acceptor credential of another
+      domain raises \c KRB5-SANDBOX-ERROR in an acceptor of the domain; a
+      temporary directory of its own %Program can later replace that of the
+      process
     - code in several isolation domains at once (the sandboxes of different
       tenants govern it) has no caches that are not file based
 

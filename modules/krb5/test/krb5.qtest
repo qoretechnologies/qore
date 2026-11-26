@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires Util
+%requires FsUtil
 %requires QUnit
 %requires krb5
 %requires Krb5Util
@@ -128,6 +129,9 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("sandboxed code does not use the default GSS credentials", \testSandboxGssDefaultCredentials());
         addTestCase("memory keytabs are kept per isolation domain", \testMemoryKeytabIsolation());
         addTestCase("sandboxed code does not accept with the default keytab", \testSandboxGssAcceptorDefaultKeytab());
+        addTestCase("a sandboxed acceptor uses the replay cache of its domain", \testSandboxGssAcceptorReplayCache());
+        addTestCase("a sandboxed acceptor does not use the acceptor credential of another domain",
+            \testSandboxGssAcceptorOtherDomainCredential());
         addTestCase("a sandboxed initiator does not use the client keytab of the process",
             \testSandboxGssClientKeytab());
         addTestCase("file cache sandbox allow", \testFileCacheSandboxAllow());
@@ -1076,8 +1080,9 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         });
     }
 
-    #! a Program governed by a sandbox with the given isolation domain (or none), whose code uses credential caches
-    private Program cacheTenant(*string domain, bool network = False) {
+    #! a Program governed by a sandbox with the given isolation domain (or none), whose code uses credential caches;
+    #! with \a fs_root, its filesystem policy allows only that directory, else the replay cache of its domain
+    private Program cacheTenant(*string domain, bool network = False, *string fs_root) {
         Program p(PO_MODERN);
         p.loadModule("krb5");
         p.parse("
@@ -1131,6 +1136,26 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
                 Qore::Krb5::GssCredential c = Qore::Krb5::GssCredential::fromKeytab(kt);
                 return exists c ? \"ok\" : NOTHING;
             }
+            hash<auto> sub gss_cred_from_keytab_result(Qore::Krb5::Krb5Keytab kt) {
+                try {
+                    Qore::Krb5::GssCredential::fromKeytab(kt);
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
+            Qore::Krb5::GssCredential sub gss_cred_obj_from_keytab(Qore::Krb5::Krb5Keytab kt) {
+                return Qore::Krb5::GssCredential::fromKeytab(kt);
+            }
+            hash<auto> sub gss_accept_with(Qore::Krb5::GssCredential cred) {
+                try {
+                    Qore::Krb5::GssAcceptorContext c(cred);
+                    c.step(\"00\");
+                } catch (hash<ExceptionInfo> ex) {
+                    return {\"err\": ex.err, \"desc\": ex.desc};
+                }
+                return {};
+            }
             hash<auto> sub gss_cred_from_cache(string name) {
                 try {
                     Qore::Krb5::Krb5Context ctx();
@@ -1168,8 +1193,19 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
             # an unrestricted network policy: the module's KDC operations are allowed
             sm.setNetworkDefaultPolicy(True);
         }
+        if (fs_root) {
+            sm.setFilesystemSandboxRoot(fs_root);
+        } else if (domain) {
+            # the replay cache of the GSSAPI acceptors of its domain (qore#7756)
+            sm.addFilesystemAllowedPath(domainReplayCachePath(domain), QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+        }
         p.setSandboxManager(sm);
         return p;
+    }
+
+    #! the replay cache file of the GSSAPI acceptors of an isolation domain (qore#7756)
+    private string domainReplayCachePath(string domain) {
+        return tmp_location() + "/qore-sandbox-d" + make_hex_string(binary(domain)) + "-krb5-rcache";
     }
 
     #! a memory cache of the host is not visible to sandboxed code, which has a cache of its own of the same name
@@ -1323,6 +1359,81 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         hash<auto> r = a.callFunction("gss_accept_default");
         assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
         assertRegex("default keytab", r.desc);
+    }
+
+    #! the acceptor credential of sandboxed code names the replay cache of its isolation domain, which its filesystem
+    #! policy must allow, not the replay cache of the process (KRB5RCACHENAME) (qore#7756)
+    private testSandboxGssAcceptorReplayCache() {
+        TmpDir tmp("module-krb5-rcache-");
+        string host_rcache = tmp.path + "/host-rcache";
+        *string rcname = getenv("KRB5RCACHENAME");
+        *string rcdir = getenv("KRB5RCACHEDIR");
+        on_exit {
+            if (exists rcname) { setenv("KRB5RCACHENAME", rcname); } else { unsetenv("KRB5RCACHENAME"); }
+            if (exists rcdir) { setenv("KRB5RCACHEDIR", rcdir); } else { unsetenv("KRB5RCACHEDIR"); }
+        }
+        setenv("KRB5RCACHENAME", "file2:" + host_rcache);
+        setenv("KRB5RCACHEDIR", tmp.path);
+
+        string kt_name = "MEMORY:module-krb5-rcache-" + getpid();
+        string dom_a = "rcache-tenant-a-" + getpid();
+        string dom_b = "rcache-tenant-b-" + getpid();
+        string a_rcache = domainReplayCachePath(dom_a);
+        string b_rcache = domainReplayCachePath(dom_b);
+        assertNeq(a_rcache, b_rcache);
+
+        # a filesystem policy that allows only a directory of the tenant's own refuses the replay cache of its domain
+        # (in the temporary directory of the process) when the credential is acquired; the error names the file
+        Program a = cacheTenant(dom_a, False, tmp.path);
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        hash<auto> r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.err, r.desc);
+        assertNeq(-1, r.desc.find(a_rcache), r.desc);
+
+        # another domain has a replay cache of its own
+        Program b = cacheTenant(dom_b, False, tmp.path);
+        auto b_kt = b.callFunction("keytab_add", kt_name, "HTTP/b.example.com@EXAMPLE.COM", getTestKeyHex1());
+        r = b.callFunction("gss_cred_from_keytab_result", b_kt);
+        assertEq("FILESYSTEM-ACCESS-DENIED", r.err, r.desc);
+        assertNeq(-1, r.desc.find(b_rcache), r.desc);
+        assertEq(-1, r.desc.find(a_rcache), r.desc);
+
+        # with a policy that allows its replay cache, the credential is acquired; the replay cache of the process
+        # (KRB5RCACHENAME) is not touched
+        Program c = cacheTenant(dom_a);
+        auto c_kt = c.callFunction("keytab_add", kt_name, "HTTP/c.example.com@EXAMPLE.COM", getTestKeyHex1());
+        assertEq({}, c.callFunction("gss_cred_from_keytab_result", c_kt));
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not created");
+        # an acceptor of the domain with the credential gets to the token (a malformed one here)
+        r = c.callFunction("gss_accept_with", c.callFunction("gss_cred_obj_from_keytab", c_kt));
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        assertFalse(is_file(host_rcache), "the replay cache of the process is not created");
+    }
+
+    #! an acceptor credential that code of another isolation domain acquired names the replay cache of that domain:
+    #! an acceptor of sandboxed code does not use it; a credential that trusted code made is one that it was given
+    #! (qore#7756)
+    private testSandboxGssAcceptorOtherDomainCredential() {
+        string kt_name = "MEMORY:module-krb5-rcache-cred-" + getpid();
+        Program a = cacheTenant("rcache-cred-tenant-a-" + getpid());
+        Program b = cacheTenant("rcache-cred-tenant-b-" + getpid());
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        Qore::Krb5::GssCredential a_cred = a.callFunction("gss_cred_obj_from_keytab", a_kt);
+        # tenant a's own acceptor gets to the (malformed) token
+        hash<auto> r = a.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
+        # tenant b's does not use tenant a's credential
+        r = b.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("replay cache of another isolation domain", r.desc);
+
+        # a credential that trusted code made and gives to sandboxed code
+        Qore::Krb5::Krb5Context ctx();
+        auto host_kt = ctx.openKeytab(kt_name);
+        host_kt.addEntry(new Qore::Krb5::Krb5Principal("HTTP/host.example.com@EXAMPLE.COM"), getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        r = b.callFunction("gss_accept_with", Qore::Krb5::GssCredential::fromKeytab(host_kt));
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
     }
 
     #! an initiator credential of a cache without a ticket gets one with the client keytab: the sandbox's own, not the

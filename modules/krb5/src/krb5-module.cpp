@@ -731,6 +731,55 @@ static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsin
     return false;
 }
 
+//! Gives the replay cache of the GSSAPI acceptor credentials of the caller's isolation domain (qore#7756)
+/** The acceptor writes every authenticator that it accepts to the replay cache; without one in the credential, the
+    library uses the replay cache of the process (the default replay cache file in the system's temporary directory,
+    or the one of \c KRB5RCACHENAME, \c KRB5RCACHETYPE and \c KRB5RCACHEDIR), which is shared with the rest of the
+    process and with other isolation domains, and is outside the filesystem policy of the sandbox.
+
+    The replay cache of the domain is a \c file2 replay cache in the temporary directory of the process (as
+    \c Util::tmp_location() finds it: \c TMPDIR, \c TMP, \c TEMP, \c TEMPDIR or \c /tmp), named with the prefix of
+    the domain; the filesystem policy of the sandbox must allow it to be read, written and created.  A temporary
+    directory of the caller's Program (qore#7656) can replace that of the process.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int krb5_sandbox_rcache_name(const Krb5CacheNamespace& ns, std::string& rcache, ExceptionSink* xsink) {
+    std::string dir;
+    for (const char* var : {"TMPDIR", "TMP", "TEMP", "TEMPDIR"}) {
+        QoreEnvironmentValue val(var);
+        if (val && !val.str().empty()) {
+            dir = val.str();
+            break;
+        }
+    }
+    if (dir.empty()) {
+        dir = "/tmp";
+    }
+    char* real = realpath(dir.c_str(), nullptr);
+    if (real) {
+        dir = real;
+        free(real);
+    }
+    while (dir.size() > 1 && dir.back() == '/') {
+        dir.pop_back();
+    }
+    std::string path = dir;
+    if (path.back() != '/') {
+        path += '/';
+    }
+    path += ns.prefix + "krb5-rcache";
+
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ | QSEC_WRITE | QSEC_CREATE, xsink)) {
+        return -1;
+    }
+    // an explicit replay cache of the credential: the library never uses the replay cache of the process for it,
+    // whatever KRB5RCACHENAME, KRB5RCACHETYPE and KRB5RCACHEDIR say; never "none:", which turns replay detection off
+    rcache = "file2:" + path;
+    return 0;
+}
+
 DLLLOCAL QoreStringNode* krb5_unparse_principal(krb5_context ctx, krb5_const_principal principal, ExceptionSink* xsink,
         const char* err, const char* context) {
     char* name = nullptr;
@@ -1469,15 +1518,32 @@ void QoreGssAcceptorContext::reset() {
 }
 
 QoreHashNode* QoreGssAcceptorContext::step(const char* token_hex, ExceptionSink* xsink) {
-    // without a credential, the acceptor uses the default keytab of the process, which is not visible to code that
-    // a sandbox governs (qore#7736): it gives a credential of a keytab of its own
-    if (!cred_ref) {
+    {
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh) {
-            xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the default keytab of the "
-                "process is not visible to code that a sandbox governs; give a credential of a keytab of its own "
-                "(GssCredential::fromKeytab())");
-            return nullptr;
+            // without a credential, the acceptor uses the default keytab of the process, which is not visible to code
+            // that a sandbox governs (qore#7736): it gives a credential of a keytab of its own
+            if (!cred_ref) {
+                xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the default keytab of "
+                    "the process is not visible to code that a sandbox governs; give a credential of a keytab of its "
+                    "own (GssCredential::fromKeytab())");
+                return nullptr;
+            }
+            // the acceptor writes the authenticators that it accepts to the replay cache of its credential: that of
+            // the isolation domain whose code acquired it from a keytab, which another domain does not use (a
+            // credential that trusted code made and gave it uses the replay cache that trusted code chose) (qore#7756)
+            if (!cred_ref->accept_prefix.empty()) {
+                Krb5CacheNamespace ns;
+                if (krb5_cache_namespace(ns, xsink, "accepting GSSAPI security context")) {
+                    return nullptr;
+                }
+                if (cred_ref->accept_prefix != ns.prefix) {
+                    xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the credential "
+                        "names the replay cache of another isolation domain than that of the code that a sandbox "
+                        "governs; give a credential of a keytab of its own (GssCredential::fromKeytab())");
+                    return nullptr;
+                }
+            }
         }
     }
     if (!token_hex || !*token_hex) {
@@ -1870,6 +1936,69 @@ QoreGssCredential::QoreGssCredential(const QoreKrb5Keytab& keytab, const QoreKrb
         ExceptionSink* xsink) {
     if (!krb5_check_keytab_access(keytab.ctx, keytab.keytab, QSEC_READ, xsink,
             "importing GSSAPI credential from keytab")) {
+        return;
+    }
+
+    // the acceptor writes every authenticator that it accepts to a replay cache, which is that of the process when
+    // the credential names none: the credential of code that a sandbox governs names the keytab and a replay cache
+    // of its isolation domain (qore#7756)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "importing GSSAPI credential from keytab")) {
+        return;
+    }
+    if (ns.sandboxed) {
+#ifdef HAVE_GSS_ACQUIRE_CRED_FROM
+        std::string rcache;
+        if (krb5_sandbox_rcache_name(ns, rcache, xsink)
+            || qore_check_cancel(xsink, "importing GSSAPI credential from keytab")) {
+            return;
+        }
+        char kt_name[MAX_KEYTAB_NAME_LEN] = {0};
+        krb5_error_code rc = krb5_kt_get_name(keytab.ctx, keytab.keytab, kt_name, sizeof(kt_name));
+        if (rc) {
+            krb5_raise_exception(xsink, keytab.ctx, rc, "KRB5-KEYTAB-ERROR", "getting keytab name");
+            return;
+        }
+        // the principal is the name of the acceptor, as with gss_krb5_import_cred()
+        gss_name_t desired_name = GSS_C_NO_NAME;
+        OM_uint32 min_stat = 0;
+        if (principal) {
+            QoreStringNodeHolder princ_str(principal->toString(xsink));
+            if (*xsink) {
+                return;
+            }
+            gss_buffer_desc name_buf = GSS_C_EMPTY_BUFFER;
+            name_buf.value = const_cast<char*>(princ_str->c_str());
+            name_buf.length = princ_str->size();
+            OM_uint32 maj = gss_import_name(&min_stat, &name_buf, GSS_KRB5_NT_PRINCIPAL_NAME, &desired_name);
+            if (maj != GSS_S_COMPLETE) {
+                gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat, "importing keytab principal name");
+                return;
+            }
+        }
+        gss_key_value_element_desc elements[2] = {
+            {"keytab", kt_name},
+            {"rcache", rcache.c_str()},
+        };
+        gss_key_value_set_desc store = {2, elements};
+        // the Kerberos mechanism only, as the import of a keytab: no default credentials of other mechanisms
+        gss_OID_set_desc mechs = {1, gss_mech_krb5};
+        OM_uint32 maj = gss_acquire_cred_from(&min_stat, desired_name, GSS_C_INDEFINITE, &mechs, GSS_C_ACCEPT,
+            &store, &cred, nullptr, nullptr);
+        if (desired_name != GSS_C_NO_NAME) {
+            OM_uint32 release_min = 0;
+            gss_release_name(&release_min, &desired_name);
+        }
+        if (maj != GSS_S_COMPLETE) {
+            gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat, "importing GSSAPI credential from keytab");
+            return;
+        }
+        accept_prefix = ns.prefix;
+#else
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from keytab: this GSSAPI library "
+            "cannot keep the replay cache of an acceptor of code that a sandbox governs apart from that of the process "
+            "(gss_acquire_cred_from() is not available)");
+#endif
         return;
     }
 
