@@ -409,13 +409,14 @@ public:
     //! removes \a m, which is in the map
     DLLLOCAL void erase(HashMember* m) {
         assert(count);
-        // the map has members, so its limit is 0 only if it is hardened, which gives the bucket of m by the keyed
-        // hash
-        if (!getLimit()) [[unlikely]] {
+        // a hardened map gives the bucket of m by the keyed hash; the test reads the mask, which the bucket index of
+        // a map that is not hardened needs too
+        uint32_t m_mask = mask;
+        if (m_mask & HardenedBit) [[unlikely]] {
             eraseHardened(m);
             return;
         }
-        HashMember** p = &buckets[m->hash & mask];
+        HashMember** p = &buckets[m->hash & m_mask];
         while (*p != m) {
             assert(*p);
             p = &(*p)->bucket_next;
