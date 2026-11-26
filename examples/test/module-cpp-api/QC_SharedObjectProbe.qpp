@@ -190,8 +190,10 @@ hash<auto> SharedObjectProbe::update(*code inner, bool make_child = False, bool 
     return run_probe_update(self, arg, xsink);
 }
 
-//! runs code that its caller gives while it holds the state of the object
-/** @throw SHARED-OBJECT-ERROR the object is shared, the calling code is sandboxed and \a c is not a closure of a
+//! runs code that its caller gives, checked as a method that holds the state of the object checks it
+/** No lock is held (the code can call the other methods of the probe); only the check is tested
+
+    @throw SHARED-OBJECT-ERROR the object is shared, the calling code is sandboxed and \a c is not a closure of a
     trusted class
 */
 auto SharedObjectProbe::runLocked(code c) {
@@ -244,8 +246,12 @@ static nothing SharedObjectProbe::checkCallback(*object obj, *code callback, str
     qore_check_shared_object_callback(obj, callback, what->c_str(), xsink);
 }
 
-//! runs qore_update_shared_object() for any object
-/** @param obj the object to update
+//! runs qore_update_shared_object() for any object, calling code that its caller gives in the scope
+/** A test hook that shows the documented hazard: a module must never call code that its caller gives in an update
+    scope, nor open one for an object of a class that is not its own, as code of a Program that no sandbox governs
+    runs in it with the rights of the scope, whoever supplied it
+
+    @param obj the object to update
     @param inner code to call in the scope
 
     @return a hash with \c can_share and \c inner, as update()

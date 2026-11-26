@@ -22,8 +22,10 @@
     qore_update_shared_object() from C++.  Trusted code marks probes and updates them; a tenant (a sandboxed Program)
     cannot change a shared probe, share objects outside an update scope, or run its own code locked, but builds a
     probe's cache on first use in a C++ update scope, in which the C++ code can share objects and the tenant's own code
-    cannot, nor open a nested scope; a probe that no Program owns is updated only by code that may share objects, a
-    probe of the tenant only by nobody; null pointers are handled.
+    cannot, nor open a nested scope (also from a Qore update scope); the scope ends with the update and is not
+    inherited by a thread; a probe that no Program owns is updated only by code that may share objects, a probe of the
+    tenant by nobody; null pointers are handled.  The hazard that the API documents is shown too: a closure of a
+    trusted class that the tenant gives runs in the scope with its rights.
 
     SharedObjectCppApi.q checks these; its output must be the one in SharedObjectCppApi.expected in every execution
     mode, on the IR tier, and in programs compiled with qcc -O0 and -O3.

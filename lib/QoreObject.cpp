@@ -994,6 +994,9 @@ int qore_object_private::checkOpenSharedUpdateScope(const QoreProgram* scope_pgm
         } else if (pgm) {
             xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope cannot be opened for an object of class "
                 "'%s' whose Program is sandboxed", theclass->getName());
+        } else if (isShared() && qore_caller_may_share_objects() && !getProgram()) {
+            xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
+                "Program cannot be opened by code that runs in no Program", theclass->getName());
         } else {
             xsink->raiseException("SHARED-OBJECT-ERROR", "an update scope for an object of class '%s' that has no "
                 "Program can only be opened by code that may share objects", theclass->getName());
@@ -1143,7 +1146,11 @@ void qore_shared_object_api_raise(ExceptionSink* xsink, const char* err, const c
 
 bool qore_caller_creates_shared_objects() {
     // fails closed: an object of a caller whose sandbox cannot be resolved is treated as shared
-    return qore_caller_sandbox_state() != 1;
+    try {
+        return qore_caller_sandbox_state() != 1;
+    } catch (...) {
+        return true;
+    }
 }
 
 bool qore_caller_can_share_objects() {

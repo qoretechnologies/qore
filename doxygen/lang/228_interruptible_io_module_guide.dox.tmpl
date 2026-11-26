@@ -331,9 +331,12 @@ while (true) {
     the scope belongs to the object's Program, which must not be sandboxed (for an object that no Program owns, to the
     Program of the calling code, if that code may share objects), and the update runs as the code of that Program,
     as a closure of the object's class does; in it the C++ update can mark the objects that it
-    creates and caches with <tt>qore_share_object()</tt>, while code that sandboxed code supplied and that the update
-    calls (a callback of the caller) acts for sandboxed code and can do neither, nor open another scope.  The update
-    computes the new state from the object itself, never from data that its caller gives.  No C++ exception leaves
+    creates and caches with <tt>qore_share_object()</tt>, while code of a sandboxed Program that the update calls (a
+    callback of a sandboxed caller) acts for sandboxed code and can do neither, nor open another scope.  Code of a
+    Program that no sandbox governs that the update calls has the rights of the scope, whoever supplied it (a closure
+    of a trusted class, a reference to a builtin), so the update never calls code or resolves names that its caller
+    gives, and computes the new state from the object itself, never from data that its caller gives; it is meant for
+    the objects of the module's own classes.  No C++ exception leaves
     these functions: a failure is raised in the \c ExceptionSink, and a C++ exception that the update throws is
     raised there too, after the scope has ended.
 

@@ -122,7 +122,9 @@ DLLEXPORT int qore_check_shared_object_change(const QoreObject* obj, const char*
     shared or a caller that no sandbox governs; fails closed.
 
     @param obj the object that the caller changes; nothing is checked for null
-    @param callback the code that the caller gives; null is refused as code that is not a closure of a trusted class
+    @param callback the code that the caller gives; where the callback is checked (a shared object and a sandboxed
+    caller), null is refused as code that is not a closure of a trusted class; otherwise 0 is returned for null too,
+    so the caller still handles a null callback itself
     @param what what is done, for the exception (ex: \c "run code locked")
     @param xsink for the exception
 
@@ -165,9 +167,15 @@ typedef QoreValue (*q_shared_object_update_t)(QoreObject* obj, void* arg, Except
 
     The update changes the object's private data directly; qore_check_shared_object_change() decides by the calling
     code only and refuses a sandboxed caller also in the scope.  Code that the update calls is subject to the normal
-    rules, as a callback that a closure calls in an update scope: code that sandboxed code supplied (a callback of the
-    caller, a method of a class of a sandboxed Program), and any code that it calls, acts for sandboxed code, so it
-    cannot change the object, open another update scope or share objects.  The scope ends on every path out of this
+    rules, as code that a closure calls in an update scope: code that runs in a sandboxed Program (a callback of a
+    sandboxed caller, a method of a class of a sandboxed Program), and any code that it calls, acts for sandboxed code,
+    so it cannot change the object, open another update scope or share objects.  Code that runs in a Program that no
+    sandbox governs is the scope's code, whoever supplied it: a closure or method reference of a trusted class, or a
+    reference to a builtin function or method, that the caller gives runs with the rights of the scope, and a name
+    that the caller gives resolves in the scope's Program.  The update therefore never calls code, or resolves names,
+    that its caller supplied; the restrictions of SandboxManager::updateSharedObject() on its closure (created by a
+    class of the object in the calling code, run once) have no counterpart here, as the update is the module's own
+    C++ code.  Use it for the objects of the module's own classes.  The scope ends on every path out of this
     function; a thread that the update starts does not inherit it.
 
     @param obj the shared object to update

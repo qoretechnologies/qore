@@ -21,6 +21,20 @@ public class TrustedHelper {
         return string sub () { return "trusted closure"; };
     }
 
+    #! returns a closure of a trusted class that reports whether it, and a thread that it starts, can share objects
+    static code getThreadCheck() {
+        return list<bool> sub () {
+            Counter done(1);
+            bool in_thread;
+            background sub () {
+                on_exit done.dec();
+                in_thread = CppApiTest::SharedObjectProbe::canShareObjects();
+            }();
+            done.waitForZero();
+            return (CppApiTest::SharedObjectProbe::canShareObjects(), in_thread);
+        };
+    }
+
     #! opens a C++ update scope with a closure of this class that rebuilds another probe from C++
     static hash<auto> nestedTrusted(CppApiTest::SharedObjectProbe p, CppApiTest::SharedObjectProbe other) {
         return p.update(hash<auto> sub () { return other.update(); });
@@ -36,6 +50,11 @@ public class HostObject {
     #! returns a closure of this class that changes the object
     code getSetter() {
         return auto sub () { v = "set by a closure of the class"; return v; };
+    }
+
+    #! runs a callback of its caller in a Qore update scope of this object
+    auto callBackInScope(code cb) {
+        return SandboxManager::updateSharedObject(self, auto sub () { return cb(); });
     }
 
     #! builds a probe's cache from C++ in a Qore update scope of this object
@@ -103,6 +122,16 @@ hash<string, code> sub probe_checks() {
                     try_it(auto sub () { CppApiTest::SharedObjectProbe::share(new CppApiTest::SharedObjectProbe(0)); }));
             });
         },
+        \"its own code changes the value in the scope\": auto sub (CppApiTest::SharedObjectProbe p) {
+            return p.update(auto sub () { return try_desc(auto sub () { p.set(\"tenant\"); }); });
+        },
+        \"the scope ends with the update\": auto sub (CppApiTest::SharedObjectProbe p) {
+            p.update();
+            return CppApiTest::SharedObjectProbe::canShareObjects();
+        },
+        \"a thread that a closure of a trusted class starts in the scope\": auto sub (CppApiTest::SharedObjectProbe p) {
+            return p.update(TrustedHelper::getThreadCheck());
+        },
         \"its own code opens a nested scope\": auto sub (CppApiTest::SharedObjectProbe p) {
             return p.update(auto sub () {
                 return try_desc(auto sub () { return p.update(); });
@@ -166,6 +195,11 @@ string sub write_member(HostObject o) {
 
 string sub nested_trusted(CppApiTest::SharedObjectProbe p, CppApiTest::SharedObjectProbe other) {
     return try_desc(auto sub () { return TrustedHelper::nestedTrusted(p, other); });
+}
+
+string sub nested_in_qore_scope(HostObject o, CppApiTest::SharedObjectProbe p) {
+    return try_desc(auto sub () { return o.callBackInScope(auto sub () { return try_desc(auto sub () {
+        return p.update(); }); }); });
 }
 
 string sub build_in_scope(HostObject o, CppApiTest::SharedObjectProbe p) {
@@ -248,6 +282,8 @@ foreach string name in (p.callFunction("probe_check_names")) {
     CppApiTest::SharedObjectProbe t = p.callFunction("create_probe");
     CppApiTest::SharedObjectProbe::share(t);
     printf("update a probe of the tenant that trusted code marked: %s\n", p.callFunction("update", t));
+    printf("trusted code updates a probe of the tenant that it marked: %s\n", try_desc(auto sub () {
+        return t.update(); }));
 }
 {
     HostObject o();
@@ -256,7 +292,9 @@ foreach string name in (p.callFunction("probe_check_names")) {
     printf("update an object of a Qore class from C++: %s\n", p.callFunction("update_object", o));
     printf("its own code changes the object in the update scope: %s, %y\n", p.callFunction("update_object_own", o),
         o.v);
-    printf("a closure of the class changes the object in the update scope: %s, %y\n",
+    # a hazard that the API documents: code of a Program that no sandbox governs that the update calls has the
+    # rights of the scope, whoever supplied it; a module never calls code that its caller gives in a scope
+    printf("(hazard) a closure of a trusted class that the tenant gives changes the object in the scope: %s, %y\n",
         p.callFunction("update_object_class", o), o.v);
 }
 {
@@ -269,4 +307,6 @@ foreach string name in (p.callFunction("probe_check_names")) {
     SandboxManager::shareObject(o);
     CppApiTest::SharedObjectProbe t(1);
     printf("a C++ scope in a Qore update scope: %s\n", p.callFunction("build_in_scope", o, t));
+    printf("its own code opens a C++ scope in a Qore update scope: %s\n", p.callFunction("nested_in_qore_scope", o,
+        t));
 }
