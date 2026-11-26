@@ -65,6 +65,7 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
             \sameProgramCycleTest());
         addTestCase("a variant of a namespace that no Program owns is refused if it names a Program's declaration",
             \sharedVariantTest());
+        addTestCase("a refused variant of a binary module's namespace initialization", \moduleContextTest());
         set_return_value(main());
     }
 
@@ -375,5 +376,33 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
                     sprintf("kind %d: no variant takes NOTHING", kind));
             }
         }, "shared variant");
+    }
+
+    moduleContextTest() {
+        skipIfNoDebugging();
+        # as a binary module's namespace initialization adds them: the variant is refused when it is added (kind 9), or,
+        # when it names a class that the same module context adds, when it is committed (kind 10); the other additions
+        # are committed with their indexes either way
+        checkFreed(sub () {
+            foreach int kind in (9, 10) {
+                int refused = dbg_refused_shared_variants();
+                Program q = newp();
+                Program p = getSource();
+                assertThrows("RUNTIME-DECLARATION-ERROR", "Program's own namespace", \dbg_add_runtime_naming(),
+                    (p, kind, q), sprintf("kind %d: the variant is refused", kind));
+                assertEq(refused + 1, dbg_refused_shared_variants(), sprintf("kind %d: the refusal is counted", kind));
+                delete p;
+                liveDecls();
+                string code = "int sub ok() { return dbg_rt_mod_ok(); }";
+                if (kind == 10) {
+                    code += " int sub mk() { DbgRtMod::DbgRtModClass o(); return o ? 1 : 0; }";
+                }
+                q.parse(code, "q");
+                assertEq(0, q.callFunction("ok"), sprintf("kind %d: the function is committed", kind));
+                if (kind == 10) {
+                    assertEq(1, q.callFunction("mk"), "the namespace is committed");
+                }
+            }
+        }, "module context");
     }
 }

@@ -1346,6 +1346,14 @@ void qore_ns_private::addBuiltinModuleVariant(const char* fname, AbstractQoreFun
         QoreModuleContext& qmc) {
     SimpleRefHolder<AbstractQoreFunctionVariant> vh(v);
 
+    // a variant for a namespace that no Program owns is checked when it is added, as addBuiltinVariantIntern() does
+    // when it is committed, so that the module that adds it gets the exception (qore#7680)
+    if (qore_runtime_mortal_decls_exist() && !ownedByProgram() && (getRoot() || module_owned)) {
+        if (BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v)) {
+            checkSharedVariant(fname, *bv);
+        }
+    }
+
     FunctionEntry* fe = func_list.findNode(fname);
 
     if (fe)
@@ -2020,7 +2028,13 @@ void QoreNamespace::addBuiltinVariant(const char* name, q_func_t f, int64 code_f
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     va_list args;
     va_start(args, num_params);
-    priv->addBuiltinVariant<q_func_t, BuiltinFunctionValueVariant>(name, f, code_flags, functional_domain, returnTypeInfo, num_params, args);
+    // a variant that is refused throws (qore#7680)
+    try {
+        priv->addBuiltinVariant<q_func_t, BuiltinFunctionValueVariant>(name, f, code_flags, functional_domain, returnTypeInfo, num_params, args);
+    } catch (...) {
+        va_end(args);
+        throw;
+    }
     va_end(args);
 }
 
@@ -2029,8 +2043,14 @@ void QoreNamespace::addBuiltinVariant(void* ptr, const char* name, q_external_fu
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     va_list args;
     va_start(args, num_params);
-    priv->addBuiltinVariant<q_external_func_t, BuiltinFunctionExternalVariant>(ptr, name, f, code_flags,
-        functional_domain, returnTypeInfo, num_params, args);
+    // a variant that is refused throws (qore#7680)
+    try {
+        priv->addBuiltinVariant<q_external_func_t, BuiltinFunctionExternalVariant>(ptr, name, f, code_flags,
+            functional_domain, returnTypeInfo, num_params, args);
+    } catch (...) {
+        va_end(args);
+        throw;
+    }
     va_end(args);
 }
 

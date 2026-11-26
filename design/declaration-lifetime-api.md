@@ -78,6 +78,12 @@ Program's namespace data.
     the variant and the declaration and says to add the variant to that Program's own namespace
     (`qore_ns_private::checkSharedVariant()`; a debug build counts the refusals:
     `qore_dbg_refused_shared_variants()`), as a reference would keep the declaration until then.
+    In a binary module's namespace initialization (a module context is set and the additions are
+    committed together), the check is made when the variant is added
+    (`addBuiltinModuleVariant()`), so that the module gets the exception; a variant that names a
+    declaration that a namespace committed before it in the same context marks is refused by
+    `qore_root_ns_private::commitModule()`, which raises the exception in the module's sink and
+    still commits the other additions and rebuilds the indexes.
     A variant added before a declaration that it names is marked is not refused; no binary module
     of this repository or of the external module repositories adds such variants at run time;
   - a declaration that becomes mortal at run time (one marked when it is added or attached,

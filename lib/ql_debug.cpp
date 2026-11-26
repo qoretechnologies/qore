@@ -677,6 +677,11 @@ static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, Exce
     - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
     - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
       each other's types (\a src needs no namespace of its own)
+    - kind 9: in a module context, as a binary module's namespace initialization runs, adds the variant of kind 8 to
+      the static system namespace as the new function dbg_rt_mod_shared() (refused when it is added) and the function dbg_rt_mod_ok() to Q
+    - kind 10: as kind 9, with the variant naming the class DbgRtMod::DbgRtModClass of a namespace added to Q in the
+      same module context, which is marked when it is committed: the variant is refused when it is committed, after
+      the namespace, and dbg_rt_mod_ok() is still added (\a src is not used)
     - kind 7: as kind 5, with both namespaces (DbgRtSA, DbgRtSB) attached to Q, one after the other
     - kind 6: attaches the namespace DbgRtF to Q and adds the class DbgRtFOne to it with the next two takes of the
       references failing: returns a hash with the number of pending declarations and whether the class's references
@@ -709,6 +714,48 @@ static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeCon
         nq->addSystemClass(b);
         src->getRootNS()->addNamespace(np.release());
         root->addNamespace(nq.release());
+        return QoreValue();
+    }
+    if (kind == 9 || kind == 10) {
+        // the route of a binary module's namespace initialization (module_ns_init()): a module context is set, and
+        // the additions are committed together when it is done (qore#7680)
+        std::unique_ptr<QoreNamespace> mns;
+        const QoreTypeInfo* ti;
+        if (kind == 9) {
+            // a variant that names a class of the source Program, refused when it is added
+            const QoreClass* sqc;
+            const TypedHashDecl* shd;
+            const QoreEnumDecl* sed;
+            if (dbg_rt_find_decls(*src, sqc, shd, sed, xsink)) {
+                return QoreValue();
+            }
+            ti = sqc->getOrNothingTypeInfo();
+        } else {
+            // a variant that names a class of a namespace added in the same module context, which is marked when the
+            // namespace is committed, before the variant is committed: refused at the commit
+            mns.reset(new QoreNamespace("DbgRtMod"));
+            QoreClass* mc = new QoreClass("DbgRtModClass", "::DbgRtMod::DbgRtModClass");
+            mns->addSystemClass(mc);
+            ti = mc->getOrNothingTypeInfo();
+        }
+        QoreModuleContextHelper qmc("dbgrtmod", pgm, *xsink);
+        if (mns) {
+            root->addNamespace(mns.release());
+        }
+        try {
+            // a function that the static system namespace does not have yet: a module adds functions, not variants
+            staticSystemNamespace->addBuiltinVariant("dbg_rt_mod_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT,
+                bigIntTypeInfo, 1, ti, QORE_PARAM_NO_ARG, "obj");
+        } catch (AbstractException& e) {
+            e.convert(xsink);
+        }
+        // a function of the target Program added after it, which the commit adds, with its indexes
+        root->addBuiltinVariant("dbg_rt_mod_ok", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+        // committed under the write lock of the target's root namespace, as a module's additions are
+        {
+            RuntimeNamespaceWriteLocker rnwl(*root);
+            qmc.commit();
+        }
         return QoreValue();
     }
     if (kind == 7) {

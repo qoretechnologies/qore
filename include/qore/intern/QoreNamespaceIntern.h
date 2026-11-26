@@ -2951,7 +2951,14 @@ public:
 
         for (unsigned j = 0; j < qmc.mcfl.size(); ++j) {
             ModuleContextFunctionCommit& mc = qmc.mcfl[j];
-            mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            // a variant that is refused (one that names a declaration that a namespace committed above marked) is
+            // freed and its exception raised in the module's sink; the others are committed, and the indexes rebuilt
+            // (qore#7680)
+            try {
+                mc.parent->addBuiltinVariantIntern(mc.name, mc.v);
+            } catch (AbstractException& e) {
+                e.convert(&qmc.getXSink());
+            }
         }
 
         // issue #3461: must rebuild all indexes here or symbols will appear missing
