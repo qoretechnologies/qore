@@ -26835,6 +26835,7 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_work(ui
                 if (xsink) {
                     xsink->raiseException("IR-EXEC-ERROR", "invalid string predicate fast-path id %d",
                         static_cast<int>(predicate));
+                    failed = true;
                 }
                 return 0;
         }
@@ -27049,7 +27050,7 @@ static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionS
         SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
         // the conversion returns -1 if and only if it raised an exception (apply_case_map())
         if (upper ? do_toupper(*(*rv), *str, xsink) : do_tolower(*(*rv), *str, xsink)) [[unlikely]] {
-            failed = true;
+            failed = static_cast<bool>(xsink);
             return toBits(QoreValue());
         }
         return toBits(rv.release());
@@ -27085,6 +27086,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_
     // a string node, as the base always is at run time; any other value (a short string, a string enum member) takes
     // the ordinary call
     if (!value.hasNode() || value.getInternalNode()->getType() != NT_STRING) [[unlikely]] {
+        if (!xsink) {
+            QoreStringValueHelper str(value);
+            return toBits(static_cast<int64_t>(qore_string_private::characterCount(**str, nullptr)));
+        }
         return toBits(qore_string_call_length(value, false, xsink));
     }
     return qore_rt_string_fast_path(xsink, [&](bool& failed) {
@@ -27107,7 +27112,7 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
         if (upper
                 ? do_toupper_measure(*str, characters, result, xsink)
                 : do_tolower_measure(*str, characters, result, xsink)) [[unlikely]] {
-            failed = true;
+            failed = static_cast<bool>(xsink);
             return 0;
         }
         return result;

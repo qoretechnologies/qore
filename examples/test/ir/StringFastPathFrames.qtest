@@ -83,8 +83,10 @@ class StringFastPathFramesTest inherits QUnit::Test {
         assertFrame(out, "findex-loop", "ENCODING-CONVERSION-ERROR", "index", 59);
         # closures and nested closures
         assertFrame(out, "cl-findex", "ENCODING-CONVERSION-ERROR", "index", 156);
+        assertFrame(out, "cl-find", "ENCODING-CONVERSION-ERROR", "<string>::find", 157);
         assertFrame(out, "cl-lwr", "INVALID-ENCODING", "<string>::lwr", 158);
         assertFrame(out, "cl-nested-findex", "ENCODING-CONVERSION-ERROR", "index", 160);
+        assertFrame(out, "cl-nested-lwr", "INVALID-ENCODING", "<string>::lwr", 164);
         # the result "INVALID-ENCODING index 169", printed as its bytes
         assertRegex("(?m)^cl-try: !!binary " + make_base64_string("INVALID-ENCODING index 169") + "$", out);
         # an integer argument outside the inline range
