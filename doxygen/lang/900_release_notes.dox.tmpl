@@ -131,9 +131,9 @@
     limit is set (a body that a handler reads as a stream is not limited); set the
     @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
 
-    @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
-    A streamed HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, also
-    one that the I/O thread sends, so that a very slow client cannot hold it; see
+    @par HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
+    An HTTP/2 or HTTP/3 response is ended for a client that takes less than 1 KiB/s while the server waits, streamed or
+    buffered, until the client has taken it, so that a very slow client cannot hold it; see
     @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate", which \c 0 disables
     (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
 

@@ -431,6 +431,11 @@ public:
     //! Sets the maximum request body size on the underlying QUIC server operation
     DLLLOCAL void setMaxRequestBodySize(int64_t size);
 
+    //! Sets the listener's default bounds of the response bodies of its sessions (qore#7653)
+    /** Kept for the QUIC server operations that startReadRequest() creates later, which accept new sessions
+    */
+    DLLLOCAL void setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
     //! Stages a certificate / private key swap to be applied on the I/O thread
     /** Safe to call from any thread. The actual swap happens at the top of the
         next continuePoll() iteration on the I/O thread, where we can update the
@@ -488,6 +493,11 @@ private:
 
     //! Headers-only mode
     bool headers_only;
+    //! the listener's default bounds of the response bodies, applied to each QUIC server operation (qore#7653)
+    bool send_bound_set = false;
+    int64_t send_bound_min_rate = 0;
+    int64_t send_bound_window_ms = 0;
+    int64_t send_bound_stall_ms = 0;
 
     //! Effective drain timeout
     std::chrono::microseconds drain_timeout;

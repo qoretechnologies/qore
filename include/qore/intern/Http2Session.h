@@ -844,6 +844,14 @@ public:
         finished; see QoreSocketObject::dbgGetStreamRecordCounts()
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts() const;
+
+    //! Debug-only: holds the session's writes to the socket, as when its client stops reading (qore#7653)
+    /** The output stays in the send buffer, which the session reports as nothing to write, so that its operation
+        waits for other events; tests use it to keep the end of a response in the send buffer
+    */
+    DLLLOCAL void dbgHoldWrites(bool hold) {
+        dbg_hold_writes.store(hold, std::memory_order_release);
+    }
 #endif
 
     //! Drains the stream IDs reset by the peer since the last call (one-shot)
@@ -1083,7 +1091,15 @@ public:
     /** This is separate from wantWrite() because nghttp2_session_want_write()
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
-    DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
+    DLLLOCAL bool hasPendingData() const {
+#ifdef DEBUG
+        // held output waits for no event (dbgHoldWrites())
+        if (dbg_hold_writes.load(std::memory_order_acquire)) {
+            return false;
+        }
+#endif
+        return send_offset < send_buffer.size();
+    }
 
     //! Returns true if nghttp2 has frames to produce and no earlier output waits for the socket
     /** Output in the send buffer that the socket refused can only progress once the socket becomes writable, which
@@ -1457,10 +1473,6 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
-        //! the stream's taken bytes when its body last made progress, and the time of it on the monotonic clock in ms,
-        //! for the no-progress bound of the body (qore#7280)
-        int64_t bound_taken = -1;
-        int64_t bound_progress_ms = 0;
         //! true while the InputStream itself has no data ready (a non-blocking read would block): the body then waits
         //! for its source, not for the client (qore#7280)
         bool source_waiting = false;
@@ -1512,12 +1524,58 @@ private:
     int64_t pump_stall_ms = 30 * 60 * 1000;
     //! true once the bounds of the pumped bodies have been set
     bool pump_bound_set = false;
+#ifdef DEBUG
+    //! Debug-only: true while the session's writes to the socket are held (dbgHoldWrites())
+    std::atomic<bool> dbg_hold_writes{false};
+#endif
 
-    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
-    DLLLOCAL void checkInputStreamSendBound();
+    //! A response body that the bounds charge to its client until the client has taken it (qore#7653)
+    struct BoundBody {
+        //! the body's progress when it last advanced and the time of it on the monotonic clock in ms (0: not seen
+        //! waiting yet): the bytes of the stream that nghttp2 has taken, or once the body's END_STREAM frame has been
+        //! serialized, the bytes that the connection has written to the socket (bound_written)
+        uint64_t bound_progress = 0;
+        int64_t bound_progress_ms = 0;
+        bool bound_written = false;
+        //! true once the frame carrying the body's END_STREAM has been serialized; end_pos is then set by
+        //! sendPendingData()
+        bool end_serialized = false;
+        bool end_pos_set = false;
+        //! the absolute position in the outgoing byte stream after the END_STREAM frame
+        uint64_t end_pos = 0;
+    };
+    //! the response bodies charged to their clients by stream ID, registered while the bounds are set; a body is
+    //! removed when its END_STREAM frame has been written to the socket, when its stream is reset or closes without
+    //! it, and when a bound ends it (qore#7653)
+    std::unordered_map<int32_t, BoundBody> bound_bodies;
+    //! the body bytes that the client has taken from the connection, which never decreases: the bytes that nghttp2
+    //! has taken less those still unwritten in the send buffer (qore#7653)
+    uint64_t conn_client_taken = 0;
 
-    //! Returns true if a pumped body waits for its client: it has not ended, and its source is not what it waits for
-    DLLLOCAL bool isInputStreamWaiting(const StreamInputStreamInfo& info) const;
+    //! Registers a response body for the bounds if they are set (qore#7653)
+    DLLLOCAL void addBoundBody(int32_t stream_id);
+    //! Removes a body from the bounds (qore#7653)
+    DLLLOCAL void eraseBoundBody(int32_t stream_id);
+    //! Removes the bodies whose END_STREAM frame has been written to the socket; called under m (qore#7653)
+    DLLLOCAL void updateBoundBodiesWritten();
+    //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under m
+    DLLLOCAL void updateActiveInputStreams();
+    //! Ends a body that a bound ended (qore#7653)
+    /** A body whose END_STREAM frame has not been serialized has its stream reset; the rest of a body whose
+        END_STREAM frame has been serialized is in the connection's send buffer, which only ending the connection
+        frees: an HTTP2-SEND-BOUND-ERROR exception is raised, which ends the connection's operation
+    */
+    DLLLOCAL void endBoundBody(int32_t stream_id, const char* reason, ExceptionSink* xsink);
+
+    //! Checks the bounds of the response bodies; the bodies of a client below them are ended (qore#7280, qore#7653)
+    DLLLOCAL void checkInputStreamSendBound(ExceptionSink* xsink);
+
+    //! Returns true if a bounded body waits for its client (qore#7653)
+    /** A body whose source sends on waits for its client unless its source has no data ready; a body whose data is
+        all buffered or sent (its source ended, or a buffered body) waits for its client until its END_STREAM frame
+        has been written to the socket
+    */
+    DLLLOCAL bool isBoundBodyWaiting(int32_t stream_id) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};

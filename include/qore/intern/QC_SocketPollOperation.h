@@ -2465,6 +2465,11 @@ public:
     */
     DLLLOCAL void setMaxRequestBodySize(int64_t size);
 
+    //! Sets the bounds of the response bodies of the sessions as the listener's default (qore#7653)
+    /** Applied to the sessions and to those accepted later; see QuicSession::setInputStreamSendBound()
+    */
+    DLLLOCAL void setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
     //! Drains per-session lifecycle events accumulated since the last call
     /** Surfaces, to the H3 server poll operation (and thence the controller),
         the QUIC streams the peer reset and the sessions that closed, so a
@@ -2509,6 +2514,12 @@ private:
 
     //! Maximum request body size (0 = unlimited); propagated to sessions
     int64_t max_request_body_size_ = 0;
+
+    //! the listener's default bounds of the response bodies, propagated to sessions (qore#7653)
+    bool send_bound_set_ = false;
+    int64_t send_bound_min_rate_ = 0;
+    int64_t send_bound_window_ms_ = 0;
+    int64_t send_bound_stall_ms_ = 0;
 
     //! Cached completed stream info; mutable so getOutput() (const) can consume it.
     //! Thread safety: the poll framework serializes continuePoll() and getOutput()

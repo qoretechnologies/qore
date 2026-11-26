@@ -90,6 +90,17 @@ void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
     }
 }
 
+void Http3ServerPollOperationPriv::setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms,
+        int64_t stall_ms) {
+    send_bound_set = true;
+    send_bound_min_rate = min_rate;
+    send_bound_window_ms = window_ms;
+    send_bound_stall_ms = stall_ms;
+    if (read_op) {
+        read_op->setInputStreamSendBoundDefault(min_rate, window_ms, stall_ms);
+    }
+}
+
 Http3ServerPollOperationPriv::~Http3ServerPollOperationPriv() {
     // cleanup() should have been called before destructor via QPP destructor.
     // Defensive cleanup to avoid leaks in program shutdown paths.
@@ -755,6 +766,10 @@ void Http3ServerPollOperationPriv::startReadRequest(ExceptionSink* xsink) {
     if (headers_only) {
         reinterpret_cast<SocketQuicServerPollOperation*>(*new_op)->setHeadersOnly(true);
     }
+    // the sessions that the new operation accepts take the listener's default bounds (qore#7653)
+    if (send_bound_set) {
+        new_op->setInputStreamSendBoundDefault(send_bound_min_rate, send_bound_window_ms, send_bound_stall_ms);
+    }
 
     // Set self on the inner op so it can build SocketPollInfo hashes
     new_op->setSelf(*self);
@@ -1254,6 +1269,38 @@ nothing Http3ServerPollOperation::startSendStreamingResponse(int status_code,
     body_obj->ref();
     priv->startSendStreamingResponse((int)status_code, headers, body_ptr, body_obj,
         chunk_size ? chunk_size : 16384, xsink);
+}
+
+//! Sets the bounds of the response bodies of the connections that this operation accepts
+/** A response body holds its stream and its data until the client has acknowledged it; with these bounds, the bodies
+    that wait for a client that acknowledges less than \a min_rate bytes per second on all its streams together, or
+    that acknowledges nothing of a body for \a stall_timeout, are ended with \c RESET_STREAM, and the event is logged.
+    They apply to the response bodies, buffered or sent from an InputStream, of the connections that the operation has
+    accepted and accepts later, until the bounds of a connection are set with
+    @ref Qore::Socket::setQuicInputStreamSendBound() "Socket::setQuicInputStreamSendBound()".
+
+    @param min_rate the minimum rate in bytes per second; 0 disables the check
+    @param window the window of the minimum rate
+    @param stall_timeout the time without progress after which a body is ended; a value that is not positive keeps
+    the default of 30 minutes
+
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+
+    @since %Qore 3.0
+*/
+nothing Http3ServerPollOperation::setStreamSendBound(int min_rate, timeout window, timeout stall_timeout = 30m)
+        [flags=NAMED_ARGS; dom=NETWORK] {
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of the minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    priv->setInputStreamSendBoundDefault(min_rate, window, stall_timeout);
+    return QoreValue();
 }
 
 //! Starts reading the next HTTP/3 request
