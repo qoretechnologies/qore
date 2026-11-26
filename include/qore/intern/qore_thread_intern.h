@@ -1578,6 +1578,12 @@ public:
         return ctx;
     }
 
+    //! Returns the number of active QoreProgramContextHelper switches when the scope was set: those made before it
+    //! while its program context helper was current are below it (see qore_get_immediate_caller(); qore#7302)
+    DLLLOCAL size_t getProgramContextSaveCount() const {
+        return pch_count;
+    }
+
     DLLLOCAL QoreCallerProgramScope(const QoreCallerProgramScope&) = delete;
     DLLLOCAL QoreCallerProgramScope& operator=(const QoreCallerProgramScope&) = delete;
 
@@ -1585,6 +1591,8 @@ private:
     const QoreCallerProgramCapture* capture = nullptr;
     const ProgramThreadCountContextHelper* ctx = nullptr;
     const QoreCallerProgramScope* old_scope = nullptr;
+    //! see getProgramContextSaveCount()
+    size_t pch_count = 0;
     bool active = false;
 };
 

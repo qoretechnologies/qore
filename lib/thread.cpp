@@ -8437,8 +8437,7 @@ int qore_thread_push_foreign_code_entry(const QoreProgram* code_pgm, ExceptionSi
         return 0;
     }
     try {
-        // both or neither: the second push is made first, so that the first one, which cannot fail after the
-        // reservation, keeps them in step
+        // both or neither: the record of the switch is pushed first and removed again if the entry cannot be pushed
         td->foreign_code_entry_switches.push_back({td->current_pgm_ctx, td->programContextSaveCount()});
         try {
             td->foreign_code_entries.push_back(code_pgm);
@@ -8690,6 +8689,7 @@ QoreCallerProgramScope::QoreCallerProgramScope(const QoreCallerProgramCapture* c
     ThreadData* td = thread_data.get();
     if (td) {
         ctx = td->current_pgm_ctx;
+        pch_count = td->programContextSaveCount();
         old_scope = td->caller_scope;
         td->caller_scope = this;
         active = true;
@@ -9215,7 +9215,8 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
             while (save && td->programContextSave(save - 1).ctx == ch) {
                 // a switch made before the barrier was set while its context was current is below the barrier: the
                 // Program that it replaced is not known as the caller of the code above it (it is still counted)
-                if (visible == static_cast<size_t>(-1) && mib && ch == mib->ctx && save <= mib->pch_count) {
+                if (visible == static_cast<size_t>(-1) && ((mib && ch == mib->ctx && save <= mib->pch_count)
+                        || (scope && ch == scope->getContext() && save <= scope->getProgramContextSaveCount()))) {
                     visible = sw.size();
                 }
                 const auto& pcs = td->programContextSave(--save);
@@ -9229,6 +9230,11 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
                 break;
             }
             sw.push_back({ch->getOldProgram(), ch->getOldProvenance(), ch, -1});
+        }
+        // every QoreProgramContextHelper switch was made while a helper of the chain (or none) was current; one that
+        // was not is a broken nesting: fail closed
+        if (save) {
+            return -1;
         }
     } catch (std::bad_alloc&) {
         // fail closed: the immediate caller is unknown
@@ -9283,15 +9289,18 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
             continue;
         }
         const ThreadData::ForeignCodeEntrySwitch& fs = td->foreign_code_entry_switches[e];
-        // the frame entered by switch i is frame i; the bottom frame (n) if the entry was made with no helper
-        size_t frame = fs.ctx ? static_cast<size_t>(-1) : n;
-        if (fs.ctx) {
-            for (size_t i = 0; i < n; ++i) {
-                if (sw[i].ctx == fs.ctx && sw[i].pch < static_cast<ssize_t>(fs.pch_count)) {
-                    frame = i;
-                    break;
-                }
+        // the frame entered by switch i is frame i: the innermost switch of the entry's helper (also none: the
+        // QoreProgramContextHelper switches made with no helper current) made before the entry; with no helper and
+        // no such switch, the bottom frame (n)
+        size_t frame = static_cast<size_t>(-1);
+        for (size_t i = 0; i < n; ++i) {
+            if (sw[i].ctx == fs.ctx && sw[i].pch < static_cast<ssize_t>(fs.pch_count)) {
+                frame = i;
+                break;
             }
+        }
+        if (frame == static_cast<size_t>(-1) && !fs.ctx) {
+            frame = n;
         }
         if (frame == static_cast<size_t>(-1)) {
             // the switch is not on the thread's stack: fail closed

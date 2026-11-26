@@ -354,7 +354,8 @@ directly). `trusted_frame` is the number of the outermost frame of the unbroken 
 ends with an unrestricted immediate caller. The walk stops, and the caller is unknown, at the start of the thread, at
 the innermost module initialization barrier (also a lifted one: the module whose initialization runs is visible, its
 loader is not; a `QoreProgramContextHelper` switch made before the barrier while the barrier's context was current is
-below it, `ModuleInitBarrier::pch_count`), at a `QoreCallerProgramScope` and on `std::bad_alloc`. The module name is
+below it, `ModuleInitBarrier::pch_count`), at a `QoreCallerProgramScope` (likewise with its switch count), on a
+`QoreProgramContextHelper` switch whose helper is not on the chain and on `std::bad_alloc`. The module name is
 `qore_program_private::module_name`, set once with `module_name_set` when the module is first registered
 (`QoreModuleManager::addModule()`: the name of the first registration, which a reinjected or private module keeps
 when it is renamed and registered again); a module that is
