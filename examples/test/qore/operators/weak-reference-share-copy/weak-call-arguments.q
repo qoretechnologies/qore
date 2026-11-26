@@ -124,7 +124,45 @@ sub boundaries() {
     }
 }
 
+# an exception raised by a later argument releases a captured argument with its argument list, first argument first,
+# and the original of a call's value that an argument took a copy of with the statement's receivers, after the
+# argument lists, as the AST interpreter unwinds the statement (qore#7426)
+class Traced {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+hash<auto> sub makeTraced() {
+    hash<auto> h = {"o": new Traced("w")};
+    observed := h;
+    return h;
+}
+hash<auto> sub makePlainTraced() {
+    return {"o": new Traced("p")};
+}
+auto sub raise() { throw "EXPECTED"; }
+sub take3(auto a, auto b, auto c) {}
+auto sub first2(auto a, auto b) { return a; }
+sub exceptionOrder() {
+    try { take3(new Traced("a"), first2(makeTraced(), raise()), 1); } catch () { printf("caught 1\n"); }
+    try {
+        take3(new Traced("a"), first2(makePlainTraced(), raise()), 1);
+    } catch () {
+        printf("caught 2\n");
+    }
+    try { take3(makeTraced(), new Traced("b") + raise(), 1); } catch () { printf("caught 3\n"); }
+    try { take3(new Traced("a"), makeTraced(), raise()); } catch () { printf("caught 4\n"); }
+    try { take3(first2(new Traced("a"), makeTraced()), raise(), 1); } catch () { printf("caught 5\n"); }
+    try {
+        take3(new Traced("a"), first2(new Traced("b"), new Traced("c")), raise());
+    } catch () {
+        printf("caught 6\n");
+    }
+}
+
 stores();
 localArguments();
 arguments(True);
 boundaries();
+exceptionOrder();
+exceptionOrder();

@@ -715,9 +715,12 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             // the release of a temporary once it has been used is not a use of it (see ReleaseOwnedTemp), nor is the
-            // check of the target of a call before its arguments, which reads the target that the call then holds
-            // as its receiver (CheckCallTarget, issue #5784)
-            if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp || inst->opcode == QoreIROpcode::CheckCallTarget) {
+            // release of the source of a captured call argument, whose second operand only compares the argument with
+            // the source (ReleaseCallArgSource, qore#7426), nor is the check of the target of a call before its
+            // arguments, which reads the target that the call then holds as its receiver (CheckCallTarget, issue
+            // #5784)
+            if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp || inst->opcode == QoreIROpcode::ReleaseCallArgSource
+                    || inst->opcode == QoreIROpcode::CheckCallTarget) {
                 continue;
             }
             // the sequence of a list of selectors is held by its first step (QoreIROpcode::ListSelectorStep with
@@ -789,6 +792,11 @@ void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vec
                 for (const QoreIRValue& operand : inst->operands) {
                     set_class(operand, QORE_IR_RELEASE_RECEIVER);
                 }
+            } else if (op == QoreIROpcode::CopyCallArg && !inst->operands.empty()) {
+                // the original of a call's value that an argument took a copy of, which the statement holds until it
+                // ends (qore_list_eval_entry(), qore#7426); when the argument took no copy, ReleaseCallArgSource
+                // releases it at once
+                set_class(inst->operands[0], QORE_IR_RELEASE_RECEIVER);
             } else if (op == QoreIROpcode::ListSelectorStep && inst->result.isValid()) {
                 // the sequence of a list of selectors (operands[0] of the Begin step), which
                 // QoreSquareBracketsOperatorNode holds as a receiver
@@ -13779,6 +13787,116 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     return folds.size();
 }
 
+// Removes the capture of a call argument (CopyCallArg and its ReleaseCallArgSource, qore#7426) whose source is the
+// value of an exact call to a producer of a fresh fixed aggregate (a callee that get_projection accepts for
+// DiscardResult: its body returns a list or hash literal of its parameters and constants).  Such a value is a new
+// container that only the caller holds, so no weak reference designates it, the argument never takes a copy of it,
+// and the capture only moves the value from the call's slot to the argument's; without it, the argument is the call's
+// value, as before #7426, so that the projections below see the producer call as the operand of its consumer (a
+// call or a projection whose argument is the aggregate).  Returns false if cancelled.
+static bool qore_ir_elide_fresh_aggregate_arg_copies(QoreIRFunction& func,
+        const QoreIRAggregateProjectionQuery& get_projection, size_t& check_count) {
+    static const char* const operation = "IR fresh aggregate argument copy elision";
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    std::unordered_map<uint32_t, unsigned> uses;
+    // the ReleaseCallArgSource of each source value
+    std::unordered_map<uint32_t, QoreIRInstruction*> source_releases;
+    std::vector<QoreIRInstruction*> copies;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, operation)) {
+                return false;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (operand.isValid()) {
+                    ++uses[operand.id];
+                }
+            }, &check_count, operation)) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::CopyCallArg && inst->operands.size() == 1 && inst->result.isValid()) {
+                copies.push_back(inst.get());
+            } else if (inst->opcode == QoreIROpcode::ReleaseCallArgSource && !inst->operands.empty()) {
+                // a source released more than once is not taken
+                auto [it, inserted] = source_releases.emplace(inst->operands[0].id, inst.get());
+                if (!inserted) {
+                    it->second = nullptr;
+                }
+            }
+        }
+    }
+    if (copies.empty()) {
+        return true;
+    }
+    std::unordered_set<const QoreIRInstruction*> removed;
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    for (QoreIRInstruction* copy : copies) {
+        if (qore_ir_analysis_cancelled(check_count, operation)) {
+            return false;
+        }
+        QoreIRValue source = copy->operands[0];
+        auto definition = definitions.find(source.id);
+        auto release = source_releases.find(source.id);
+        auto source_uses = uses.find(source.id);
+        // the source is used by the copy and its release only, and the release compares it with this argument
+        if (definition == definitions.end() || release == source_releases.end() || !release->second
+                || source_uses == uses.end() || source_uses->second != 2
+                || release->second->operands.size() != 2
+                || release->second->operands[1].id != copy->result.id) {
+            continue;
+        }
+        QoreIRInstruction* call = definition->second;
+        // a method that a subclass can override can return another value than the variant resolved here
+        if (call->opcode != QoreIROpcode::CallDirect && call->opcode != QoreIROpcode::CallStaticDirect
+                && !((call->opcode == QoreIROpcode::CallMethodDirect
+                        || call->opcode == QoreIROpcode::DotEvalMethodDirect)
+                    && qore_ir_is_non_overridable_method_call(*call))) {
+            continue;
+        }
+        // the producer's own arguments whose captures were removed before (the copies are visited in block and
+        // instruction order, and an argument is evaluated before its call) are the values of their calls, which the
+        // query checks the facts of: wrapRows(wrapRow(makeRow(...), ...), ...)
+        if (!replacements.empty()) {
+            (void)qore_ir_rewrite_value_operands(*call, replacements, check_count, false);
+        }
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee = qore_ir_get_resolved_effect_callee(call, has_ref_args);
+        int16_t operand = -1;
+        int64_t size = 0;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
+        auto projection = QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
+        std::vector<QoreIRCallDirectInstruction::AOTAggregateProjectionDescriptor> guarded_descriptors;
+        std::vector<std::string> guarded_keys;
+        if (!callee || has_ref_args
+                || !get_projection(callee, call, QoreIRAggregateProjectionQueryKind::DiscardResult, 0,
+                    std::string(), operand, size, int_constant, float_constant, projection, guarded_descriptors,
+                    guarded_keys)) {
+            continue;
+        }
+        removed.insert(copy);
+        removed.insert(release->second);
+        replacements.emplace(copy->result.id, source);
+    }
+    if (removed.empty()) {
+        return true;
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                return removed.count(inst.get()) != 0;
+            }), instructions.end());
+        for (const auto& inst : instructions) {
+            (void)qore_ir_rewrite_value_operands(*inst, replacements, check_count, false);
+        }
+    }
+    return true;
+}
+
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         const QoreIRAggregateProjectionQuery& get_projection,
         const QoreIRAggregateConsumerQuery& get_consumer,
@@ -13792,6 +13910,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         return 0;
     }
     size_t check_count = 0;
+    if (!qore_ir_elide_fresh_aggregate_arg_copies(func, get_projection, check_count)) {
+        return 0;
+    }
     struct LocalOperation {
         size_t block_id = 0;
         size_t offset = 0;
