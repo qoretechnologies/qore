@@ -968,9 +968,11 @@ private:
         of the body, or the end of the handler (getScopeFlowPaths() with the handler, qore#7008).
     */
     bool setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error);
-    //! Gives the ScopeExit \a se past the inline cap in the code of a debugger's request, whose handlers can hand a
-    //! value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the value
-    //! that one of them handed over before it, which the entry of each path releases (qore#7008)
+    //! Gives the ScopeExit \a se past the inline cap outside the cleanups of a return statement, whose handlers can
+    //! hand a value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the
+    //! value that one of them handed over before it, which the entry of each path releases (qore#7008); in the code
+    //! of a debugger's request, and at the normal end of a block in the body of a handler lowered inline, where a loop
+    //! or a switch statement of the function can take the request of its handlers (qore#7625)
     bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
             const QoreProgramLocation* loc, std::string& error);
     //! Gives the ScopeExit \a se past the inline cap whose handlers' values replace the value of a return (its
@@ -1527,6 +1529,16 @@ private:
     void pushBlockCleanup(BlockCleanupEntry entry);
     //! Push a break / continue target, recording the number of temp scopes open where it is pushed
     void pushFlowTarget(FlowTarget target);
+    //! In the debug IR of the body of a handler compiled as a function of its own, emits the release of what the
+    //! handler run has handed over (QoreIROpcode::HandlerAbandonReturn) on the path of a debugger's break or continue
+    //! request (\a rc) that abandons the return of the block that the request leaves, where that block decides it
+    //! (qore#7625)
+    /** @param taken true if the function takes the request (a loop or a switch statement of the body): the return is
+        abandoned; false if the request leaves the function: the run of the handler decides
+        (qore_handler_abandon_return())
+    */
+    void emitHandlerAbandonReturn(int rc, bool taken, const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target);
     std::vector<QoreIRBasicBlock*> exception_stack;
     //! Scope stack depth at each exception handler's entry point.
     //! Parallel to exception_stack — records scope_stack.size() when each handler was pushed.

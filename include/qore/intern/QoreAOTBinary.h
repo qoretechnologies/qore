@@ -725,6 +725,17 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!        of an earlier format refuses the kind
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
+//! v54 (the AOT3 batch; the reader refuses v53 and older images, also those that a qcc executable embeds):
+//!      - IR can encode HandlerAbandonReturn (opcode 447, Base group, no result; QoreIROpcode::HandlerAbandonReturn),
+//!        only on the paths of a debugger's requests in the debug IR of the body of a handler compiled as a function
+//!        of its own: the release of what the handler run has handed over to the function that it runs for when a
+//!        break or a continue request abandons the return of the block that it leaves, where the block decides it, as
+//!        the AST interpreter's block releases the return (qore#7625); no operand: the function takes the request;
+//!        one operand, the request (an integer constant): the run decides; the maximum opcode in the AOT header is 447
+//! The shared format version for the changes of the AOT3 batch (see v54 above).
+constexpr uint16_t QORE_AOT_BATCH_AOT3_VERSION = 54;
+//! First format version whose debug IR can have HandlerAbandonReturn (see v54 above, qore#7625).
+constexpr uint16_t QORE_AOT_HANDLER_ABANDON_RETURN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -765,8 +776,11 @@ constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AO
 //! METHODS record (qore#7169), the callee of each background helper (qore#7087), the exit restorations of its IR
 //! functions (qore#7379), the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022) and class signature
 //! hashes with the namespace path of their class (qore#7397), the declared types of their members, static variables
-//! and method return types (qore#7457) and their methods in the order of their names (qore#7458)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+//! and method return types (qore#7457) and their methods in the order of their names (qore#7458).
+//! Old compiled artifacts must be rebuilt (see v54 above): the reader refuses v53 and older images the same way; the
+//! debug IR of a v54 image has the release of what a handler compiled as a function of its own handed over on the
+//! paths of a debugger's requests that abandon its return (qore#7625)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -915,12 +929,14 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT3_VERSION;
 static_assert(QORE_AOT_EXIT_RESTORE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
-    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
-    "the format changes of the second AOT-identity batch share one format version (v53), which the reader requires");
+    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
+    "the format changes of the second AOT-identity batch share one format version (v53)");
+static_assert(QORE_AOT_HANDLER_ABANDON_RETURN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT3_VERSION
+    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT3_VERSION,
+    "the format changes of the AOT3 batch share one format version (v54), which the reader requires");
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {

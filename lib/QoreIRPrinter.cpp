@@ -448,6 +448,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleasePlainLocalRead: return "release.plain.local.read";
         case QoreIROpcode::ReadReferenceThrough: return "read.reference.through";
+        case QoreIROpcode::HandlerAbandonReturn: return "handler.abandon.return";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::PushTempMarkPair: return "push.temp.mark.pair";

@@ -17231,6 +17231,21 @@ void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
     ctx->hand_over(ctx->data, value, xsink);
 }
 
+// documented in QoreHandlerRun.h
+void qore_handler_abandon_return(int rc, ExceptionSink* xsink) {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    // only the IR interpreter's frames, which take requests, release what was handed over (see abandon)
+    if (!ctx || !ctx->abandon || !ctx->hand_over_count || *ctx->hand_over_count == ctx->run_start_count) {
+        return;
+    }
+    assert(*ctx->hand_over_count > ctx->run_start_count);
+    if (rc && !(ctx->takes_request && ctx->takes_request(ctx->run_info, rc))) {
+        return;
+    }
+    *ctx->hand_over_count = ctx->run_start_count;
+    ctx->abandon(ctx->data, xsink);
+}
+
 //! Returns the count of the values handed over to the function that the handler that runs it hands its values to
 //! (qore_handler_run_hand_over_count()), which the native code of a ScopeExit with a result in a handler compiled as a
 //! function of its own compares before and after its handlers run (#6552)
