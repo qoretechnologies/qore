@@ -3621,7 +3621,7 @@ static __attribute__((noinline)) void qore_ir_store_hash_key_result(QoreHashNode
         uint32_t result_id) {
     QoreValue rv;
     if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink, rv)) {
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+        qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, &rv);
     }
     qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
 }
@@ -3631,7 +3631,7 @@ static __attribute__((noinline)) void qore_ir_store_new_hash_key_result(QoreHash
         const QoreValue& val, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
         uint32_t result_id) {
     QoreValue rv;
-    qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+    qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, &rv);
     qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
 }
 
@@ -15813,7 +15813,7 @@ load_local_done:
                                 hks_inst->result.id);
                         } else if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()),
                                 val, xsink)) {
-                            qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(),
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*h, hks_inst->key_name.c_str(), val,
                                 xsink);
                         }
 
@@ -15858,8 +15858,8 @@ load_local_done:
                             qore_ir_store_new_hash_key_result(new_h, hks_inst->key_name.c_str(), val, xsink, values,
                                 cleanup, hks_inst->result.id);
                         } else {
-                            qore_hash_private::setKeyValueCanonical(*new_h, hks_inst->key_name.c_str(),
-                                val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, hks_inst->key_name.c_str(), val,
+                                xsink);
                         }
                         if (xsink && *xsink) {
                             // the hash was created for this store only, so the rejected store leaves no value behind
@@ -15983,7 +15983,7 @@ load_local_done:
                                 hksd_inst->result.id);
                         } else if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val,
                                 xsink)) {
-                            qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*h, key_str.c_str(), val, xsink);
                         }
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
@@ -16020,7 +16020,7 @@ load_local_done:
                             qore_ir_store_new_hash_key_result(new_h, key_str.c_str(), val, xsink, values, cleanup,
                                 hksd_inst->result.id);
                         } else {
-                            qore_hash_private::setKeyValueCanonical(*new_h, key_str.c_str(), val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key_str.c_str(), val, xsink);
                         }
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
