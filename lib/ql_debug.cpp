@@ -401,6 +401,43 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
     added again (it is kept with the namespace, as the declarations that are added can use its type), and nothing
     reaches the parse-error path, as there is no parse
 */
+//! the static variant of Qore::dbg_shared_target(): returns 1 (qore#7588)
+static QoreValue f_dbg_shared_target_int(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(1);
+}
+
+//! the variant of Qore::dbg_shared_target() that dbg_add_shared_variant() adds at run time: returns 2 (qore#7588)
+static QoreValue f_dbg_shared_target_str(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(2);
+}
+
+//! the variant of Qore::dbg_shared_target() that dbg_add_shared_variant(1) adds at run time: returns 3 (qore#7588)
+static QoreValue f_dbg_shared_target_list(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(3);
+}
+
+//! Debug-only: adds a variant to the function dbg_shared_target() of the current Program's namespace Qore at run
+//! time, as a binary module can (qore#7588)
+/** The function is shared with the static system namespace (and with the Program's child Programs): the variant is
+    the Program's only.  Kind 0: a variant with a string parameter, which returns 2; kind 1: a variant with a list
+    parameter, which returns 3
+*/
+static QoreValue f_dbg_add_shared_variant(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 kind = get_param_value(params, 0).getAsBigInt();
+    QoreNamespace* qns = getProgram()->findNamespace(QoreString("::Qore"));
+    if (!qns) {
+        return xsink->raiseException("DBG-ADD-SHARED-VARIANT-ERROR", "the Program has no namespace Qore");
+    }
+    if (kind == 1) {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_list, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "l");
+    } else {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_str, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    }
+    return QoreValue();
+}
+
 //! a static generic builtin class (Qore::DbgRtBox<T>), made when the debug functions are added (qore#7540)
 static QoreClass* dbg_rt_box = nullptr;
 //! the type DbgRtBox<DbgRtClass> that the last dbg_add_runtime_namespace() with variant 3 made, before the namespace
@@ -444,6 +481,24 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 5: a namespace is attached empty, then a class is added to it one at a time (addSystemClass()), then a
+    // function whose parameter names the class (qore#7649)
+    if (variant == 5) {
+        if (sep != std::string::npos) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
+        }
+        RootQoreNamespace* root = getProgram()->getRootNS();
+        root->addNamespace(new QoreNamespace(inner.c_str()));
+        QoreNamespace* ans = getProgram()->findNamespace(QoreString(inner.c_str()));
+        if (!ans) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
+        }
+        QoreClass* one = new QoreClass("DbgRtOne", (path + "::DbgRtOne").c_str());
+        ans->addSystemClass(one);
+        ans->addBuiltinVariant("dbg_rt_one", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            one->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        return QoreValue();
+    }
     // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
     bool fail_refresh = variant == 4;
     if (fail_refresh) {
@@ -5571,6 +5626,11 @@ public:
             ctrl.io_waiting = false;
         }
         return 0;
+    }
+
+    //! Returns the index of the I/O thread that the operations on the pollable object are routed to
+    static int routeThread(AsyncIoControllerPriv& ctrl, const AbstractPollableIoObjectBase* sock) {
+        return ctrl.getThreadIndex(AsyncIoControllerPriv::getRouteKey(sock));
     }
 
     static void resize(UnitTestCounters& c) {
@@ -24456,6 +24516,39 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: returns the index of the I/O thread of the global async I/O controller that the operations on a pollable object are routed to (qore#7624)
+/** Operations are routed by the socket, not by their key: a test of keys that collide on different I/O threads needs
+    two objects that are routed to different threads.  DEBUG builds only.
+
+    @param sock the pollable I/O object (an EventNotifier, a Socket)
+
+    @return the I/O thread index
+
+    @throw DBG-ARGUMENT-ERROR the object is not a pollable I/O object
+*/
+static QoreValue f_dbg_async_io_route_thread(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* sock_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AbstractPollableIoObjectBase> sock(static_cast<AbstractPollableIoObjectBase*>(
+        const_cast<QoreObject*>(sock_obj)->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!sock) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the object is not a pollable I/O object");
+        return QoreValue();
+    }
+    return static_cast<int64>(AsyncIoCloseTest::routeThread(**ctrl, *sock));
+}
+
 //! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
 static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -37573,6 +37666,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    // a function of the static namespace that a Program can add a variant to at run time (qore#7588)
+    qns.addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_int, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "i");
+    qns.addBuiltinVariant("dbg_add_shared_variant", f_dbg_add_shared_variant, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, bigIntTypeInfo, QoreValue(static_cast<int64>(0)), "kind");
     // a static generic builtin class (qore#7540)
     dbg_rt_box = new QoreClass("DbgRtBox", "::Qore::DbgRtBox");
     dbg_rt_box->addTypeParameter("T");
@@ -37922,6 +38020,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_route_thread", f_dbg_async_io_route_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        objectTypeInfo, QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

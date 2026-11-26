@@ -1068,6 +1068,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Maximum bytes captured from a failed SSE response body.
             const MaxSseErrorBodyBytes = 1024 * 1024;
 
+            #! The MIME type of the AWS binary event stream
+            /** @since RestClientIo 1.0 */
+            const MimeTypeAwsEventStream = "application/vnd.amazon.eventstream";
+
             #! Custom token refresh options (all-or-nothing); mirrors
             #! @ref RestClient::RestClient::CustomTokenOptions
             const hash<string, bool> CustomTokenOptions = {
@@ -5633,6 +5637,8 @@ rest.addSensitiveHeaders("Qorus-Token");
             @param opts options passed through to SseObservable:
             - \c serialization: "json" or "none" (default: inherits from data serialization)
             - \c timeout: I/O timeout for reading events (default: 30s)
+            - \c start_timeout: the time in milliseconds that the startup waits for the response that starts the
+              stream (default: the client's request timeout); not passed to SseObservable
 
             @note A response that does not start an event stream (an error status, or a successful response whose
             \c Content-Type is not \c text/event-stream) closes the observable with \c reason \c "startup-error" and the
@@ -5656,14 +5662,35 @@ obs.observersReady();
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts, *hash<RestClient::RestRequestContext> request_context) {
+            return restObserveStreamIntern(method, path, body, hdr, opts, request_context,
+                RestClientIoStreamFormat::Sse, False);
+        }
+
+        #! Creates the observable of a streaming response of the given format
+        /** @param method HTTP method
+            @param path request path
+            @param body request body; serialized by the client unless \a raw is @ref True
+            @param hdr additional request headers; an \c Accept header for the format is added if there is none
+            @param opts observable options, as for @ref restObserveSse()
+            @param request_context the resolved target of the request, if already resolved
+            @param format the format of the response's event stream
+            @param raw @ref True if \a body is already serialized and is sent unchanged
+
+            @return the observable; call \c observersReady() after registering observers to start the stream
+
+            @since RestClientIo 1.0
+        */
+        private HttpClientStreamingIo::SseObservable restObserveStreamIntern(string method, string path,
+                auto body, *hash<auto> hdr, *hash<auto> opts, *hash<RestClient::RestRequestContext> request_context,
+                RestClientIoStreamFormat format, bool raw) {
             request_context = request_context ?? resolveRequestTarget(
                 <RestClient::RestRequestTarget>{"path": path}, method);
-            # Ensure Accept: text/event-stream header; the caller's headers may be narrowed to one value type (e.g.
+            # Ensure an Accept header for the format; the caller's headers may be narrowed to one value type (e.g.
             # hash<string, int> for {"X-Count": 1}), so it is added in a hash that accepts values of any type
             {
                 hash<auto!> sse_hdr = hdr ?? {};
                 if (!sse_hdr."accept" && !sse_hdr."Accept") {
-                    sse_hdr."accept" = "text/event-stream";
+                    sse_hdr."accept" = RestClientIo::getStreamMimeType(format);
                 }
                 hdr = sse_hdr;
             }
@@ -5676,9 +5703,11 @@ obs.observersReady();
             if (!obs_opts.serialization) {
                 obs_opts.serialization = "none";
             }
+            *int start_timeout_ms = remove obs_opts.start_timeout;
             obs_opts.startup_callback =
                 auto sub (HttpClientStreamingIo::SseObservable obs) {
-                    return startSseObservableOperation(obs, method, path, body, hdr, request_context);
+                    return startSseObservableOperation(obs, method, path, body, hdr, request_context, format, raw,
+                        start_timeout_ms);
                 };
 
             return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
@@ -5703,10 +5732,12 @@ obs.observersReady();
         #! Starts an event-driven RestClientIo SSE observable connection
         private *code<bool()> startSseObservableOperation(
                 HttpClientStreamingIo::SseObservable obs, string method, string path,
-                auto body, *hash<auto> hdr, *hash<RestClient::RestRequestContext> request_context) {
+                auto body, *hash<auto> hdr, *hash<RestClient::RestRequestContext> request_context,
+                RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False,
+                *int start_timeout_ms) {
             ensureToken();
             RestClientIoSseObservableStartOperation op(self, obs, method, path,
-                body, hdr, request_context);
+                body, hdr, request_context, format, raw, start_timeout_ms);
             op.start();
             return bool sub () {
                 return op.cancel();
@@ -5722,6 +5753,93 @@ obs.observersReady();
         */
         bool isNotEventStreamContentType(*string content_type) {
             return content_type.val() && !RestClientIo::isSseContentType(content_type);
+        }
+
+        #! Returns True if the Content-Type of a successful response is not that of the event stream requested
+        /** Used by event-driven observable startup: a response to an SSE request is refused if it has a
+            Content-Type that is not \c text/event-stream (see @ref isNotEventStreamContentType()), and a response
+            to a request for the AWS binary event stream if its Content-Type, with any parameters, is not
+            \c application/vnd.amazon.eventstream, or it has none, as AwsRestClient::AwsSignedEventStream refuses it
+
+            @param format the format of the event stream requested
+            @param content_type the Content-Type header value of the response, if any
+
+            @return @ref True if the response is refused
+
+            @since RestClientIo 1.0
+        */
+        bool isNotStreamContentType(RestClientIoStreamFormat format, *string content_type) {
+            if (format == RestClientIoStreamFormat::Sse) {
+                return isNotEventStreamContentType(content_type);
+            }
+            # the media type without parameters; a response without a Content-Type is refused
+            return trim(((content_type ?? "").split(";")[0] ?? "").lwr()) != MimeTypeAwsEventStream;
+        }
+
+        #! Raises the error of a response that does not start the event stream of an observable
+        /** Used by event-driven observable startup for a response with an error status or with a Content-Type that
+            @ref isNotStreamContentType() refuses, after its body (up to @ref MaxSseErrorBodyBytes) has been read.
+            For server-sent events, the errors are those of @ref restSseReader() for the same response; for the AWS
+            binary event stream, the base class raises the REST response error of the status, or
+            \c REST-RESPONSE-ERROR for a refused Content-Type, and AwsRestClient::AwsRestClientIo raises the errors
+            of AwsRestClient::AwsSignedEventStream::readFrame().
+
+            @param format the format of the event stream requested
+            @param raw the response, without its body
+            @param not_stream_type the Content-Type of a successful response that is refused (an empty string for a
+            response without one), or @ref nothing for an error status
+            @param body the body of the response, if any was received
+            @param method the HTTP method of the request
+            @param path the path of the request
+            @param request_headers the headers of the request
+            @param request_body the body of the request
+            @param req_allow_any_response the \c allow_any_response setting of the request
+            @param request_context the resolved target of the request
+
+            @since RestClientIo 1.0
+        */
+        raiseStreamObservableStartError(RestClientIoStreamFormat format, hash<auto> raw, *string not_stream_type,
+                *data body, string method, string path, *hash<auto> request_headers, *data request_body,
+                bool req_allow_any_response, *hash<RestClient::RestRequestContext> request_context) {
+            if (format == RestClientIoStreamFormat::Sse) {
+                if (exists not_stream_type) {
+                    raiseSseObservableNotEventStream(raw, not_stream_type, body, method, path, request_headers,
+                        request_body);
+                }
+            } else if (exists not_stream_type) {
+                hash<string, bool> extra = getSensitiveHeaderSet();
+                throw "REST-RESPONSE-ERROR",
+                    sprintf("HTTP %d response with Content-Type %y received; expected an AWS event stream "
+                        "(Content-Type %y)", raw.status_code, not_stream_type, MimeTypeAwsEventStream),
+                    <RestClient::RestResponseInfo>{
+                        "status_code": raw.status_code,
+                        "headers": raw.headers ?? {},
+                        "body": body,
+                        "content_type": not_stream_type,
+                        "response_body_raw": body,
+                        "request_method": method,
+                        "request_path": path,
+                        "request_headers": RestClientIo::redactHeaders(request_headers, extra),
+                        "request_body": request_body,
+                    };
+            }
+            hash<auto> response = raw;
+            if (exists body) {
+                response.body = body;
+            }
+            raiseSseObservableResponseError(response, method, path, request_headers, request_body,
+                req_allow_any_response, request_context);
+        }
+
+        #! Returns the MIME type of the event stream of the given format
+        /** @param format the format of an event stream
+
+            @return \c text/event-stream or \c application/vnd.amazon.eventstream
+
+            @since RestClientIo 1.0
+        */
+        static string getStreamMimeType(RestClientIoStreamFormat format) {
+            return format == RestClientIoStreamFormat::Sse ? "text/event-stream" : MimeTypeAwsEventStream;
         }
 
         #! Raises the error of a successful response to an SSE request that is not an event stream
@@ -6609,10 +6727,24 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 }
 
+#! The format of the event stream of a streaming response that an observable delivers
+/** @see RestClientIo::RestClientIoSseObservableStartOperation
+
+    @since RestClientIo 1.0
+*/
+public enum RestClientIoStreamFormat {
+    #! Server-sent events (\c text/event-stream), parsed into @ref Qore::SseMessageInfo hashes
+    Sse = 0,
+    #! The AWS binary event stream (\c application/vnd.amazon.eventstream), decoded into hashes with the keys of
+    #! AwsEventStream::AwsEventStreamFrame (see HttpClientIo::HttpClientStreamHandle::installEventStreamState())
+    AwsEventStream = 1,
+}
+
 #! Event-driven RestClientIo SSE observable startup with Negotiate retry support
 /** Opens a raw streaming response, waits for response headers via an
     EventNotifier, performs at most one Kerberos/SPNEGO Negotiate retry on
-    401, then installs the C++ SSE parser on the surviving stream.
+    401, then installs the C++ parser of the stream's format (server-sent events, or the AWS binary event stream; see
+    @ref RestClientIoStreamFormat) on the surviving stream.
 */
 public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation<auto> {
     public {
@@ -6654,8 +6786,16 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         string error_body = "";
         bool got_error_body = False;
         #! The Content-Type of a successful response that is not an event stream, whose body is read before the
-        #! response is refused
+        #! response is refused (an empty string for a response without one)
         *string not_event_stream_type;
+
+        #! The format of the event stream
+        RestClientIoStreamFormat format;
+        #! @ref True if the body is already serialized
+        bool raw;
+        #! The time in milliseconds to wait for the response that starts the stream; the client's request timeout
+        #! when not set
+        *int start_timeout_ms;
 
         string state = SPS_CONNECTING;
         bool goal_reached = False;
@@ -6663,9 +6803,27 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         Mutex m();
     }
 
+    #! Creates the startup of an observable's stream
+    /** @param rcio the client
+        @param observable the observable that the stream is delivered to
+        @param method the HTTP method
+        @param path the request path
+        @param body the request body; serialized by the client unless \a raw is @ref True
+        @param hdr the request headers
+        @param request_context the resolved target of the request
+        @param format the format of the response's event stream
+        @param raw @ref True if \a body is already serialized and is sent unchanged
+        @param start_timeout_ms the positive time in milliseconds to wait for the response that starts the stream;
+        the client's request timeout when not set
+    */
     constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable,
             string method, string path, auto body, *hash<auto> hdr,
-            *hash<RestClient::RestRequestContext> request_context) {
+            *hash<RestClient::RestRequestContext> request_context,
+            RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False,
+            *int start_timeout_ms) {
+        self.format = format;
+        self.raw = raw;
+        self.start_timeout_ms = start_timeout_ms > 0 ? start_timeout_ms : NOTHING;
         self.request_context = request_context;
         self.rcio = rcio;
         self.observable = observable;
@@ -6689,7 +6847,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "sock": poll_info.socket,
                 "spop": self,
                 # a request timeout of 0 means no deadline; a negative controller timeout means none
-            "to": rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1,
+                "to": start_timeout_ms
+                    ? milliseconds(start_timeout_ms)
+                    : (rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1),
                 "owner": "restclientio-sse-observable:" + self.uniqueHash(),
                 "has_on_complete": True,
             });
@@ -6711,7 +6871,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     }
 
     string getGoal() {
-        return sprintf("REST SSE %s %s", method, path);
+        return sprintf("REST %s %s %s", format == RestClientIoStreamFormat::Sse ? "SSE" : "AWS event stream", method,
+            path);
     }
 
     string getState() {
@@ -6869,7 +7030,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             prepareAttempt();
         }
         setPendingStream(mgr.acquireStream(rcio.getUrl()));
-        # sse_install_eligible=True: this flow always completes with installSseState()
+        # sse_install_eligible=True: this flow always completes with installSseState() (installEventStreamState())
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
         # The cookie jar of the connection manager supplies cookies as with other requests.
@@ -6890,7 +7051,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
     private prepareAttempt() {
         prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body,
-            \hdr, False, \negotiate_context, NOTHING, NOTHING, request_context);
+            \hdr, raw, \negotiate_context, NOTHING, NOTHING, request_context);
         request_context = prepared_attempt.request_context;
         request_body = prepared_attempt.serialized_body;
         request_allow_any_response = prepared_attempt.allow_any_response;
@@ -7003,11 +7164,11 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         # has been read
         if (status_code < 300) {
             *string content_type = RestClient::getSingleHeaderValue(response_headers."content-type");
-            if (rcio.isNotEventStreamContentType(content_type)) {
-                not_event_stream_type = content_type;
+            if (rcio.isNotStreamContentType(format, content_type)) {
+                not_event_stream_type = content_type ?? "";
             }
         }
-        if (status_code >= 300 || not_event_stream_type) {
+        if (status_code >= 300 || exists not_event_stream_type) {
             if (captureErrorBody(item)) {
                 raiseResponseError();
             }
@@ -7024,8 +7185,11 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 negotiate_context);
         }
         *data initial_body = getInitialBody(item);
-        pending_stream.installSseState(sse_queue, stream_notifier,
-            initial_body);
+        if (format == RestClientIoStreamFormat::Sse) {
+            pending_stream.installSseState(sse_queue, stream_notifier, initial_body);
+        } else {
+            pending_stream.installEventStreamState(sse_queue, stream_notifier, initial_body);
+        }
         HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
         clearPendingStream();
         goal_reached = True;
@@ -7082,15 +7246,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         if (!raw.headers) {
             raw.headers = {};
         }
-        if (not_event_stream_type) {
-            rcio.raiseSseObservableNotEventStream(raw, not_event_stream_type, got_error_body ? error_body : NOTHING,
-                method, path, hdr, request_body);
-        }
-        if (got_error_body) {
-            raw.body = error_body;
-        }
-        rcio.raiseSseObservableResponseError(raw, method, path, hdr,
-            request_body, request_allow_any_response, request_context);
+        rcio.raiseStreamObservableStartError(format, raw, not_event_stream_type,
+            got_error_body ? error_body : NOTHING, method, path, hdr, request_body, request_allow_any_response,
+            request_context);
         throw "REST-RESPONSE-ERROR",
             sprintf("HTTP %d response received", raw.status_code), rcio.getSafeDiagnostic(raw, hdr);
     }

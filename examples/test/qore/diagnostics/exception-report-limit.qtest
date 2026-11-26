@@ -8,7 +8,8 @@
 
 class ExceptionReportLimitTest inherits QUnit::Test {
     constructor() : Test("Exception report limit", "1.0", \ARGV) {
-        addTestCase("syntax errors in text reports", \reportTest());
+        addTestCase("syntax errors in one-line diagnostics (the default format)", \reportTest());
+        addTestCase("syntax errors in legacy reports", \legacyReportTest());
         addTestCase("change the limit during execution", \runtimeTest());
         set_return_value(main());
     }
@@ -28,6 +29,19 @@ class ExceptionReportLimitTest inherits QUnit::Test {
     }
 
     reportTest() {
+        checkReports("", "^[^ ]+: error: PARSE-EXCEPTION:", "qore: note: maximum exception count reached (%d)");
+    }
+
+    legacyReportTest() {
+        checkReports(" --diag-format=legacy", "^PARSE-EXCEPTION:", "maximum exception count reached (%d)");
+    }
+
+    #! checks the number of parse errors reported, and the notice of the limit, for each setting of the limit
+    /** @param opts the options of the interpreter that select the format
+        @param error_re a regex matching the line of an error in the report
+        @param notice_fmt the format of the notice of the limit, with the limit as its argument
+    */
+    private checkReports(string opts, string error_re, string notice_fmt) {
         string src;
         for (int i = 0; i < 13; ++i) {
             src += sprintf("missing_%d();\n", i);
@@ -38,12 +52,12 @@ class ExceptionReportLimitTest inherits QUnit::Test {
             string env = exists value ? "QORE_EXCEPTION_REPORT_LIMIT=" + quote(value) + " "
                 : "unset QORE_EXCEPTION_REPORT_LIMIT; ";
             int status;
-            string report = backquote(env + quote(TestInterpreter::qore_interpreter()) + " -e "
+            string report = backquote(env + quote(TestInterpreter::qore_interpreter()) + opts + " -e "
                 + quote(src) + " 2>&1", \status);
             assertEq(2, status);
-            list<string> errors = select report.split("\n"), $1 =~ /^PARSE-EXCEPTION:/;
+            list<string> errors = select report.split("\n"), regex($1, error_re);
             assertEq(expected, errors.size(), sprintf("%y", value));
-            assertEq(expected < 13, report.find(sprintf("maximum exception count reached (%d)", expected)) >= 0);
+            assertEq(expected < 13, report.find(sprintf(notice_fmt, expected)) >= 0, sprintf("notice: %y", value));
         }
     }
 }

@@ -5427,7 +5427,9 @@ public:
     /** As isSandboxedCode(), with the trust rule of SandboxManager::isRestricted(): a sandbox that allows uncontrolled
         APIs trusts its code; fails closed.  Once the source Program has released the class, its state is not known
         and isSandboxedCode()'s is used, which is true whenever this is.  It decides whether the class is declared by
-        sandboxed code for the private access to the declarations of trusted classes (isSandboxDeclared())
+        sandboxed code for the private access to the declarations of trusted classes (isSandboxDeclared()), which
+        trusts builtin classes itself.  Unlike isSandboxedCode(), a builtin class is judged by its source Program too
+        (qore#7677): one without a source Program, as most are, is not restricted
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedCode() const;
 

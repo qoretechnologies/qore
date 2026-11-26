@@ -65,6 +65,7 @@ public namespace EdifactUtil {
                 schema = cache.loadSchema(release, cache_opts);
                 if (schema) {
                     if (shared) {
+                        EdifactSchemaRegistry::share(schema);
                         registry{release} = schema;
                     }
                     return schema;
@@ -83,12 +84,26 @@ public namespace EdifactUtil {
             schema = loader.loadFromFlatDir(opts.dir, release, opts.loader_opts ?? {});
             if (shared) {
                 cache.writeSchema(schema);
+                EdifactSchemaRegistry::share(schema);
                 registry{release} = schema;
             }
             return schema;
         }
 
+        #! Marks a schema that the registry keeps for every caller as shared (issue #7685)
+        /** getRelease() returns the schemas of the registry to every caller: code that is sandboxed or acts for
+            sandboxed code cannot change them (see
+            @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()")
+        */
+        private:internal static share(EdifactSchema schema) {
+            if (SandboxManager::createsSharedObjects()) {
+                SandboxManager::shareObject(schema);
+            }
+        }
+
         #! Returns the schema for a release if loaded
+        /** The schema is shared by every caller: code that is sandboxed or acts for sandboxed code cannot change it
+        */
         public static *EdifactSchema getRelease(string release) {
             if (!registry) {
                 return NOTHING;

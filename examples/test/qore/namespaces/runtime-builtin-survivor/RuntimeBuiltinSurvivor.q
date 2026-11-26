@@ -54,6 +54,15 @@ switch (which) {
         dbg_keep_until_cleanup(s);
         break;
     }
+    case "one": {
+        # as "static", but the class that names the module's class is added one at a time (addSystemClass()) to a
+        # namespace that the Program already has (qore#7649)
+        Program s(PO_NEW_STYLE | PO_NO_INHERIT_SYSTEM_CLASSES);
+        s.parse("sub add() { rtsurv_add(\"RtSurvNsO\"); rtsurv_add_one(\"RtSurvNsO\"); }", "one");
+        s.callFunction("add");
+        dbg_keep_until_cleanup(s);
+        break;
+    }
     case "both": {
         # an object, whose destructor is the module's, and the Program that shares the class and its static variables
         object o = c.callFunction("mk");

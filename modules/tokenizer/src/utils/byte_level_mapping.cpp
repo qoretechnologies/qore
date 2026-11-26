@@ -121,13 +121,79 @@ std::string unicodeToBytes(const std::string& input) {
         if (it != u2b.end()) {
             result += (char)it->second;
         } else {
-            // Pass through unmapped characters as-is
-            result += ch;
+            // Hugging Face passes the whole token through if any character is unmapped.
+            return input;
         }
         i += len;
     }
 
     return result;
+}
+
+// returns the decoded bytes as a UTF-8 string, each invalid byte sequence replaced by U+FFFD
+/* Decoding a sequence of tokens that ends or starts in the middle of a character (ex: the first byte-level token of
+   an emoji, or a ByteFallback <0xF0> token alone) gives bytes that are not valid UTF-8.  As in Hugging Face
+   tokenizers, which decode with Rust's String::from_utf8_lossy(), each maximal subpart of an invalid sequence (the
+   longest start of a valid sequence, or a single byte that cannot start one) is replaced by one U+FFFD (the
+   "substitution of maximal subparts" of the Unicode standard, chapter 3.9); the valid text is kept as it is
+   (qore#6604)
+*/
+std::string decodedUtf8(const std::string& bytes) {
+    static const char replacement[] = "\xef\xbf\xbd";
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(bytes.data());
+    size_t len = bytes.size();
+    std::string out;
+    out.reserve(len);
+    size_t i = 0;
+    while (i < len) {
+        unsigned char b = p[i];
+        if (b < 0x80) {
+            out += static_cast<char>(b);
+            ++i;
+            continue;
+        }
+        // the length of the sequence and the range of its second byte (RFC 3629, Unicode Table 3-7)
+        size_t n;
+        unsigned char lo = 0x80, hi = 0xbf;
+        if (b >= 0xc2 && b <= 0xdf) {
+            n = 2;
+        } else if (b >= 0xe0 && b <= 0xef) {
+            n = 3;
+            if (b == 0xe0) {
+                lo = 0xa0;
+            } else if (b == 0xed) {
+                hi = 0x9f;
+            }
+        } else if (b >= 0xf0 && b <= 0xf4) {
+            n = 4;
+            if (b == 0xf0) {
+                lo = 0x90;
+            } else if (b == 0xf4) {
+                hi = 0x8f;
+            }
+        } else {
+            // a continuation byte, an overlong lead byte (C0, C1) or a byte above F4
+            out.append(replacement, 3);
+            ++i;
+            continue;
+        }
+        // the number of bytes of a valid sequence that are there
+        size_t k = 1;
+        while (k < n && i + k < len) {
+            unsigned char c = p[i + k];
+            if (k == 1 ? (c < lo || c > hi) : (c < 0x80 || c > 0xbf)) {
+                break;
+            }
+            ++k;
+        }
+        if (k == n) {
+            out.append(bytes, i, n);
+        } else {
+            out.append(replacement, 3);
+        }
+        i += k;
+    }
+    return out;
 }
 
 } // namespace QoreTokenizer

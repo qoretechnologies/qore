@@ -460,10 +460,57 @@ void QoreNamespace::setClassHandler(q_ns_class_handler_t class_handler) {
     priv->setClassHandler(class_handler);
 }
 
+//! A marking event of a declaration that a binary module adds to a namespace that a Program owns (qore#7540)
+/** Started when it is made (qore_root_ns_private::beginRuntimeMarking()); the declaration is marked before it is
+    published, and complete() completes the event once it is: if that does not happen (an allocation failed), the
+    event stays pending, and the next one on the root namespace completes it
+*/
+class RuntimeMarkingHelper {
+public:
+    //! the types of the declarations marked
+    type_vec_t marked_types;
+    //! the declarations marked, which reference the binary module declarations that they name at once (qore#7649)
+    std::vector<QoreTypeOwner*> marked_owners;
+
+    DLLLOCAL RuntimeMarkingHelper(qore_ns_private& ns) : rns(ns.ownedByProgram() ? ns.getRoot() : nullptr) {
+        if (rns) {
+            full = rns->beginRuntimeMarking();
+            start = rns->runtimeVariantCount();
+        }
+    }
+
+    //! Returns true if the namespace is owned by a Program
+    DLLLOCAL explicit operator bool() const {
+        return rns;
+    }
+
+    //! Completes the event
+    DLLLOCAL void complete() {
+        if (rns) {
+            // as in markProgramLocal(): a declaration of a Program references the binary module declarations that it
+            // names from its first batch, which a declaration marked now has only at its Program's teardown, possibly
+            // after the module is deleted; taken before the rest of the event (qore#7540, qore#7649)
+            qore_type_owner_take_module_refs(marked_owners);
+            rns->completeRuntimeMarking(marked_types, start, full);
+        }
+    }
+
+private:
+    qore_root_ns_private* rns;
+    bool full = false;
+    size_t start = 0;
+};
+
 void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     // set sys and pub flags
     typed_hash_decl_private::get(*hd)->setSystemPublic();
+    // a hashdecl added to a namespace that a Program owns is owned by that Program (qore#7540); it is marked before it
+    // is published, and the marking event is completed after (RuntimeMarkingHelper)
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        typed_hash_decl_private::get(*hd)->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+    }
     typed_hash_decl_private::get(*hd)->setNamespace(priv);
 #ifdef DEBUG
     if (priv->hashDeclList.add(hd))
@@ -474,6 +521,7 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
 #else
     priv->hashDeclList.add(hd);
 #endif
+    rmh.complete();
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
@@ -493,6 +541,11 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
         enum_priv->setSystemPublic();
     }
     enum_priv->setNamespace(priv);
+    // an enum added to a namespace that a Program owns is owned by that Program (qore#7540)
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        enum_priv->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+    }
 
 #ifdef DEBUG
     if (priv->enumList.add(enumdecl)) {
@@ -503,6 +556,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
 #else
     priv->enumList.add(enumdecl);
 #endif
+    rmh.complete();
 
     bool new_ns = false;
     qore_ns_private* enum_ns_priv = nullptr;
@@ -539,11 +593,17 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
 
     oc->setSystem();
+    // a class added to a namespace that a Program owns is owned by that Program (qore#7540): it is marked before it is
+    // published, and the marking event is completed after
+    RuntimeMarkingHelper rmh(*priv);
     if (qore_class_private::get(*oc)->setNamespaceConditional(priv)) {
         // generate builtin class signature
         std::string path;
         priv->getPath(path);
         qore_class_private::get(*oc)->finalizeBuiltin(path.c_str());
+        if (rmh) {
+            qore_class_private::get(*oc)->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+        }
     } else {
         assert(qore_class_private::get(*oc)->initialized);
     }
@@ -557,6 +617,7 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 #else
     priv->classList.add(oc);
 #endif
+    rmh.complete();
     // code in other threads can reach the class from now on, or when the module being initialized returns from its
     // initialization (issue #6422)
     qore_class_private::get(*oc)->systemClassCommitted();
@@ -1056,6 +1117,31 @@ void qore_root_ns_private::releaseRuntimeVariants() {
     unmarked_decl_variants.clear();
 }
 
+//! Returns true if the function has a variant with the parameter types of \a v, which QoreFunction::addBuiltinVariant()
+//! frees as a duplicate (qore#7588)
+static bool function_has_signature(const QoreFunction& f, const AbstractQoreFunctionVariant& v) {
+    const AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant&>(v).getSignature();
+    QoreFunctionIterator fi(f);
+    while (fi.next()) {
+        const AbstractFunctionSignature* vs = const_cast<AbstractQoreFunctionVariant*>(fi.getVariant())->getSignature();
+        unsigned tp = vs->numParams();
+        if (tp != sig->numParams()) {
+            continue;
+        }
+        bool different = false;
+        for (unsigned pi = 0; pi < tp; ++pi) {
+            if (vs->getParamTypeInfo(pi) != sig->getParamTypeInfo(pi)) {
+                different = true;
+                break;
+            }
+        }
+        if (!different) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! Returns true if the function has the variant
 static bool function_has_variant(const QoreFunction& f, const AbstractQoreFunctionVariant* v) {
     QoreFunctionIterator fi(f);
@@ -1235,16 +1321,28 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
 
     FunctionEntry* fe = func_list.findNode(fname);
 
+    // a variant added to a function of a namespace that a Program owns, which the namespace shares with a namespace
+    // that no Program owns (its copy of the static system namespace or of a module's), is the Program's: the entry
+    // gets its own copy of the function first (copy on write), as adding it to the shared function would add it to
+    // every namespace that shares it and keep what it names in the static namespace (qore#7588)
+    // the same applies to a function that the namespace shares with a child Program's or a parent Program's; a
+    // variant with the signature of one that the function has, which the function frees, gets no copy
+    bool owned = ownedByProgram();
+    if (fe && owned && fe->sharesFunction() && !function_has_signature(*fe->getFunction(), *v)) {
+        // the copy takes every variant of the function and keeps it injected if it is; replaceFunction() does not throw
+        QoreFunction* f = fe->getFunction();
+        fe->replaceFunction(new QoreFunction(*f, QoreParseOptions(), true, f->injected()));
+    }
+
     // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
-    // marked later (qore#7540); one added to a namespace that no Program owns, or to a function that the namespace
-    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs and
-    // references none: it would keep them until the static system namespace is deleted at library cleanup
+    // marked later (qore#7540); one added to a namespace that no Program owns is shared by the Programs and references
+    // none: it would keep them until the static system namespace is deleted at library cleanup
     BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
     bool runtime_variant = false;
     if (bv) {
-        if (ownedByProgram() && !(fe && fe->isSharedUnowned())) {
+        if (owned) {
             runtime_variant = !bv->isSharedOrigin();
-        } else if (getRoot() || module_owned || (fe && fe->isSharedUnowned())) {
+        } else if (getRoot() || module_owned) {
             bv->setSharedOrigin();
         }
     }

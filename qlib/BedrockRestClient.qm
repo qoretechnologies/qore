@@ -33,6 +33,9 @@
 %requires AwsEventStream >= 1.1
 %requires QoreLlmTypes
 %requires QoreRagTypes
+# the observable and the observer of an asynchronous ConverseStream
+%requires DataProvider
+%requires HttpClientStreamingIo
 # the structured-output schema helpers shared with the Anthropic provider (structuredOutputSchema())
 %requires AnthropicRestClient
 
@@ -78,6 +81,13 @@ module BedrockRestClient {
     checked against its CRCs, and streams support timeouts and cancellation.
     @ref BedrockRestClient::BedrockLlmProvider::chatStream() "BedrockLlmProvider::chatStream()" emits Converse text
     and tool-call fragments as they arrive, followed by the stop reason and usage metadata.
+
+    The asynchronous chat calls of @ref qorellmutilsintro "QoreLlmUtils" (\c chatAsync(), \c chatStreamAsync() and
+    the calls built on them) hold no thread while they wait for Bedrock
+    (@ref BedrockRestClient::BedrockLlmProvider::supportsAsyncChat() "BedrockLlmProvider::supportsAsyncChat()"): the
+    Converse request and the ConverseStream are sent and read by the async I/O controller, and the frames of the
+    stream are decoded and checked on the I/O thread; their events, responses and errors are those of the
+    synchronous calls.
 
     Requests for the Claude models that reject a temperature (Claude Opus 4.7 and later, Claude Sonnet 5 and later,
     Claude Haiku 5.5, Claude Fable and Claude Mythos) are sent without one. A reasoning token budget of zero or
@@ -157,6 +167,14 @@ hash<ChatResponse> r = p.chat((
       @ref QoreLlmUtils::ChatResponse::reasoning_blocks "ChatResponse::reasoning_blocks", streamed or not, in the
       Anthropic Messages API's form, and replayed unchanged before an assistant turn's content, which a tool-result
       follow-up with adaptive thinking requires; the factory declares \c supports_reasoning_effort
+    - the asynchronous chat calls hold no thread while they wait for Bedrock: the provider makes the Converse request
+      and reads the ConverseStream through the async I/O controller
+      (@ref BedrockRestClient::BedrockLlmProvider::supportsAsyncChat() "BedrockLlmProvider::supportsAsyncChat()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/7648">issue 7648</a>)
+    - the start of a streamed chat (@ref BedrockRestClient::BedrockLlmProvider::chatStream() "chatStream()" and its
+      asynchronous call), until its response has started the event stream, is retried as a chat request is: on
+      HTTP 429 and 5xx responses, with the call's retry options
+      (<a href="https://github.com/qoretechnologies/qore/issues/7661">issue 7661</a>)
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
     - initial release
@@ -224,6 +242,61 @@ public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
     BedrockEventStream openConverseStream(string model_id, hash<auto> body) {
         return new BedrockEventStream(startEncodedEventStream("POST", streamPath(model_id, "converse-stream"),
             binary(make_json(body)), {"content-type": MimeTypeJson, "accept": "application/vnd.amazon.eventstream"}));
+    }
+
+    #! Opens the unified Converse event stream as an observable that the async I/O controller reads
+    /** The request of @ref openConverseStream(); the frames of the response are decoded on the I/O thread and
+        delivered to the observers of the observable, as described for
+        @ref AwsRestClient::AwsRestClientIo::observeEncodedEventStreamTarget()
+        "AwsRestClientIo::observeEncodedEventStreamTarget()"; each frame gives a native Bedrock event with
+        @ref BedrockEventStream::decodeFrame()
+
+        @param model_id model ID or ARN
+        @param body native ConverseStream request, including optional streaming guardrail settings
+        @param opts observable options (ex: \c idle_timeout)
+
+        @return the observable; call \c observersReady() after registering observers to start the stream
+
+        @throw BEDROCK-STREAM-ERROR the model ID is empty
+
+        @since BedrockRestClient 1.2
+    */
+    HttpClientStreamingIo::SseObservable observeConverseStream(string model_id, hash<auto> body,
+            *hash<auto> opts) {
+        return observeEncodedEventStreamTarget("POST",
+            <RestClient::RestRequestTarget>{"path": streamPath(model_id, "converse-stream")}, binary(make_json(body)),
+            {"content-type": MimeTypeJson, "accept": "application/vnd.amazon.eventstream"}, opts);
+    }
+
+    #! Sends a Converse request without holding a thread
+    /** The request of the provider's synchronous chat calls, signed with SigV4 for each attempt; it is sent and
+        read by the async I/O controller
+
+        @param model_id model ID, inference profile ID, or ARN; it is percent-encoded here
+        @param body the Converse request body
+        @param timeout_ms the positive transport deadline of the request in milliseconds
+        @param notifier signaled once when the request has ended
+
+        @return a cancellable future containing the deserialized response
+
+        @since BedrockRestClient 1.2
+    */
+    RestClientIo::RestFuture converseAsyncWithNotifier(string model_id, hash<auto> body, int timeout_ms,
+            EventNotifier notifier) {
+        return restDoEncodedRawRequestAsyncTargetWithNotifier("POST",
+            <RestClient::RestRequestTarget>{"path": BedrockRestClientIo::conversePath(model_id)},
+            binary(make_json(body)), {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, timeout_ms, notifier);
+    }
+
+    #! Returns the path of the Converse request of a model
+    /** @param model_id model ID, inference profile ID, or ARN
+
+        @return \c /model/<encoded model ID>/converse
+
+        @since BedrockRestClient 1.2
+    */
+    static string conversePath(string model_id) {
+        return sprintf("/model/%s/converse", encode_url(model_id, True));
     }
 
     #! Opens a model-specific inference response stream
@@ -305,41 +378,61 @@ public class BedrockEventStream {
             if (!frame) {
                 return NOTHING;
             }
-            string message_type = frame.headers.":message-type" ?? "";
-            string event_type = frame.headers.":event-type" ?? "";
-            if (message_type == "exception" || message_type == "error") {
-                string exception_type = frame.headers.":exception-type" ?? frame.headers.":error-code" ?? "Unknown";
-                *string message = frame.headers.":error-message";
-                hash<auto> detail = {};
-                if (frame.payload.size()) {
-                    try { detail = parse_json(frame.payload.toString("UTF-8")); } catch () {}
-                }
-                throw "BEDROCK-STREAM-EXCEPTION", exception_type + ": "
-                    + (message ?? detail.message ?? detail.Message ?? "Bedrock stream failed"), detail;
-            }
-            if (message_type != "event" || !event_type.val()) {
-                throw "BEDROCK-STREAM-FORMAT-ERROR", "missing or invalid Bedrock event type";
-            }
-            auto payload;
-            try {
-                payload = frame.payload.size() ? parse_json(frame.payload.toString("UTF-8")) : {};
-            } catch (hash<ExceptionInfo> ex) {
-                throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload is not valid JSON", ex;
-            }
-            if (payload.typeCode() != NT_HASH) {
-                throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload must be a JSON object";
-            }
-            if (event_type == "chunk") {
-                if (payload.bytes.typeCode() != NT_STRING) {
-                    throw "BEDROCK-STREAM-FORMAT-ERROR", "chunk.bytes must be a base64 string";
-                }
-                payload.bytes = parse_base64_string(payload.bytes);
-            }
-            return {event_type: payload};
+            return BedrockEventStream::decodeFrame(frame);
         } catch (hash<ExceptionInfo> ex) {
             stream.close();
             rethrow;
         }
+    }
+
+    #! Returns the native Bedrock event of a frame of a Bedrock event stream
+    /** The event of @ref readEvent() for a frame: \c {event_type: payload}, with the JSON payload parsed (and the
+        base64 \c bytes of a \c chunk event decoded)
+
+        @param frame a decoded frame: a hash with the keys of @ref AwsEventStream::AwsEventStreamFrame
+        "AwsEventStreamFrame", as @ref AwsRestClient::AwsSignedEventStream::readFrame() "readFrame()" returns it
+        or as @ref AwsRestClient::AwsRestClientIo::observeEncodedEventStreamTarget()
+        "AwsRestClientIo::observeEncodedEventStreamTarget()" delivers it
+
+        @return the event hash
+
+        @throw BEDROCK-STREAM-EXCEPTION the frame is an exception or error event of the service
+        @throw BEDROCK-STREAM-FORMAT-ERROR malformed event metadata or JSON
+
+        @since BedrockRestClient 1.2
+    */
+    static hash<auto> decodeFrame(hash<auto> frame) {
+        string message_type = frame.headers.":message-type" ?? "";
+        string event_type = frame.headers.":event-type" ?? "";
+        if (message_type == "exception" || message_type == "error") {
+            string exception_type = frame.headers.":exception-type" ?? frame.headers.":error-code" ?? "Unknown";
+            *string message = frame.headers.":error-message";
+            hash<auto> detail = {};
+            if (frame.payload.size()) {
+                try { detail = parse_json(frame.payload.toString("UTF-8")); } catch () {}
+            }
+            throw "BEDROCK-STREAM-EXCEPTION", exception_type + ": "
+                + (message ?? detail.message ?? detail.Message ?? "Bedrock stream failed"), detail;
+        }
+        if (message_type != "event" || !event_type.val()) {
+            throw "BEDROCK-STREAM-FORMAT-ERROR", "missing or invalid Bedrock event type";
+        }
+        auto payload;
+        try {
+            payload = frame.payload.size() ? parse_json(frame.payload.toString("UTF-8")) : {};
+        } catch (hash<ExceptionInfo> ex) {
+            throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload is not valid JSON", ex;
+        }
+        if (payload.typeCode() != NT_HASH) {
+            throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload must be a JSON object";
+        }
+        if (event_type == "chunk") {
+            if (payload.bytes.typeCode() != NT_STRING) {
+                throw "BEDROCK-STREAM-FORMAT-ERROR", "chunk.bytes must be a base64 string";
+            }
+            payload.bytes = parse_base64_string(payload.bytes);
+        }
+        return {event_type: payload};
     }
 
     #! Sends a model-native input payload on a bidirectional session
@@ -361,6 +454,19 @@ public class BedrockEventStream {
     /** @return HTTP status and response headers available so far */
     hash<auto> getResponseInfo() {
         return stream.getResponseInfo();
+    }
+
+    #! Waits until the response has started the event stream, without reading an event
+    /** @param timeout_ms idle timeout; omitted to use the HTTP client timeout
+        @return the HTTP response metadata
+        @throw AWS-EVENT-STREAM-HTTP-ERROR unsuccessful HTTP status (with the response as the argument) or wrong
+        response media type
+        @throw AWS-EVENT-STREAM-TIMEOUT no response arrived before the timeout
+        @see @ref AwsRestClient::AwsSignedEventStream::waitForResponse() "AwsSignedEventStream::waitForResponse()"
+        @since BedrockRestClient 1.2
+    */
+    hash<auto> waitForResponse(*timeout timeout_ms) {
+        return stream.waitForResponse(timeout_ms);
     }
 
     #! Cancels the session, including a blocked read; safe to call repeatedly
@@ -609,6 +715,69 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
     }
 }
 
+#! The state of an asynchronous ConverseStream (BedrockLlmProvider::startChatStreamAsync())
+class BedrockAsyncStreamState {
+    public {
+        #! The \c x-amzn-requestid header of the response, set when the stream has started
+        *string request_id;
+        #! @ref True once the \c messageStop has been delivered
+        bool stopped = False;
+        #! The state of the structured-output tool route (see BedrockLlmProvider::streamStructuredOutput())
+        hash<auto> structured_state = {};
+    }
+}
+
+#! Passes the events of the observable of an asynchronous ConverseStream to its request
+/** The frames of the stream are given to the request as they arrive; an error of the stream's decoder or transport
+    is reported as BedrockLlmProvider::chatStream() reports it (\c LLM-ERROR "Bedrock ConverseStream failed: ...")
+*/
+class BedrockAsyncStreamObserver inherits DataProvider::Observer {
+    private {
+        #! The request of the stream
+        QoreLlmUtils::LlmAsyncSseRequest req;
+        #! The attempt that opened the stream
+        int attempt;
+        #! The state of the stream
+        BedrockAsyncStreamState state;
+    }
+
+    constructor(QoreLlmUtils::LlmAsyncSseRequest req, int attempt, BedrockAsyncStreamState state) {
+        self.req = req;
+        self.attempt = attempt;
+        self.state = state;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        switch (event_id) {
+            case HttpClientStreamingIo::EVENT_SSE_CONNECTED:
+                # set before the request is told, which then reads it in the tasks of its events
+                state.request_id = data_.headers."x-amzn-requestid";
+                req.sseConnected(attempt);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_DATA:
+                req.sseEvent(attempt, data_);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_CLOSED: {
+                *hash<ExceptionInfo> ex;
+                if (data_.reason == "stream-error" && data_.error.typeCode() == NT_HASH) {
+                    # an error of the decoder (a CRC or format error) or of the transport, as readFrame() raises it
+                    ex = QoreLlmUtils::AbstractLlmProvider::makeException("LLM-ERROR",
+                        "Bedrock ConverseStream failed: " + (data_.error.desc ?? "HTTP stream failed"),
+                        data_.error);
+                } else {
+                    ex = QoreLlmUtils::LlmAsyncSseRequest::getCloseError(data_);
+                }
+                req.sseClosed(attempt, data_.reason == "idle-timeout"
+                    ? QoreLlmUtils::LlmAsyncSseRequest::ClosedIdleTimeout
+                    : (exists data_.reason
+                        ? QoreLlmUtils::LlmAsyncSseRequest::ClosedError
+                        : QoreLlmUtils::LlmAsyncSseRequest::ClosedEnd), ex);
+                break;
+            }
+        }
+    }
+}
+
 #! Bedrock LLM provider — speaks the unified Converse API
 /** Implements @ref QoreLlmUtils::AbstractLlmProvider for any model
     available via Bedrock's Converse endpoint.  A streamed request is
@@ -655,6 +824,14 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
 */
 public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     public {
+        #! The description of the error of a stream that no data arrives on within the request timeout
+        /** As @ref AwsRestClient::AwsSignedEventStream::readFrame() "AwsSignedEventStream::readFrame()" gives it
+            (\c AWS-EVENT-STREAM-TIMEOUT)
+
+            @since BedrockRestClient 1.2
+        */
+        const StreamTimeoutDesc = "timed out waiting for AWS event-stream data";
+
         const DefaultModel = "amazon.nova-lite-v1:0";
     }
 
@@ -706,7 +883,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     #! Streams text, tool-call fragments, stop reason, and usage from ConverseStream
     /** Each native event is delivered immediately. Exactly one final <tt>done</tt> event follows clean EOF,
         after the message stop and usage metadata; errors or callback failures cancel the stream without
-        retrying a partially delivered generation.
+        retrying a partially delivered generation.  The start of the stream, until its response has started the
+        event stream, is retried as @ref chat() retries its request: on HTTP 429 and 5xx responses, with the retry
+        policy of @ref QoreLlmUtils::AbstractLlmProvider::withRetry() "withRetry()".
 
         @param messages conversation history
         @param callback receives each incremental event
@@ -729,9 +908,28 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         *BedrockEventStream stream;
         bool stopped = False;
         checkRequestCancelled(opts);
+        # the start of the stream (until its response has started the event stream, before any event is delivered)
+        # is retried as chat() retries its request (qore#7661)
         try {
-            stream = rest_client.openConverseStream(getBedrockModelId(opts), body);
+            stream = withRetry(BedrockEventStream sub () {
+                # a deadline that has passed fails the attempt before its request is sent
+                int timeout_ms = getRequestTimeoutMs(opts);
+                BedrockEventStream s = rest_client.openConverseStream(getBedrockModelId(opts), body);
+                # a cancellation closes the connection of the request at once, also while its response is awaited
+                int start_cancel_id = addRequestCancelHandler(opts, sub () { s.close(); });
+                on_exit removeRequestCancelHandler(opts, start_cancel_id);
+                try {
+                    s.waitForResponse(timeout_ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    s.close();
+                    rethrow;
+                }
+                return s;
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc + getErrorMessageSuffix(ex), ex;
         }
         on_exit stream.close();
@@ -753,32 +951,209 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (!raw) {
                 break;
             }
-            string event_name = (keys raw)[0];
-            raw = raw + {"requestId": stream.getResponseInfo().headers."x-amzn-requestid"};
-            if (exists raw.messageStop) {
+            if (handleConverseStreamEvent(raw, stream.getResponseInfo().headers."x-amzn-requestid", callback, opts,
+                    structured_tool, \structured_state)) {
                 stopped = True;
             }
-            hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
-                "event": event_name,
-                "raw": raw,
-            };
-            if (exists raw.contentBlockDelta.delta.text) {
-                event.delta = raw.contentBlockDelta.delta.text;
-            }
-            if (structured_tool) {
-                foreach hash<QoreLlmUtils::ChatStreamEvent> e in (BedrockLlmProvider::streamStructuredOutput(
-                        structured_tool, \structured_state, event)) {
-                    deliverStreamEvent(callback, e, opts);
-                }
-                continue;
-            }
-            deliverStreamEvent(callback, event, opts);
         }
         if (!stopped) {
             throw "LLM-ERROR", "Bedrock ConverseStream ended without messageStop";
         }
         stream.close();
         deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
+    }
+
+    #! Returns @ref True: the asynchronous chat calls hold no thread while they wait for Bedrock
+    /** @ref startChatAsync() sends the Converse request of @ref chat(), and @ref startChatStreamAsync() opens the
+        ConverseStream of @ref chatStream(), through the async I/O controller.
+
+        @since BedrockRestClient 1.2
+    */
+    bool supportsAsyncChat() {
+        return True;
+    }
+
+    #! Starts the request of @ref chat() as a step of an asynchronous operation, without holding a thread
+    /** The request, its retries and its errors are those of @ref chat(); the response is awaited by the async I/O
+        controller, and a retry waits on a timer.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatAsync() "AbstractLlmProvider::startChatAsync()".
+
+        @since BedrockRestClient 1.2
+    */
+    startChatAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing(hash<QoreLlmUtils::ChatResponse>)> on_response,
+            code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> body;
+        *string structured_tool;
+        string model_id;
+        try {
+            ensureRestClient();
+            body = buildConverseBody(messages, tools, opts);
+            structured_tool = getStructuredOutputTool(opts.output_schema, opts);
+            model_id = getBedrockModelId(opts);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        string path = BedrockRestClientIo::conversePath(model_id);
+        startRequestAsync(op, opts, hash<QoreLlmUtils::LlmAsyncSubmission> sub (EventNotifier notifier) {
+            # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+            return BedrockLlmProvider::submission(rest_client.converseAsyncWithNotifier(model_id, body,
+                getRequestTimeoutMs(opts), notifier));
+        }, sub (auto resp) {
+            hash<QoreLlmUtils::ChatResponse> response;
+            try {
+                response = parseConverseResponse(resp.body, opts, structured_tool);
+            } catch (hash<ExceptionInfo> ex) {
+                error_cb(ex);
+                return;
+            }
+            on_response(response);
+        }, sub (hash<ExceptionInfo> ex) {
+            error_cb(ex.err == "LLM-CANCELLED" ? ex : makeException("LLM-ERROR",
+                sprintf("Bedrock Converse request to %y failed: %s%s", path, ex.desc,
+                    BedrockLlmProvider::getErrorMessageSuffix(ex)), ex));
+        });
+    }
+
+    #! Starts the request of @ref chatStream() as a step of an asynchronous operation, without holding a thread
+    /** The request, its events and its errors are those of @ref chatStream(): the ConverseStream is opened and read
+        by the async I/O controller, its frames are decoded on the I/O thread, and each event is delivered in a task
+        of \a op.  As with @ref chatStream(), the start of the stream is retried, with a wait on a timer.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatStreamAsync() "AbstractLlmProvider::startChatStreamAsync()".
+
+        @since BedrockRestClient 1.2
+    */
+    startChatStreamAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing()> on_end, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> body;
+        *string structured_tool;
+        string model_id;
+        try {
+            ensureRestClient();
+            body = buildConverseBody(messages, tools, opts);
+            structured_tool = getStructuredOutputTool(opts.output_schema, opts);
+            model_id = getBedrockModelId(opts);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        BedrockAsyncStreamState state();
+        # the start of the stream is retried as chatStream() retries it (qore#7661)
+        # the call's deadline (LlmRequestOptions::deadline) ends the stream, as chatStream()'s reads end at it; a
+        # deadline that has passed is reported by the attempt, which sends nothing then
+        *int deadline_ms;
+        if (opts.deadline) {
+            int remaining_ms = (opts.deadline - now_us()).durationMilliseconds();
+            if (remaining_ms > 0) {
+                deadline_ms = remaining_ms;
+            }
+        }
+        QoreLlmUtils::LlmAsyncSseRequest req(self, op, opts,
+            code<nothing()> sub (QoreLlmUtils::LlmAsyncSseRequest r, int attempt) {
+                # each wait, also the wait for the response that starts the stream, is bounded by the request
+                # timeout, as each read of chatStream() is
+                int timeout_ms;
+                try {
+                    timeout_ms = getRequestTimeoutMs(opts);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the deadline has passed: the error of chatStream()'s read
+                    throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
+                }
+                HttpClientStreamingIo::SseObservable obs = rest_client.observeConverseStream(model_id, body,
+                    {"idle_timeout": timeout_ms, "start_timeout": timeout_ms, "emit_heartbeat": False});
+                obs.registerObserver(new BedrockAsyncStreamObserver(r, attempt, state));
+                obs.observersReady();
+                return sub () { obs.stopEvents(); };
+            },
+            bool sub (hash<auto> frame) {
+                hash<auto> raw;
+                try {
+                    raw = BedrockEventStream::decodeFrame(frame);
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
+                }
+                if (handleConverseStreamEvent(raw, state.request_id, callback, opts, structured_tool,
+                        \state.structured_state)) {
+                    state.stopped = True;
+                }
+                # the usage metadata follows the messageStop: the stream is read to its end
+                return False;
+            },
+            sub () {
+                if (!state.stopped) {
+                    throw "LLM-ERROR", "Bedrock ConverseStream ended without messageStop";
+                }
+                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
+            },
+            hash<ExceptionInfo> sub () {
+                # the error of chatStream() for a stream that no data arrives on
+                return makeException("LLM-ERROR", "Bedrock ConverseStream failed: "
+                    + BedrockLlmProvider::StreamTimeoutDesc, NOTHING);
+            },
+            hash<ExceptionInfo> sub (hash<ExceptionInfo> ex) {
+                # an error that is already the call's error
+                if (ex.err == "LLM-ERROR") {
+                    return ex;
+                }
+                # no response started the stream in time: the error of chatStream() for a stream that no data
+                # arrives on
+                if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                    return makeException("LLM-ERROR", "Bedrock ConverseStream failed: "
+                        + BedrockLlmProvider::StreamTimeoutDesc, ex);
+                }
+                return makeException("LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc
+                    + BedrockLlmProvider::getErrorMessageSuffix(ex), ex);
+            },
+            on_end, error_cb, deadline_ms);
+        req.start();
+    }
+
+    #! Delivers the stream events of a native event of a ConverseStream
+    /** Shared by @ref chatStream() and @ref startChatStreamAsync()
+
+        @param raw the native event, as @ref BedrockEventStream::decodeFrame() returns it
+        @param request_id the \c x-amzn-requestid header of the response, added to the event as \c requestId
+        @param callback receives the events
+        @param opts per-call overrides
+        @param structured_tool the name of the structured-output tool on the tool route
+        @param structured_state the state of the structured-output route, kept by the caller between events
+
+        @return @ref True if the event is the \c messageStop
+    */
+    private:internal bool handleConverseStreamEvent(hash<auto> raw, *string request_id,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, *hash<QoreLlmUtils::LlmRequestOptions> opts,
+            *string structured_tool, reference<hash<auto>> structured_state) {
+        string event_name = (keys raw)[0];
+        raw = raw + {"requestId": request_id};
+        hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
+            "event": event_name,
+            "raw": raw,
+        };
+        if (exists raw.contentBlockDelta.delta.text) {
+            event.delta = raw.contentBlockDelta.delta.text;
+        }
+        if (structured_tool) {
+            foreach hash<QoreLlmUtils::ChatStreamEvent> e in (BedrockLlmProvider::streamStructuredOutput(
+                    structured_tool, \structured_state, event)) {
+                deliverStreamEvent(callback, e, opts);
+            }
+        } else {
+            deliverStreamEvent(callback, event, opts);
+        }
+        return exists raw.messageStop;
+    }
+
+    #! Returns the submission of an asynchronous request
+    private static hash<QoreLlmUtils::LlmAsyncSubmission> submission(RestClientIo::RestFuture future) {
+        return <QoreLlmUtils::LlmAsyncSubmission>{
+            "cancel": sub () { future.cancel(); },
+            "is_done": bool sub () { return future.isDone(); },
+            "get": auto sub () { return future.get(); },
+        };
     }
 
     #! Returns the stream events to deliver for a native event on the structured-output tool route
@@ -1347,8 +1722,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private:internal hash<auto> postConverse(hash<auto> body,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
-        string path = sprintf("/model/%s/converse",
-            encode_url(getBedrockModelId(opts), True));
+        string path = BedrockRestClientIo::conversePath(getBedrockModelId(opts));
         try {
             return withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's

@@ -159,7 +159,7 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       <tt><em>driver</em>:****</tt>), or \c "****" if it has no valid driver name
     - the errors of a datasource show its masked description: its driver, host and port, with the user name, the
       password and the database name masked as \c "****"
-      (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>);
+      (ex: <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>);
       @ref Qore::SQL::mask_datasource(string) "mask_datasource()" and
       @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" give this
       description to Qore code
@@ -242,7 +242,7 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
     @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()".  As the result depends on the drivers that
     are loaded, these functions are not evaluated when the code is parsed.
 
-    (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@orders%dbhost:5432{min=2,application-name=****}</tt> if the
+    (ex: <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@orders%dbhost:5432{min=2,application-name=****}</tt> if the
     \c pgsql driver is not loaded)
 */
 ///@{
@@ -452,7 +452,7 @@ string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARG
 
 //! Returns a description of a datasource string for messages, with the user name, password and database name masked
 /** The description has the form
-    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    <tt><em>driver</em>:****</tt><tt>/</tt><tt>****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
     the user name, the password and the database name are always replaced with \c "****", whether they are set or
     not, so that the description shows none of them, and not whether they are set; the host and port are shown if
     set; this is the description that %Qore uses for datasources in its own exception messages
@@ -499,7 +499,7 @@ string mask_datasource(string datasource, *hash<auto> opts) [flags=RET_VALUE_ONL
 
 //! Returns a description of a datasource hash for messages, with the user name, password and database name masked
 /** The description has the form
-    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>,
+    <tt><em>driver</em>:****</tt><tt>/</tt><tt>****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>,
     made from the \c "type", \c "host" and \c "port" keys of the hash: the user name, the password and the database
     name are always replaced with \c "****", whether they are set or not, so that the description shows none of
     them, and not whether they are set; the host and port are shown if set; this is the description that %Qore uses

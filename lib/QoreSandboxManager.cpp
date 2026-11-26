@@ -2304,6 +2304,23 @@ void qore_program_private::getSandboxManagerRefs(QoreSandboxManager*& own, QoreS
     }
 }
 
+void qore_program_private::getCreatorSandboxRefs(QoreSandboxManager*& creator, QoreSandboxManager*& policy) {
+    creator = nullptr;
+    policy = nullptr;
+    if (!hasSandboxManager()) {
+        return;
+    }
+    AutoLocker al(sm_lock);
+    QoreSandboxManager* sm = creator_sandbox_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        creator = sm;
+    }
+    sm = creator_policy_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        policy = sm;
+    }
+}
+
 int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace) {
     QoreSandboxManager* old;
     {
@@ -2922,6 +2939,20 @@ int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
     }
     xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
         "(functional domain TERMINAL_IO, PO_NO_TERMINAL_IO)", what);
+    return -1;
+}
+
+int qore_check_system_object_change(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // fails closed, as qore_check_process_wide_registration(): true if the governing sandbox cannot be resolved; false
+    // under a module initialization barrier for the code that loads library code
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot call %s() "
+        "with a system constant object: the process-wide standard I/O objects are shared by every Program of the "
+        "process", what);
     return -1;
 }
 
