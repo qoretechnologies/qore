@@ -412,16 +412,26 @@ public class AbstractDataField inherits Qore::Serializable {
     freeze() {
         # a field that is a shared object was frozen when it was marked
         if (SandboxManager::isSharedObject(self)) {
+            # the process-wide type cache gets the field's type: what it holds must be shared objects (qore#7740)
+            if (Priv::_freeze_requires_marking) {
+                getType().freeze();
+            }
             return;
         }
         shared_object = True;
         # marked before its type, so that a type that holds the field is not frozen again through it; a field frozen
         # where it could not be marked is marked, with its type, when code that may share objects freezes it again
         # (qore#7735)
-        if (SandboxManager::canShareObjects()) {
+        bool can_share = SandboxManager::canShareObjects();
+        if (can_share) {
             SandboxManager::shareObject(self);
         }
-        getType().freeze();
+        AbstractDataProviderType type = getType();
+        type.freeze();
+        # a field that is a shared object has a type that is a shared object (qore#7740)
+        if (can_share && !SandboxManager::isSharedObject(type)) {
+            Priv::refuse_unmarked_member("data type", type.getName());
+        }
     }
 
     #! Makes a copy of the field that belongs to the code that makes it

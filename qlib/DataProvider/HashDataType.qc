@@ -123,12 +123,13 @@ public class HashDataType inherits QoreDataType {
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         checkChange("fields");
+        # a type that a frozen type holds is shared as well (qore#7728); one that cannot be is refused before it is
+        # set (qore#7740)
+        if (default_other_field_type && frozen) {
+            freezeHeld(default_other_field_type);
+        }
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
-            # a type that a frozen type holds is shared as well (qore#7728)
-            if (frozen) {
-                default_other_field_type.freeze();
-            }
             has_default_other_field_type = default_other_field_type.hasType();
             if (default_other_field_type.getTags().dynamic) {
                 setDynamicTag();
@@ -466,6 +467,15 @@ auto v = t.getDefaultValue();
         return self;
     }
 
+    #! Returns the fields of the type and the default type of its undeclared fields; see AbstractDataProviderType::getHeld()
+    private *list<object> getHeld() {
+        list<object> rv = fields ? (map $1, fields.iterator()) : ();
+        if (default_other_field_type) {
+            push rv, default_other_field_type;
+        }
+        return rv;
+    }
+
     #! Marks the fields of the type and their types as shared; see AbstractDataProviderType::freeze()
     private freezeImpl() {
         map $1.freeze(), fields.iterator();
@@ -520,7 +530,7 @@ node.setFields(fields);
         checkChange("fields");
         # the fields of a frozen type are shared as well (qore#7728)
         if (frozen) {
-            map $1.freeze(), fields.iterator();
+            map freezeHeld($1), fields.iterator();
         }
         self.fields = fields;
         if (type == AutoHashType) {
@@ -770,7 +780,7 @@ response.setFieldList((id_field, name_field));
     private addFieldIntern(AbstractDataField field) {
         # a field added to a frozen type is shared as well (qore#7728)
         if (frozen) {
-            field.freeze();
+            freezeHeld(field);
         }
         postProcessAddedField(fields{field.getName()} = field);
     }

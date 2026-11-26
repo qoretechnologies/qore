@@ -32072,6 +32072,20 @@ static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, 
         b->size());
 }
 
+//! returns the hash given as the first argument of the debug functions of hash key maps, or raises an exception
+/** the parameter takes any value, so that a hash of another type (ex: <tt>hash<auto></tt>) is not converted for the
+    call: the conversion copies the hash, and the copy hashes its keys again
+*/
+static const QoreHashNode* dbg_hash_param(const QoreListNode* params, ExceptionSink* xsink) {
+    QoreValue hv = get_param_value(params, 0);
+    if (hv.getType() != NT_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first argument must be a hash; got type '%s'",
+            hv.getTypeName());
+        return nullptr;
+    }
+    return hv.get<const QoreHashNode>();
+}
+
 //! Debug-only: looks up a key of a hash with the hash value of another key, as a collision would (qore#7194)
 /** @param h the hash
     @param key the key to look up
@@ -32081,7 +32095,10 @@ static QoreValue f_dbg_key_equal(const QoreListNode* params, RuntimeConfig& rc, 
 */
 static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreHashNode* h = get_param_value(params, 0).get<const QoreHashNode>();
+    const QoreHashNode* h = dbg_hash_param(params, xsink);
+    if (!h) {
+        return QoreValue();
+    }
     DbgStringNodeHelper key_param(get_param_value(params, 1));
     DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
     const QoreStringNode* key = *key_param;
@@ -32098,6 +32115,127 @@ static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, Runt
     rv->setKeyValue("exists", exists, xsink);
     rv->setKeyValue("value", value.release(), xsink);
     return rv.release();
+}
+
+//! Debug-only: inserts a key into a hash with the hash value of another key, as keys that share their hash would be
+//! inserted (qore#7557)
+/** The member keeps the hash value of \c hash_key in a key map that is not hardened, so a normal search of it does not
+    find it until the map is hardened (dbg_hash_lookup_with_hash_of() does); a hardened map hashes the key itself.
+    The hash is changed in place, without the copy that a change of a shared hash makes: pass a hash made at run time
+    that no other code shares.  Do not copy the hash before it is hardened: a copy keeps the hashes of the members, which debug
+    builds assert to be the hashes of their keys.
+
+    @param h the hash
+    @param key the key to insert, which the hash must not have
+    @param hash_key the key whose hash value the member gets
+    @param value the value of the new member
+*/
+//! true while this thread's dbg_hash_insert_with_hash_of() inserts its member
+static thread_local bool dbg_hash_foreign_member_hash = false;
+
+bool qore_dbg_hash_foreign_member_hash() {
+    return dbg_hash_foreign_member_hash;
+}
+
+//! sets dbg_hash_foreign_member_hash for its scope, also when an exception leaves it
+class DbgForeignMemberHashHelper {
+public:
+    DLLLOCAL DbgForeignMemberHashHelper() {
+        assert(!dbg_hash_foreign_member_hash);
+        dbg_hash_foreign_member_hash = true;
+    }
+
+    DLLLOCAL ~DbgForeignMemberHashHelper() {
+        dbg_hash_foreign_member_hash = false;
+    }
+
+    DbgForeignMemberHashHelper(const DbgForeignMemberHashHelper&) = delete;
+    DbgForeignMemberHashHelper& operator=(const DbgForeignMemberHashHelper&) = delete;
+};
+
+static QoreValue f_dbg_hash_insert_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHashNode* h = const_cast<QoreHashNode*>(dbg_hash_param(params, xsink));
+    if (!h) {
+        return QoreValue();
+    }
+    DbgStringNodeHelper key_param(get_param_value(params, 1));
+    DbgStringNodeHelper hash_key_param(get_param_value(params, 2));
+    const QoreStringNode* key = *key_param;
+    const QoreStringNode* hash_key = *hash_key_param;
+    if (strlen(key->c_str()) != key->size()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the key has a NUL character");
+        return QoreValue();
+    }
+    qore_hash_private* hp = qore_hash_private::get(*h);
+    size_t hash = qore_hash_lookup_key::hashBytes(hash_key->c_str(), hash_key->size());
+    // the members of the hash may have been inserted with the hashes of other keys, so that a search by a hash
+    // could miss one; the keys are compared one by one
+    for (const HashMember* om : hp->member_list) {
+        if (om->key.size() == key->size() && !memcmp(om->key.data(), key->c_str(), key->size())) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the hash already has key '%s'", key->c_str());
+            return QoreValue();
+        }
+    }
+    HashMember* m;
+    {
+        // the member is inserted with the hash of another key, which addMemberKnownAbsent() asserts otherwise
+        DbgForeignMemberHashHelper foreign_hash;
+        m = hp->addMemberKnownAbsent(new HashMember(std::string(key->c_str(), key->size()), hash));
+    }
+    hp->setNewMemberValue(m, get_param_value(params, 3).refSelf());
+    return QoreValue();
+}
+
+//! Debug-only: describes the key map of a hash (qore#7557)
+/** @return a hash with \c hardened (True if the map hashes its keys with the keyed hash), \c buckets (the number of
+    buckets), \c max_chain (the length of the longest chain of a bucket) and \c member_buckets (the bucket of each
+    member, in the order of the hash)
+*/
+static QoreValue f_dbg_hash_key_map_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreHashNode* h = dbg_hash_param(params, xsink);
+    if (!h) {
+        return QoreValue();
+    }
+    const qore_hash_private* hp = qore_hash_private::get(*h);
+    ReferenceHolder<QoreListNode> member_buckets(new QoreListNode(bigIntTypeInfo), xsink);
+    for (const HashMember* m : hp->member_list) {
+        member_buckets->push(static_cast<int64>(hp->hm.bucketIndex(m)), xsink);
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("hardened", hp->hm.isHardened(), xsink);
+    rv->setKeyValue("buckets", static_cast<int64>(hp->hm.bucket_count()), xsink);
+    rv->setKeyValue("max_chain", static_cast<int64>(hp->hm.maxChain()), xsink);
+    rv->setKeyValue("member_buckets", member_buckets.release(), xsink);
+    return rv.release();
+}
+
+//! true while dbg_fail_hash_harden_alloc() has armed the failure of the next hardening of a key map
+static std::atomic<bool> dbg_hash_harden_alloc_fail{false};
+//! true once the armed failure happened
+static std::atomic<bool> dbg_hash_harden_alloc_failed{false};
+
+bool qore_dbg_hash_harden_alloc_must_fail() {
+    if (!dbg_hash_harden_alloc_fail.exchange(false)) {
+        return false;
+    }
+    dbg_hash_harden_alloc_failed.store(true);
+    return true;
+}
+
+//! Debug-only: the allocation of the bucket array of the next hardening of the key map of a hash fails (one-shot,
+//! qore#7557)
+static QoreValue f_dbg_fail_hash_harden_alloc(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_hash_harden_alloc_failed.store(false);
+    dbg_hash_harden_alloc_fail.store(true);
+    return QoreValue();
+}
+
+//! Debug-only: returns True if the failure armed by dbg_fail_hash_harden_alloc() happened, and disarms it
+static QoreValue f_dbg_hash_harden_alloc_failed(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_hash_harden_alloc_fail.store(false);
+    return dbg_hash_harden_alloc_failed.exchange(false);
 }
 
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -38246,8 +38384,17 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
     qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, hashTypeInfo, 3, hashTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, anyTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
         "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key");
+    qns.addBuiltinVariant("dbg_hash_insert_with_hash_of", f_dbg_hash_insert_with_hash_of, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 4, anyTypeInfo, QORE_PARAM_NO_ARG, "h", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "key", stringTypeInfo, QORE_PARAM_NO_ARG, "hash_key", anyTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_hash_key_map_info", f_dbg_hash_key_map_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
+    qns.addBuiltinVariant("dbg_fail_hash_harden_alloc", f_dbg_fail_hash_harden_alloc, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_hash_harden_alloc_failed", f_dbg_hash_harden_alloc_failed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -1966,6 +1966,26 @@ void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, Exc
     releaseOffIoThread(refs, xsink);
 }
 
+void AsyncIoControllerPriv::releaseOpPollInfo(PollInfo& pinfo, ExceptionSink* xsink) {
+    if (!pinfo.poll_info) {
+        return;
+    }
+    AsyncIoDeferredRelease refs;
+    refs.poll_info = pinfo.poll_info;
+    pinfo.poll_info = nullptr;
+    // with a reference to the operation, whose Program the release runs in
+    if (pinfo.spop_base) {
+        pinfo.spop_base->ref();
+        refs.spop_base = pinfo.spop_base;
+    } else if (pinfo.spop_obj) {
+        pinfo.spop_obj->ref();
+        refs.spop_obj = pinfo.spop_obj;
+    }
+    refs.setModuleCleanup(pinfo.sandbox_ctx);
+    refs.caller_restrictions = async_io_caller_restrictions(pinfo.sandbox_ctx);
+    releaseOffIoThread(refs, xsink, pinfo.sync_release.get());
+}
+
 void AsyncIoControllerPriv::dispatchNativeTask(AsyncIoNativeTask* task) {
     ensureCallDispatcher();
     call_dispatcher.load(std::memory_order_acquire)->dispatchNativeTaskAsync(task);
@@ -9683,9 +9703,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     t.removeUnregisteredOp(result.op_id);
                 } else {
                     // Operation still pending - update poll_info
-                    if (pinfo.poll_info) {
-                        pinfo.poll_info->deref(xsink);
-                    }
+                    releaseOpPollInfo(pinfo, xsink);
                     pinfo.poll_info = result.new_poll_info;
 
                     // Update EventLoop registration and cache sock_hash for O(1) Phase 1 lookup
@@ -10875,6 +10893,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         ASYNC_IO_TRACE("processCommands: drained batch size=%d\n", (int)batch.size());
         for (size_t batch_idx = 0; batch_idx < batch.size(); ++batch_idx) {
             auto& cmd = batch[batch_idx];
+            // one command must not leave an exception pending for the commands processed after it in this batch,
+            // whose handling checks the sink for its own failures (ex: the registration of a step result's poll
+            // info, qore#7713), as for the results of Phase 3
+            logAndClearStrayException("a command", xsink);
             // the operations that a command of the module cleanup cancels are canceled for the cleanup (see
             // doCancelIntern())
             IoCommandModuleCleanupDelegateHelper cmd_delegate(cmd.module_cleanup_delegate);
@@ -11880,9 +11902,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 }
                             }
 
-                            if (pinfo.poll_info) {
-                                pinfo.poll_info->deref(xsink);
-                            }
+                            releaseOpPollInfo(pinfo, xsink);
                             pinfo.poll_info = cmd.continue_poll_result;
 
                             if (!cmd.continue_poll_result) {
