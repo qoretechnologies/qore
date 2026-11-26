@@ -215,6 +215,18 @@ So the drain counts with deterministic objects instead:
   `handleRequestResult()`, and, for a new connection, the registration guards and drain checks in
   `handleAcceptComplete()`; the inline path is short, so the same fixed cost weighs more there. Removing it needs a
   restructured hot path (no per-listener count of the dispatches, or a Counter that costs nothing per request).
+- qore#7509 (B', a request holds its server until its response has been handed to the I/O; HttpServer.qm,
+  HttpServerAsyncIo): callgrind, Release build, instructions per request, (Ir(300) - Ir(100)) / 200 of one process
+  that starts an HttpServer with a plain 200 handler and sends 100 or 300 sequential GET requests over one keep-alive
+  HTTPClient connection; base: HttpServer.qm, HttpServerAsyncIo.qm and HttpAsyncSocketIoController.qc of
+  1ffd8e79fc (before B') in the same build:
+  - server side only (collected in HttpServerNativeAsyncTarget::onHttpRequest() / tryInlineRequest() and
+    HttpAsyncSocketIoController::handleRequestResult(), --toggle-collect): base 4,877,667, head 4,926,247
+    (+48.6K, +1.0%); two head runs differ by 1.5K;
+  - whole process (client included): base 6,891,580 / 6,897,170, head +48.8K (+0.7%);
+  - the controller and the new HttpRequestResultInfo::request_hold field alone cost 1K to 7K; the rest is in the
+    HttpServer.qm request path, spread over many small runtime calls (local variable handling, member lookups by
+    name), not attributed; accepted by David, the per-request cost is followed up in qoretechnologies/qore#7765.
 
 ## Per-listener drain (qore#7692)
 
