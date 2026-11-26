@@ -134,7 +134,9 @@ int sub show(Program p, string state) {
     foreach string fn in ("modern_native_reference", "legacy_native_reference") {
         auto actual = p.callFunction(fn, cb);
         bool native_expected = fn == "modern_native_reference";
-        if (actual !== native_expected) ++failures;
+        if (actual !== native_expected) {
+            ++failures;
+        }
         printf("%s %s expected=%y actual=%y\n", state, fn, native_expected, actual);
     }
     # calls of the module's call reference in this Program: in a try block (which the JIT and AOT code make as an
@@ -147,7 +149,9 @@ int sub show(Program p, string state) {
     }
     printf("%s module reference in a try block: %s expected=True actual=%y\n", state,
         try_result === True ? "PASS" : "FAIL", try_result);
-    if (try_result !== True) ++failures;
+    if (try_result !== True) {
+        ++failures;
+    }
     auto named_result;
     try {
         named_result = cb(a: 1);
@@ -156,7 +160,9 @@ int sub show(Program p, string state) {
     }
     printf("%s module reference named call: %s expected=\"NAMED-CALL-NOT-SUPPORTED\" actual=%y\n", state,
         named_result === "NAMED-CALL-NOT-SUPPORTED" ? "PASS" : "FAIL", named_result);
-    if (named_result !== "NAMED-CALL-NOT-SUPPORTED") ++failures;
+    if (named_result !== "NAMED-CALL-NOT-SUPPORTED") {
+        ++failures;
+    }
     return failures;
 }
 int sub concurrent(Program p, string state) {
