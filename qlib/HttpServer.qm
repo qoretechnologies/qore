@@ -287,6 +287,34 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @ref Qore::Socket::getRemoteCertificate() "getRemoteCertificate()": the request context gives them, in
     \c cx."peer-info" and \c cx."client-cert" (see @ref httpserverutil_request_context).
 
+    @section httpserver_http2_errors HTTP/2 Errors and the End of an HTTP/2 Connection
+
+    The server logs the HTTP/2 error frames of a connection at warning level, with the client's address and port
+    (see <a href="https://github.com/qoretechnologies/qore/issues/7770">issue 7770</a>):
+    - each \c GOAWAY frame with an error code other than \c NO_ERROR that it sends or receives: its error code, the
+      last stream ID and its debug data
+    - each \c RST_STREAM frame with an error code other than \c NO_ERROR and \c CANCEL that it sends or receives: its
+      stream ID and error code
+    - each frame that it receives and that is not valid (the cause of a stream error or of a connection error): its
+      type, stream ID, flags and length, and the error
+
+    At most 16 such messages are logged for a connection, and then one that says that further ones are not logged.
+    The messages go to the logger of the asynchronous I/O (see @ref Qore::set_async_io_logger() "set_async_io_logger()"),
+    or, if it has none, to the logger of the global
+    @ref Qore::AsyncIoController::setLogger() "AsyncIoController", which an HttpServer with a logger sets when it
+    starts.
+
+    After it has sent the \c GOAWAY frame of a connection error, the server closes the connection (RFC 9113 section
+    5.4.1), as it does when a \c GOAWAY frame has been sent or received and no stream of the connection has work left.
+
+    The server ends its half of the stream of an HTTP/2 WebSocket connection (RFC 8441) when the WebSocket connection
+    has closed: after the closing handshake, after the close timeout, or at once after its close frame when the
+    handler has no close timeout.  If the client has not ended its half then, the server resets the stream with
+    <tt>RST_STREAM(NO_ERROR)</tt> (RFC 9113 section 8.1), as it does for a request whose response it sent before the
+    end of the request; without a close timeout, the client's close frame is then not received.  A stream that the
+    client does not end would otherwise stay open for the life of the connection and count against the connection's
+    \c SETTINGS_MAX_CONCURRENT_STREAMS.  Any other \c CONNECT tunnel stays open until each side has ended its half.
+
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
     When a TLS listener is added with \c enable_h3 (or when

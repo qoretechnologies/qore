@@ -80,9 +80,19 @@ enum class Http2StreamType {
     Sse             //!< Server-Sent Events stream
 };
 
+//! The maximum number of HTTP/2 error messages logged for a connection (qore#7770)
+constexpr unsigned QORE_H2_MAX_ERROR_FRAME_LOGS = 16;
+
 //! HTTP/2 stream information
 struct Http2StreamInfo {
     int32_t stream_id = 0;
+    //! true once the dispatch of a server CONNECT stream has returned (cleanupStream()); the tunnel is still served
+    //! while the stream is open, so the stream's data is still received: its record is released once the stream has
+    //! closed and its received data has been taken (qore#7770)
+    bool tunnel_released = false;
+    //! true once the server's poll operation has ended the consumer of a CONNECT tunnel (its Queue or frame state):
+    //! the data received on the tunnel then is discarded, as nothing takes it (qore#7770)
+    bool tunnel_unconsumed = false;
     Http2StreamState state = Http2StreamState::Idle;
     Http2StreamType stream_type = Http2StreamType::Normal;
 
@@ -437,6 +447,18 @@ public:
 
     //! Returns true if a drain was started and the session has no open streams and nothing left to write
     DLLLOCAL bool isDrainComplete() const;
+
+    //! Returns true if the session wants to neither read nor write and has nothing left to send
+    /** nghttp2 wants neither once it has sent the GOAWAY of a connection error (RFC 9113 section 5.4.1), or once a
+        GOAWAY has been sent or received and no stream is active; the connection is closed then
+    */
+    DLLLOCAL bool isSessionDone() const;
+
+    //! Returns the error code of the GOAWAY frame of a connection error that the session sent, or -1 if it sent none
+    DLLLOCAL int64_t getGoawayErrorSent() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return goaway_error_sent;
+    }
 
     //! Returns true if startDrain() was called; lock-free, so that the paths that end a stream pay for the
     //! completion check only while draining
@@ -921,6 +943,12 @@ public:
     */
     DLLLOCAL void releaseStreamBodyConsumer(int32_t stream_id);
 
+    //! Called by the server's poll operation when it has ended the consumer of a CONNECT tunnel (qore#7770)
+    /** The data of the tunnel that no consumer takes is discarded, now and when it arrives later, and the record of
+        the tunnel is removed once its dispatch has returned and it is closed; a no-op for other streams
+    */
+    DLLLOCAL void releaseTunnelConsumer(int32_t stream_id);
+
     //! Marks a stream as streaming for subsequent data delivery
     /** Used by client multiplex to mark a CONNECT stream as streaming after
         the response headers are received, so that subsequent DATA frames are
@@ -1176,6 +1204,20 @@ private:
         size_t length, int flags, void* user_data);
     static int onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
+    //! Logs an HTTP/2 error frame that the session sent or received (RST_STREAM, GOAWAY) at warning level
+    /** Frames with the error codes NO_ERROR and CANCEL are not logged (qore#7770); called with the mutex held
+    */
+    DLLLOCAL void logErrorFrame(const nghttp2_frame* frame, bool sent) const;
+
+    //! Returns true if another HTTP/2 error message may be logged for the connection; called with the mutex held
+    /** At most @ref QORE_H2_MAX_ERROR_FRAME_LOGS messages are logged for a connection; when the limit is reached, a
+        last message says that further ones are not logged
+    */
+    DLLLOCAL bool takeErrorLogSlot() const;
+
+    //! Returns the address and port of the peer, for log messages
+    DLLLOCAL std::string getPeerDesc() const;
+
     static int onFrameSendCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data);
     static int onDataChunkRecvCallback(nghttp2_session* session, uint8_t flags,
@@ -1293,6 +1335,13 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
+    //! the error code of the GOAWAY frame of a connection error that the session sent, or -1 if it sent none
+    int64_t goaway_error_sent = -1;
+    //! the number of HTTP/2 error messages logged for the connection (see takeErrorLogSlot()); changed with m held
+    mutable unsigned error_frames_logged = 0;
+    //! true once a GOAWAY frame was sent or received: before it, nghttp2 always wants to read, so isSessionDone()
+    //! reads only this flag
+    std::atomic<bool> goaway_exchanged{false};
     //! true once startDrain() was called; set under m, read without it by isDraining()
     std::atomic<bool> draining{false};
     int32_t last_stream_id = 0;

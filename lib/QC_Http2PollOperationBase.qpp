@@ -395,6 +395,10 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             setClosed("the connection was drained");
             return nullptr;
         }
+        if (closeIfSessionDone(xsink)) {
+            poll_info->deref(xsink);
+            return nullptr;
+        }
         // Inner op needs more polling
         return poll_info;
     }
@@ -435,6 +439,9 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         if (isDrainComplete()) {
             clearStreamQueues(xsink);
             setClosed("the connection was drained");
+            return nullptr;
+        }
+        if (closeIfSessionDone(xsink)) {
             return nullptr;
         }
         h2_state = H2ServerState::WAIT_READ;
@@ -1022,6 +1029,10 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             // handler is done with it and it is closed
             if (request_body) {
                 qore_socket_object_private(sock).releaseHttp2StreamBodyConsumer(sid);
+            } else {
+                // a tunnel's consumer has been ended (a drain ends a CONNECT tunnel that is still open): the data
+                // that arrives on the tunnel then is discarded, and its record can be removed (qore#7770)
+                qore_socket_object_private(sock).releaseHttp2TunnelConsumer(sid);
             }
         }
     }
