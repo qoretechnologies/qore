@@ -264,6 +264,10 @@ bool QoreSerializationCaller::restricts(const qore_class_private& decl, bool int
     if (unrestricted) {
         return false;
     }
+    if (!class_ctx_known) {
+        class_ctx = qore_serialization_caller_class();
+        class_ctx_known = true;
+    }
     // the code of a class that trusted code declared, for the declarations that it has private access to: all of its
     // own, and the private declarations of its parent and child classes, not those of other classes of an object's
     // hierarchy (such as a sibling base class)

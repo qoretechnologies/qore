@@ -172,12 +172,16 @@ DLLLOCAL bool qore_serialization_calling_code_trusted();
 */
 class QoreSerializationCaller {
 public:
-    //! the calling code (see qore_serialization_caller_class())
-    DLLLOCAL QoreSerializationCaller() : class_ctx(qore_serialization_caller_class()) {
+    //! the calling code (see qore_serialization_caller_class()), which restricts() reads when it is first needed
+    /** restricts() is called by the serialization code of the builtin that serializes, deserializes or formats, in
+        its own frame (the methods that it calls have returned), so the class context that it reads is the one that
+        the builtin was called with; a serialization that meets no class with protected state reads nothing
+    */
+    DLLLOCAL QoreSerializationCaller() {
     }
 
     //! for a trusted API: all state is given
-    DLLLOCAL explicit QoreSerializationCaller(bool unrestricted) : unrestricted(unrestricted) {
+    DLLLOCAL explicit QoreSerializationCaller(bool unrestricted) : class_ctx_known(true), unrestricted(unrestricted) {
     }
 
     //! returns true if the non-public declarations of class \a decl are withheld from the calling code
@@ -203,6 +207,8 @@ public:
 private:
     //! the class context of the calling code, if it is a class that trusted code declared
     const qore_class_private* class_ctx = nullptr;
+    //! true once class_ctx was read (or for a trusted API, which does not use it)
+    bool class_ctx_known = false;
     //! qore_caller_is_sandboxed(), when it is needed: -1 = not known yet
     int8_t chain_sandboxed = -1;
     //! true for a trusted API
