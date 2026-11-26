@@ -593,14 +593,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
     /** A value that a type refuses is reported with \c TYPE-VALUE-ERROR.  A type never refuses a value with one of
         the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack),
-        nor with \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the
-        value no longer exists: they mean that the check itself failed, so they keep their code, to be told apart
-        from a value that was refused.
+        with \c THREAD-CANCELLED (the thread checking the value was cancelled), nor with
+        \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the value no
+        longer exists: they mean that the check itself failed, so they keep their code, to be told apart from a value
+        that was refused.
 
         @param err the code of the error raised when the part of the value was checked
 
-        @return the error code to report: \a err if it is a language error or \c SCHEMA-DOCUMENT-DESTROYED,
-        otherwise \c TYPE-VALUE-ERROR
+        @return the error code to report: \a err if it is a language error, \c THREAD-CANCELLED or
+        \c SCHEMA-DOCUMENT-DESTROYED, otherwise \c TYPE-VALUE-ERROR
 
         @since DataProvider 3.11
     */
@@ -609,6 +610,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             case "RUNTIME-TYPE-ERROR":
             case "RUNTIME-OVERLOAD-ERROR":
             case "STACK-LIMIT-EXCEEDED":
+            # the check was cancelled with its thread; it did not refuse the value (qore#7734)
+            case "THREAD-CANCELLED":
             # a schema whose document has been destroyed cannot check the value (see the OpenApi3 and Swagger
             # modules); this is a condition of the lifetime of the type, not a refused value
             case "SCHEMA-DOCUMENT-DESTROYED":
@@ -640,9 +643,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns True if an error raised when one alternative of a union checked a value means that the check failed
     /** A union tries its alternatives in turn, and an alternative that refuses the value does not match it.  An
-        error that means that the check itself failed (a call that no variant accepts, an exhausted stack or a schema
-        whose document no longer exists) must be raised instead of trying the next alternative.  \c RUNTIME-TYPE-ERROR
-        is not one of them here, as a type from outside this module may still refuse a value with it.
+        error that means that the check itself failed (a call that no variant accepts, an exhausted stack, a cancelled
+        thread or a schema whose document no longer exists) must be raised instead of trying the next alternative.
+        \c RUNTIME-TYPE-ERROR is not one of them here, as a type from outside this module may still refuse a value
+        with it.
 
         @param err the code of the error raised by the alternative
 
@@ -1285,25 +1289,37 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     #! Marks the type, and the types and fields that it holds, as shared by every Program of the process
     /** For a type that a module builds in a call that a sandbox governs and then keeps for every caller, such as in a
         process-wide cache: sandboxed code cannot change it afterwards, as if code that no sandbox governs had created
-        it (qore#6843, qore#6863).  It cannot be undone.
+        it (qore#6843, qore#6863).  It cannot be undone; a field or type that code adds to the type afterwards is
+        frozen as well, with the types that it holds, also a type that sandboxed code created (qore#7728).
 
         Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"),
         such as a shared REST schema that caches the types that it builds, also marks the type as a shared object
         (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), so that sandboxed code cannot
-        change its members in any way, also not with Reflection.
+        change its members in any way, also not with Reflection.  A type that was frozen by code that may not share
+        objects, such as sandboxed code freezing a type of its own, is marked then, with the types and fields that it
+        holds, when code that may share objects freezes it again, as when such code registers it in the process-wide
+        type cache (qore#7735).
 
         @since DataProvider 3.12
     */
     freeze() {
+        bool can_share = SandboxManager::canShareObjects();
         if (frozen) {
-            return;
+            # a type frozen where it could not be marked as a shared object is marked, with the types and fields that
+            # it holds, when code that may share objects freezes it again (qore#7735)
+            if (!can_share || SandboxManager::isSharedObject(self)) {
+                return;
+            }
+        } else {
+            frozen = True;
+            shared_object = True;
         }
-        frozen = True;
-        shared_object = True;
-        freezeImpl();
-        if (SandboxManager::canShareObjects()) {
+        # marked before the types and fields that it holds, so that a type that holds itself, directly or through
+        # them, is not frozen again
+        if (can_share) {
             SandboxManager::shareObject(self);
         }
+        freezeImpl();
     }
 
     #! Makes a copy of the type that belongs to the code that makes it
@@ -1319,7 +1335,9 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     }
 
     #! Marks the types and fields that the type holds as shared; see freeze()
-    /** The base class method does nothing; a type that holds other types or fields overrides it
+    /** The base class method does nothing; a type that holds other types or fields overrides it.  It must only freeze
+        what the type holds and not change the type itself, which is marked as a shared object before it is called
+        (see freeze())
     */
     private freezeImpl() {
     }

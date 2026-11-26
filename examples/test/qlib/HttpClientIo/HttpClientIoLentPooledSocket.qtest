@@ -79,7 +79,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 const BorrowerCode = "%modern
 %requires HttpClientIo
 %requires reflection
-our HttpClientConnection conn;
+our HttpClientConnectionView conn;
+our *HttpClientStreamHandle kept_sh;
 our *Socket sock;
 our *HttpClientStreamHandle upgrade_sh;
 our *hash<auto> upgrade_req;
@@ -88,17 +89,22 @@ int sub request(HttpClientConnectionManager mgr, string url, string path) {
     HttpClientStreamHandle sh = mgr.acquireStream(url);
     hash<auto> r = sh.submitAsync(\"GET\", path);
     int status = r.future.get(20s).status_code;
-    conn = sh.getConnection();
+    kept_sh = sh;
+    conn = sh.getConnectionView();
     return status;
 }
 #! takes the socket of the kept connection, directly or from its poll operation; returns \"taken\" or the error
 string sub take(string how) {
     try {
-        sock = how == \"poll\" ? conn.getPollOperation().getSocket() : conn.getSocket();
+        sock = how == \"poll\" ? conn.getPollSocket() : conn.getSocket();
         return \"taken\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
+}
+#! the real connection of the kept request: refused to restricted code that does not own the manager (qore#7570)
+HttpClientConnection sub realConn() {
+    return kept_sh.getConnection();
 }
 #! writes to the taken socket, which corrupts the next exchange of a request on its connection
 string sub write() {
@@ -108,8 +114,9 @@ string sub write() {
 #! puts the taken connection back into the pool with the connection's public methods
 string sub repool() {
     try {
-        conn.releaseStreamReservation();
-        conn.setLeased(False);
+        HttpClientConnection rc = realConn();
+        rc.releaseStreamReservation();
+        rc.setLeased(False);
         return \"done\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
@@ -118,7 +125,7 @@ string sub repool() {
 #! calls the builtin getSocket() of the poll operation's class through reflection
 string sub reflect(string cls) {
     try {
-        sock = Class::forName(cls).getMethod(\"getSocket\").call(conn.getPollOperation());
+        sock = Class::forName(cls).getMethod(\"getSocket\").call(realConn().getPollOperation());
         return \"taken\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
@@ -127,11 +134,12 @@ string sub reflect(string cls) {
 #! cuts the connection off from its poll operation, or sets another one
 string sub cut(string how) {
     try {
-        HttpClientPollOperation op = conn.getPollOperation();
+        HttpClientConnection rc = realConn();
+        HttpClientPollOperation op = rc.getPollOperation();
         if (how == \"clear\") {
             call_object_method(op, \"clearConnection\");
         } else {
-            call_object_method(op, \"setConnection\", conn);
+            call_object_method(op, \"setConnection\", rc);
         }
         return \"done\";
     } catch (hash<ExceptionInfo> ex) {
@@ -142,7 +150,7 @@ string sub cut(string how) {
 nothing sub upgrade(HttpClientConnectionManager mgr, string url) {
     upgrade_sh = mgr.acquireStream(url);
     upgrade_req = upgrade_sh.submitAsync(\"GET\", \"/hold\", {\"Upgrade\": \"websocket\", \"Connection\": \"Upgrade\"});
-    conn = upgrade_sh.getConnection();
+    conn = upgrade_sh.getConnectionView();
 }
 #! returns the status code of the response of the upgrade request
 int sub upgradeStatus() {
@@ -207,10 +215,10 @@ class CuttingConn inherits HttpClientConnection {
 #! closes a connection of its own class that returns the kept connection's poll operation; returns what the poll
 #! operation's accessor then says
 string sub cutThrough() {
-    CuttingConn cc(conn.getPollOperation());
-    cc.close();
     try {
-        conn.getPollOperation().getSocket();
+        CuttingConn cc(realConn().getPollOperation());
+        cc.close();
+        realConn().getPollOperation().getSocket();
         return \"taken\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.desc;
@@ -225,15 +233,15 @@ string sub pin(HttpClientConnectionManager lent, string url) {
     on_exit own_mgr.closeAll();
     try {
         request(own_mgr, url, \"/ok\");
-        lent.pinConnection(conn);
+        lent.pinConnection(kept_sh.getConnection());
         return \"pinned\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
 }
-#! returns the kept connection
-HttpClientConnection sub getConn() {
-    return conn;
+#! returns the stream of the kept connection, whose connection the host may take
+HttpClientStreamHandle sub getKeptStream() {
+    return kept_sh;
 }
 #! returns the ID of the kept connection
 int sub connId() {
@@ -432,7 +440,8 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
         int borrowed = p.callFunction("connId");
         assertEq("taken", p.callFunction("take", "conn"), "the socket of an idle connection");
-        assertEq("done", p.callFunction("repool"), "the public methods of the connection can be called");
+        # the borrower cannot get the connection to call its public methods (qore#7570)
+        assertEq("PERMISSION-DENIED", p.callFunction("repool"), "the connection is refused to the borrower");
         list<auto> r = hostRequest(mgr, srv.url, "/after");
         assertEq(200, r[0], "the host's request");
         assertNeq(borrowed, r[1], "the taken connection is not given to the host's request");
@@ -463,8 +472,9 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         on_exit mgr.closeAll();
         Program p = getBorrower(srv.port);
         assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
-        assertEq("REFLECTION-ACCESS-ERROR", p.callFunction("reflect", "Http1ClientPollOperationBase"),
-            "the builtin accessor of the poll operation's base class");
+        # the borrower cannot get the connection, so it has no poll operation to call the accessor on (qore#7570)
+        assertEq("PERMISSION-DENIED", p.callFunction("reflect", "Http1ClientPollOperationBase"),
+            "the connection is refused to the borrower");
     }
 
     cutTest() {
@@ -509,7 +519,7 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         Program p = getBorrower(srv.port);
         assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
         # the host leases the idle connection for a session of its own
-        HttpClientConnection c = p.callFunction("getConn");
+        HttpClientConnection c = p.callFunction("getKeptStream").getConnection();
         c.setLeased(True);
         on_exit c.setLeased(False);
         assertEq("PERMISSION-DENIED", p.callFunction("take", "conn"), "a leased connection is not taken");
@@ -535,6 +545,6 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         string desc = p.callFunction("cutThrough");
         srv.handler.release.push(True);
         assertEq(200, done.get(HangGuard), "the host's request");
-        assertRegex("while another request uses it", desc, "the poll operation still has its connection");
+        assertRegex("use getConnectionView", desc, "the connection is refused to the borrower");
     }
 }
