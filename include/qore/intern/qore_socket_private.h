@@ -2709,7 +2709,8 @@ public:
     //! The records of the close frames of the WebSocket streams of the HTTP/2 session that the socket released when
     //! it closed (Http2Session::takeWebSocketCloseRecords(), #6077); a stream context created after the session
     //! ended gets its record from here.  Replaced at the next close, so bounded by the streams of one connection.
-    std::unordered_map<int32_t, WebSocketCloseRecordRef> h2_ws_close_records;
+    // an ordered map: it keeps a record of each WebSocket stream of the session (qore#7750)
+    std::map<int32_t, WebSocketCloseRecordRef> h2_ws_close_records;
     //! protects h2_ws_close_records
     mutable std::mutex h2_ws_close_records_lock;
 
@@ -2810,6 +2811,7 @@ public:
         Used by Http2ClientMultiplexPollOperation to route completed responses
         to the appropriate handler.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, QoreValue> h2_stream_callbacks;
     mutable QoreThreadLock h2_stream_callbacks_lock;
 
@@ -2831,16 +2833,28 @@ public:
         Although typically called from the I/O thread (which holds sock->priv->m),
         this lock makes it safe regardless of caller context.
 
-        @note The returned reference remains valid for the lifetime of the socket
+        @note The returned pointer remains valid for the lifetime of the socket
         because quic_dispatcher is only set once (lazy init) and never cleared
         or moved.
+
+        @return the dispatcher, or nullptr if it could not be created (an exception is raised in \a xsink then: no
+        memory, or no secret key for its keyed hash, qore#7750)
     */
-    DLLLOCAL QoreDatagramDispatcher& getQuicDispatcher() {
+    DLLLOCAL QoreDatagramDispatcher* getQuicDispatcher(ExceptionSink* xsink) {
         AutoLocker al(quic_sessions_lock);
         if (!quic_dispatcher) {
-            quic_dispatcher = std::make_unique<QoreDatagramDispatcher>();
+            if (qore_intern_hash_process_key_check(xsink)) {
+                return nullptr;
+            }
+            try {
+                quic_dispatcher = std::make_unique<QoreDatagramDispatcher>();
+            } catch (const std::exception& e) {
+                xsink->raiseException("QUIC-ERROR", "cannot create the datagram dispatcher of a QUIC socket: %s",
+                    e.what());
+                return nullptr;
+            }
         }
-        return *quic_dispatcher;
+        return quic_dispatcher.get();
     }
 
     //! Authoritative map of session_id -> QuicSession for multi-connection support.
@@ -3713,7 +3727,7 @@ public:
 
         if (old_h2_session) {
             // the records of the session's WebSocket streams outlive it (#6077); no socket lock is held here
-            std::unordered_map<int32_t, WebSocketCloseRecordRef> recs = old_h2_session->takeWebSocketCloseRecords();
+            std::map<int32_t, WebSocketCloseRecordRef> recs = old_h2_session->takeWebSocketCloseRecords();
             if (!recs.empty()) {
                 std::lock_guard<std::mutex> lg(h2_ws_close_records_lock);
                 h2_ws_close_records.swap(recs);

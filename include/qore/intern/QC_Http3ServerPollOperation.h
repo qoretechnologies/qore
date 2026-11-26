@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include <atomic>
 #include <chrono>
@@ -509,10 +510,10 @@ private:
         These raw pointers are used for empty() checks on the I/O thread
         without Qore interpreter overhead.
     */
-    std::unordered_map<std::string, Queue*> stream_queues;
+    qore_keyed_string_map<Queue*> stream_queues;
     //! The keys of the stream_queues entries that are CONNECT tunnels (no WebSocket frame state); a draining server
     //! ends them (see checkStreamQueues()), protected by op_lock
-    std::unordered_set<std::string> tunnel_stream_keys;
+    qore_keyed_string_set tunnel_stream_keys;
 
     //! Set under @c op_lock at the start of @ref closeStreamQueues() so any concurrent
     //! @ref registerStreamQueue() call from a handler thread that races shutdown
@@ -521,14 +522,14 @@ private:
     bool stream_queues_closed = false;
 
     //! Stream data notifications that arrived before listener registration
-    std::unordered_set<std::string> pending_stream_data;
+    qore_keyed_string_set pending_stream_data;
 
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;
 
     //! Stream keys whose response transmission result is reported; see addResponseSendWatch().  Protected by
     //! @c op_lock.
-    std::unordered_set<std::string> response_send_watches;
+    qore_keyed_string_set response_send_watches;
 
     //! Transmission results of watched responses awaiting dispatch by the controller.  Protected by @c op_lock.
     std::vector<std::pair<std::string, bool>> response_send_results;
@@ -538,7 +539,7 @@ private:
         @c Http3ServerPollOperation::registerStreamListener() and cleared by
         @ref deregisterStreamCloseNotify().  Protected by @c op_lock.
     */
-    std::unordered_set<std::string> close_notify_streams;
+    qore_keyed_string_set close_notify_streams;
 
     //! Stream keys the peer reset, or whose QUIC session closed
     /** Read by @ref isStreamPeerClosed() from worker threads; written by
@@ -548,7 +549,7 @@ private:
         so the set stays bounded even though the H3 poll operation is
         listener-scoped and long-lived.
     */
-    std::unordered_set<std::string> peer_closed_streams;
+    qore_keyed_string_set peer_closed_streams;
 
     //! Persistent-session close-delivery Queues (session_id -> C++ Queue*)
     /** Bound via registerPersistentSessionQueue(); continuePoll() pushes a

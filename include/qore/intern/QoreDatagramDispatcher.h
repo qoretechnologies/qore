@@ -40,7 +40,8 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <unordered_map>
+
+#include "qore/intern/qore_keyed_hash.h"
 
 class QoreSSLPrivateKey;
 
@@ -56,7 +57,13 @@ class QoreSSLPrivateKey;
 */
 class QoreDatagramDispatcher {
 public:
-    DLLLOCAL QoreDatagramDispatcher() = default;
+    //! creates the dispatcher
+    /** @throw std::runtime_error if the secret key of the keyed hashes cannot be created (call
+        qore_intern_hash_process_key_check() first)
+    */
+    DLLLOCAL QoreDatagramDispatcher() {
+        QORE_KEYED_HASH_SITE("quic-connection-ids", cid_map);
+    }
     DLLLOCAL ~QoreDatagramDispatcher() = default;
 
     //! Register a connection ID with a session
@@ -217,7 +224,8 @@ public:
     }
 
 private:
-    std::unordered_map<std::string, int64_t> cid_map;
+    //! connection ID -> session ID, with the keyed hash of the process (qore#7750)
+    qore_keyed_string_map<int64_t> cid_map;
     mutable QoreThreadLock lock;
 
     //! the static key of the listener's stateless resets; written once, before \c sr_key_set is set

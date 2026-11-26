@@ -663,6 +663,7 @@ private:
     mutable QoreThreadLock stream_queues_lock;
 
     //! Registered stream queues (under stream_queues_lock)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
     //! Set when a stream queue that was full has room again, cleared when the queues are drained (issue #5859)

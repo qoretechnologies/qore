@@ -570,7 +570,7 @@ public:
     DLLLOCAL WebSocketCloseRecordRef getWebSocketCloseRecord(int32_t stream_id, bool create = false);
 
     //! Takes the records of the close frames of the session's WebSocket streams, when the socket releases it
-    DLLLOCAL std::unordered_map<int32_t, WebSocketCloseRecordRef> takeWebSocketCloseRecords();
+    DLLLOCAL std::map<int32_t, WebSocketCloseRecordRef> takeWebSocketCloseRecords();
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -1234,6 +1234,7 @@ private:
     std::string scheme;  //!< "https" for h2, "http" for h2c
 
     // Stream management (unordered_map: O(1) lookup by stream_id, no ordered iteration needed)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
 
@@ -1267,6 +1268,7 @@ private:
     };
 
     //! Watched responses by stream ID; accessed under m
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, ResponseSendWatch> response_send_watches;
 
     //! Watched streams whose END_STREAM frame was serialized in the current sendPendingData() collection pass
@@ -1309,31 +1311,40 @@ private:
                    reinterpret_cast<const uint8_t*>(src) + len),
               end_stream(end_stream) {}
     };
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, BodyData> pending_body_data;
 
     //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> stream_send_limits;
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> stream_refused_len;
     //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
     //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! the bytes that the connection has taken on all its streams, which never decreases (qore#7280)
     uint64_t conn_taken_total = 0;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
     //! The latest pong of a stream whose send buffer was full, buffered when the buffer falls under its limit;
     //! erased with the stream (issue #5900)
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::vector<uint8_t>> pending_pongs;
 
     //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_set<int32_t> close_frame_streams;
 
     //! The records of the close frames of the WebSocket streams (getWebSocketCloseRecord()), kept for the
     //! session's life, as a stream context can be created after its stream ended (#6077)
-    std::unordered_map<int32_t, WebSocketCloseRecordRef> ws_close_records;
+    // an ordered map: it keeps a record of each WebSocket stream of the session, whose stream IDs the peer chooses
+    // (qore#7750)
+    std::map<int32_t, WebSocketCloseRecordRef> ws_close_records;
 
     //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
     /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),
@@ -1353,12 +1364,14 @@ private:
         so a long-lived session does not keep one for every stream the peer
         reset.  Mirrors @ref QuicSession::peer_reset_streams_.
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
 
     //! the streams that the application has reset whose RST_STREAM nghttp2 has not sent yet: stream ID -> error code
     /** Their send state was released by releaseResetStream(); an entry is removed when nghttp2 closes the stream
         (onStreamCloseCallback()) (qore#7532)
     */
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, uint32_t> app_reset_unsent_streams;
 
 #ifdef DEBUG
@@ -1400,6 +1413,7 @@ private:
         //! Error from nghttp2_submit_trailer() failure in data provider callback
         int trailer_submit_error = 0;
     };
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
 
     DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
@@ -1421,6 +1435,7 @@ private:
         uint64_t provided = 0;
     };
     //! The body rules of the streamed responses, by stream; erased when the stream closes
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamedResponseRule> streamed_response_rules;
 
     //! Checks a server response's header block against the body rules; returns -1 with an exception if it is refused
@@ -1504,6 +1519,7 @@ private:
     DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
         ExceptionSink* xsink);
 
+    // keyed by stream ID (std::hash): bounded by the streams that the session may have open (qore#7750)
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! the minimum send rate of the connection's pumped bodies, across its streams (qore#7280)

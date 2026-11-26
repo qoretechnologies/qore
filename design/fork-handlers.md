@@ -83,6 +83,8 @@ cannot deadlock with a thread that keeps to the order.
 | 1040 | the debug registries of the live types and declarations (debug builds only), taken whenever a type or a declaration is created or destroyed | ACQUIRE | — |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
+| 1600 | the creation of the secret key of the keyed hashes (`hash_process_key`, qore#7750): taken when the key is first needed, under any lock above (an insert into a hash can need it); the random bytes are read before it is taken, so its holder only stores the key | ACQUIRE | — |
+| 1610 | the registry of the keyed hash sites of debug builds (`dbg_keyed_hash_sites`, qore#7750): taken when a container with a keyed hash is constructed | ACQUIRE | allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
 

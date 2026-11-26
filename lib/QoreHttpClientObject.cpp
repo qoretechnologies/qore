@@ -1352,7 +1352,8 @@ struct qore_httpclient_priv {
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
     // Thread safety: protected by msock->m (held on all access paths)
-    std::unordered_map<std::string, AltSvcEntry> alt_svc_cache;
+    // (an ordered map: its keys need no hash, qore#7750)
+    std::map<std::string, AltSvcEntry> alt_svc_cache;
 
     // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
     int32_t h2_stream_id = 0;
@@ -3412,7 +3413,7 @@ struct qore_httpclient_priv {
     //! Parsed auth challenge from WWW-Authenticate / Proxy-Authenticate header
     struct AuthChallenge {
         std::string scheme;  //!< "Basic" or "Digest"
-        std::unordered_map<std::string, std::string> params;  //!< realm, nonce, qop, algorithm, etc.
+        std::map<std::string, std::string> params;  //!< realm, nonce, qop, algorithm, etc. (an ordered map, qore#7750)
     };
 
     //! Parse a WWW-Authenticate or Proxy-Authenticate header value
