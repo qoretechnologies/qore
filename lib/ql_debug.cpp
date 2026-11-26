@@ -1829,6 +1829,18 @@ public:
         notifyIntern();
         unlock_signal();
     }
+
+    //! returns the number of threads waiting for the rsection
+    DLLLOCAL int rsectionWaiting() {
+        AutoLocker al(l);
+        return rsection_waiting;
+    }
+
+    //! wakes every thread waiting for the rsection; only to let a failed test end
+    DLLLOCAL void wakeRSectionWaitersForTest() {
+        AutoLocker al(l);
+        rsection_cond.broadcast();
+    }
 };
 
 class TestRSectionLock : public QoreVarRWLock {
@@ -1846,6 +1858,10 @@ public:
 
     DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn) {
         return static_cast<TestRSectionPriv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
+    }
+
+    DLLLOCAL TestRSectionPriv* getPriv() {
+        return static_cast<TestRSectionPriv*>(priv);
     }
 };
 
@@ -2082,6 +2098,223 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+namespace {
+//! State of ut_rsection_waiters_woken_on_release(); protected by sync_lck
+struct RSectionWakeTest {
+    //! the rsection whose waiters the hook holds
+    TestRSectionPriv* rs = nullptr;
+    QoreThreadLock sync_lck;
+    QoreCondition sync_cond;
+    //! the number of waiters that have started to wait for the rsection
+    int waiting = 0;
+    //! the number of waiters that have been woken
+    int woken = 0;
+    //! set once the test holds the write lock; until then, a woken waiter is held before it checks the rsection
+    bool writer_set = false;
+    //! the number of waiters whose acquisition has returned
+    int done = 0;
+};
+
+//! A thread waiting for the rsection in ut_rsection_waiters_woken_on_release()
+struct RSectionWakeWaiter {
+    RSectionWakeTest* t = nullptr;
+    RNotifier rn;
+    //! the result of the acquisition
+    int rc = 0;
+    //! true if the acquisition registered a notification
+    bool notified = false;
+};
+
+std::atomic<RSectionWakeTest*> rsection_wake_test{nullptr};
+
+//! qore_rsection_wait_hook for ut_rsection_waiters_woken_on_release()
+void rsection_wake_hook(qore_rsection_priv* rs, QoreThreadLock& m, bool woken) {
+    RSectionWakeTest* t = rsection_wake_test.load();
+    if (!t || rs != t->rs) {
+        return;
+    }
+    if (!woken) {
+        // the rsection's mutex is released only in the wait, so once the test can take it, the waiter is waiting
+        AutoLocker al(t->sync_lck);
+        ++t->waiting;
+        t->sync_cond.broadcast();
+        return;
+    }
+    // hold the woken waiter, without the rsection's mutex, until the test has taken the write lock
+    m.unlock();
+    {
+        AutoLocker al(t->sync_lck);
+        ++t->woken;
+        t->sync_cond.broadcast();
+        while (!t->writer_set) {
+            t->sync_cond.wait(&t->sync_lck);
+        }
+    }
+    m.lock();
+}
+
+void rsection_wake_waiter(ExceptionSink* xsink, void* arg) {
+    RSectionWakeWaiter* w = static_cast<RSectionWakeWaiter*>(arg);
+    RSectionWakeTest* t = w->t;
+    int rc = t->rs->tryRSectionLockNotifyWaitRead(&w->rn);
+    // the notification is read before the write lock is released, which clears it
+    bool notified;
+    {
+        AutoLocker al(w->rn.m);
+        notified = w->rn.setp;
+    }
+    if (!rc) {
+        // only a waiter that the test wakes to end after a failure gets here: the rsection is free then
+        t->rs->rSectionUnlock();
+    }
+    AutoLocker al(t->sync_lck);
+    w->rc = rc;
+    w->notified = notified;
+    ++t->done;
+    t->sync_cond.broadcast();
+}
+}
+
+//! Every thread waiting for an rsection is woken when it becomes free, even if another thread then takes the lock
+/** A thread taking the rsection exclusively waits while scans hold it in shared mode.  The last scan to leave woke
+    only one waiter; when another thread took the write lock before that waiter checked the rsection again, the
+    waiter registered a notification and returned, and the other waiters slept on although the rsection was free,
+    keeping every scan of the object out as well (qore#7717).  The hook holds the woken waiter between its wakeup and
+    its check until the write lock is taken; every waiter must then return and register a notification.
+*/
+static void ut_rsection_waiters_woken_on_release(UnitTestCounters& c) {
+    const int num_waiters = 2;
+    TestRSectionLock lock;
+    RSectionWakeTest t;
+    t.rs = lock.getPriv();
+
+    // installs the hook for the lifetime of the test; every waiter has finished when the test returns
+    struct HookHelper {
+        HookHelper(RSectionWakeTest* t) {
+            rsection_wake_test = t;
+            qore_rsection_wait_hook = rsection_wake_hook;
+        }
+        ~HookHelper() {
+            qore_rsection_wait_hook = nullptr;
+            rsection_wake_test = nullptr;
+        }
+    } hook_helper(&t);
+
+    // a scan holds the rsection in shared mode
+    RNotifier shared_rn;
+    bool shared = false;
+    int rc = t.rs->tryRSectionLockSharedNotifyWaitRead(&shared_rn, shared);
+    UT_ASSERT(c, !rc && shared, "a scan takes the free rsection in shared mode");
+    if (rc || !shared) {
+        return;
+    }
+
+    RSectionWakeWaiter waiters[num_waiters];
+    int started = 0;
+    for (RSectionWakeWaiter& w : waiters) {
+        w.t = &t;
+        ExceptionSink xsink;
+        if (q_start_thread(&xsink, rsection_wake_waiter, &w) < 0) {
+            xsink.clear();
+            break;
+        }
+        ++started;
+    }
+    UT_ASSERT_EQ(c, num_waiters, started, "the waiter threads start");
+
+    SafeLocker sl(t.sync_lck);
+    if (started < num_waiters) {
+        // let the waiters that started take the rsection one after the other and end
+        t.writer_set = true;
+        t.sync_cond.broadcast();
+        sl.unlock();
+        t.rs->rSectionUnlockShared();
+        sl.lock();
+        while (t.done < started) {
+            t.sync_cond.wait(&t.sync_lck);
+        }
+        return;
+    }
+
+    // each waiter reports that it waits while it still holds the rsection's mutex, which the release below takes
+    while (t.waiting < num_waiters) {
+        t.sync_cond.wait(&t.sync_lck);
+    }
+    sl.unlock();
+    UT_ASSERT_EQ(c, num_waiters, t.rs->rsectionWaiting(), "the threads wait for the rsection held in shared mode");
+
+    // the last scan leaves: the rsection is free, and a waiter is woken
+    t.rs->rSectionUnlockShared();
+
+    sl.lock();
+    while (!t.woken) {
+        t.sync_cond.wait(&t.sync_lck);
+    }
+    sl.unlock();
+
+    // another thread takes the write lock before the woken waiter checks the rsection
+    lock.setFakeWriter(q_gettid());
+
+    sl.lock();
+    t.writer_set = true;
+    t.sync_cond.broadcast();
+    // every waiter returns at once now, as the write lock is a conflict; a waiter that was not woken never does, so
+    // the wait has a limit only to report the failure
+    int64 deadline_us = q_get_monotonic_us() + 10000000;
+    while (t.done < num_waiters) {
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            break;
+        }
+        t.sync_cond.wait2(&t.sync_lck, (remaining_us + 999) / 1000);
+    }
+    int done = t.done;
+    sl.unlock();
+    UT_ASSERT_EQ(c, num_waiters, done, "every thread waiting for the rsection is woken when it becomes free");
+    if (done == num_waiters) {
+        UT_ASSERT_EQ(c, 0, t.rs->rsectionWaiting(), "no thread waits for the free rsection");
+    }
+    for (RSectionWakeWaiter& w : waiters) {
+        SafeLocker wl(t.sync_lck);
+        // a waiter that has not returned is reported by the check above
+        if (w.rc == 0 && !w.notified) {
+            continue;
+        }
+        int w_rc = w.rc;
+        bool w_notified = w.notified;
+        wl.unlock();
+        UT_ASSERT_EQ(c, -1, w_rc, "a woken waiter that finds the write lock taken reports a conflict");
+        UT_ASSERT(c, w_notified,
+            "a woken waiter that finds the write lock taken registers a notification for its release");
+    }
+
+    // releasing the write lock clears the notifications
+    lock.clearFakeWriterAndNotify();
+
+    if (done < num_waiters) {
+        // wake the waiters left asleep so that the test can end; they take the free rsection and release it
+        t.rs->wakeRSectionWaitersForTest();
+        sl.lock();
+        while (t.done < num_waiters) {
+            t.sync_cond.wait(&t.sync_lck);
+        }
+        sl.unlock();
+    }
+    for (RSectionWakeWaiter& w : waiters) {
+        AutoLocker al(w.rn.m);
+        UT_ASSERT(c, !w.rn.setp, "no notification is left registered");
+    }
+
+    // with no waiter left, a scan can take the rsection again
+    RNotifier probe_rn;
+    shared = false;
+    rc = t.rs->tryRSectionLockSharedNotifyWaitRead(&probe_rn, shared);
+    UT_ASSERT(c, !rc && shared, "a scan takes the rsection in shared mode once no thread waits for it");
+    if (!rc && shared) {
+        t.rs->rSectionUnlockShared();
+    }
+}
+
 namespace {
 //! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
 struct ForkHoldTest {
@@ -28464,6 +28697,13 @@ static QoreValue f_dbg_run_connect_error_tests(const QoreListNode* params, Runti
 #endif
 
 #ifdef DEBUG
+//! Debug-only: runs the unit tests of the waits for an rsection (qore#7717)
+static QoreValue f_dbg_run_rsection_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_rsection_waiters_woken_on_release(c);
+    return make_unit_test_result(c, xsink);
+}
+
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
@@ -37609,6 +37849,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_rsection_tests", f_dbg_run_rsection_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
 #ifndef _Q_WINDOWS
     qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
