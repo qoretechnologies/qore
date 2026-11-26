@@ -1,12 +1,13 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
-%requires Util
+%requires FsUtil
 %requires ../../TestInterpreter.qm
 
 %try-module process
@@ -24,13 +25,13 @@ class KeyedHashSitesTest inherits QUnit::Test {
     public {
         #! the sites of the containers that the child processes construct
         const NetworkSites = (
-            "quic-connection-ids",
-            "http3-server-stream-queues",
-            "http3-server-tunnel-streams",
-            "http3-server-pending-stream-data",
-            "http3-server-response-send-watches",
-            "http3-server-close-notify-streams",
-            "http3-server-peer-closed-streams",
+            "quic-socket",
+            "http3-server-1",
+            "http3-server-2",
+            "http3-server-3",
+            "http3-server-4",
+            "http3-server-5",
+            "http3-server-6",
         );
 
         #! the time limit of a child process
@@ -52,7 +53,7 @@ class KeyedHashSitesTest inherits QUnit::Test {
         if (!Option::HAVE_HTTP3) {
             testSkip("HTTP/3 is not available");
         }
-        # an HTTP/3 server operation on a UDP socket creates the connection ID map of the socket and its stream maps
+        # an HTTP/3 server operation on a UDP socket constructs the keyed containers of the socket and the operation
         string src = "%modern\n"
             "Socket s();\n"
             "s.bindINET(\"127.0.0.1\", 0, False, AF_INET, SOCK_DGRAM);\n"
@@ -94,12 +95,12 @@ class KeyedHashSitesTest inherits QUnit::Test {
         testSkip("the process module is required to run bounded child processes");
         return "";
 %else
-        string file = tmp_location() + DirSep + sprintf("keyed-hash-sites-%d-%d.q", getpid(), ++child_count);
+        TmpDir tmp("qore-keyed-hash-sites-");
+        string file = tmp.path + DirSep + "child.q";
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(src);
         f.close();
-        on_exit unlink(file);
         hash<auto> env = ENV - "QORE_DBG_HASH_KEY";
         env.QORE_DBG_HASH_KEY = key;
         StringOutputStream out_stream();
@@ -122,9 +123,5 @@ class KeyedHashSitesTest inherits QUnit::Test {
         assertEq("", err, "the child process wrote nothing to stderr");
         return out;
 %endif
-    }
-
-    private {
-        int child_count = 0;
     }
 }

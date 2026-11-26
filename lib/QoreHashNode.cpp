@@ -399,7 +399,15 @@ void qore_hash_ensure_process_key() {
         return;
     }
     uint64_t k[2];
-    qore_hash_make_process_key(k);
+    try {
+        qore_hash_make_process_key(k);
+    } catch (...) {
+        // another thread may have stored a key while this one failed to make one
+        if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
+            return;
+        }
+        throw;
+    }
     std::lock_guard<std::mutex> guard(qore_hash_process_key_lock);
     if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
         qore_hash_process_key[0] = k[0];

@@ -8946,6 +8946,8 @@ AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, 
 
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
     @throw SOCKET-NOT-OPEN if the socket is not open
+    @throw HASH-SECRET-KEY-ERROR no random source works to create the secret key of the keyed hashes of the process
+    (see @ref keyed_internal_tables)
 
     @param options optional options hash:
     - \c "headers_only": if @ref True, dispatches requests as soon as headers are received
@@ -9034,6 +9036,9 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
 
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
+
+    The operation fails with a \c HASH-SECRET-KEY-ERROR exception if no random source works to create the secret
+    key of the keyed hashes of the process (see @ref keyed_internal_tables)
 
     @since %Qore 3.0
 */
@@ -9824,6 +9829,9 @@ bool Socket::isQuicGoawayReceived(int session_id) [guard=none; flags=NAMED_ARGS]
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given
     ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
+
+    The operation fails with a \c HASH-SECRET-KEY-ERROR exception if no random source works to create the secret
+    key of the keyed hashes of the process (see @ref keyed_internal_tables)
 
     @since %Qore 3.0
 */

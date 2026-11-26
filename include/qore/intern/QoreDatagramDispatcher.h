@@ -62,7 +62,7 @@ public:
         qore_intern_hash_process_key_check() first)
     */
     DLLLOCAL QoreDatagramDispatcher() {
-        QORE_KEYED_HASH_SITE("quic-connection-ids", cid_map);
+        QORE_KEYED_HASH_SITE("quic-socket", cid_map);
     }
     DLLLOCAL ~QoreDatagramDispatcher() = default;
 

@@ -500,9 +500,8 @@ ColumnarResult again = df.toColumnarResult();
     @ref execution_modes "execution mode".\n\n
 
     @anchor keyed_internal_tables
-    The internal hash tables of %Qore whose keys the data that it processes can choose, with no bound on their number
-    (for example the connection IDs of the QUIC connections of a socket), use the same keyed hash function with the
-    same secret key of the process from the start, or are ordered maps.  If no random source works when the key is
+    The internal hash tables of %Qore whose keys the data that it processes can choose, with no bound on their number,
+    use the same keyed hash function with the same secret key of the process from the start, or are ordered maps.  If no random source works when the key is
     first needed, the operation that needs it raises a \c HASH-SECRET-KEY-ERROR exception.\n\n
 
     @anchor hash_max_size
