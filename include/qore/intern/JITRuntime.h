@@ -605,6 +605,7 @@ uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_weak_source_container(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink);
+uint64_t qore_rt_weak_share_copy_store(uint64_t value, uint64_t held, ExceptionSink* xsink);
 uint64_t qore_rt_take_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b);
 void qore_rt_add_assign_release_operand(uint64_t value, uint64_t* slot);
 uint64_t qore_rt_weak_share_param(uint64_t value);

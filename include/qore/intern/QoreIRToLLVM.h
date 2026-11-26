@@ -2124,9 +2124,11 @@ private:
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
     //! returns \a owned, or a copy of its own if it is a weakly shared list or hash (qore#7342): the tag, the node type
-    //! and the flags of the container are tested inline, and the copy is made out of line
+    //! and the flags of the container are tested inline, and the copy is made out of line; \a current is the storage
+    //! of the local that a store gives \a owned, if any: the container that it holds already gets no new holder (a +=
+    //! changed it in place, qore#7421)
     llvm::Value* emitWeakShareCheck(llvm::Module& module, llvm::Function* func, llvm::Value* owned,
-            llvm::Value* xsink);
+            llvm::Value* xsink, llvm::Value* current = nullptr);
     //! returns an i1 that is true if \a value is a weakly shared list or hash (the test of emitWeakShareCheck(), without
     //! the reference count), which a store may have copied (qore#7342)
     llvm::Value* emitWeakSharedTest(llvm::Module& module, llvm::Function* func, llvm::Value* value);

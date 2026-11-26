@@ -4974,9 +4974,13 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
 
     // a weakly designated container is assigned as a copy of its own (qore#7342): to a local variable while another
     // holder holds it (one that nothing else holds is moved), to any other lvalue always; a weak assignment designates
-    // it, and an opaque one keeps the reference
+    // it, and an opaque one keeps the reference; the container that the local variable holds already, which a +=
+    // changed in place (qore_add_assign_unique_container(), qore#7421), gets no new holder from the assignment, which
+    // replaces the variable's reference
     if constexpr (!WeakOrOpaque) {
-        if ((val && val == local_var_lvalue ? qore_weak_shared_local(n) : qore_weak_shared(n))) [[unlikely]] {
+        if ((val && val == local_var_lvalue
+                ? qore_weak_shared_local(n) && val->getInternalNode() != n.getInternalNode()
+                : qore_weak_shared(n))) [[unlikely]] {
             n = qore_weak_share_copy(n, vl.xsink);
         }
     }

@@ -1861,6 +1861,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_weak_share_copy",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_weak_share_copy_store",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_take_store_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_add_assign_release_operand",
@@ -3035,7 +3037,7 @@ llvm::Value* QoreIRToLLVM::emitWeakSharedTest(llvm::Module& module, llvm::Functi
 }
 
 llvm::Value* QoreIRToLLVM::emitWeakShareCheck(llvm::Module& module, llvm::Function* func, llvm::Value* owned,
-        llvm::Value* xsink) {
+        llvm::Value* xsink, llvm::Value* current) {
     llvm::LLVMContext& ctx = module.getContext();
     llvm::Value* shared = emitWeakSharedTest(module, func, owned);
     llvm::BasicBlock* tested = builder->GetInsertBlock();
@@ -3044,9 +3046,19 @@ llvm::Value* QoreIRToLLVM::emitWeakShareCheck(llvm::Module& module, llvm::Functi
     builder->CreateCondBr(shared, copy_bb, done_bb);
 
     builder->SetInsertPoint(copy_bb);
-    auto copy_fn = module.getOrInsertFunction("qore_rt_weak_share_copy",
-        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-    llvm::Value* copied = builder->CreateCall(copy_fn, {owned, xsink});
+    llvm::Value* copied;
+    if (current) {
+        // the container that the local holds already, which a += changed in place, is stored as it is: the store
+        // replaces the local's reference (qore#7421)
+        auto copy_fn = module.getOrInsertFunction("qore_rt_weak_share_copy_store",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+        // raw local cache: the value that the local holds
+        copied = builder->CreateCall(copy_fn, {owned, builder->CreateLoad(i64_type, current), xsink});
+    } else {
+        auto copy_fn = module.getOrInsertFunction("qore_rt_weak_share_copy",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+        copied = builder->CreateCall(copy_fn, {owned, xsink});
+    }
     builder->CreateBr(done_bb);
 
     builder->SetInsertPoint(done_bb);
@@ -23092,7 +23104,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a weak
                 // or opaque store keeps the container that it designates
                 if (!qore_assignment_mode_converts_value(linst->mode)) {
-                    owned_boxed = emitWeakShareCheck(module, llvm_func, owned_boxed, xsink_arg);
+                    owned_boxed = emitWeakShareCheck(module, llvm_func, owned_boxed, xsink_arg,
+                        it->second.storage());
                 }
                 auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));

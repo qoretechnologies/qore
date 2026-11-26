@@ -681,6 +681,13 @@ static inline qore_type_t qore_ir_value_node_type(const QoreValue& value) {
     return n ? n->getType() : NT_NOTHING;
 }
 
+//! Returns true if the load of an "auto" local paired with a generic += (auto_local_string_append) borrows a value
+//! of the node type \a type: the operation changes a string, a list or a hash that the local holds alone in place
+//! (qore_rt_add_assign_local_any(); qore#6279, qore#7421)
+static inline bool qore_ir_auto_local_add_borrows(qore_type_t type) {
+    return type == NT_STRING || type == NT_LIST || type == NT_HASH;
+}
+
 // The mode in which a store assigns the given value: a store in AssignmentMode::Element (the variable of a foreach
 // loop) assigns a weak reference as it is, as the AST interpreter assigns each element, and any other value as a
 // Normal store does
@@ -15145,11 +15152,12 @@ dbg_dismissed_exit:
                         }
                         if (cache_has_value) {
                             if (!local_inst->auto_ref || local_inst->interpreter_borrow != QoreIRLocalInstruction::Borrow::None
-                                    || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
+                                    || (local_inst->auto_local_string_append
+                                        && qore_ir_auto_local_add_borrows(cached_node_type))) {
                                 // The consumer borrows this local until it mutates the value or the iterator
-                                // takes its own reference (#6638); a load that pairs with a local string append
-                                // and has no other consumers borrows the slot-cache reference so the builder
-                                // node stays unique at the mutation site (#6279; native code borrows via alloca
+                                // takes its own reference (#6638); a load that pairs with a += of a local string, list
+                                // or hash and has no other consumers borrows the slot-cache reference so the node
+                                // stays unique at the mutation site (#6279, #7421; native code borrows via alloca
                                 // loads)
                                 out = cached_val;
                                 if ((local_inst->auto_local_string_append || local_inst->string_append_local_cow
@@ -15243,7 +15251,7 @@ dbg_dismissed_exit:
                         if (((local_inst->borrowed_local_load
                                     && (local_inst->string_append_local_cow || local_inst->list_push_local_cow))
                                 || (local_inst->auto_local_string_append && !reference_value
-                                    && val.getType() == NT_STRING))
+                                    && qore_ir_auto_local_add_borrows(val.getType())))
                                 && !is_ir_only_local && !is_weak_ref_local && !weak_container_local) {
                             // eval() returned a temporary +1 ref while the TLS
                             // local remains the owner. Release that temporary
@@ -17761,9 +17769,14 @@ load_local_done:
                         stored = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
                     }
                     // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a
-                    // weak or opaque store keeps the container that it designates
+                    // weak or opaque store keeps the container that it designates; the container that the local
+                    // holds already, which a += changed in place (qore_add_assign_unique_container(), qore#7421), gets
+                    // no new holder from the store, which replaces the local's reference
                     if (store_mode != AssignmentMode::Weak && store_mode != AssignmentMode::Opaque
-                            && qore_weak_shared_local(stored)) [[unlikely]] {
+                            && qore_weak_shared_local(stored)
+                            // raw slot: the node that the local holds
+                            && locals_slot_cache.storage(local_inst->slot_id).getInternalNode()
+                                != stored.getInternalNode()) [[unlikely]] {
                         stored = qore_weak_share_copy(stored, xsink);
                     }
                     if (xsink && *xsink) {

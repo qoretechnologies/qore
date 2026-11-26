@@ -262,6 +262,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
     { "qore_rt_weak_share_copy", reinterpret_cast<void*>(&qore_rt_weak_share_copy) },
+    { "qore_rt_weak_share_copy_store", reinterpret_cast<void*>(&qore_rt_weak_share_copy_store) },
     { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
     { "qore_rt_add_assign_release_operand", reinterpret_cast<void*>(&qore_rt_add_assign_release_operand) },
     { "qore_rt_weak_share_param", reinterpret_cast<void*>(&qore_rt_weak_share_param) },
@@ -954,16 +955,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t rig
     return qore_rt_result_or_nothing(result, xsink);
 }
 
-// Only the duplicate references to this string can be dropped: the deferred tracker can keep
-// a previous value live for another SSA use, including an object with an observable destructor.
+// Only the duplicate references to this string, list or hash can be dropped: the deferred tracker can keep
+// a previous value live for another SSA use, including an object with an observable destructor.  The local holds a
+// reference of its own, so the node stays alive, and a node that the local then holds alone is changed in place by
+// qore_rt_add_assign_local_any() (qore#6279, qore#7421)
 extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry,
         uint64_t* current, uint64_t* previous) {
     QoreValue value = fromBits(left);
-    if (value.isPlainPointer() && value.getType() == NT_STRING) {
+    qore_type_t type = value.getType();
+    if (value.isPlainPointer() && (type == NT_STRING || type == NT_LIST || type == NT_HASH)) {
         for (uint64_t* slot : {entry, current, previous}) {
             if (slot && *slot == left) {
                 *slot = toBits(QoreValue());
-                value.get<QoreStringNode>()->deref();
+                AbstractQoreNode* node = value.get<AbstractQoreNode>();
+                // never the last reference: the local holds one, so no destructor runs and nothing is raised
+                assert(node->reference_count() > 1);
+                ExceptionSink xsink;
+                node->deref(&xsink);
             }
         }
     }
@@ -982,6 +990,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64
     if (value.isInt() && rhs.isInt()) {
         // Both operands fit in 48 bits. Their sum fits in int64, and QoreValue boxes it if necessary.
         return toBits(QoreValue(value.getInt() + rhs.getInt()));
+    }
+    // a list or a hash that the local holds alone is changed in place, as the AST interpreter changes it: the load
+    // borrows the local's value, and the extra reference of qore_compound_assign_value() would make the operation
+    // change a copy, which a weak reference to the container shows (qore#7421)
+    if (value.isPlainPointer() && (value.getType() == NT_LIST || value.getType() == NT_HASH)
+            && value.get<const AbstractQoreNode>()->is_unique()) {
+        return qore_rt_result_or_nothing(qore_add_assign_unique_container(value, rhs, xsink), xsink);
     }
     return qore_rt_result_or_nothing(qore_compound_assign_value(LVCompoundOp::AddAssign, value, rhs, xsink), xsink);
 }
@@ -3312,6 +3327,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionS
         return value;
     }
     return toBits(qore_weak_share_copy(v, xsink));
+}
+
+//! as qore_rt_weak_share_copy(), for a store to an IR-only local that holds \a held: the container that the local holds
+//! already, which a += changed in place (qore_add_assign_unique_container()), gets no new holder from the store, which
+//! replaces the local's reference, and is stored as it is (qore#7421)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy_store(uint64_t value, uint64_t held, ExceptionSink* xsink) {
+    if (value == held) {
+        return value;
+    }
+    return qore_rt_weak_share_copy(value, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {
@@ -19453,6 +19478,33 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
         return QoreValue();
     }
     return value.release();
+}
+
+// documented in QoreIRInterpreter.h
+QoreValue qore_add_assign_unique_container(QoreValue container, const QoreValue& right, ExceptionSink* xsink) {
+    assert(container.isPlainPointer());
+    assert(container.getType() == NT_LIST || container.getType() == NT_HASH);
+    assert(container.get<const AbstractQoreNode>()->is_unique());
+    // += takes the operand's reference when it stores the value; the holder must be declared before the
+    // LValueHelper (see qore_rt_apply_lvalue_compound())
+    ValueHolder rhs_holder(right.refSelf(), xsink);
+    // the reference of the result, taken before the helper releases the values that the operation replaced, whose
+    // destructors could otherwise release the container through the local
+    QoreValue result;
+    {
+        // the local's own reference: the container stays unique, so that the operation changes it in place
+        QoreValue lvalue = container;
+        LValueHelper lvh(xsink);
+        // as for an "auto" lvalue (see qore_compound_assign_value())
+        lvh.setValue(lvalue, autoTypeInfo);
+        ValueHolder res(qore_rt_apply_lvalue_compound(lvh, LVCompoundOp::AddAssign, rhs_holder, xsink), xsink);
+        // += never replaces a list or a hash (doPlusEqualsOnLValue()), which the local still holds
+        assert(lvalue.getInternalNode() == container.getInternalNode());
+        if (!*xsink) {
+            result = container.refSelf();
+        }
+    }
+    return result;
 }
 
 //! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder
