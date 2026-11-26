@@ -1327,6 +1327,11 @@ struct qore_httpclient_priv {
     // call sendUrl() on one client at once, and read from public isHttp2Active() without locking (qore#7720)
     std::atomic<bool> http2_active{false};
 
+    // The protocol of the response of the last request that selected its own target (sendUrl()), which
+    // getHttpVersion() reports: 0 if the last request was the client's own (the protocol flags then report it), 1 for
+    // HTTP/1.x, 2 for HTTP/2, 3 for HTTP/3; cleared wherever the client's own protocol state is set (qore#7720)
+    std::atomic<int> last_url_protocol{0};
+
     // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED, HTTP2_MODE_H2C_*)
     // Atomic: may be read from send_internal without priv->m while set
     // by setHTTPVersion / setHttp2Mode under priv->m
@@ -1354,8 +1359,10 @@ struct qore_httpclient_priv {
     }
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
-    // Thread safety: protected by msock->m (held on all access paths)
+    // Thread safety: protected by alt_svc_lock, a leaf lock: the requests of the connection manager path read and
+    // update it without msock->m, from all the threads that send requests on the client at once (qore#7720)
     std::unordered_map<std::string, AltSvcEntry> alt_svc_cache;
+    std::mutex alt_svc_lock;
 
     // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
     int32_t h2_stream_id = 0;
@@ -1380,6 +1387,7 @@ struct qore_httpclient_priv {
         }
         h2_stream_id = 0;
         http2_active = false;
+        last_url_protocol = 0;
     }
 
     //! Sets the active HTTP/2 stream ID of the client
@@ -1711,6 +1719,7 @@ struct qore_httpclient_priv {
                 // uses @c opts.protocol — no per-connection variance on a
                 // given HTTPClient instance.
                 http2_active = (opts.protocol == HttpClientProtocol::H2);
+                last_url_protocol = 0;
                 http3_active = (opts.protocol == HttpClientProtocol::H3);
             }
             rv = conn_mgr;
@@ -2097,6 +2106,7 @@ struct qore_httpclient_priv {
         // Clear the protocol-active flags — the next getConnMgr will
         // set them again for the new manager's protocol.
         http2_active = false;
+        last_url_protocol = 0;
         http3_active = false;
         return old_mgr;
     }
@@ -3360,6 +3370,7 @@ struct qore_httpclient_priv {
     //! Remove Alt-Svc entry (used on QUIC disconnect for clean slate)
     DLLLOCAL void removeAltSvc(const char* host, int port) {
         std::string origin = std::string(host) + ":" + std::to_string(port);
+        std::lock_guard<std::mutex> al(alt_svc_lock);
         alt_svc_cache.erase(origin);
     }
 
@@ -3371,6 +3382,7 @@ struct qore_httpclient_priv {
     */
     DLLLOCAL void markAltSvcFailed(const char* host, int port) {
         std::string origin = std::string(host) + ":" + std::to_string(port);
+        std::lock_guard<std::mutex> al(alt_svc_lock);
         auto it = alt_svc_cache.find(origin);
         if (it != alt_svc_cache.end()) {
             // 5-minute backoff before retrying QUIC for this origin
@@ -4607,6 +4619,17 @@ void QoreHttpClientObject::setHttp2StreamPriority(int32_t stream_id, int32_t wei
 }
 
 QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
+    // the protocol of the response of a sendUrl() request that was the last request (qore#7720)
+    switch (http_priv->last_url_protocol.load()) {
+        case 3:
+            return new QoreStringNode("HTTP/3");
+        case 2:
+            return new QoreStringNode("HTTP/2");
+        case 1:
+            return new QoreStringNode(http_priv->http11 ? "HTTP/1.1" : "HTTP/1.0");
+        default:
+            break;
+    }
     if (http_priv->http3_active) {
         return new QoreStringNode("HTTP/3");
     }
@@ -4824,6 +4847,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             http_priv->h2_connect_stream_id = stream_id;
             http_priv->h2_connect_stream_closed = false;
             http_priv->http2_active = true;
+            http_priv->last_url_protocol = 0;
             http_priv->setActiveH2StreamId(stream_id);
         }
         return out.release();
@@ -4874,6 +4898,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         http_priv->dropConnMgr(true);
         http_priv->http3_active = true;
         http_priv->http2_active = false;
+        http_priv->last_url_protocol = 0;
     }
 
     auto restore_forced_h3 = [&]() {
@@ -5055,6 +5080,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             http_priv->h3_connect_stream_closed = false;
             http_priv->http3_active = true;
             http_priv->http2_active = false;
+            http_priv->last_url_protocol = 0;
         }
         return out.release();
     }
@@ -5588,6 +5614,7 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
         if (!strncmp(p, "clear", 5)) {
             // Clear all Alt-Svc entries for this origin
             std::string origin = std::string(host) + ":" + std::to_string(port);
+            std::lock_guard<std::mutex> al(alt_svc_lock);
             alt_svc_cache.erase(origin);
             return;
         }
@@ -5696,6 +5723,7 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
         // Only store h3 (not h3-29 or other draft versions)
         if (proto == "h3" && alt_port > 0) {
             std::string origin = std::string(host) + ":" + std::to_string(port);
+            std::lock_guard<std::mutex> al(alt_svc_lock);
             auto it = alt_svc_cache.find(origin);
             if (it != alt_svc_cache.end()) {
                 // Update port and expiry but preserve retry_after backoff
@@ -5710,6 +5738,7 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
 
 std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAltSvc(const char* host, int port) {
     std::string origin = std::string(host) + ":" + std::to_string(port);
+    std::lock_guard<std::mutex> al(alt_svc_lock);
     auto it = alt_svc_cache.find(origin);
     if (it == alt_svc_cache.end()) {
         return std::nullopt;
@@ -5977,9 +6006,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // QUIC failure the Alt-Svc cache entry is marked with a 5
         // minute backoff in mgr.request's error handling so repeated
         // requests don't keep retrying H3.
+        // a request that selects its own target (sendUrl()) changes nothing on the client: not its connection
+        // manager, nor its protocol state (qore#7720)
         bool attempted_h3_upgrade = false;
-        if (!persistent && !this_connection.is_unix && !http3_active && http3_mode != HTTP3_MODE_DISABLED
-                && this_connection.ssl) {
+        if (!request_target && !persistent && !this_connection.is_unix && !http3_active
+                && http3_mode != HTTP3_MODE_DISABLED && this_connection.ssl) {
             auto alt = lookupAltSvc(this_connection.host.c_str(),
                 this_connection.port);
             if (alt.has_value()) {
@@ -5988,6 +6019,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 dropConnMgr(true);
                 http3_active = true;
                 http2_active = false;
+                last_url_protocol = 0;
                 attempted_h3_upgrade = true;
             }
         }
@@ -7240,7 +7272,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // a new connection (RFC 9110 section 9.2.2): the next pass takes the Alt-Svc upgrade again, and
                 // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
                 // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
-                if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
+                if (!request_target && http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
                         && qore_http_manager_ops::isIdempotentMethod(meth)
                         && !qore_http_manager_ops::isCancelPending()) {
                     QoreStringValueHelper err(xsink->getExceptionErr());
@@ -7477,19 +7509,26 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
+    // the protocol of the response: the client's own state for its own target; a request that selects its own target
+    // (sendUrl()) changes nothing on the client, and its protocol is only reported by getHttpVersion() (qore#7720)
     if (response_protocol->getType() == NT_STRING) {
         // the protocol can be an inline short string, which has no node (issue #7038)
         QoreStringDataHelper protocol_str(*response_protocol);
         const char* protocol = protocol_str.c_str();
-        http2_active = !strcmp(protocol, "h2");
-        http3_active = !strcmp(protocol, "h3");
+        if (!request_target) {
+            http2_active = !strcmp(protocol, "h2");
+            last_url_protocol = 0;
+            http3_active = !strcmp(protocol, "h3");
+        } else {
+            last_url_protocol = !strcmp(protocol, "h3") ? 3 : (!strcmp(protocol, "h2") ? 2 : 1);
+        }
     }
 
     // Parse Alt-Svc for future HTTP/3 upgrades.  Without this, the conn_mgr
     // dispatch path never populates the alt_svc_cache and subsequent requests
     // do not auto-upgrade to HTTP/3, even when the server advertises h3
     // support.
-    if (http3_mode != HTTP3_MODE_DISABLED) {
+    if (!request_target && http3_mode != HTTP3_MODE_DISABLED) {
         QoreValue alt_svc_val = ans->getKeyValue("alt-svc");
         if (alt_svc_val.getType() == NT_STRING) {
             QoreStringValueHelper alt_svc(alt_svc_val);
@@ -8682,6 +8721,7 @@ public:
                         const char* p = proto_str->c_str();
                         if (!strcmp(p, "h2")) {
                             priv_ref->http2_active = true;
+                            priv_ref->last_url_protocol = 0;
                         }
                     }
                 }

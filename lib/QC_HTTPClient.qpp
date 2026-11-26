@@ -219,11 +219,9 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     be read as if the server had sent it.  The same applies to the connections of the
     @ref httpclientiointro "HttpClientIo" module through a proxy, over HTTP/1.1 and HTTP/2.
 
-    Objects of this class are thread-safe and support serializing multiple simultaneous requests from many threads. If
-    a request is in progress and another thread attempts to make a request at the same time, the second thread will
-    block until the first is complete. Therefore the total amount of time a thread could wait for a response in a
-    multi-threaded context could be greater than the timeout value (which applies to the maximum time a single
-    internal send() or recv() action can take).
+    Objects of this class are thread-safe: requests that several threads make on one object at the same time are sent
+    at the same time, each on a connection or stream of the client's connection manager.  The timeout applies to the maximum time that a single internal send
+    or receive action of a request can take.
 
     This class understands and automatically decodes \c "deflate", \c "gzip", and \c "bzip2" content encodings as
     well.
@@ -1390,7 +1388,10 @@ bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) [fl
 }
 
 //! Returns the negotiated HTTP protocol version string
-/** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
+/** The version is that of the response of the last request, also of a request sent with @ref sendUrl(), which
+    otherwise changes nothing on the client (@ref httpclient_request_url)
+
+    @return "HTTP/3" or "HTTP/2" if the last response used HTTP/3 or HTTP/2, otherwise "HTTP/1.1" or "HTTP/1.0"
 
     @par Example:
     @code{.py}
