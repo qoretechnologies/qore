@@ -25211,8 +25211,8 @@ namespace {
 //! Runs another C++ poll operation on the I/O thread and counts its steps
 /** Its steps, results and output are those of the operation that it runs; dbg_counting_poll_operation_steps()
     returns the number of its continuePoll() calls.  It references the private data of the operation that it runs; the
-    caller keeps that operation's object, whose \c sock member the operation's poll info refers to.  Given a Queue,
-    it pushes True to it when a step first returns a wait.
+    caller keeps that operation's object, whose \c sock member the operation's poll info refers to.  Given a Queue
+    without a size limit, it pushes True to it when a step first returns a wait.
 
     Only the step, the goal, the state, the output, the ready events and the dispatch are forwarded: the operation run
     must not change its descriptor (fd generation), renew its timeout, handle its completion, push to queues or wake
@@ -25312,6 +25312,14 @@ static QoreValue f_dbg_counting_poll_operation(const QoreListNode* params, Runti
         waiting = static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink));
         if (!waiting) {
             inner->deref(xsink);
+            return QoreValue();
+        }
+        if (waiting->getMax() != -1) {
+            // the I/O thread cannot wait for room in the queue: pushAndTakeRef() needs a queue without a size limit
+            waiting->deref(xsink);
+            inner->deref(xsink);
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_counting_poll_operation(): the queue must have no size "
+                "limit");
             return QoreValue();
         }
     }

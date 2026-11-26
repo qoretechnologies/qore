@@ -204,6 +204,8 @@ class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
         }
         # the operation that the counting operation runs is kept here (see dbg_counting_poll_operation())
         SocketPollOperation inner = pair.client.startPollSend(binary(strmul("x", DataSize)));
+        # the I/O thread cannot wait for room in a queue with a size limit
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_counting_poll_operation", inner, new Queue(1)));
         Queue waiting();
         SocketPollOperation op = call_function("dbg_counting_poll_operation", inner, waiting);
         Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
