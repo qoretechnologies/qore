@@ -562,9 +562,15 @@ public:
     DLLEXPORT QoreStringNode* getchar(ExceptionSink* xsink);
 
     //! returns the filename of the file being read as a std::string (the string is empty if no file name is set)
+    /** The name is the path of the host, also for a file opened in a Dir object whose path derives from the process's
+        current directory; C++ code that gives it to %Qore code restricted from external information gives that code a
+        path relative to the current directory, as ReadOnlyFile::getFileName() does (qore#7662)
+    */
     DLLEXPORT std::string getFileNameStr() const;
 
     //! returns the filename of the file being read (NULL if no file name is set); caller owns the reference count returned
+    /** @see getFileNameStr() for the form of the name for %Qore code restricted from external information
+    */
     DLLEXPORT QoreStringNode* getFileName() const;
 
 #ifndef _Q_WINDOWS

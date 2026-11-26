@@ -11260,6 +11260,157 @@ bool qore_msg_restricted() {
     return qore_msg_restricted_scope;
 }
 
+// the host directory that paths in messages are given relative to, while a scope of
+// QoreHostDirBaseMessageScopeHelper is active (qore#7662)
+static thread_local const std::string* qore_msg_host_dir_base = nullptr;
+
+// splits an absolute path into its components, with "." and ".." folded; ".." at the root stays at the root
+static void qore_split_abs_path(const char* path, std::vector<std::string>& comps) {
+    const char* p = path;
+    while (*p) {
+#ifdef _Q_WINDOWS
+        while (*p == '/' || *p == '\\') {
+#else
+        while (*p == '/') {
+#endif
+            ++p;
+        }
+        if (!*p) {
+            break;
+        }
+        const char* start = p;
+#ifdef _Q_WINDOWS
+        while (*p && *p != '/' && *p != '\\') {
+#else
+        while (*p && *p != '/') {
+#endif
+            ++p;
+        }
+        std::string comp(start, p - start);
+        if (comp == ".") {
+            continue;
+        }
+        if (comp == "..") {
+            if (!comps.empty()) {
+                comps.pop_back();
+            }
+            continue;
+        }
+        comps.push_back(std::move(comp));
+    }
+}
+
+#ifdef _Q_WINDOWS
+// true if two components of Windows paths are equal: names are compared without regard to case
+static bool qore_path_comp_eq(const std::string& a, const std::string& b) {
+    return a.size() == b.size() && !strncasecmp(a.c_str(), b.c_str(), a.size());
+}
+
+// returns the root of a Windows path: the server and share of a UNC path, the drive, or an empty string
+static std::string qore_path_root(const char* path, const std::vector<std::string>& comps) {
+    bool unc = (path[0] == '/' || path[0] == '\\') && (path[1] == '/' || path[1] == '\\');
+    if (unc) {
+        std::string rv = "//";
+        for (size_t i = 0; i < 2 && i < comps.size(); ++i) {
+            rv += comps[i];
+            rv += '/';
+        }
+        return rv;
+    }
+    if (!comps.empty() && comps[0].size() == 2 && comps[0][1] == ':') {
+        return comps[0];
+    }
+    return std::string();
+}
+#else
+static bool qore_path_comp_eq(const std::string& a, const std::string& b) {
+    return a == b;
+}
+#endif
+
+// returns the number of leading components that two lists of path components have in common
+static size_t qore_path_common_comps(const std::vector<std::string>& a, const std::vector<std::string>& b) {
+    size_t common = 0;
+    while (common < a.size() && common < b.size() && qore_path_comp_eq(a[common], b[common])) {
+        ++common;
+    }
+    return common;
+}
+
+std::string qore_path_relative_to_base(const char* path, const std::string& base) {
+    if (!q_absolute_path(path)) {
+        return std::string(path);
+    }
+    std::vector<std::string> pcomps, bcomps;
+    qore_split_abs_path(path, pcomps);
+    qore_split_abs_path(base.c_str(), bcomps);
+#ifdef _Q_WINDOWS
+    // a path on another drive or share has no path relative to the base; it is given without its directories, never
+    // as an absolute path, which would name the directories of the host (fail closed)
+    if (!qore_path_comp_eq(qore_path_root(path, pcomps), qore_path_root(base.c_str(), bcomps))) {
+        return qore_path_file_name(path);
+    }
+#endif
+    size_t common = qore_path_common_comps(pcomps, bcomps);
+    std::string rv;
+    for (size_t i = common; i < bcomps.size(); ++i) {
+        if (!rv.empty()) {
+            rv += QORE_DIR_SEP;
+        }
+        rv += "..";
+    }
+    if (rv.empty()) {
+        rv = ".";
+    }
+    for (size_t i = common; i < pcomps.size(); ++i) {
+        rv += QORE_DIR_SEP;
+        rv += pcomps[i];
+    }
+    return rv;
+}
+
+bool qore_caller_no_host_dirs() {
+    return qore_msg_restricted_scope || qore_caller_no_external_info();
+}
+
+int qore_canonical_path_for_caller(const char* arg, QoreString& canon, ExceptionSink* xsink) {
+    if (!qore_caller_no_host_dirs()) {
+        return 0;
+    }
+    QoreString cwd;
+    if (q_getcwd(cwd)) {
+        // the form of the result cannot be determined: no host path is given (fail closed)
+        xsink->raiseErrnoException("REALPATH-ERROR", errno, "the current directory cannot be resolved");
+        return -1;
+    }
+    bool relative = !q_absolute_path(arg);
+    if (!relative) {
+        // an absolute path that the code gave keeps its canonical form, unless its canonical form shares more leading
+        // directories with the current directory than the path that the code gave does (ex: "/proc/self/cwd"): every
+        // directory of the current directory that a result gives was then given by the code itself
+        std::vector<std::string> ccomps, acomps, wcomps;
+        qore_split_abs_path(canon.c_str(), ccomps);
+        qore_split_abs_path(arg, acomps);
+        qore_split_abs_path(cwd.c_str(), wcomps);
+        relative = qore_path_common_comps(ccomps, wcomps) > qore_path_common_comps(acomps, wcomps);
+    }
+    if (relative) {
+        canon.set(qore_path_relative_to_base(canon.c_str(), std::string(cwd.c_str())).c_str());
+    }
+    return 0;
+}
+
+QoreHostDirBaseMessageScopeHelper::QoreHostDirBaseMessageScopeHelper(std::string b) : base(std::move(b)),
+        old(qore_msg_host_dir_base) {
+    if (!base.empty() && qore_caller_no_host_dirs()) {
+        qore_msg_host_dir_base = &base;
+    }
+}
+
+QoreHostDirBaseMessageScopeHelper::~QoreHostDirBaseMessageScopeHelper() {
+    qore_msg_host_dir_base = old;
+}
+
 std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
     if (!path) {
         return std::string();
@@ -11283,7 +11434,10 @@ std::string qore_msg_path(const char* path) {
     if (!path) {
         return std::string();
     }
-    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+    if (qore_msg_restricted_scope) {
+        return qore_path_file_name(path);
+    }
+    return qore_msg_host_dir_base ? qore_path_relative_to_base(path, *qore_msg_host_dir_base) : std::string(path);
 }
 
 QoreStringNode* qore_msg_path_node(const char* path) {
