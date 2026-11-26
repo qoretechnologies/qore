@@ -25211,7 +25211,8 @@ namespace {
 //! Runs another C++ poll operation on the I/O thread and counts its steps
 /** Its steps, results and output are those of the operation that it runs; dbg_counting_poll_operation_steps()
     returns the number of its continuePoll() calls.  It references the private data of the operation that it runs; the
-    caller keeps that operation's object, whose \c sock member the operation's poll info refers to.
+    caller keeps that operation's object, whose \c sock member the operation's poll info refers to.  Given a Queue,
+    it pushes True to it when a step first returns a wait.
 
     Only the step, the goal, the state, the output, the ready events and the dispatch are forwarded: the operation run
     must not change its descriptor (fd generation), renew its timeout, handle its completion, push to queues or wake
@@ -25219,14 +25220,17 @@ namespace {
 */
 class DbgCountingPollOperation : public SocketPollOperationBase {
 public:
-    //! @p inner is referenced by the caller for this object
-    DbgCountingPollOperation(SocketPollOperationBase* inner) : inner(inner) {
+    //! @p inner and @p waiting (if not nullptr) are referenced by the caller for this object
+    DbgCountingPollOperation(SocketPollOperationBase* inner, Queue* waiting) : inner(inner), waiting(waiting) {
         assert(inner);
     }
 
     virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             inner->deref(xsink);
+            if (waiting) {
+                waiting->deref(xsink);
+            }
             delete this;
         }
     }
@@ -25246,7 +25250,13 @@ public:
 
     virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         steps.fetch_add(1, std::memory_order_relaxed);
-        return inner->continuePoll(xsink);
+        QoreHashNode* rv = inner->continuePoll(xsink);
+        if (rv && waiting && !waiting_pushed) {
+            // steps of an operation do not run concurrently
+            waiting_pushed = true;
+            waiting->pushAndTakeRef(true);
+        }
+        return rv;
     }
 
     virtual bool needsWorkerDispatch() const override {
@@ -25273,6 +25283,10 @@ public:
 private:
     //! the operation run (referenced)
     SocketPollOperationBase* inner;
+    //! gets True when a step first returns a wait (referenced), or nullptr
+    Queue* waiting;
+    //! true once True was pushed to @ref waiting
+    bool waiting_pushed = false;
     //! the number of continuePoll() calls (made on the I/O thread, read by the test's thread)
     std::atomic<int64> steps{0};
 };
@@ -25293,10 +25307,21 @@ static QoreValue f_dbg_counting_poll_operation(const QoreListNode* params, Runti
         }
         return QoreValue();
     }
+    Queue* waiting = nullptr;
+    if (QoreObject* queue_obj = get_param_value(params, 1).get<QoreObject>()) {
+        waiting = static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink));
+        if (!waiting) {
+            inner->deref(xsink);
+            return QoreValue();
+        }
+    }
     ExceptionSink sock_xsink;
     ReferenceHolder<QoreObject> sock(inner->getReferencedSocketObject(&sock_xsink), xsink);
     if (!sock) {
         inner->deref(xsink);
+        if (waiting) {
+            waiting->deref(xsink);
+        }
         if (sock_xsink) {
             xsink->assimilate(sock_xsink);
         } else {
@@ -25304,7 +25329,7 @@ static QoreValue f_dbg_counting_poll_operation(const QoreListNode* params, Runti
         }
         return QoreValue();
     }
-    DbgCountingPollOperation* op = new DbgCountingPollOperation(inner);
+    DbgCountingPollOperation* op = new DbgCountingPollOperation(inner, waiting);
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
     op->setSelf(*op_obj);
     qore_poll_op_set_member(op_obj, "sock", sock.release(), xsink);
@@ -38099,8 +38124,9 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits",
         hashTypeInfo, QORE_PARAM_NO_ARG, "extra");
     qns.addBuiltinVariant("dbg_counting_poll_operation", f_dbg_counting_poll_operation,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, QC_SOCKETPOLLOPERATION->getTypeInfo(), 1,
-        QC_ABSTRACTPOLLOPERATION->getTypeInfo(), QORE_PARAM_NO_ARG, "op");
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, QC_SOCKETPOLLOPERATION->getTypeInfo(), 2,
+        QC_ABSTRACTPOLLOPERATION->getTypeInfo(), QORE_PARAM_NO_ARG, "op",
+        QC_QUEUE->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
     qns.addBuiltinVariant("dbg_counting_poll_operation_steps", f_dbg_counting_poll_operation_steps,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         QC_ABSTRACTPOLLOPERATION->getTypeInfo(), QORE_PARAM_NO_ARG, "op");
