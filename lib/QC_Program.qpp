@@ -4760,8 +4760,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
@@ -4993,8 +4995,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
     @throw PARSE-COMMAND-ERROR the module does not support commands
     @throw RUNTIME-COMMAND-ERROR the code issuing the command is restricted (it is sandboxed, or a parse option
     restricts a functional domain) and the module has not declared that its commands honor the restrictions of the
-    code that issues them; or the code is sandboxed or more restricted than the target Program, and the command is for
-    another Program
+    code that issues them; or the command is for another Program (also the Program of a restricted caller) and the
+    code is restricted or acts for restricted code (see @ref sandbox_manager_classes: host or library code that
+    restricted code calls, or that runs in a thread, task or callback started or created for it; since %Qore 3.0), or
+    is more restricted than the target Program
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details

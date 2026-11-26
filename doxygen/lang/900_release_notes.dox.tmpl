@@ -1465,10 +1465,10 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
 
     @par Trusted (Governed) and Restricting Sandbox Managers
-    The rules that restrict what code may do (shared objects, injection, private access, the host's process-wide
-    state, module paths, trusted capabilities, cancellation deferral) apply only to code that a restricting sandbox
-    governs; a sandbox that allows uncontrolled APIs keeps only its interrupts, limits and I/O policies (see
-    @ref sandbox_manager_classes; <a href="https://github.com/qoretechnologies/qore/issues/7737">issue 7737</a>).
+    The rules that restrict what code may do (shared objects, injection, private access, process-wide state, trusted
+    capabilities, deferral) apply only to code that a restricting sandbox governs, also code acting for it, which cannot
+    send @ref Qore::Program::issueModuleCmd() "module commands" to another Program; trusting sandboxes keep interrupts,
+    limits and I/O policies (@ref sandbox_manager_classes; <a href="https://github.com/qoretechnologies/qore/issues/7737">issue 7737</a>).
 
     @par Configurable Exception Report Limit
     @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an

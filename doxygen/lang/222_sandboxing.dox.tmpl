@@ -318,7 +318,8 @@ auto result = p.callFunction("main");
     it may still use the system-policy calls
     (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
     @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), system threads
-    (@ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()") and cancellation
+    (@ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()"), governed calls
+    (@ref Qore::SandboxManager::callGoverned() "SandboxManager::callGoverned()") and cancellation
     deferral (@ref Qore::defer_thread_cancel() "defer_thread_cancel()", which postpones its interrupts until the
     deferred code returns), and any uncontrolled API.  Containment is what a restricting manager gives.  Code that a
     trusted manager governs and that runs for restricted code (called by it, or in a thread, task or callback that was
