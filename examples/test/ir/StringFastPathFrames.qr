@@ -152,3 +152,28 @@ show("findex-caller", auto sub () { return f_findex_caller(ascii, "日"); });
 show("findex-ret", auto sub () { return f_findex_ret(ascii, "日"); });
 show("fsubstr-ret", auto sub () { return f_fsubstr_ret(bad); });
 show("pending", auto sub () { return f_pending(bad); });
+# closures and nested closures: the function and the method forms
+code cl_findex = int sub (string s, string p) { return index(s, p); };
+code cl_find = int sub (string s, string p) { return s.find(p); };
+code cl_lwr = string sub (string s) { return s.lwr(); };
+code cl_nested_findex = int sub (string s, string p) {
+    code inner = int sub (string s2) { return index(s2, p); };
+    return inner(s);
+};
+code cl_nested_lwr = string sub (string s) {
+    code inner = string sub (string s2) { return s2.lwr(); };
+    return inner(s);
+};
+code cl_try = string sub (string s) {
+    try {
+        return index(binary_to_string(<61ff62>, "UTF-8"), "b").toString() + substr(s, 0, 1);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+};
+show("cl-findex", auto sub () { return cl_findex(ascii, "日"); });
+show("cl-find", auto sub () { return cl_find(ascii, "日"); });
+show("cl-lwr", auto sub () { return cl_lwr(bad); });
+show("cl-nested-findex", auto sub () { return cl_nested_findex(ascii, "日"); });
+show("cl-nested-lwr", auto sub () { return cl_nested_lwr(bad); });
+show("cl-try", auto sub () { return cl_try("a"); });
