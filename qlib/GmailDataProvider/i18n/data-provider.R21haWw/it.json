@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Cerca messaggi"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Recupera un messaggio"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "L'ID del messaggio da recuperare"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Recupera un allegato"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "L'ID dell'allegato da recuperare"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nuova email"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Il numero massimo di messaggi recapitati in un ciclo di polling; non impostato o `0` indica nessun limite.\n\nIl limite viene applicato partendo dalla parte più **vecchia** del backlog, così che il cursore di controllo avanzi comunque in modo contiguo e i messaggi rimanenti vengano recapitati dai cicli successivi anziché ignorati. Utilizzarlo per delimitare il lavoro eseguibile da un singolo ciclo quando può accumularsi un backlog elevato"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nuovi allegati email"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Il numero massimo di messaggi recapitati in un ciclo di polling; non impostato o `0` indica nessun limite.\n\nIl limite viene applicato partendo dalla parte più **vecchia** del backlog, così che il cursore di controllo avanzi comunque in modo contiguo e i messaggi rimanenti vengano recapitati dai cicli successivi anziché ignorati. Utilizzarlo per delimitare il lavoro eseguibile da un singolo ciclo quando può accumularsi un backlog elevato"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Sposta un messaggio nel cestino"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "L'ID del messaggio da spostare nel cestino; gli eventi di monitoraggio includono questo valore come `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Elimina un messaggio"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Il valore dell'intestazione `References`: i valori `Message-ID` dei messaggi della conversazione a cui si risponde, dal più vecchio al più recente, separati da spazi e parentesi angolari comprese. Se non è impostato, viene usato `in_reply_to`. Gli eventi di monitoraggio includono l'intestazione `References` del messaggio originale"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Cerca messaggi con metadati"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Le intestazioni del messaggio da recuperare per ogni messaggio corrispondente; ignorato a meno che `format` non sia `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Ripristina un messaggio dal cestino"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "L'ID del messaggio da ripristinare dal cestino; gli eventi di monitoraggio includono questo valore come `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Modifica le etichette di un messaggio"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Gli ID delle etichette da rimuovere dal messaggio; un'etichetta è identificata dal suo ID (es. `INBOX`, `UNREAD`, `Label_12`), non dal nome"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Elenca etichette"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Elenca tutte le etichette dell'account, sia le etichette di sistema di Gmail (`INBOX`, `UNREAD`, `STARRED` e così via) sia quelle create dall'utente, ciascuna con l'ID accettato da `modify-message-labels` e dall'opzione di ricerca `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Crea un'etichetta"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Non mostrare i messaggi con l'etichetta nell'elenco dei messaggi"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Crea una bozza"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Il valore dell'intestazione `References`: i valori `Message-ID` dei messaggi della conversazione a cui si risponde, dal più vecchio al più recente, separati da spazi e parentesi angolari comprese. Se non è impostato, viene usato `in_reply_to`. Gli eventi di monitoraggio includono l'intestazione `References` del messaggio originale"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Cerca bozze"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Recupera una bozza"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Il messaggio completo come dati MIME codificati in base64url in `raw`; il corpo non viene analizzato"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Invia una bozza"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "L'ID della bozza da inviare; `list-drafts` e `create-draft` restituiscono questo valore come `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Elimina una bozza"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

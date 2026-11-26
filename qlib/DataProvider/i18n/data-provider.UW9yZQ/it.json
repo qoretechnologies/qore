@@ -16,7 +16,7 @@
           "message": "Elaboratori di pipeline di dati Qore integrati per filtrare, trasformare e manipolare i record nelle pipeline di dati"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
+          "source": "Filter records",
           "message": "Filtra record"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Un'espressione stringa DPQL per filtrare i record; utilizzare questa opzione quando si scrive il predicato direttamente come testo invece di utilizzare il generatore di espressioni"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
+          "source": "Select fields",
           "message": "Seleziona campi"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Un elenco di specifiche di campo; usa `name` per mantenere un campo invariato, o `new_name=old_name` per rinominare un campo (es. `name`, `email`, `customer_name=name`)"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
+          "source": "Set fields",
           "message": "Imposta campi"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Un hash di nomi di campo e valori da impostare su ciascun record; i campi esistenti vengono sovrascritti, i nuovi campi vengono aggiunti"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "Rimuovi campi"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Un elenco di nomi di campi da rimuovere da ciascun record; supporta la notazione con punto per i campi annidati (es. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "Cerca e sostituisci"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
@@ -268,7 +268,7 @@
           "message": "Trova tutte le corrispondenze, non solo la prima"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
+          "source": "Record limit",
           "message": "Limite di record"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Il numero massimo di record che possono transitare attraverso la pipeline; una volta raggiunto il limite, tutti i record successivi vengono eliminati"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
+          "source": "Running statistics",
           "message": "Statistiche correnti"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "Il numero di record da accumulare in ciascuna finestra analitica; per i processori a livello di finestra, viene emesso un evento quando la finestra è piena; per i processori a livello di record, questo parametro controlla le dimensioni della finestra mobile.\n\n**Guida al dimensionamento**: utilizzare `20`–`50` per gli avvisi in tempo reale in cui la rapidità di risposta è fondamentale, `100`–`500` per l'analisi generale di trend e statistiche o `1000`+ per dati ad alta frequenza in cui sono necessarie statistiche stabili a lungo termine; la finestra deve essere sufficientemente ampia per acquisire almeno un ciclo completo di qualsiasi pattern che si desidera rilevare"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
+          "source": "Moving average",
           "message": "Media mobile"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Controlla quanto peso viene dato al valore più recente rispetto ai valori storici durante il calcolo della media mobile esponenziale (EMA); valori più alti fanno sì che la media risponda più rapidamente alle variazioni recenti ma la rendono anche più rumorosa.\n\n**Valori tipici**: `0.1` (uniforme, lenta a reagire), `0.2` (bilanciato, buon valore predefinito), `0.5` (reattivo, traccia rapidamente le variazioni); deve essere compreso tra `0.0` e `1.0` esclusi; predefinito: `0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
+          "source": "Trend analysis",
           "message": "Analisi del trend"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
@@ -424,7 +424,7 @@
           "message": "La grandezza minima della pendenza affinché il trend sia classificato come `rising` o `falling`; le pendenze inferiori a questa soglia vengono classificate come `flat`.\n\n**Valori tipici**: `0.001` (sensibile: rileva trend molto graduali), `0.01` (moderato), `0.1` (solo trend marcati); usa valori inferiori se i dati hanno una scala ampia e i trend significativi hanno pendenze ridotte; deve essere >= `0`; predefinito: `0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
+          "source": "Anomaly detection",
           "message": "Rilevamento anomalie"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "A quante deviazioni standard dalla media deve trovarsi un valore per essere considerato anomalo (questo valore è chiamato *z-score*); ad esempio, una soglia di `3.0` indica che un valore deve distare più di 3 deviazioni standard dalla media per essere segnalato.\n\n**Valori tipici**: `2.0` (sensibile — segnala circa il 5% dei dati casuali), `3.0` (standard — segnala circa lo 0,3%), `4.0` (conservativo — solo outlier estremi); deve essere maggiore di `0`; predefinito: `3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
+          "source": "Calculate data distribution",
           "message": "Calcola distribuzione dei dati"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Un elenco separato da virgole di valori percentili da calcolare (`0`–`100`); ad esempio, `50` è la mediana, `25` e `75` sono i quartili inferiore e superiore; predefinito: `\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
+          "source": "Find related fields",
           "message": "Trova campi correlati"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Il numero di record da accumulare prima di calcolare la matrice di correlazione; la finestra viene svuotata dopo ogni calcolo.\n\n**Guida al dimensionamento**: la correlazione necessita di dati sufficienti per risultati stabili; utilizzare almeno `30` per una correlazione di base, `100`+ per risultati affidabili"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
+          "source": "Find delayed relationships",
           "message": "Trova relazioni ritardate"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Il numero massimo di intervalli temporali di cui spostare un campo rispetto all'altro; impostare su `0` per utilizzare `window_size / 4` automaticamente; predefinito: `0` (auto)"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
+          "source": "Count value ranges",
           "message": "Conta intervalli di valori"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Quantile (bin con lo stesso conteggio)"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
+          "source": "Measure speed of change",
           "message": "Misura velocità di variazione"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Se abilitato, applica una media mobile semplice sulla finestra prima di calcolare le derivate, riducendo il rumore nella velocità di variazione; disabilitare per tassi non elaborati da punto a punto; predefinito: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
+          "source": "Monitor process Stability",
           "message": "Monitora stabilità processo"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Il valore target/centrale atteso per il processo; se non impostato, viene utilizzata automaticamente la media dello storico della finestra mobile; impostare su un valore qualsiasi (incluso `0`) per utilizzare una linea centrale fissa; predefinito: auto (utilizza la media della finestra)"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
+          "source": "Detect repeating patterns",
           "message": "Rileva pattern ripetuti"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
@@ -864,7 +864,7 @@
           "message": "L'intensità minima di un pattern ripetitivo (misurata come autocorrelazione, `0`–`1`) affinché venga segnalato; l'autocorrelazione misura quanto una serie di dati sia simile a una copia traslata di se stessa.\n\n**Valori tipici**: `0.2` (rileva pattern deboli/rumorosi), `0.3` (predefinito bilanciato), `0.5` (segnala solo pattern forti e chiari); predefinito: `0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
+          "source": "Group by and aggregate",
           "message": "Raggruppa e aggrega"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {

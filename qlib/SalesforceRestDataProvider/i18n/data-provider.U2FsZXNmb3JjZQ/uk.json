@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Створити запис"
         },
         "app.U2FsZXNmb3JjZQ.action.Y3JlYXRl.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Назва таблиці Salesforce (також називається \"sobject\"), наприклад: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Знайти один запис"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZF9zaW5nbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Назва таблиці Salesforce (також називається \"sobject\"), наприклад: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.display_name": {
-          "source": "Find Matching Records",
+          "source": "Find matching records",
           "message": "Знайти відповідні записи"
         },
         "app.U2FsZXNmb3JjZQ.action.ZmluZA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Назва таблиці Salesforce (також називається \"sobject\"), наприклад: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBkYXRl.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Назва таблиці Salesforce (також називається \"sobject\"), наприклад: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.display_name": {
-          "source": "Upsert Records",
+          "source": "Upsert records",
           "message": "Оновити або додати записи"
         },
         "app.U2FsZXNmb3JjZQ.action.dXBzZXJ0.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Назва таблиці Salesforce (також називається \"sobject\"), наприклад: `Account`"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.U2FsZXNmb3JjZQ.action.ZGVsZXRl.short_desc": {

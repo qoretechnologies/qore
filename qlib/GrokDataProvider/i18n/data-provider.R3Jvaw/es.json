@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Multi Chat"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Un identificador único que representa a su usuario final para el monitoreo de abusos"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Procesar solicitud con un modelo"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "No truncar; devolver un error si el contexto supera el límite"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Transmitir respuesta"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "No truncar; devolver un error si el contexto supera el límite"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Crear respuesta"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
@@ -4564,7 +4564,7 @@
           "message": "El identificador único de la respuesta a recuperar"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Eliminar respuesta"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -4600,7 +4600,7 @@
           "message": "El identificador único de la respuesta a eliminar"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
-          "source": "Get Deferred Completion",
+          "source": "Get deferred completion",
           "message": "Obtener compleción diferida"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {

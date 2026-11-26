@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "連絡先を検索"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -940,7 +940,7 @@
           "message": "削除する連絡先"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a Campaign",
+          "source": "Add a Contact to a campaign",
           "message": "キャンペーンに連絡先を追加"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "連絡先を追加するキャンペーンのID"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a Campaign",
+          "source": "Remove a Contact from a campaign",
           "message": "キャンペーンから連絡先を削除"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "連絡先の削除元となるキャンペーンの ID"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a Note to the Contact",
+          "source": "Add a note to the Contact",
           "message": "連絡先にノートを追加"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "ノート作成者のユーザーID"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
-          "source": "Search Opportunities",
+          "source": "Search opportunities",
           "message": "案件の検索"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "返す結果の最大数"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "商談を取得"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "商談ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "案件を作成"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "案件を割り当てるユーザーID"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "商談を更新"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "案件を割り当てるユーザーID"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "商談を削除"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "削除する商談"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "タスクの一覧表示"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "返す結果の最大数"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "タスクを取得"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "取得するタスクのID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "タスクを作成"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "タスクが完了しているかどうか（`True`または`False`）"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "タスクを更新"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "タスクが完了しているかどうか（`True`または`False`）"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "タスクの削除"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "新しい予約"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "新しいレコードを確認する頻度（最小30秒）"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
-          "source": "New Message",
+          "source": "New message",
           "message": "新しいメッセージ"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {

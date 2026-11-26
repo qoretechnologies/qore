@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Crea fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -496,7 +496,7 @@
           "message": "ID del modello PDF da utilizzare per questa fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aggiorna fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -652,7 +652,7 @@
           "message": "ID del modello PDF da utilizzare per questa fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Elimina fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -680,7 +680,7 @@
           "message": "La fattura da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Recupera fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.short_desc": {
@@ -708,7 +708,7 @@
           "message": "La fattura da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Elenca fatture"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Cerca fatture per numero di fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Invia fattura tramite email"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Corpo dell'e-mail"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.display_name": {
-          "source": "Mark Invoice Status",
+          "source": "Mark invoice status",
           "message": "Contrassegna stato fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Contrassegna come bozza"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Create Recurring Invoice",
+          "source": "Create recurring invoice",
           "message": "Crea fattura ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "ID del modello PDF da utilizzare per le fatture generate"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Update Recurring Invoice",
+          "source": "Update recurring invoice",
           "message": "Aggiorna fattura ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "ID del modello PDF da utilizzare per le fatture generate"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Get Recurring Invoice",
+          "source": "Get recurring invoice",
           "message": "Ottieni fattura ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "La fattura ricorrente da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.display_name": {
-          "source": "List Recurring Invoices",
+          "source": "List recurring invoices",
           "message": "Elenca fatture ricorrenti"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Filtra per cliente"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.display_name": {
-          "source": "Mark Recurring Invoice Status",
+          "source": "Mark recurring invoice status",
           "message": "Contrassegna stato della fattura ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Il contatto da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Elenca contatti"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Cerca contatti per indirizzo email"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact Status",
+          "source": "Mark Contact status",
           "message": "Contrassegna stato contatto"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Contrassegna come inattivo"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Crea spesa"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Numero di ricevuta o altro riferimento"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Aggiorna spesa"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Numero di ricevuta o altro riferimento"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Elimina spesa"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "La spesa da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Ottieni spesa"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "La spesa da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "Elenca spese"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Filtra spese create entro questa data o anteriormente (`YYYY-MM-DD`)"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Create Recurring Expense",
+          "source": "Create recurring expense",
           "message": "Crea spesa ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Indica se questa spesa deve essere fatturata a un cliente"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Update Recurring Expense",
+          "source": "Update recurring expense",
           "message": "Aggiorna spesa ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Indica se questa spesa deve essere fatturata a un cliente"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Delete Recurring Expense",
+          "source": "Delete recurring expense",
           "message": "Elimina spesa ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2376,7 +2376,7 @@
           "message": "La spesa ricorrente da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Get Recurring Expense",
+          "source": "Get recurring expense",
           "message": "Ottieni spesa ricorrente"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2404,7 +2404,7 @@
           "message": "La spesa ricorrente da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.display_name": {
-          "source": "List Recurring Expenses",
+          "source": "List recurring expenses",
           "message": "Elenca spese ricorrenti"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Organizzazione di Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Crea pagamento"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Tasso di cambio se il pagamento è in una valuta diversa"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Aggiorna pagamento"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Tasso di cambio se il pagamento è in una valuta diversa"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Elimina pagamento"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "Il pagamento da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Ottieni pagamento"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Il pagamento da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Elenca pagamenti"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Cerca pagamenti per numero di assegno, ID transazione o altro riferimento"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Rimborsa pagamento"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Importo del rimborso"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Crea preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "ID del modello PDF da utilizzare per questo preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Aggiorna preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "ID del modello PDF da utilizzare per questo preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Elimina preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Il preventivo da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Ottieni preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "Il preventivo da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "Elenca preventivi"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Filtra per cliente"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.display_name": {
-          "source": "Mark Estimate Status",
+          "source": "Mark estimate status",
           "message": "Contrassegna stato preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Contrassegna come rifiutato"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Crea progetto"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Valore del budget (importo o ore a seconda del tipo di budget)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Aggiorna progetto"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Valore del budget (importo o ore a seconda del tipo di budget)"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Ottieni progetto"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -3616,7 +3616,7 @@
           "message": "Il progetto da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Elenca progetti"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Cerca progetti per nome (corrispondenza parziale)"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.display_name": {
-          "source": "Mark Project Status",
+          "source": "Mark project status",
           "message": "Contrassegna stato del progetto"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Contrassegna come inattivo"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Crea articolo"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Servizi"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aggiorna elemento"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -3916,7 +3916,7 @@
           "message": "Servizi"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Elimina elemento"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -3944,7 +3944,7 @@
           "message": "L'elemento da eliminare"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Ottieni articolo"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "L'elemento da recuperare"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Elenca elementi"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "Organizzazione di Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nuova fattura"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.short_desc": {
@@ -4048,7 +4048,7 @@
           "message": "Frequenza di controllo per nuovi contatti (secondi)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Nuovo preventivo"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -4076,7 +4076,7 @@
           "message": "Frequenza di controllo per nuovi preventivi (secondi)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Nuova spesa"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Frequenza di controllo per nuove spese (secondi)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Nuovo elemento"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.short_desc": {
@@ -4132,7 +4132,7 @@
           "message": "Frequenza di controllo per nuovi articoli (secondi)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Nuovo progetto"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.short_desc": {

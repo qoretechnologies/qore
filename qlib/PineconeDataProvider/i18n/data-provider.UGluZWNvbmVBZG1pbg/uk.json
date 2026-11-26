@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Отримати список проєктів"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Перелічіть усі проекти в організації."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Створити проєкт"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Чи потрібно примусово шифрувати за допомогою ключа шифрування, керованого клієнтом (CMEK). За замовчуванням `false`."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Отримати список організацій"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Перегляд площини даних"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Список користувачів"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ID користувача"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
+          "source": "List invites",
           "message": "Список запрошень"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Курсор від `pagination.next` попередньої відповіді. Необхідно повторно використовувати з тим самим контекстом запиту (параметри шляху, фільтри та `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
+          "source": "Create invite",
           "message": "Створити запрошення"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "ID запрошення"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
+          "source": "List service accounts",
           "message": "Список облікових записів служби"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Курсор від `pagination.next` попередньої відповіді. Необхідно повторно використовувати з тим самим контекстом запиту (параметри шляху, фільтри та `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
+          "source": "Create service account",
           "message": "Створити обліковий запис служби"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "Унікальний ідентифікатор сервісного облікового запису."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
+          "source": "List role bindings",
           "message": "Список прив’язок ролей"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Курсор від `pagination.next` попередньої відповіді. Необхідно повторно використовувати з тим самим контекстом запиту (параметри шляху, фільтри та `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
+          "source": "Create role binding",
           "message": "Створення прив'язки до ролі"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {

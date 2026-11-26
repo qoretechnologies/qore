@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
-          "source": "List People",
+          "source": "List people",
           "message": "列出人員"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "依 Customer.io 內部 ID 篩選人員"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
-          "source": "Get Person",
+          "source": "Get person",
           "message": "取得個人"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
@@ -412,7 +412,7 @@
           "message": "要查詢的客戶 ID、電子郵件或 cio_id"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
-          "source": "Create/Update Customer",
+          "source": "Create/update customer",
           "message": "建立/更新客戶"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
@@ -472,7 +472,7 @@
           "message": "要在客戶上設定的自訂屬性"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "刪除客戶"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "要刪除的唯一客戶識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
-          "source": "Suppress Customer",
+          "source": "Suppress customer",
           "message": "抑制客戶"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
@@ -520,7 +520,7 @@
           "message": "要抑制的唯一客戶識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
-          "source": "Unsuppress Customer",
+          "source": "Unsuppress customer",
           "message": "解除封鎖客戶"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
@@ -544,7 +544,7 @@
           "message": "要解除封鎖的唯一客戶識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
-          "source": "Merge Customers",
+          "source": "Merge customers",
           "message": "合併客戶"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
@@ -628,7 +628,7 @@
           "message": "次要識別碼值"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "列出受眾區隔"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -688,7 +688,7 @@
           "message": "唯一的 Customer.io 區段 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment People",
+          "source": "Get Segment people",
           "message": "取得區段人員"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -724,7 +724,7 @@
           "message": "分頁結果的頁碼"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "列出行銷活動"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -760,7 +760,7 @@
           "message": "每頁結果數"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "取得行銷活動"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -784,7 +784,7 @@
           "message": "唯一的 Customer.io 行銷活動 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
-          "source": "Get Campaign Metrics",
+          "source": "Get campaign metrics",
           "message": "取得行銷活動指標"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
@@ -820,7 +820,7 @@
           "message": "指標彙總的期間"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
-          "source": "Get Campaign Actions",
+          "source": "Get campaign actions",
           "message": "取得行銷活動動作"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
@@ -844,7 +844,7 @@
           "message": "要取得動作的唯一 Customer.io 行銷活動 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "列出廣播"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -880,7 +880,7 @@
           "message": "每頁結果數"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get Broadcast",
+          "source": "Get broadcast",
           "message": "取得廣播"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "唯一的 Customer.io 廣播 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
-          "source": "Trigger Broadcast",
+          "source": "Trigger broadcast",
           "message": "觸發廣播"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "使用 HTML 內容覆寫訊息本文"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
-          "source": "Send Transactional Push",
+          "source": "Send transactional push",
           "message": "傳送交易推播"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "覆寫推播通知內文"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "列出集合"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "每頁結果數"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "取得集合"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "唯一的 Customer.io 集合 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "建立集合"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "集合的外部資料來源 URL"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Update Collection",
+          "source": "Update collection",
           "message": "更新集合"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "外部資料來源的更新 URL"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "刪除集合"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "要刪除的唯一 Customer.io 集合 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
-          "source": "List Snippets",
+          "source": "List snippets",
           "message": "列出片段"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "從 Customer.io 擷取所有程式碼片段清單。"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
-          "source": "Get Snippet",
+          "source": "Get snippet",
           "message": "取得片段"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "要擷取的片段唯一名稱識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Create Snippet",
+          "source": "Create snippet",
           "message": "建立文字片段"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "文字片段的內容"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Update Snippet",
+          "source": "Update snippet",
           "message": "更新片段"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "片段的更新內容"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
-          "source": "Delete Snippet",
+          "source": "Delete snippet",
           "message": "刪除片段"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "要刪除的片段唯一名稱識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
-          "source": "Create Export",
+          "source": "Create export",
           "message": "建立匯出"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "套用至匯出的篩選條件"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
-          "source": "Get Export Status",
+          "source": "Get export status",
           "message": "取得匯出狀態"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "要檢查狀態的唯一 Customer.io 匯出 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
-          "source": "Download Export",
+          "source": "Download export",
           "message": "下載匯出"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "要下載的唯一 Customer.io 匯出 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
-          "source": "List Deliveries",
+          "source": "List deliveries",
           "message": "列出傳送記錄"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "篩選在此 Unix 時間戳記或之前傳送的訊息"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get Message",
+          "source": "Get message",
           "message": "取得訊息"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "唯一的 Customer.io 訊息 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "列出活動"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "篩選此 Unix 時間戳記或之前的活動"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
-          "source": "List Newsletters",
+          "source": "List newsletters",
           "message": "列出電子報"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "每頁結果數"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
-          "source": "Get Newsletter",
+          "source": "Get newsletter",
           "message": "取得電子報"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "唯一的 Customer.io 電子報 ID"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
-          "source": "Track Event",
+          "source": "Track event",
           "message": "追蹤事件"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "事件的 Unix 時間戳記"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
-          "source": "Track Anonymous Event",
+          "source": "Track anonymous event",
           "message": "追蹤匿名事件"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "事件的 Unix 時間戳記"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
-          "source": "Track Page View",
+          "source": "Track page view",
           "message": "追蹤頁面瀏覽"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "頁面瀏覽事件的 Unix 時間戳記"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
-          "source": "Add Device",
+          "source": "Add device",
           "message": "新增裝置"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "裝置屬性"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
-          "source": "Delete Device",
+          "source": "Delete device",
           "message": "刪除裝置"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "要移除的裝置權杖"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
-          "source": "Create/Update Object",
+          "source": "Create/update object",
           "message": "建立/更新物件"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "要在物件上設定的自訂屬性"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "刪除物件"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "物件識別碼"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Add Relationships",
+          "source": "Add relationships",
           "message": "新增關聯"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "識別碼雜湊列表，每個包含 'identifier' 和可選的 'relationship_attributes'"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Delete Relationships",
+          "source": "Delete relationships",
           "message": "刪除關聯"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "要從該物件中斷連線的識別碼雜湊清單"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch Email Sent",
+          "source": "Watch email Sent",
           "message": "監控電子郵件已傳送"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "當透過 Customer.io 傳送電子郵件時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
-          "source": "Watch Email Delivered",
+          "source": "Watch email delivered",
           "message": "監控電子郵件已送達"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "當透過 Customer.io 傳送的電子郵件送達時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
-          "source": "Watch Email Opened",
+          "source": "Watch email opened",
           "message": "監控電子郵件已開啟"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
@@ -2480,7 +2480,7 @@
           "message": "當透過 Customer.io 傳送的電子郵件被開啟時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Watch Email Clicked",
+          "source": "Watch email clicked",
           "message": "監控電子郵件已點擊"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "當透過 Customer.io 傳送的電子郵件中的連結被點擊時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Watch Email Bounced",
+          "source": "Watch email bounced",
           "message": "監控電子郵件已退信"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "當透過 Customer.io 傳送的電子郵件退信時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
-          "source": "Watch Email Dropped",
+          "source": "Watch email dropped",
           "message": "監控電子郵件已丟棄"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "當電子郵件被 Customer.io 丟棄時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
-          "source": "Watch Email Spammed",
+          "source": "Watch email spammed",
           "message": "監控電子郵件已標記為垃圾郵件"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "當透過 Customer.io 傳送的電子郵件被標記為垃圾郵件時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Email Unsubscribed",
+          "source": "Watch email unsubscribed",
           "message": "監控電子郵件已取消訂閱"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "當透過 Customer.io 傳送簡訊時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
-          "source": "Watch SMS Delivered",
+          "source": "Watch SMS delivered",
           "message": "監控簡訊已送達"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "當透過 Customer.io 傳送的簡訊送達時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
-          "source": "Watch SMS Failed",
+          "source": "Watch SMS failed",
           "message": "監控簡訊傳送失敗"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "當透過 Customer.io 傳送簡訊失敗時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
-          "source": "Watch SMS Clicked",
+          "source": "Watch SMS clicked",
           "message": "監控簡訊已點擊"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "當透過 Customer.io 傳送的簡訊中的連結被點擊時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch Push Sent",
+          "source": "Watch push Sent",
           "message": "監看推播已傳送"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "當透過 Customer.io 傳送推播通知時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
-          "source": "Watch Push Delivered",
+          "source": "Watch push delivered",
           "message": "監看推播已送達"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "當透過 Customer.io 送達推播通知時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
-          "source": "Watch Push Opened",
+          "source": "Watch push opened",
           "message": "監看推播已開啟"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "當透過 Customer.io 開啟推播通知時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
-          "source": "Watch Push Failed",
+          "source": "Watch push failed",
           "message": "監看推播傳送失敗"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "當透過 Customer.io 傳送 Slack 訊息時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
-          "source": "Watch Slack Clicked",
+          "source": "Watch Slack clicked",
           "message": "監看 Slack 點擊"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "當透過 Customer.io 點擊 Slack 訊息中的連結時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
-          "source": "Watch Slack Failed",
+          "source": "Watch Slack failed",
           "message": "監看 Slack 傳送失敗"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
@@ -2672,7 +2672,7 @@
           "message": "當透過 Customer.io 傳送 Slack 訊息失敗時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
-          "source": "Watch Subscribed",
+          "source": "Watch subscribed",
           "message": "監看已訂閱"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "當客戶透過 Customer.io 訂閱時接收通知。"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Unsubscribed",
+          "source": "Watch unsubscribed",
           "message": "監看已取消訂閱"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Pobierz listę projektów"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Lista wszystkich projektów w organizacji."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Utwórz projekt"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Określa, czy wymusić szyfrowanie przy użyciu klucza szyfrowania zarządzanego przez klienta (CMEK). Wartość domyślna to `false`."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Wyświetl listę organizacji"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Przeglądarka płaszczyzny danych"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Lista użytkowników"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ID użytkownika"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
+          "source": "List invites",
           "message": "Lista zaproszeń"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Kursor z `pagination.next` wcześniejszej odpowiedzi. Należy użyć ponownie z tym samym kontekstem zapytania (parametry ścieżki, filtry i `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
+          "source": "Create invite",
           "message": "Utwórz zaproszenie"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Identyfikator zaproszenia"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
+          "source": "List service accounts",
           "message": "Wyświetl listę kont usług"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Kursor z `pagination.next` wcześniejszej odpowiedzi. Należy użyć ponownie z tym samym kontekstem zapytania (parametry ścieżki, filtry i `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
+          "source": "Create service account",
           "message": "Utwórz konto usługi"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "Unikalny identyfikator konta usługi."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
+          "source": "List role bindings",
           "message": "Lista powiązań ról"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Kursor z `pagination.next` wcześniejszej odpowiedzi. Należy użyć ponownie z tym samym kontekstem zapytania (parametry ścieżki, filtry i `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
+          "source": "Create role binding",
           "message": "Utwórz powiązanie roli"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {

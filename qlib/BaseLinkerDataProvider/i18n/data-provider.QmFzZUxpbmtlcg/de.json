@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Bestellungen auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Gibt einen Stream von BaseLinker-Bestellungen über `getOrders` zurück. Unterstützt Cursor-Paginierung über `id_from`/`date_from` und Filter nach Status, E-Mail und Quellkanal. Die Seitengröße ist von BaseLinker auf 100 Bestellungen pro Aufruf festgelegt."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Bestellung abrufen"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
@@ -372,7 +372,7 @@
           "message": "BaseLinker-Bestellkennung"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
-          "source": "Add Order",
+          "source": "Add order",
           "message": "Bestellung hinzufügen"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Gewicht pro Einheit in Kilogramm."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
-          "source": "Set Order Fields",
+          "source": "Set order fields",
           "message": "Bestellfelder festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "5 Sterne"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Set Order Status",
+          "source": "Set order status",
           "message": "Bestellstatus festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "Kennung des neuen Bestellstatus; siehe `list-order-statuses`."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
-          "source": "Set Order Payment",
+          "source": "Set order payment",
           "message": "Bestellzahlung festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Vom Zahlungsgateway zugewiesene Kennung"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Bestellung löschen"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Array von zu löschenden BaseLinker-Bestell-IDs (bis zu 1000 pro Aufruf)."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Add Order Product",
+          "source": "Add order product",
           "message": "Bestellprodukt hinzufügen"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Marktplatz-Auktions- oder Angebots-ID (eBay, Allegro, Amazon usw.)."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
-          "source": "Set Order Product Fields",
+          "source": "Set order product fields",
           "message": "Bestellproduktfelder festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "Marktplatz-Auktions- oder Angebots-ID (eBay, Allegro, Amazon usw.)."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Delete Order Product",
+          "source": "Delete order product",
           "message": "Bestellprodukt löschen"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Zu löschende Positionskennung"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
-          "source": "List Order Returns",
+          "source": "List order returns",
           "message": "Bestellrücksendungen auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "Gibt einen Stream von BaseLinker-Bestellrücksendungen über `getOrderReturns` zurück. Unterstützt Cursor-Paginierung über `id_from` und Filter nach Status und Bestätigungsdatum."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
-          "source": "Get Order Return",
+          "source": "Get order return",
           "message": "Bestellretoure abrufen"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "BaseLinker-Bestellretourenkennung"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
-          "source": "Add Order Return",
+          "source": "Add order return",
           "message": "Bestellrücksendung hinzufügen"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "Gewicht pro Einheit in Kilogramm."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
-          "source": "Set Order Return Fields",
+          "source": "Set order return fields",
           "message": "Bestellrücksendungsfelder festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "Zuordnung von `{\"<extra_field_id>\": <value>}` für in BaseLinker konfigurierte benutzerdefinierte Zusatzfelder für Bestellrücksendungen. Textfelder akzeptieren Zeichenfolgen; Dateifelder akzeptieren einen `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`-Hash, bei dem die base64-codierte Datei 2 MB nicht überschreiten darf."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
-          "source": "Set Order Return Status",
+          "source": "Set order return status",
           "message": "Bestellrücksendestatus festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "Kennung des Ziel-Retourenstatus; die Werte stammen aus dem BaseLinker-Endpunkt `getOrderReturnStatusList` und werden über die Referenzdaten `order_return_statuses` bereitgestellt."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
-          "source": "Set Order Return Refund",
+          "source": "Set order return refund",
           "message": "Bestellrücksendungserstattung festlegen"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Vom Erstattungsanbieter zugewiesene Kennung"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
-          "source": "List Inventories",
+          "source": "List inventories",
           "message": "Inventare auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "Listet alle BaseLinker-Inventare (Kataloge) über `getInventories` auf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
-          "source": "List Inventory Products",
+          "source": "List inventory products",
           "message": "Inventarprodukte auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Listet Produkte in einem BaseLinker-Inventar über `getInventoryProductsList` auf. Unterstützt Seitennummer-Paginierung und Filter nach Kategorie, EAN, SKU, Name, Preisspanne und Bestandsspanne."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Get Inventory Product",
+          "source": "Get inventory product",
           "message": "Inventarprodukt abrufen"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "BaseLinker-Inventarproduktkennung"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Add / Update Inventory Product",
+          "source": "Add / update inventory product",
           "message": "Inventarprodukt hinzufügen / aktualisieren"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "Zuordnung von `{\"<product_id>\": <quantity>}`, bei der jeder Schlüssel die Kennung eines in diesem Bundle enthaltenen Produkts ist und der Wert die Stückzahl darstellt."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Delete Inventory Product",
+          "source": "Delete inventory product",
           "message": "Inventarprodukt löschen"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Zu löschendes Produkt"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
-          "source": "List Inventory Stock",
+          "source": "List inventory stock",
           "message": "Inventarbestand auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Listet BaseLinker-Inventar-Produktbestände über `getInventoryProductsStock` auf. Jede Zeile enthält einen nach `product_id` geschlüsselten Hash von Lager → Menge."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
-          "source": "Update Inventory Stock",
+          "source": "Update inventory stock",
           "message": "Lagerbestand aktualisieren"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "Verschachtelte Map im Format `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. Für Produkte ohne Varianten die Produkt-ID als inneres Schlüsselpräfix verwenden (z. B. `0|bl_123`). Bis zu 1000 Produkte pro Aufruf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
-          "source": "List Inventory Prices",
+          "source": "List inventory prices",
           "message": "Inventarpreise auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "Listet BaseLinker-Inventar-Produktpreise über `getInventoryProductsPrices` auf. Jede Zeile enthält einen nach `product_id` geschlüsselten Hash von Preisgruppe → Preis."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
-          "source": "Update Inventory Prices",
+          "source": "Update inventory prices",
           "message": "Inventarpreise aktualisieren"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "Verschachtelte Map im Format `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. Bis zu 1000 Produkte pro Aufruf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
-          "source": "List Inventory Manufacturers",
+          "source": "List inventory manufacturers",
           "message": "Inventarhersteller auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Listet BaseLinker-Inventarhersteller über `getInventoryManufacturers` auf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
-          "source": "List Inventory Categories",
+          "source": "List inventory categories",
           "message": "Inventarkategorien auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
@@ -3124,7 +3124,7 @@
           "message": "Listet BaseLinker-Inventarkategorien über `getInventoryCategories` auf. Wenn `inventory_id` angegeben ist, werden die Ergebnisse auf diesen Katalog beschränkt."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
-          "source": "List Order Packages",
+          "source": "List order packages",
           "message": "Bestellpakete auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
@@ -3136,7 +3136,7 @@
           "message": "Listet Kurierpakete (Sendungen) auf, die mit einer BaseLinker-Bestellung über `getOrderPackages` verknüpft sind."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
-          "source": "Add Courier Package",
+          "source": "Add courier package",
           "message": "Kurierpaket hinzufügen"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "Paketbreite"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
-          "source": "Get Courier Label",
+          "source": "Get courier label",
           "message": "Kurieretikett abrufen"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "Vom Versanddienstleister zugewiesene Sendungsverfolgungs-/Paketnummer. Geben Sie entweder diese oder `package_id` an."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
-          "source": "Delete Courier Package",
+          "source": "Delete courier package",
           "message": "Kurierpaket löschen"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "Wenn `True`, wird das Paket aus BaseLinker entfernt, selbst wenn der Versanddienstleister die Stornierung ablehnt."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "Kuriere auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Listet die für dieses BaseLinker-Konto konfigurierten Kuriere über `getCouriersList` auf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
-          "source": "List Courier Services",
+          "source": "List courier services",
           "message": "Kurierdienste auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "Listet verfügbare Dienste (Produkt-/Tarifoptionen) für einen bestimmten Kurier über `getCourierServices` auf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Courier Accounts",
+          "source": "List courier accounts",
           "message": "Kurierkonten auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Listet die für einen bestimmten Kurier über `getCourierAccounts` konfigurierten Kurierkonto-Anmeldedaten auf."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
-          "source": "List Courier Fields",
+          "source": "List courier fields",
           "message": "Kurierfelder auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "Listet das Schema der benutzerdefinierten Felder (erforderliche/optionale Eingaben) für einen bestimmten Kurier über `getCourierFields` auf. Nützlich bei der programmgesteuerten Erstellung von `createPackage`-Nutzdaten."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
-          "source": "List Order Statuses",
+          "source": "List order statuses",
           "message": "Bestellstatus auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
@@ -3432,7 +3432,7 @@
           "message": "In BaseLinker konfigurierte Bestellstatus über `getOrderStatusList` auflisten."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
-          "source": "List Order Sources",
+          "source": "List order sources",
           "message": "Bestellquellen auflisten"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
@@ -3444,7 +3444,7 @@
           "message": "Listet die in BaseLinker über `getOrderSources` konfigurierten Bestellquellen (Marktplätze/Shops) auf."
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Bestellung erstellt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "Wird ausgelöst, wenn eine neue Bestellung in BaseLinker erstellt wird. (Abgefragt von `getJournalList` `log_type` 1.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
-          "source": "Order Downloaded",
+          "source": "Order downloaded",
           "message": "Bestellung heruntergeladen"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung von einem verknüpften Shop heruntergeladen wird. (Abgefragt von `getJournalList` `log_type` 2.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
-          "source": "Order Paid",
+          "source": "Order paid",
           "message": "Bestellung bezahlt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung als bezahlt markiert wird. (Abgefragt von `getJournalList` `log_type` 3.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
-          "source": "Order Removed",
+          "source": "Order removed",
           "message": "Bestellung entfernt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
@@ -3492,7 +3492,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung entfernt wird. (Abgefragt von `getJournalList` `log_type` 4.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
-          "source": "Orders Merged",
+          "source": "Orders merged",
           "message": "Bestellungen zusammengeführt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
@@ -3504,7 +3504,7 @@
           "message": "Wird ausgelöst, wenn zwei oder mehr Bestellungen zusammengeführt werden. (Abgefragt von `getJournalList` `log_type` 5.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
-          "source": "Order Split",
+          "source": "Order split",
           "message": "Bestellung aufgeteilt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
@@ -3516,7 +3516,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung aufgeteilt wird. (Abgefragt von `getJournalList` `log_type` 6.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
-          "source": "Invoice Issued",
+          "source": "Invoice issued",
           "message": "Rechnung ausgestellt"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
@@ -3528,7 +3528,7 @@
           "message": "Wird ausgelöst, wenn eine Rechnung ausgestellt wird. (Abgefragt von `getJournalList` `log_type` 7.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
-          "source": "Receipt Issued",
+          "source": "Receipt issued",
           "message": "Beleg ausgestellt"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Wird ausgelöst, wenn ein Beleg ausgestellt wird. (Abgefragt über `getJournalList` `log_type` 8.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
-          "source": "Package Created",
+          "source": "Package created",
           "message": "Paket erstellt"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "Wird ausgelöst, wenn ein Kurierpaket erstellt wird. (Abgefragt über `getJournalList` `log_type` 9.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
-          "source": "Package Deleted",
+          "source": "Package deleted",
           "message": "Paket gelöscht"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "Wird ausgelöst, wenn ein Kurierpaket gelöscht wird. (Abgefragt über `getJournalList` `log_type` 10.)"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Delivery Data Edited",
+          "source": "Delivery data edited",
           "message": "Lieferdaten bearbeitet"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "Wird ausgelöst, wenn Lieferdaten zu einer Bestellung bearbeitet werden. (Abgefragt von `getJournalList` `log_type` 11.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
-          "source": "Order Product Added",
+          "source": "Order product added",
           "message": "Bestellprodukt hinzugefügt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Wird ausgelöst, wenn ein Produkt zu einer Bestellung hinzugefügt wird. (Abgefragt von `getJournalList` `log_type` 12.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
-          "source": "Order Product Edited",
+          "source": "Order product edited",
           "message": "Bestellprodukt bearbeitet"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "Wird ausgelöst, wenn eine Produktposition in einer Bestellung bearbeitet wird. (Abgefragt von `getJournalList` `log_type` 13.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
-          "source": "Order Product Removed",
+          "source": "Order product removed",
           "message": "Bestellprodukt entfernt"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
@@ -3612,7 +3612,7 @@
           "message": "Wird ausgelöst, wenn eine Produktposition aus einer Bestellung entfernt wird. (Abgefragt von `getJournalList` `log_type` 14.)"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
-          "source": "Blacklist Entry Added",
+          "source": "Blacklist entry added",
           "message": "Blacklist-Eintrag hinzugefügt"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "Wird ausgelöst, wenn ein Käufer zur Blacklist hinzugefügt wird. (Abgefragt von `getJournalList` `log_type` 15.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Order Data Edited",
+          "source": "Order data edited",
           "message": "Bestelldaten bearbeitet"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3636,7 +3636,7 @@
           "message": "Wird ausgelöst, wenn allgemeine Bestelldaten bearbeitet werden. (Abgefragt von `getJournalList` `log_type` 16.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
-          "source": "Order Copied",
+          "source": "Order copied",
           "message": "Bestellung kopiert"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "Wird ausgelöst, wenn eine Bestellung kopiert wird. (Abgefragt von `getJournalList` `log_type` 17.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Order Status Changed",
+          "source": "Order status changed",
           "message": "Bestellstatus geändert"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
@@ -3660,7 +3660,7 @@
           "message": "Wird ausgelöst, wenn sich der Status einer Bestellung ändert. (Abgefragt von `getJournalList` `log_type` 18.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
-          "source": "Invoice Deleted",
+          "source": "Invoice deleted",
           "message": "Rechnung gelöscht"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Wird ausgelöst, wenn eine Rechnung gelöscht wird. (Abgefragt von `getJournalList` `log_type` 19.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
-          "source": "Receipt Deleted",
+          "source": "Receipt deleted",
           "message": "Beleg gelöscht"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
@@ -3684,7 +3684,7 @@
           "message": "Wird ausgelöst, wenn ein Beleg gelöscht wird. (Abgefragt über `getJournalList` `log_type` 20.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
-          "source": "Invoice Edited",
+          "source": "Invoice edited",
           "message": "Rechnung bearbeitet"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "Wird ausgelöst, wenn eine Rechnung bearbeitet wird. (Abgefragt von `getJournalList` `log_type` 21.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
-          "source": "Package Status Changed",
+          "source": "Package status changed",
           "message": "Paketstatus geändert"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {

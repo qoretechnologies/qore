@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.display_name": {
-          "source": "Create Measurements",
+          "source": "Create measurements",
           "message": "Messwerte erstellen"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Liste der Messereignisse, die erstellt werden sollen"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.display_name": {
-          "source": "Booking Ref",
+          "source": "Booking ref",
           "message": "Buchungsreferenz"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.short_desc": {

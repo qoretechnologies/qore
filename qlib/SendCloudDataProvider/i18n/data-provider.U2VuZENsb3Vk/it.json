@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
+          "source": "List parcels",
           "message": "Elenca pacchi"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Numero massimo di record aggregati da restituire tra le pagine"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Recupera pacco"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Numero di etichette da generare per questo pacco (spedizioni multicollo)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
+          "source": "Update parcel",
           "message": "Aggiorna pacco"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "Nome visualizzato del metodo di spedizione (es. 'Lettera non francata')"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
+          "source": "Cancel parcel",
           "message": "Annulla pacco"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "ID numerico del pacco da annullare"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
+          "source": "Get parcel label",
           "message": "Ottieni etichetta del pacco"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "ID numerico del pacco di cui recuperare gli URL dell'etichetta"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
+          "source": "Get parcel document",
           "message": "Recupera documento del collo"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Immagine PNG (disponibile solo per determinati tipi di documento come i codici QR)"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Elenca metodi di spedizione"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Se `True`, include un dettaglio dei prezzi per ciascun metodo"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
+          "source": "List sender addresses",
           "message": "Elenca indirizzi mittente"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Recupera un elenco di indirizzi del mittente configurati sul tuo account SendCloud; l'indirizzo predefinito del mittente viene utilizzato quando non ne viene specificato un altro su un pacco."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Elenca utenti"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Recupera l'utente/account SendCloud proprietario delle credenziali API correnti. L'elenco contiene al massimo una voce poiché l'API restituisce solo l'utente autenticato."
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "Ottieni utente"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Recupera informazioni sull'utente SendCloud attualmente autenticato (proprietario dell'account)."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
+          "source": "List service points",
           "message": "Elenca punti di servizio"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Codice postale vicino al quale cercare i punti di servizio (con distanza restituita)"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
+          "source": "Search service points",
           "message": "Cerca punti di servizio"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Numero civico utilizzato insieme all'origine della ricerca"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
+          "source": "List returns",
           "message": "Elenca resi"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Numero massimo di record aggregati da restituire tra le pagine"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Ottieni reso"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Numero di telefono del destinatario (richiesto da alcuni vettori)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
+          "source": "Update return",
           "message": "Aggiorna reso"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Motivo del reso aggiornato"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
+          "source": "Cancel return",
           "message": "Annulla reso"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "ID numerico del reso da annullare"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
+          "source": "List brands",
           "message": "Elenca brand"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Recupera un elenco di brand configurati sul tuo account SendCloud. I brand vengono utilizzati per personalizzare le pagine di tracciamento e la documentazione di spedizione."
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
+          "source": "Parcel status changed",
           "message": "Stato del pacco modificato"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Si attiva ogni volta che cambia lo stato di un pacco SendCloud. L'intervallo di polling è configurabile; viene applicato un intervallo minimo per rispettare i limiti delle API SendCloud."
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
+          "source": "Return updated",
           "message": "Reso aggiornato"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {

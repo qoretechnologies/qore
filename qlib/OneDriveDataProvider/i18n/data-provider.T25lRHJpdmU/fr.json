@@ -1076,7 +1076,7 @@
           "message": "Date et heure d'expiration du lien de partage"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Fichier ou dossier modifié"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

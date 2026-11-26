@@ -1960,7 +1960,7 @@
           "message": "要處理的清單項目"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "文件已新增"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "當文件新增至文件庫時觸發。使用差異查詢，從上次中斷處精確繼續，而無需重新讀取整個文件庫"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "文件已修改"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "當文件庫中已有的文件遭到修改時觸發。使用差異查詢，從上次中斷處精確繼續，而無需重新讀取整個文件庫"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "資料夾已新增"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "當資料夾新增至文件庫時觸發"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "清單項目已新增"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

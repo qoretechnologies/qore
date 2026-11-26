@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Pobierz bieżącego użytkownika"
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Pobiera profil zalogowanego użytkownika: imię i nazwisko, adres e-mail, zdjęcie profilowe oraz ustawienia regionalne.\n\nPole `urn` to URN `urn:li:person:{id}` użytkownika, którego interfejsy API LinkedIn wymagają wszędzie tam, gdzie należy wskazać użytkownika."
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
-          "source": "Create Text Post",
+          "source": "Create text post",
           "message": "Utwórz post tekstowy"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
-          "source": "Create Article Post",
+          "source": "Create article post",
           "message": "Utwórz post z artykułem"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Image Post",
+          "source": "Create image post",
           "message": "Utwórz post z obrazem"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
-          "source": "Create Video Post",
+          "source": "Create video post",
           "message": "Utwórz post wideo"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Multi-Image Post",
+          "source": "Create multi-image post",
           "message": "Utwórz post z wieloma obrazami"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
-          "source": "Reshare Post",
+          "source": "Reshare post",
           "message": "Udostępnij post"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Zablokuj możliwość ponownego udostępniania posta przez innych"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update Post",
+          "source": "Update post",
           "message": "Zaktualizuj post"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Nowy tekst posta, zastępujący istniejący tekst.\n\nWzmianki i hasztagi są zapisywane **w tekście**: `@[Qore Technologies](urn:li:organization:2414183)` oznacza organizację, a `#coding` to hasztag."
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete Post",
+          "source": "Delete post",
           "message": "Usuń post"
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "URN posta do usunięcia"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
+          "source": "Get post",
           "message": "Pobierz wpis"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Najnowsza wersja, która może mieć stan `DRAFT` lub `PROCESSING`, a nie być opublikowana"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
-          "source": "Upload Image",
+          "source": "Upload image",
           "message": "Prześlij obraz"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "URN podmiotu, który będzie właścicielem zasobu. Domyślnie jest to uwierzytelniony użytkownik (`urn:li:person:...`); URN organizacji (`urn:li:organization:...`) wymaga roli administratora lub administratora treści na tej stronie oraz zakresu `w_organization_social`"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
-          "source": "Upload Video",
+          "source": "Upload video",
           "message": "Prześlij film"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {

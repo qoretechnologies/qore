@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires Util
+
+%exec-class ActionDisplayNamesSentenceCaseTest
+
+#! The display names of the data provider actions in qlib are labels in sentence case
+/** A user interface lists an app's actions by their display names, beside the labels that
+    @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" derives from field
+    names, which are in sentence case.  An action's display name is written by hand, so this test reads every one in
+    the modules' sources: only its first word starts with a capital letter, apart from words in capitals (API, PDF),
+    words with a capital after their first letter (WebSocket, OAuth2), single capital letters, and proper names: the
+    words of an app's own display name (ex: "Google Drive", "HubSpot") and the product names in @ref ProperNames.
+*/
+class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
+    public {
+        #! Product names that are not the name of an app in qlib but appear in action names
+        const ProperNames = (
+            "Slack", "Word", "Excel", "PowerPoint", "Outlook", "Teams",
+        );
+    }
+
+    private {
+        #! every action display name: label -> files
+        hash<string, list<string>> labels;
+        #! the words of every app's display name
+        hash<string, bool> app_words;
+    }
+
+    constructor() : Test("ActionDisplayNamesSentenceCaseTest", "1.0") {
+        addTestCase("the action display names are found", \foundTest());
+        addTestCase("every action display name is in sentence case", \sentenceCaseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string root = normalize_dir(get_script_dir() + "/../../../../qlib");
+        foreach string file in (findSources(root)) {
+            string src = ReadOnlyFile::readTextFile(file);
+            # comments may quote old or example names
+            src =~ s/\/\*.*?\*\///sg;
+            src =~ s/^[ \t]*#[^\n]*//mg;
+            foreach string app in (src =~ x/<DataProviderAppInfo>\s*\{.{0,1500}?"display_name"\s*:\s*"([^"]+)"/sg ?? ()) {
+                foreach string word in (app.split(" ")) {
+                    app_words{word} = True;
+                }
+            }
+            foreach string label in (src =~ x/"action"\s*:\s*[^,{}\n]+,[^{}]{0,600}?"display_name"\s*:\s*"([^"\n]+)"/g
+                    ?? ()) {
+                labels{label} += (basename(file),);
+            }
+        }
+    }
+
+    foundTest() {
+        assertTrue(labels.size() > 1500, sprintf("action display names found: %d", labels.size()));
+        assertTrue(app_words.size() > 100, sprintf("app name words found: %d", app_words.size()));
+    }
+
+    sentenceCaseTest() {
+        list<string> offenders = ();
+        foreach hash<auto> i in (labels.pairIterator()) {
+            list<string> words = titleCaseWords(i.key);
+            if (words) {
+                offenders += sprintf("%y in %s (%s)", i.key, i.value.join(", "), words.join(", "));
+            }
+        }
+        assertEq((), offenders, "action display names in title case; write them in sentence case and change the "
+            "matching sources in the module's data-provider catalogs");
+    }
+
+    #! The words of a label after its first that start with a capital and are neither acronyms nor proper names
+    private list<string> titleCaseWords(string label) {
+        list<string> rv = ();
+        list<string> words = label.split(" ");
+        for (int i = 1; i < words.size(); ++i) {
+            foreach string piece in (words[i].split("/")) {
+                string core = piece;
+                core =~ s/[^A-Za-z0-9]//g;
+                if (core.length() < 2 || core !~ /^[A-Z]/) {
+                    continue;
+                }
+                # capitals after the first letter: an acronym (PDF) or a name written that way (WebSocket)
+                if (core.substr(1) != core.substr(1).lwr()) {
+                    continue;
+                }
+                if (app_words{piece} || app_words{core} || inlist(core, ProperNames)) {
+                    continue;
+                }
+                rv += piece;
+            }
+        }
+        return rv;
+    }
+
+    private static list<string> findSources(string dir) {
+        list<string> rv = ();
+        foreach string entry in (glob(dir + "/*")) {
+            if (is_dir(entry)) {
+                rv += findSources(entry);
+            } else if (entry =~ /\.(qc|qm)$/) {
+                rv += entry;
+            }
+        }
+        return rv;
+    }
+}

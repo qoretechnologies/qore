@@ -592,7 +592,7 @@
           "message": "要刪除之聯絡人的唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -656,7 +656,7 @@
           "message": "聯絡人 ID"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign Tag to Contact",
+          "source": "Assign tag to Contact",
           "message": "指派標籤給聯絡人"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
@@ -692,7 +692,7 @@
           "message": "要指派給聯絡人的標籤唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from Contact",
           "message": "從聯絡人移除標籤"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
@@ -728,7 +728,7 @@
           "message": "要從聯絡人移除之標籤的唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "建立標籤"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "要建立的標籤名稱"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
+          "source": "Update tag",
           "message": "更新標籤"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
@@ -788,7 +788,7 @@
           "message": "標籤的新名稱"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
+          "source": "Delete tag",
           "message": "刪除標籤"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -812,7 +812,7 @@
           "message": "要刪除之標籤的唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
@@ -856,7 +856,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
-          "source": "Get Tag",
+          "source": "Get tag",
           "message": "取得標籤"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
@@ -876,7 +876,7 @@
           "message": "標籤 ID"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact Field",
+          "source": "Create Contact field",
           "message": "建立聯絡人欄位"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -912,7 +912,7 @@
           "message": "自訂聯絡人欄位的唯一代稱 (slug) 識別碼"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact Field",
+          "source": "Update Contact field",
           "message": "更新聯絡人欄位"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -948,7 +948,7 @@
           "message": "自訂聯絡人欄位的新顯示名稱"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact Field",
+          "source": "Delete Contact field",
           "message": "刪除聯絡人欄位"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "要刪除之自訂聯絡人欄位的唯一 slug 識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact Fields",
+          "source": "List Contact fields",
           "message": "列出聯絡人欄位"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact Field",
+          "source": "Get Contact field",
           "message": "取得聯絡人欄位"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "聯絡人欄位 slug"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "列出課程"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -1080,7 +1080,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create Enrollment",
+          "source": "Create enrollment",
           "message": "建立註冊"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1152,7 +1152,7 @@
           "message": "要授予存取權的單元 ID 清單。當 `accessType` 為 `partial_access` 時為必填"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Delete Enrollment",
+          "source": "Delete enrollment",
           "message": "刪除註冊"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "要刪除之註冊的唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "列出註冊"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "列出社群"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Create Membership",
+          "source": "Create membership",
           "message": "建立成員資格"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "要新增為成員的聯絡人唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Delete Membership",
+          "source": "Delete membership",
           "message": "刪除成員資格"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "要刪除之成員資格的唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
-          "source": "List Memberships",
+          "source": "List memberships",
           "message": "名單成員資格"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "降序"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Cancel Subscription",
+          "source": "Cancel subscription",
           "message": "取消訂閱"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "要取消的訂閱唯一識別碼"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "列出訂閱"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "在 Systeme.io 中建立新聯絡人時觸發"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
-          "source": "New Tag",
+          "source": "New tag",
           "message": "新標籤"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {

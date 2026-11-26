@@ -410,7 +410,7 @@ public class IntercomManifest {
                 "mutates_state": False,
                 "path": "/contacts/search",
                 "operation_id": "SearchContacts",
-                "display_name": "Search Contacts",
+                "display_name": "Search contacts",
                 "short_desc": "Find contacts matching a query",
                 "desc": "Searches the workspace's contacts.\n\n"
                     "`query` is either a single filter - `{field, operator, value}` - or a boolean "
@@ -430,7 +430,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/contacts",
                 "operation_id": "ListContacts",
-                "display_name": "List Contacts",
+                "display_name": "List contacts",
                 "short_desc": "List the contacts in the workspace",
                 "desc": "Lists contacts, newest first.\n\n"
                     "This is exported so that the contact dropdowns have an action to call; **Search "
@@ -485,7 +485,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/tags",
                 "operation_id": "listTags",
-                "display_name": "List Tags",
+                "display_name": "List tags",
                 "short_desc": "List the tags defined in the workspace",
                 "desc": "Lists every tag defined in the workspace.\n\n"
                     "This listing is not paged: Intercom returns the whole set in one response.",
@@ -562,7 +562,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/companies",
                 "operation_id": "createOrUpdateCompany",
-                "display_name": "Create or Update Company",
+                "display_name": "Create or update company",
                 "short_desc": "Create a company, or update the one with this company ID",
                 "desc": "Creates a company, or updates the existing one with the same `company_id`.\n\n"
                     "`company_id` is **your** identifier for the company, not Intercom's: it is what "
@@ -597,7 +597,7 @@ public class IntercomManifest {
                 "mutates_state": False,
                 "path": "/companies/list",
                 "operation_id": "listAllCompanies",
-                "display_name": "List Companies",
+                "display_name": "List companies",
                 "short_desc": "List the companies in the workspace",
                 "desc": "Lists every company in the workspace.\n\n"
                     "This is the one listing Intercom pages by **page number** rather than by cursor: "
@@ -621,7 +621,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/conversations",
                 "operation_id": "createConversation",
-                "display_name": "Create Conversation",
+                "display_name": "Create conversation",
                 "short_desc": "Start a conversation as a contact",
                 "desc": "Starts a conversation **from a contact** - as though the contact had written "
                     "in.\n\n"
@@ -665,7 +665,7 @@ public class IntercomManifest {
                 "mutates_state": False,
                 "path": "/conversations/search",
                 "operation_id": "searchConversations",
-                "display_name": "Search Conversations",
+                "display_name": "Search conversations",
                 "short_desc": "Find conversations matching a query",
                 "desc": "Searches the workspace's conversations.\n\n"
                     "`query` takes the same shape as **Search Contacts**: a single "
@@ -682,7 +682,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/messages",
                 "operation_id": "createMessage",
-                "display_name": "Create Message",
+                "display_name": "Create message",
                 "short_desc": "Send a message to a contact from a teammate",
                 "desc": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n"
                     "`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows "
@@ -724,7 +724,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/events",
                 "operation_id": "createDataEvent",
-                "display_name": "Submit Data Event",
+                "display_name": "Submit data event",
                 "short_desc": "Record that a contact did something",
                 "desc": "Records a data event against a contact - a signup, a purchase, a feature used.\n\n"
                     "The contact is named in exactly one of three ways: `id` is Intercom's identity for "
@@ -780,7 +780,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/events",
                 "operation_id": "lisDataEvents",
-                "display_name": "List Data Events",
+                "display_name": "List data Events",
                 "short_desc": "Summarise the data events recorded for one contact",
                 "desc": "Returns a summary of the data events recorded for **one contact**.\n\n"
                     "This is not a listing of the workspace's events: `filter` names the contact - by "
@@ -815,7 +815,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/articles",
                 "operation_id": "listArticles",
-                "display_name": "List Articles",
+                "display_name": "List articles",
                 "short_desc": "List the help center articles",
                 "desc": "Lists the workspace's help center articles.\n\n"
                     "Intercom's description declares no paging arguments for this operation even though it "
@@ -830,7 +830,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/help_center/collections",
                 "operation_id": "listAllCollections",
-                "display_name": "List Collections",
+                "display_name": "List collections",
                 "short_desc": "List the help center collections",
                 "desc": "Lists the help center collections articles can be filed under.\n\n"
                     "This is exported so that **Create Article**'s parent dropdown has an action to "
@@ -847,7 +847,7 @@ public class IntercomManifest {
                 "method": "POST",
                 "path": "/articles",
                 "operation_id": "createArticle",
-                "display_name": "Create Article",
+                "display_name": "Create article",
                 "short_desc": "Write a help center article",
                 "desc": "Creates a help center article.\n\n"
                     "`author_id` has to be a teammate on the help center's workspace. `state` decides "
@@ -903,7 +903,7 @@ public class IntercomManifest {
                 "method": "GET",
                 "path": "/admins",
                 "operation_id": "listAdmins",
-                "display_name": "List Teammates",
+                "display_name": "List teammates",
                 "short_desc": "List the teammates with access to the workspace",
                 "desc": "Lists the teammates who have access to the workspace.\n\n"
                     "This is exported so that the teammate dropdowns have an action to call - an article's "

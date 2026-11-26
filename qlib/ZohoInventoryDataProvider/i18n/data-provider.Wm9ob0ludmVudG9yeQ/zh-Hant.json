@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "搜尋聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -648,7 +648,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
-          "source": "Mark Contact Active/Inactive",
+          "source": "Mark Contact active/inactive",
           "message": "標記聯絡人為有效/停用"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "`True` 標記為有效，`False` 標記為停用"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
-          "source": "List Contact Persons",
+          "source": "List Contact persons",
           "message": "列出聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
@@ -716,7 +716,7 @@
           "message": "母聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Create Contact Person",
+          "source": "Create Contact person",
           "message": "建立聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -784,7 +784,7 @@
           "message": "職稱或頭銜"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Get Contact Person",
+          "source": "Get Contact person",
           "message": "取得聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -812,7 +812,7 @@
           "message": "要檢索的聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Update Contact Person",
+          "source": "Update Contact person",
           "message": "更新聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -880,7 +880,7 @@
           "message": "職稱或頭銜"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Delete Contact Person",
+          "source": "Delete Contact person",
           "message": "刪除聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -908,7 +908,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
-          "source": "Mark Contact Person Primary",
+          "source": "Mark Contact person primary",
           "message": "標記主要聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
@@ -936,7 +936,7 @@
           "message": "要標記為主要的聯絡人"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "列出項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
@@ -996,7 +996,7 @@
           "message": "銷售與採購品項"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "建立項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "庫存帳戶"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "取得項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "要檢索的項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "更新項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "品項成本價"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
-          "source": "Mark Item Active/Inactive",
+          "source": "Mark item active/inactive",
           "message": "標記品項為有效/停用"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "啟用狀態"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "刪除項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "要刪除的項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
-          "source": "List Item Groups",
+          "source": "List item groups",
           "message": "列製品項群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "依群組名稱篩選"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Create Item Group",
+          "source": "Create item group",
           "message": "建立品項群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "群組中帶有屬性的品項清單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Get Item Group",
+          "source": "Get item group",
           "message": "取得項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "要檢索的項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Update Item Group",
+          "source": "Update item group",
           "message": "更新項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "群組中的品項"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Delete Item Group",
+          "source": "Delete item group",
           "message": "刪除項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "要刪除的項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
-          "source": "List Item Adjustments",
+          "source": "List item adjustments",
           "message": "列製品項調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Zoho Inventory 組織"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Create Item Adjustment",
+          "source": "Create item adjustment",
           "message": "建立品項調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "調整參考編號"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Get Item Adjustment",
+          "source": "Get item adjustment",
           "message": "取得庫存調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "要檢索的庫存調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Delete Item Adjustment",
+          "source": "Delete item adjustment",
           "message": "刪除庫存調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "要刪除的庫存調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "列出包裹類型"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "依包裹編號篩選"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
-          "source": "Create Package",
+          "source": "Create package",
           "message": "建立包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "自訂包裹編號"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
-          "source": "Get Package",
+          "source": "Get package",
           "message": "取得包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "要檢索的包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
-          "source": "Update Package",
+          "source": "Update package",
           "message": "更新包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "包裹備註"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
-          "source": "Delete Package",
+          "source": "Delete package",
           "message": "刪除包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "要刪除的包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "列出採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "已開立帳單的採購訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
+          "source": "Create purchase order",
           "message": "建立採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "採購單備註"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "取得採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "要擷取的採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
+          "source": "Update purchase order",
           "message": "更新採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "採購單備註"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
+          "source": "Delete purchase order",
           "message": "刪除採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "要刪除的採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "列出銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "作廢銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "建立銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "條款與條件"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "取得銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "要擷取的銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "更新銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "條款與條件"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "刪除銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "要刪除的銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "列出發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "部分付款發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "建立發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "關聯的銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "取得發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "要擷取的發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "更新發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "參考編號"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "刪除發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "要刪除的發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
-          "source": "List Shipment Orders",
+          "source": "List shipment orders",
           "message": "列出發貨訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "依發貨狀態篩選"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Create Shipment Order",
+          "source": "Create shipment order",
           "message": "建立發貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "發貨備註"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Get Shipment Order",
+          "source": "Get shipment order",
           "message": "取得出貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "要檢索的出貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Update Shipment Order",
+          "source": "Update shipment order",
           "message": "更新出貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "發貨備註"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Delete Shipment Order",
+          "source": "Delete shipment order",
           "message": "刪除出貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "要刪除的出貨單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
-          "source": "Mark Shipment Delivered",
+          "source": "Mark shipment delivered",
           "message": "標記發貨為已送達"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
@@ -3076,7 +3076,7 @@
           "message": "檢查新聯絡人的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "新發票"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "檢查新發票的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "New Item Adjustment",
+          "source": "New item adjustment",
           "message": "新品項調整"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "檢查新品項調整的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "New Item Group",
+          "source": "New item group",
           "message": "新項目群組"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "檢查新項目群組的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "新項目"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "檢查新項目的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
-          "source": "New Package",
+          "source": "New package",
           "message": "新包裹"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "檢查新包裹的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "新增採購單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "檢查新採購單的頻率（秒）"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "新增銷售訂單"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

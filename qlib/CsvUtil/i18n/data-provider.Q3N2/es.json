@@ -16,7 +16,7 @@
           "message": "Leer y escribir datos de archivos CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Leer archivo CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "si es `true` (predeterminado `false`), si una línea se procesa con un recuento de columnas o campos diferente al de otras líneas, se genera una excepción `CSVFILEITERATOR-DATA-ERROR`\n\nTenga en cuenta que habilitar esta opción afectará al rendimiento"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Leer datos CSV en línea"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "si es `true` (predeterminado `false`), si una línea se procesa con un recuento de columnas o campos diferente al de otras líneas, se genera una excepción `CSVFILEITERATOR-DATA-ERROR`\n\nTenga en cuenta que habilitar esta opción afectará al rendimiento"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Perfilar datos CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Si es `True` (predeterminado), los valores de muestra y los contraejemplos se ocultan según su forma: las letras pasan a ser `x` o `X` y los dígitos `9`, para que un perfil pueda compartirse sin los datos"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Escribir datos CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "Establézcalo en `false` para suprimir la salida de encabezados; el valor predeterminado es `true`, lo que significa generar encabezados si están presentes"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Crear datos CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "Crea spedizione"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Se `True`, le tariffe verranno generate in modo asincrono. L'impostazione predefinita è `False`."
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "Ottieni spedizione"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "L'identificatore univoco della spedizione da recuperare"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "Cerca spedizioni"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -1760,7 +1760,7 @@
           "message": "Recupera un elenco di spedizioni da Shippo con filtro opzionale per data di creazione."
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
-          "source": "Create Label by Rate",
+          "source": "Create label by rate",
           "message": "Crea etichetta per tariffa"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "L'identificatore univoco della transazione (etichetta di spedizione) da recuperare"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
-          "source": "Search Shipping Labels",
+          "source": "Search shipping labels",
           "message": "Cerca etichette di spedizione"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Consegna non riuscita"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Crea ordine"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Eventuali note o istruzioni speciali per l'ordine"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Ottieni ordine"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "L'identificatore univoco dell'ordine da recuperare"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Elenca ordini"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -2712,7 +2712,7 @@
           "message": "Spedito"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
-          "source": "Validate Address",
+          "source": "Validate address",
           "message": "Valida indirizzo"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Indica se l'indirizzo è una posizione residenziale"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
-          "source": "New Parcel",
+          "source": "New parcel",
           "message": "Nuovo pacco"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "Si attiva quando viene rilevato un nuovo pacco in Shippo tramite polling. Fornisce i dettagli del pacco, incluse dimensioni e peso."
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
-          "source": "New Shipment",
+          "source": "New shipment",
           "message": "Nuova spedizione"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Si attiva quando viene rilevata una nuova spedizione in Shippo tramite polling. Fornisce i dettagli della spedizione, inclusi indirizzi, pacchi e tariffe disponibili."
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
-          "source": "New Shipping Label",
+          "source": "New shipping label",
           "message": "Nuova etichetta di spedizione"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Si attiva quando viene rilevata una nuova etichetta di spedizione (transazione) in Shippo tramite polling. Fornisce i dettagli dell'etichetta, inclusi codice di tracciamento e URL dell'etichetta."
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
-          "source": "New Order",
+          "source": "New order",
           "message": "Nuovo ordine"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {

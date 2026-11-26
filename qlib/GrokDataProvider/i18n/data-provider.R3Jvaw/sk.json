@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Viacnásobný chat"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Spracovať požiadavku pomocou modelu"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Neorezávať; ak kontext prekročí limit, vrátiť chybu"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Streamovať odpoveď"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "Neorezávať; ak kontext prekročí limit, vrátiť chybu"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "Vytvoriť odpoveď"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
@@ -4564,7 +4564,7 @@
           "message": "Jedinečný identifikátor odpovede, ktorá sa má získať"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "Odstrániť odpoveď"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -4600,7 +4600,7 @@
           "message": "Jedinečný identifikátor odpovede, ktorá sa má odstrániť"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
-          "source": "Get Deferred Completion",
+          "source": "Get deferred completion",
           "message": "Získať odložené dokončenie"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {

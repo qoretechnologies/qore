@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Доповнення чату"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Непрозорий ідентифікатор кінцевого користувача. Реєструється на стороні сервера для відстеження зловживань та обліку використання; не впливає на генерацію."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Створити ембединги"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Непрозорий ідентифікатор, що представляє кінцевого користувача. Фіксується в журналі на стороні сервера для відстеження зловживань та атрибуції використання; не впливає на результат."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "Обмежена генерація"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Якщо встановлено `True`, кожен запис логарифмічної ймовірності включає декодований текст токена на додаток до ідентифікатора токена. Простіше для перевірки, але збільшує обсяг корисного навантаження."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Отримати інформацію про сервер"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Повертає конфігурацію сервера SGLang (назва моделі, шлях токенізатора, max_total_tokens, chat_template тощо) та стан середовища виконання (версія, пристрій CUDA, кількість GPU). Корисно для перевірки працездатності та валідації конфігурації."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "Очистити кеш KV"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

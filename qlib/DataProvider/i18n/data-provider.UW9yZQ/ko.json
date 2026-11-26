@@ -16,7 +16,7 @@
           "message": "데이터 파이프라인에서 레코드를 필터링, 변환 및 조작하기 위한 내장 Qore 데이터 파이프라인 프로세서"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
+          "source": "Filter records",
           "message": "레코드 필터링"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
@@ -52,7 +52,7 @@
           "message": "레코드를 필터링하기 위한 DPQL 문자열 표현식입니다. 표현식 작성기를 사용하는 대신 조건자를 텍스트로 직접 작성할 때 이 옵션을 사용하십시오"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
+          "source": "Select fields",
           "message": "필드 선택"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
@@ -76,7 +76,7 @@
           "message": "필드 지정 목록입니다. 필드를 그대로 유지하려면 `name`(을)를 사용하고, 필드 이름을 바꾸려면 `new_name=old_name`(을)를 사용하세요 (예: `name`, `email`, `customer_name=name`)"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
+          "source": "Set fields",
           "message": "필드 설정"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
@@ -100,7 +100,7 @@
           "message": "각 레코드에 설정할 필드 이름 및 값의 해시입니다. 기존 필드는 덮어쓰고 새 필드는 추가됩니다"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "필드 제거"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "각 레코드에서 제거할 필드 이름 목록입니다. 중첩 필드에 대한 점 표기법을 지원합니다(예: `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "찾기 및 바꾸기"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
@@ -268,7 +268,7 @@
           "message": "첫 번째 항목뿐만 아니라 일치하는 모든 항목을 찾습니다"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
+          "source": "Record limit",
           "message": "레코드 제한"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
@@ -292,7 +292,7 @@
           "message": "파이프라인을 통과할 최대 레코드 수입니다. 한도에 도달하면 이후의 모든 레코드는 삭제됩니다"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
+          "source": "Running statistics",
           "message": "누적 통계"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
+          "source": "Moving average",
           "message": "이동 평균"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
@@ -376,7 +376,7 @@
           "message": "지수 이동 평균(EMA)을 계산할 때 과거 값 대비 최신 값에 부여할 가중치를 제어합니다. 값이 클수록 평균이 최근 변화에 더 빠르게 반응하지만 노이즈도 커집니다.\n\n**일반적인 값**: `0.1`(매끄러움, 느린 반응), `0.2`(균형 잡힘, 적절한 기본값), `0.5`(반응 빠름, 변화를 빠르게 추적); `0.0`와 `1.0` 사이(양 끝값 제외)여야 함; 기본값: `0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
+          "source": "Trend analysis",
           "message": "추세 분석"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
@@ -424,7 +424,7 @@
           "message": "추세가 `rising` 또는 `falling`(으)로 분류되기 위한 최소 기울기 크기입니다. 이 임계값 미만의 기울기는 `flat`(으)로 분류됩니다.\n\n**일반적인 값**: `0.001` (민감함 — 매우 완만한 추세 감지), `0.01` (보통), `0.1` (강한 추세만); 데이터의 스케일이 크고 유의미한 추세의 기울기가 작은 경우 더 작은 값을 사용하세요. >= `0`이어야 합니다. 기본값: `0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
+          "source": "Anomaly detection",
           "message": "이상 감지"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "이상값으로 간주하기 위해 값이 평균에서 몇 표준편차만큼 떨어져 있어야 하는지를 지정합니다(이를 *z-score*라고 합니다). 예를 들어 임계값 `3.0`은(는) 값이 평균에서 3 표준편차 이상 떨어져 있어야 감지됨을 의미합니다.\n\n**일반적인 값**: `2.0`(민감 — 무작위 데이터의 약 5% 감지), `3.0`(표준 — 약 0.3% 감지), `4.0`(보수적 — 극단적인 이상값만 감지). `0`보다 커야 합니다. 기본값: `3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
+          "source": "Calculate data distribution",
           "message": "데이터 분포 계산"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "계산할 백분위수 값의 쉼표로 구분된 목록입니다 (`0`–`100`). 예를 들어 `50`(은)는 중앙값이고, `25` 및 `75`(은)는 각각 하위 및 상위 사분위수입니다. 기본값: `\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
+          "source": "Find related fields",
           "message": "연관된 필드 찾기"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
@@ -556,7 +556,7 @@
           "message": "상관관계 행렬을 계산하기 전에 누적할 레코드 수입니다. 계산 후에는 윈도우가 초기화됩니다.\n\n**크기 설정 가이드**: 상관관계는 안정적인 결과를 위해 충분한 데이터가 필요합니다. 기본 상관관계에는 최소 `30`개, 신뢰할 수 있는 결과에는 `100`개 이상을 사용하십시오."
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
+          "source": "Find delayed relationships",
           "message": "지연된 관계 찾기"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
@@ -616,7 +616,7 @@
           "message": "한 필드를 다른 필드에 대해 이동할 최대 타임스텝 수입니다. `window_size / 4`을(를) 자동으로 사용하려면 `0`으(로) 설정하십시오. 기본값: `0`(자동)"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
+          "source": "Count value ranges",
           "message": "값 범위 개수 계산"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
@@ -684,7 +684,7 @@
           "message": "분위수 (동일 개수 구간)"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
+          "source": "Measure speed of change",
           "message": "변화 속도 측정"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
@@ -732,7 +732,7 @@
           "message": "활성화하면 도함수를 계산하기 전에 윈도우 전체에 단순 이동 평균을 적용하여 변화율의 노이즈를 줄입니다. 원시 포인트 간 변화율을 보려면 비활성화하세요. 기본값: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
+          "source": "Monitor process Stability",
           "message": "프로세스 안정성 모니터링"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "프로세스의 예상 중심/목표 값입니다. 설정하지 않으면 슬라이딩 윈도우 기록의 평균이 자동으로 사용됩니다. 고정된 중심선을 사용하려면 임의의 값(`0` 포함)으로 설정하십시오. 기본값: auto(윈도우 평균 사용)"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
+          "source": "Detect repeating patterns",
           "message": "반복 패턴 감지"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
@@ -864,7 +864,7 @@
           "message": "보고 대상이 되기 위한 반복 패턴의 최소 강도(자기상관으로 측정, `0`~`1`)입니다. 자기상관은 데이터 계열이 자체의 이동된 복사본과 얼마나 유사한지를 측정합니다.\n\n**일반적인 값**: `0.2`(약하거나 노이즈가 있는 패턴 감지), `0.3`(균형 잡힌 기본값), `0.5`(강하고 명확한 패턴만 보고); 기본값: `0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
+          "source": "Group by and aggregate",
           "message": "그룹화 및 집계"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {

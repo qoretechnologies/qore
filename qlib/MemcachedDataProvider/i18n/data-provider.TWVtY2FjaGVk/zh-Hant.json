@@ -16,7 +16,7 @@
           "message": "Memcached 分散式記憶體物件快取系統"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
+          "source": "Set value",
           "message": "設定值"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
@@ -28,7 +28,7 @@
           "message": "在 memcached 中儲存鍵值組，並覆寫任何現有值"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
+          "source": "Add value",
           "message": "新增值"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
@@ -40,7 +40,7 @@
           "message": "僅在鍵尚不存在時於 memcached 中儲存鍵值組"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
+          "source": "Replace value",
           "message": "取代值"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "僅在鍵已存在時取代 memcached 中的值"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
+          "source": "Compare and swap",
           "message": "比較並交換"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
@@ -64,7 +64,7 @@
           "message": "僅在其 CAS 權杖相符時更新值（樂觀鎖定）"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
+          "source": "Get value",
           "message": "取得值"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
@@ -88,7 +88,7 @@
           "message": "檢索快取值及其用於樂觀鎖定的 CAS 權杖"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
+          "source": "Multi-get",
           "message": "多重取得"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
@@ -172,7 +172,7 @@
           "message": "檢索 memcached 伺服器版本"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
+          "source": "Flush all",
           "message": "清空全部"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {

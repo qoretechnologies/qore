@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "주문 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "`getOrders`을(를) 통해 BaseLinker 주문 스트림을 반환합니다. `id_from`/`date_from`을(를) 통한 커서 페이지네이션을 지원하며 상태, 이메일 및 소스 채널별 필터링을 지원합니다. 페이지 크기는 호출당 주문 100개로 BaseLinker에 의해 고정되어 있습니다."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "주문 가져오기"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
@@ -372,7 +372,7 @@
           "message": "BaseLinker 주문 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
-          "source": "Add Order",
+          "source": "Add order",
           "message": "주문 추가"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
@@ -928,7 +928,7 @@
           "message": "킬로그램 단위의 개당 무게입니다."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
-          "source": "Set Order Fields",
+          "source": "Set order fields",
           "message": "주문 필드 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "별 5개"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
-          "source": "Set Order Status",
+          "source": "Set order status",
           "message": "주문 상태 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
@@ -1340,7 +1340,7 @@
           "message": "새 주문 상태 식별자입니다. `list-order-statuses`을(를) 참조하세요."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
-          "source": "Set Order Payment",
+          "source": "Set order payment",
           "message": "주문 결제 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "결제 게이트웨이에서 할당한 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "주문 삭제"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "삭제할 BaseLinker 주문 ID 배열 (호출당 최대 1000개)."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Add Order Product",
+          "source": "Add order product",
           "message": "주문 제품 추가"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "마켓플레이스 경매 또는 리스팅 ID(eBay, Allegro, Amazon 등)입니다."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
-          "source": "Set Order Product Fields",
+          "source": "Set order product fields",
           "message": "주문 품목 필드 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "마켓플레이스 경매 또는 리스팅 ID(eBay, Allegro, Amazon 등)입니다."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
-          "source": "Delete Order Product",
+          "source": "Delete order product",
           "message": "주문 제품 삭제"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "삭제할 품목 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
-          "source": "List Order Returns",
+          "source": "List order returns",
           "message": "주문 반품 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
@@ -1896,7 +1896,7 @@
           "message": "`getOrderReturns`을(를) 통해 BaseLinker 주문 반품 스트림을 반환합니다. `id_from`을(를) 통한 커서 페이지네이션 및 상태와 확인 날짜별 필터링을 지원합니다."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
-          "source": "Get Order Return",
+          "source": "Get order return",
           "message": "주문 반품 조회"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
@@ -1916,7 +1916,7 @@
           "message": "BaseLinker 주문 반품 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
-          "source": "Add Order Return",
+          "source": "Add order return",
           "message": "주문 반품 추가"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "킬로그램 단위의 개당 무게입니다."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
-          "source": "Set Order Return Fields",
+          "source": "Set order return fields",
           "message": "주문 반품 필드 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
@@ -2512,7 +2512,7 @@
           "message": "BaseLinker에 구성된 사용자 지정 주문 반품 추가 필드에 대한 `{\"<extra_field_id>\": <value>}`의 맵입니다. 텍스트 필드는 문자열을 사용하고, 파일 필드는 base64로 인코딩된 파일 크기가 2MB를 초과하지 않아야 하는 `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` 해시를 사용합니다."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
-          "source": "Set Order Return Status",
+          "source": "Set order return status",
           "message": "주문 반품 상태 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "대상 반품 상태 식별자입니다. 값은 BaseLinker의 `getOrderReturnStatusList` 엔드포인트에서 가져오며 `order_return_statuses` 참조 데이터를 통해 표시됩니다."
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
-          "source": "Set Order Return Refund",
+          "source": "Set order return refund",
           "message": "주문 반품 환불 설정"
         },
         "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "환불 제공업체에서 할당한 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
-          "source": "List Inventories",
+          "source": "List inventories",
           "message": "인벤토리 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
@@ -2620,7 +2620,7 @@
           "message": "`getInventories`을(를) 통해 모든 BaseLinker 인벤토리(카탈로그)를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
-          "source": "List Inventory Products",
+          "source": "List inventory products",
           "message": "인벤토리 상품 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "`getInventoryProductsList`을(를) 통해 BaseLinker 인벤토리의 상품을 나열합니다. 페이지 번호 매기기 및 카테고리, EAN, SKU, 이름, 가격 범위, 재고 범위별 필터링을 지원합니다."
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Get Inventory Product",
+          "source": "Get inventory product",
           "message": "재고 제품 조회"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "BaseLinker 재고 제품 식별자"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Add / Update Inventory Product",
+          "source": "Add / update inventory product",
           "message": "재고 제품 추가/업데이트"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "각 키가 이 번들에 포함된 제품의 식별자이고 값이 수량인 `{\"<product_id>\": <quantity>}` 맵입니다."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
-          "source": "Delete Inventory Product",
+          "source": "Delete inventory product",
           "message": "재고 제품 삭제"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "삭제할 제품"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
-          "source": "List Inventory Stock",
+          "source": "List inventory stock",
           "message": "인벤토리 재고 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "`getInventoryProductsStock`을(를) 통해 BaseLinker 인벤토리 상품 재고 수준을 나열합니다. 각 행에는 창고 → 수량 형식의 `product_id` 키 해시가 포함됩니다."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
-          "source": "Update Inventory Stock",
+          "source": "Update inventory stock",
           "message": "재고 수량 업데이트"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "`{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}` 형식의 중첩 맵입니다. 비변형 제품의 경우 제품 ID를 내부 키 접두사(예: `0|bl_123`)로 사용합니다. 호출당 최대 1000개 제품을 지원합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
-          "source": "List Inventory Prices",
+          "source": "List inventory prices",
           "message": "인벤토리 가격 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
@@ -3068,7 +3068,7 @@
           "message": "`getInventoryProductsPrices`을(를) 통해 BaseLinker 인벤토리 상품 가격을 나열합니다. 각 행에는 가격 그룹 → 가격 형식의 `product_id` 키 해시가 포함됩니다."
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
-          "source": "Update Inventory Prices",
+          "source": "Update inventory prices",
           "message": "재고 가격 업데이트"
         },
         "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "`{\"<product_id>\": {\"<price_group_id>\": <price>}}` 형식의 중첩 맵입니다. 호출당 최대 1000개 제품을 지원합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
-          "source": "List Inventory Manufacturers",
+          "source": "List inventory manufacturers",
           "message": "인벤토리 제조업체 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "`getInventoryManufacturers`을(를) 통해 BaseLinker 인벤토리 제조업체를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
-          "source": "List Inventory Categories",
+          "source": "List inventory categories",
           "message": "인벤토리 카테고리 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
@@ -3124,7 +3124,7 @@
           "message": "`getInventoryCategories`을(를) 통해 BaseLinker 인벤토리 카테고리를 나열합니다. `inventory_id`이(가) 제공되면 결과 범위가 해당 카탈로그로 한정됩니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
-          "source": "List Order Packages",
+          "source": "List order packages",
           "message": "주문 패키지 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
@@ -3136,7 +3136,7 @@
           "message": "`getOrderPackages`을(를) 통해 BaseLinker 주문과 연결된 배송업체 패키지(배송물)를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
-          "source": "Add Courier Package",
+          "source": "Add courier package",
           "message": "택배 패키지 추가"
         },
         "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "소포 너비"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
-          "source": "Get Courier Label",
+          "source": "Get courier label",
           "message": "택배 라벨 조회"
         },
         "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "운송업체가 할당한 운송장/패키지 번호입니다. 이것 또는 `package_id` 중 하나를 입력하십시오."
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
-          "source": "Delete Courier Package",
+          "source": "Delete courier package",
           "message": "택배 패키지 삭제"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
@@ -3372,7 +3372,7 @@
           "message": "`True`인 경우, 운송업체가 취소를 거부하더라도 BaseLinker에서 패키지를 제거합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
-          "source": "List Couriers",
+          "source": "List couriers",
           "message": "택배사 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "`getCouriersList`을(를) 통해 이 BaseLinker 계정에 구성된 배송업체 목록을 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
-          "source": "List Courier Services",
+          "source": "List courier services",
           "message": "배송업체 서비스 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
@@ -3396,7 +3396,7 @@
           "message": "`getCourierServices`을(를) 통해 지정된 배송업체의 이용 가능한 서비스(상품/등급 옵션)를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Courier Accounts",
+          "source": "List courier accounts",
           "message": "배송업체 계정 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "`getCourierAccounts`을(를) 통해 지정된 배송업체에 구성된 배송업체 계정 자격 증명을 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
-          "source": "List Courier Fields",
+          "source": "List courier fields",
           "message": "배송업체 필드 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
@@ -3420,7 +3420,7 @@
           "message": "`getCourierFields`을(를) 통해 지정된 배송업체의 커스텀 필드 스키마(필수/선택 입력값)를 나열합니다. 프로그래밍 방식으로 `createPackage` 페이로드를 구성할 때 유용합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
-          "source": "List Order Statuses",
+          "source": "List order statuses",
           "message": "주문 상태 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
@@ -3432,7 +3432,7 @@
           "message": "`getOrderStatusList`을(를) 통해 BaseLinker에 구성된 주문 상태를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
-          "source": "List Order Sources",
+          "source": "List order sources",
           "message": "주문 소스 목록 조회"
         },
         "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
@@ -3444,7 +3444,7 @@
           "message": "`getOrderSources`을(를) 통해 BaseLinker에 구성된 주문 소스(마켓플레이스/쇼핑몰)를 나열합니다."
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "주문 생성됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3456,7 +3456,7 @@
           "message": "BaseLinker에서 새 주문이 생성될 때 발생합니다. (`getJournalList` `log_type` 1에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
-          "source": "Order Downloaded",
+          "source": "Order downloaded",
           "message": "주문 다운로드됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "연결된 상점에서 주문이 다운로드될 때 발생합니다. (`getJournalList` `log_type` 2에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
-          "source": "Order Paid",
+          "source": "Order paid",
           "message": "주문 결제 완료"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
@@ -3480,7 +3480,7 @@
           "message": "주문이 결제 완료로 표시될 때 실행됩니다. (`getJournalList` `log_type` 3에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
-          "source": "Order Removed",
+          "source": "Order removed",
           "message": "주문 삭제됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
@@ -3492,7 +3492,7 @@
           "message": "주문이 삭제될 때 실행됩니다. (`getJournalList` `log_type` 4에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
-          "source": "Orders Merged",
+          "source": "Orders merged",
           "message": "주문 병합됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
@@ -3504,7 +3504,7 @@
           "message": "둘 이상의 주문이 병합될 때 실행됩니다. (`getJournalList` `log_type` 5에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
-          "source": "Order Split",
+          "source": "Order split",
           "message": "주문 분할"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
@@ -3516,7 +3516,7 @@
           "message": "주문이 분할될 때 발생합니다. (`getJournalList` `log_type` 6에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
-          "source": "Invoice Issued",
+          "source": "Invoice issued",
           "message": "송장 발행됨"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
@@ -3528,7 +3528,7 @@
           "message": "송장이 발행될 때 발생합니다. (`getJournalList` `log_type` 7에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
-          "source": "Receipt Issued",
+          "source": "Receipt issued",
           "message": "영수증 발행됨"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "영수증이 발행될 때 실행됩니다. (`getJournalList` `log_type` 8에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
-          "source": "Package Created",
+          "source": "Package created",
           "message": "패키지 생성됨"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "택배 패키지가 생성될 때 실행됩니다. (`getJournalList` `log_type` 9에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
-          "source": "Package Deleted",
+          "source": "Package deleted",
           "message": "패키지 삭제됨"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "택배 패키지가 삭제될 때 실행됩니다. (`getJournalList` `log_type` 10에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Delivery Data Edited",
+          "source": "Delivery data edited",
           "message": "배송 데이터 편집됨"
         },
         "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3576,7 +3576,7 @@
           "message": "주문의 배송 데이터가 편집될 때 발생합니다. (`getJournalList` `log_type` 11에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
-          "source": "Order Product Added",
+          "source": "Order product added",
           "message": "주문 상품 추가됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "주문에 상품이 추가될 때 실행됩니다. (`getJournalList` `log_type` 12에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
-          "source": "Order Product Edited",
+          "source": "Order product edited",
           "message": "주문 상품 수정됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
@@ -3600,7 +3600,7 @@
           "message": "주문의 상품 항목이 수정될 때 실행됩니다. (`getJournalList` `log_type` 13에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
-          "source": "Order Product Removed",
+          "source": "Order product removed",
           "message": "주문 상품 삭제됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
@@ -3612,7 +3612,7 @@
           "message": "주문에서 상품 항목이 삭제될 때 실행됩니다. (`getJournalList` `log_type` 14에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
-          "source": "Blacklist Entry Added",
+          "source": "Blacklist entry added",
           "message": "블랙리스트 항목 추가됨"
         },
         "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
@@ -3624,7 +3624,7 @@
           "message": "구매자가 블랙리스트에 추가될 때 실행됩니다(`getJournalList` `log_type` 15에서 폴링됨)."
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
-          "source": "Order Data Edited",
+          "source": "Order data edited",
           "message": "주문 데이터 편집됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
@@ -3636,7 +3636,7 @@
           "message": "일반 주문 데이터가 편집될 때 발생합니다. (`getJournalList` `log_type` 16에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
-          "source": "Order Copied",
+          "source": "Order copied",
           "message": "주문 복사됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
@@ -3648,7 +3648,7 @@
           "message": "주문이 복사될 때 발생합니다. (`getJournalList` `log_type` 17에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Order Status Changed",
+          "source": "Order status changed",
           "message": "주문 상태 변경됨"
         },
         "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
@@ -3660,7 +3660,7 @@
           "message": "주문 상태가 변경될 때 실행됩니다. (`getJournalList` `log_type` 18에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
-          "source": "Invoice Deleted",
+          "source": "Invoice deleted",
           "message": "송장 삭제됨"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "송장이 삭제될 때 발생합니다. (`getJournalList` `log_type` 19에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
-          "source": "Receipt Deleted",
+          "source": "Receipt deleted",
           "message": "영수증 삭제됨"
         },
         "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
@@ -3684,7 +3684,7 @@
           "message": "영수증이 삭제될 때 실행됩니다. (`getJournalList` `log_type` 20에서 폴링됨)"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
-          "source": "Invoice Edited",
+          "source": "Invoice edited",
           "message": "송장 편집됨"
         },
         "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
@@ -3696,7 +3696,7 @@
           "message": "송장이 편집될 때 발생합니다. (`getJournalList` `log_type` 21에서 폴링됨.)"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
-          "source": "Package Status Changed",
+          "source": "Package status changed",
           "message": "패키지 상태 변경됨"
         },
         "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {

@@ -339,7 +339,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.display_name": {
-          "source": "List Indexes",
+          "source": "List indexes",
           "message": "Indizes auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.short_desc": {
@@ -375,7 +375,7 @@
           "message": "Der Index, für den dies gilt, anhand seines Namens."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.display_name": {
-          "source": "Create Index",
+          "source": "Create index",
           "message": "Index erstellen"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.short_desc": {
@@ -471,7 +471,7 @@
           "message": "Microsoft Azure."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "Bereitstellungstyp"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -563,7 +563,7 @@
           "message": "Azure `eastus2`, in Virginia."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
+          "source": "Deployment type",
           "message": "Bereitstellungstyp"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
@@ -731,7 +731,7 @@
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Knotentyp"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
@@ -783,7 +783,7 @@
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.display_name": {
-          "source": "Create Index with Integrated Embedding",
+          "source": "Create index with integrated embedding",
           "message": "Index mit integriertem Embedding erstellen"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.short_desc": {
@@ -1131,7 +1131,7 @@
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Knotentyp"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
@@ -1295,7 +1295,7 @@
           "message": "Parameter zur Aktualisierung der Bereitstellung für Pod-basierte Indizes. Geben Sie `replicas`, `pod_type` oder beides an. Bereitstellungstyp, Cloud/Region und Umgebung können nach der Erstellung nicht geändert werden. Fügen Sie kein Feld `deployment_type` hinzu; es wird nicht akzeptiert."
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.display_name": {
-          "source": "Pod Type",
+          "source": "Pod type",
           "message": "Pod-Typ"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.short_desc": {
@@ -1431,7 +1431,7 @@
           "message": "Die Anzahl der Shards."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Knotentyp"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
@@ -1507,7 +1507,7 @@
           "message": "Der Index, für den dies gilt, anhand seines Namens."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.display_name": {
-          "source": "List Backups",
+          "source": "List backups",
           "message": "Sicherungen auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.short_desc": {
@@ -1863,7 +1863,7 @@
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
+          "source": "Node type",
           "message": "Knotentyp"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
@@ -2079,7 +2079,7 @@
           "message": "Wie lange jede Sicherung aufbewahrt wird, als `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "Nach Ablauf Tage"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2199,7 +2199,7 @@
           "message": "Wie lange jede Sicherung aufbewahrt wird, als `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
+          "source": "Expire after days",
           "message": "Nach Ablauf Tage"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
@@ -2283,7 +2283,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.display_name": {
-          "source": "List Restore Jobs",
+          "source": "List restore jobs",
           "message": "Wiederherstellungsaufträge auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.short_desc": {
@@ -2343,7 +2343,7 @@
           "message": "Die ID des zu beschreibenden Wiederherstellungsauftrags."
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Sammlungen auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -2355,7 +2355,7 @@
           "message": "Listet die Collections im Projekt auf.\n\n**Collections sind veraltet.**  Sie werden nur für Pod-basierte Indizes unterstützt, und ein solcher Index lässt sich in dieser API-Version nicht erstellen – dies betrifft also nur ein Projekt, das noch einen aus einer früheren Version besitzt.  Verwenden Sie für alles Aktuelle stattdessen **Sicherungen**."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "Sammlung erstellen"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -2439,7 +2439,7 @@
           "message": "Der Name der Collection."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.display_name": {
-          "source": "Get Index Statistics",
+          "source": "Get index statistics",
           "message": "Indexstatistiken abrufen"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.short_desc": {
@@ -2643,7 +2643,7 @@
           "message": "Ein Optimierungsparameter, der die maximale Anzahl der neu zu sortierenden dichten Kandidatenvektoren steuert. Die Neusortierung berechnet exakte Distanzen und verbessert so die Trefferquote, erhöht aber die Abfragelatenz. Bereich: top_k – 100000.\nBelassen Sie den Standard für ein ausgewogenes Verhältnis von Trefferquote und Latenz. Erhöhen Sie den Wert, wenn die Trefferquote zu niedrig ist, oder senken Sie ihn, um die Latenz auf Kosten der Genauigkeit zu reduzieren. Dieser Parameter wird nur für dedizierte (DRN) dichte Indizes unterstützt."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.display_name": {
-          "source": "Upsert Vectors",
+          "source": "Upsert vectors",
           "message": "Vektoren upserten"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.short_desc": {
@@ -2715,7 +2715,7 @@
           "message": "Dies sind die Metadaten, die in der Anfrage enthalten sind. Feldnamen dürfen nicht mit `$` beginnen, das für Filteroperatoren reserviert ist. Alle anderen Namen werden akzeptiert, einschließlich leerer, nicht-ASCII- und mit `_` beginnender Namen."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Spärliche Werte"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.short_desc": {
@@ -2763,7 +2763,7 @@
           "message": "Dies sind die Vektordaten. Bei einer Anfrage muss er nicht leer sein, und mindestens ein Wert muss eine Größe von `1e-8` oder größer haben – ein Vektor, dessen Werte alle kleiner als dieser Wert sind, wird abgelehnt, da er nur Nullen enthält.\n\nBei einer Antwort ist das Array leer, wenn der Datensatz keine dichten Daten zurückgeben kann: bei einem spärlichen Index und bei jedem Index, wenn Werte nicht angefordert wurden. Das Array ist daher hier nicht eingeschränkt, da dieses Schema beide Richtungen beschreibt."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.display_name": {
-          "source": "Update Vectors",
+          "source": "Update vectors",
           "message": "Vektoren aktualisieren"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.short_desc": {
@@ -2895,7 +2895,7 @@
           "message": "Die entsprechenden Werte der spärlichen Daten, die die gleiche Länge wie die Indizes haben müssen."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.display_name": {
-          "source": "Delete Vectors",
+          "source": "Delete vectors",
           "message": "Vektoren löschen"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.short_desc": {
@@ -2967,7 +2967,7 @@
           "message": "Alle Datensätze im Namespace löschen.  Kann nicht mit **Datensatz-IDs** oder einem **Metadatenfilter** kombiniert werden."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.display_name": {
-          "source": "Fetch Vectors",
+          "source": "Fetch vectors",
           "message": "Vektoren abrufen"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.short_desc": {
@@ -3015,7 +3015,7 @@
           "message": "Die abzurufenden Vektor-IDs."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.display_name": {
-          "source": "Fetch Vectors by Metadata",
+          "source": "Fetch vectors by metadata",
           "message": "Vektoren anhand von Metadaten abrufen"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.short_desc": {
@@ -3087,7 +3087,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.display_name": {
-          "source": "List Record IDs",
+          "source": "List record IDs",
           "message": "Datensatz-IDs auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.short_desc": {
@@ -3159,7 +3159,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.display_name": {
-          "source": "List Namespaces",
+          "source": "List namespaces",
           "message": "Namespaces auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.short_desc": {
@@ -3219,7 +3219,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Create Namespace",
+          "source": "Create namespace",
           "message": "Namespace erstellen"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.short_desc": {
@@ -3543,7 +3543,7 @@
           "message": "Die Abfrage zum Neuordnen von Dokumenten. Wenn eine spezifische Neuordnungsabfrage angegeben wird, überschreibt sie die Abfrage, die auf oberster Ebene bereitgestellt wurde. Erforderlich, wenn die Suche `vector` oder `id` verwendet, da keine Abfragezeichenkette zum Neuordnen vorhanden ist; das Weglassen in diesem Fall wird mit `400` abgelehnt."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.display_name": {
-          "source": "Rank Fields",
+          "source": "Rank fields",
           "message": "Felder für die Sortierung"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.short_desc": {
@@ -3555,7 +3555,7 @@
           "message": "Die Felder, die für das Reranking berücksichtigt werden sollen. Jedes zurückgegebene Dokument muss jedes aufgeführte Feld enthalten; andernfalls wird die Anfrage mit dem Fehlercode `400` abgelehnt.\n\nDie Anzahl unterstützter Felder ist [modellabhängig](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Top-N"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.short_desc": {
@@ -3579,7 +3579,7 @@
           "message": "Ein Vektor, mit dem anstelle von Text gesucht wird, für einen Index ohne integriertes Embedding — oder wenn das Embedding an anderer Stelle berechnet wird.\n\nDichte Werte gehören in `values`; ein dünnbesetzter Vektor wird als `sparse_values` mit den zugehörigen `sparse_indices` angegeben."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.display_name": {
-          "source": "Sparse Indices",
+          "source": "Sparse indices",
           "message": "Spärliche Indizes"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.short_desc": {
@@ -3591,7 +3591,7 @@
           "message": "Die Indizes der spärlichen Einbettung."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Spärliche Werte"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -3815,7 +3815,7 @@
           "message": "Die Textabfrage für die Bewertungstypen `text` und `query_string`. Führende und abschließende Leerzeichen werden entfernt; eine Abfrage, die nach dem Entfernen leer ist, wird abgelehnt. Maximal 10 KB."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
+          "source": "Sparse values",
           "message": "Spärliche Werte"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
@@ -4099,7 +4099,7 @@
           "message": "Die eindeutige Kennung des Dokuments, das aktualisiert werden soll."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "Felder entfernen"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.short_desc": {
@@ -4291,7 +4291,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.display_name": {
-          "source": "List Imports",
+          "source": "List imports",
           "message": "Importe auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.short_desc": {
@@ -4339,7 +4339,7 @@
           "message": "Der Wert `pagination.next` aus der vorherigen Antwort.  Eine Antwort ohne `pagination` ist die letzte Seite."
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.display_name": {
-          "source": "Start Import",
+          "source": "Start import",
           "message": "Import starten"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.short_desc": {
@@ -4499,7 +4499,7 @@
           "message": "Eindeutige Kennung des Importvorgangs."
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.display_name": {
-          "source": "Generate Embeddings",
+          "source": "Generate embeddings",
           "message": "Embeddings erzeugen"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.short_desc": {
@@ -4559,7 +4559,7 @@
           "message": "Modellspezifische Parameter, etwa `{\"input_type\": \"query\", \"truncate\": \"END\"}`.  Welche ein Modell akzeptiert, meldet **Modell beschreiben**.\n\n`input_type` ist wichtig: mehrere Modelle betten eine **Abfrage** anders ein als eine **Passage**, und der falsche Wert kostet unbemerkt Relevanz."
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.display_name": {
-          "source": "Rerank Results",
+          "source": "Rerank results",
           "message": "Ergebnisse neu sortieren"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.short_desc": {
@@ -4655,7 +4655,7 @@
           "message": "Zusätzliche modellspezifische Parameter. Die verfügbaren Modellparameter finden Sie im [Modellleitfaden](https://docs.pinecone.io/guides/search/rerank-results#reranking-models)."
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Modelle auflisten"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -4747,7 +4747,7 @@
           "message": "Der Name des nachzuschlagenden Modells."
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Datensätze suchen"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.short_desc": {
@@ -4771,7 +4771,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` oder `documents`"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Einzeldatensatz suchen"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4795,7 +4795,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` oder `documents`"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Datensätze erstellen"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.short_desc": {
@@ -4819,7 +4819,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` oder `documents`"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Datensätze aktualisieren"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.short_desc": {
@@ -4843,7 +4843,7 @@
           "message": "Die Tabelle, mit der gearbeitet werden soll: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` oder `documents`"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Datensätze löschen"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.short_desc": {

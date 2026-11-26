@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Crea embedding"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Dimensione del vettore di output. Il `model` selezionato determina l’intervallo supportato."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "Tipo di Embedding"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Se `true`, tronca l'input che supera il limite massimo di token del modello invece di restituire un errore."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "Late Chunking"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Con `True`, gli input vengono elaborati come un’unica sequenza prima della suddivisione, preservando il contesto tra i frammenti."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "Restituisci multivector"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Se `true`, restituisce un embedding per token. Non può essere usato con `dimensions`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "Restituisci input tokenizzato"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Se `true`, restituisce i token insieme agli embedding multi-vettore. Richiede `return_multivector=true`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Tipo di input"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "documento"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Riordina documenti"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Immagine come URL o stringa codificata in base64."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Primi N"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Numero dei migliori risultati da restituire. Se omesso, vengono restituiti tutti i documenti."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "Restituisci documenti"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Con `True` (valore predefinito), ogni risultato include il contenuto del documento."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "Lunghezza massima documento"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Token massimi per documento (1-8192). Omettere per usare il valore predefinito del modello (2048 per jina-reranker-v3, 8192 per jina-reranker-v3.5)."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "Restituisci embedding"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Se `true`, restituisce l'embedding del documento insieme al punteggio di rilevanza."
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "Classifica Contenuto"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Etichette candidate: un elenco di massimo 512 etichette, o un dizionario di massimo 8 gruppi con massimo 64 etichette ciascuno."
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "Addestra o aggiorna classificatore"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Pubblico"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "Numero di iterazioni"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Numero di iterazioni per il processo di addestramento."
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "Elenca classificatori"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Il modello di cui recuperare capacità e prezzi."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "Crea Embeddings in Batch"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Il batch di embedding da ispezionare o annullare."
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Elenca i lotti"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Includi icone del sito con i risultati."
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "Segmenta testo"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Restituisci solo questo numero di token finali."
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "Chatta con il modello Vision"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Temperatura di campionamento che controlla la variazione della risposta."
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "Deep Search"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Leggi fonti solo da questi domini."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "Scarica Output Batch"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Batch completato di cui scaricare i risultati o gli errori JSONL."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "Scarica Errori Batch"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

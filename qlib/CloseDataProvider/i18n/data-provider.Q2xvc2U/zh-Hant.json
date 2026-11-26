@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "建立潛在客戶"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "郵遞區號或郵政編碼"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update a Lead",
+          "source": "Update a lead",
           "message": "更新潛在客戶"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "與潛在客戶關聯的新網站 URL"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "刪除潛在客戶"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -728,7 +728,7 @@
           "message": "要刪除的潛在客戶"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "列出潛在客戶"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "取得潛在客戶"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "聯絡人 ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "建立商機"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "輸單日期（格式為 YYYY-MM-DD）"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "更新商機"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "商機的新文字筆記"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "刪除商機"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "要刪除的商機"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "列出商機"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "取得商機"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "商機 ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "建立任務"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "要指派此任務的使用者 ID"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "更新任務"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "任務的新文字描述或內文"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "刪除任務"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "要刪除的工作"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "取得任務"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "此通話的 HTML 格式備註"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
-          "source": "Update a Call",
+          "source": "Update a call",
           "message": "更新通話"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "通話的新處置或結果"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
-          "source": "Delete a Call",
+          "source": "Delete a call",
           "message": "刪除通話"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "要刪除的通話"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
-          "source": "List Calls",
+          "source": "List calls",
           "message": "列出通話"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
-          "source": "Get a Call",
+          "source": "Get a call",
           "message": "取得通話"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "通話 ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
-          "source": "Create an Email",
+          "source": "Create an email",
           "message": "建立電子郵件"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "外寄電子郵件"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete an Email",
+          "source": "Delete an email",
           "message": "刪除電子郵件"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "要刪除的電子郵件"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "列出電子郵件"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
@@ -2340,7 +2340,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get an Email",
+          "source": "Get an email",
           "message": "取得電子郵件"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "電子郵件 ID"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "建立備註"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2428,7 +2428,7 @@
           "message": "設定為 `True` 以將此備註置頂"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "更新備忘錄"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "筆記的新 HTML 內容"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "刪除記事"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "要刪除的記事"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "列出筆記"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get a Note",
+          "source": "Get a note",
           "message": "取得筆記"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "筆記 ID"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
-          "source": "List Meetings",
+          "source": "List meetings",
           "message": "列出會議"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
-          "source": "Get a Meeting",
+          "source": "Get a meeting",
           "message": "取得會議"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "簡訊 ID"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
-          "source": "Lead Created",
+          "source": "Lead created",
           "message": "潛在客戶已建立"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
-          "source": "Lead Updated",
+          "source": "Lead updated",
           "message": "潛在客戶已更新"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
-          "source": "Lead Deleted",
+          "source": "Lead deleted",
           "message": "潛在客戶已刪除"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "聯絡人已建立"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "聯絡人已更新"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
-          "source": "Contact Deleted",
+          "source": "Contact deleted",
           "message": "已刪除聯絡人"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
-          "source": "Opportunity Created",
+          "source": "Opportunity created",
           "message": "商機已建立"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
-          "source": "Opportunity Updated",
+          "source": "Opportunity updated",
           "message": "商機已更新"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
-          "source": "Opportunity Deleted",
+          "source": "Opportunity deleted",
           "message": "商機已刪除"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {

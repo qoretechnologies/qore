@@ -16,8 +16,8 @@
           "message": "Read and write CSV file data"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
-          "message": "Read CSV File"
+          "source": "Read CSV file",
+          "message": "Read CSV file"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
           "source": "Read CSV file data from a specific file location",
@@ -440,8 +440,8 @@
           "message": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
-          "message": "Read CSV Inline Data"
+          "source": "Read CSV inline data",
+          "message": "Read CSV inline data"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
           "source": "Read CSV inline data",
@@ -864,8 +864,8 @@
           "message": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
-          "message": "Profile CSV Data"
+          "source": "Profile CSV data",
+          "message": "Profile CSV data"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
           "source": "Detect the format of CSV data and describe its layout and columns",
@@ -972,8 +972,8 @@
           "message": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
-          "message": "Write CSV Data"
+          "source": "Write CSV data",
+          "message": "Write CSV data"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
           "source": "Write CSV file data to a specific file location",
@@ -1224,8 +1224,8 @@
           "message": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
-          "message": "Create CSV Data"
+          "source": "Create CSV data",
+          "message": "Create CSV data"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {
           "source": "Create CSV data from records and return it as bytes",

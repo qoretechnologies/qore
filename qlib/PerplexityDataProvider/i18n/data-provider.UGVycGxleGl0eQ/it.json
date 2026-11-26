@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Chat multipla"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Un codice lingua ISO 639-1 che specifica la lingua preferita per la risposta"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
+          "source": "Simple chat",
           "message": "Chat semplice"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Un codice lingua ISO 639-1 che specifica la lingua preferita per la risposta"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
+          "source": "Stream chat",
           "message": "Chat in streaming"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {

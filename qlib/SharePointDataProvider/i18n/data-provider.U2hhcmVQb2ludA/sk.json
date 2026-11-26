@@ -1960,7 +1960,7 @@
           "message": "Položka zoznamu, ktorú chcete adresovať"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument bol pridaný"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Spustí sa po pridaní dokumentu do knižnice dokumentov. Používa rozdielové dopyty (delta queries), ktoré pokračujú presne tam, kde skončili, namiesto opätovného načítavania knižnice"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument bol upravený"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Spustí sa pri úprave dokumentu, ktorý sa už nachádza v knižnici. Používa rozdielové dopyty (delta queries), ktoré pokračujú presne tam, kde skončili, namiesto opätovného načítavania knižnice"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Priečinok bol pridaný"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Spustí sa po pridaní priečinka do knižnice dokumentov"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Položka zoznamu bola pridaná"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

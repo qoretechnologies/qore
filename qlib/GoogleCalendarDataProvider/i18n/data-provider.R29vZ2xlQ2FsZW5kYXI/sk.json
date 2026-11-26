@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
+          "source": "Add event from text",
           "message": "Pridať udalosť z textu"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Neodosielajú sa žiadne oznámenia. Pri úlohách migrácie kalendára zvážte namiesto toho použitie metódy `Events.import`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Vytvoriť udalosť"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Kalendár, do ktorého sa má udalosť pridať"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
+          "source": "Update event",
           "message": "Aktualizovať udalosť"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Kalendár, do ktorého sa má udalosť pridať"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
+          "source": "Delete event",
           "message": "Odstrániť udalosť"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Ak je `True`, do výsledku sú zahrnuté odstránené udalosti (so `status` rovným `cancelled`). Zrušené inštancie opakujúcich sa udalostí (nie však samotná opakujúca sa udalosť) sú zahrnuté aj vtedy, keď sú `showDeleted` aj `singleEvents` obe `False`; ak sú obe `True`, vrátené sú iba jednotlivé inštancie odstránených udalostí. Predvolená hodnota je `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Získať udalosť"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
@@ -636,7 +636,7 @@
           "message": "ID udalosti, ktorá sa má načítať; ID udalostí sú vracané v poli `id` udalostí vrátených akciou `list-events`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
+          "source": "List calendars",
           "message": "Zobraziť kalendáre"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {

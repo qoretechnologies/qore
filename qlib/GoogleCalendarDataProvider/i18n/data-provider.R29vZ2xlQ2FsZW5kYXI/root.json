@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
-          "message": "Add Event From Text"
+          "source": "Add event from text",
+          "message": "Add event from text"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
           "source": "Quickly add an event to a calendar from text",
@@ -400,8 +400,8 @@
           "message": "No notifications are sent. For calendar migration tasks, consider using the `Events.import` method instead"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
-          "message": "Create Event"
+          "source": "Create event",
+          "message": "Create event"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
           "source": "Create an event in a calendar",
@@ -424,8 +424,8 @@
           "message": "The calendar to add the event to"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
-          "message": "Update Event"
+          "source": "Update event",
+          "message": "Update event"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
           "source": "Update an event in a calendar",
@@ -448,8 +448,8 @@
           "message": "The calendar to add the event to"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
-          "message": "Delete Event"
+          "source": "Delete event",
+          "message": "Delete event"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
@@ -600,8 +600,8 @@
           "message": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
-          "message": "Get Event"
+          "source": "Get event",
+          "message": "Get event"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
           "source": "Retrieve an event from a calendar",
@@ -636,8 +636,8 @@
           "message": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
-          "message": "List Calendars"
+          "source": "List calendars",
+          "message": "List calendars"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
           "source": "List the calendars in the user's calendar list",

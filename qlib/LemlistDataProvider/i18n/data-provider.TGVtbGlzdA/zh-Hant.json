@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "列出行銷活動"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -388,7 +388,7 @@
           "message": "有錯誤的行銷活動"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "取得行銷活動"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -412,7 +412,7 @@
           "message": "要擷取的行銷活動唯一識別碼"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "建立廣告活動"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -436,7 +436,7 @@
           "message": "要建立的行銷活動名稱"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
-          "source": "Pause Campaign",
+          "source": "Pause campaign",
           "message": "暫停行銷活動"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "要暫停之行銷活動的唯一識別碼"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
-          "source": "Start Campaign",
+          "source": "Start campaign",
           "message": "啟動行銷活動"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
@@ -484,7 +484,7 @@
           "message": "要啟動之行銷活動的唯一識別碼"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "列出潛在客戶"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "要從中擷取潛在客戶的行銷活動識別碼"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "取得潛在客戶"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "要擷取的潛在客戶電子郵件地址"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Add Lead to Campaign",
+          "source": "Add lead to campaign",
           "message": "將潛在客戶新增至行銷活動"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -652,7 +652,7 @@
           "message": "與該潛在客戶相關聯的網站 URL"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "更新潛在客戶"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "設為 `True` 可將此潛在客戶標記為對您的方案感興趣"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Remove Lead from Campaign",
+          "source": "Remove lead from campaign",
           "message": "從行銷活動中移除潛在客戶"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "要從行銷活動中移除之潛在客戶的電子郵件地址"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "列出活動"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -896,7 +896,7 @@
           "message": "如果為 `True`，則每個行銷活動中每個潛在客戶僅傳回每種活動類型的第一次發生"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
@@ -920,7 +920,7 @@
           "message": "要傳回的任務最大數量（最多 100）"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "取得任務"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
@@ -944,7 +944,7 @@
           "message": "要擷取的任務之唯一識別碼"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "建立任務"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "此任務的截止日期與時間"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "更新任務"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "此任務更新後的到期日期與時間"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "刪除任務"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "要刪除的任務唯一識別碼"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "電子郵件已開啟"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "已點擊電子郵件連結"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
-          "source": "Email Replied",
+          "source": "Email replied",
           "message": "電子郵件已回覆"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "電子郵件已退信"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Marked Interested",
+          "source": "Lead marked interested",
           "message": "潛在客戶已標記為感興趣"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "選擇性地將事件篩選為特定的 Lemlist 行銷活動"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
-          "source": "Lead Marked Not Interested",
+          "source": "Lead marked not interested",
           "message": "潛在客戶已標記為不感興趣"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {

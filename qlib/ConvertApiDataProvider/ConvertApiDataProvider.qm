@@ -86,7 +86,7 @@ module ConvertApiDataProvider {
             "app": ConvertApiDataProvider::AppName,
             "path": "/convert-file",
             "action": "convert-file",
-            "display_name": "Convert a File",
+            "display_name": "Convert a file",
             "short_desc": "Convert files with any ConvertAPI converter",
             "desc": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n"
                 "**Formats**: select the `from` format first; the `to` list then shows the destination formats of "
@@ -135,7 +135,7 @@ module ConvertApiDataProvider {
             "app": ConvertApiDataProvider::AppName,
             "path": "/get-converter-info",
             "action": "get-converter-info",
-            "display_name": "Get Converter Information",
+            "display_name": "Get converter information",
             "short_desc": "Get the description and parameters of a converter",
             "desc": "Returns the description and the parameters of a ConvertAPI converter, given by its source and "
                 "destination formats.\n\n"
@@ -259,7 +259,7 @@ module ConvertApiDataProvider {
             "app": ConvertApiDataProvider::AppName,
             "path": "/convert-pdf-to-image",
             "action": "convert-pdf-to-image",
-            "display_name": "Convert PDF to Images",
+            "display_name": "Convert PDF to images",
             "short_desc": "Convert the pages of a PDF to JPG, PNG, TIFF or WebP images",
             "desc": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF "
                 "file.\n\n"
@@ -292,7 +292,7 @@ module ConvertApiDataProvider {
             "app": ConvertApiDataProvider::AppName,
             "path": "/merge-pdf",
             "action": "merge-pdf",
-            "display_name": "Merge PDF Files",
+            "display_name": "Merge PDF files",
             "short_desc": "Merge several PDF files into one PDF",
             "desc": "Merges several PDF files into one PDF, in the order given.\n\n"
                 "Give the PDF files in `files` or their URLs in `urls`; optionally add a bookmark for each "

@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Elenca progetti"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Elenca tutti i progetti in un'organizzazione."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Crea progetto"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Se forzare la crittografia con una chiave di crittografia gestita dal cliente (CMEK). L'impostazione predefinita è `false`."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "Elenca organizzazioni"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Visualizzatore del piano dati"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Elenca utenti"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ID utente"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
+          "source": "List invites",
           "message": "Elenco inviti"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Cursore da `pagination.next` di una risposta precedente. Deve essere riutilizzato con lo stesso contesto della query (parametri del percorso, filtri e `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
+          "source": "Create invite",
           "message": "Crea invito"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Invito ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
+          "source": "List service accounts",
           "message": "Elenca gli account di servizio"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Cursore da `pagination.next` di una risposta precedente. Deve essere riutilizzato con lo stesso contesto della query (parametri del percorso, filtri e `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
+          "source": "Create service account",
           "message": "Crea un account di servizio"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "L'identificatore univoco dell'account di servizio."
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
+          "source": "List role bindings",
           "message": "Elenca i collegamenti dei ruoli"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Cursore da `pagination.next` di una risposta precedente. Deve essere riutilizzato con lo stesso contesto della query (parametri del percorso, filtri e `limit`)."
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
+          "source": "Create role binding",
           "message": "Crea associazione di ruoli"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {

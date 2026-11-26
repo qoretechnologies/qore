@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create Message",
+          "source": "Create message",
           "message": "メッセージを作成"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
@@ -868,7 +868,7 @@
           "message": "設定されたコンテキストストア経由で会話コンテキストを読み込みおよび保存するために使用される不透明なキー。指定すると、以前のメッセージが自動的に先頭に追加されます"
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.display_name": {
-          "source": "Stream Message",
+          "source": "Stream message",
           "message": "メッセージのストリーミング"
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "このモデルIDの前のモデルを返します（後方ページネーション用カーソル）"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Message Batch",
+          "source": "Create message batch",
           "message": "メッセージバッチの作成"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -2696,7 +2696,7 @@
           "message": "このバッチIDの前に作成されたバッチを返します（後方ページネーション用カーソル）"
         },
         "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.display_name": {
-          "source": "Cancel Message Batch",
+          "source": "Cancel message batch",
           "message": "メッセージバッチのキャンセル"
         },
         "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "メッセージバッチの一意の識別子（例: `msgbatch_013Zva2CMbUFEYkeWyl6QV`）"
         },
         "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "ファイルをアップロード"
         },
         "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "ファイルの一意の識別子"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "ファイルを削除"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "ファイルの一意の識別子"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.display_name": {
-          "source": "Create Skill",
+          "source": "Create skill",
           "message": "スキルの作成"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "スキルのユニーク識別子"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.display_name": {
-          "source": "Delete Skill",
+          "source": "Delete skill",
           "message": "スキルの削除"
         },
         "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.short_desc": {
@@ -3156,7 +3156,7 @@
           "message": "スキルのユニーク識別子"
         },
         "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.display_name": {
-          "source": "Update Skill",
+          "source": "Update skill",
           "message": "スキルの更新"
         },
         "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.short_desc": {

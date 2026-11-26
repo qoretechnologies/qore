@@ -516,7 +516,7 @@
           "message": "Приватний"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Політика форкання"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
@@ -540,7 +540,7 @@
           "message": "Мова"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Має проблеми"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
@@ -548,7 +548,7 @@
           "message": "\nТрекер проблем для цього репозиторію ввімкнено. Функції трекера\nпроблем не підтримуються для репозиторіїв у робочих областях,\nадміністрування яких здійснюється через admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Має вікі"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
@@ -560,7 +560,7 @@
           "message": "Проєкт"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -568,7 +568,7 @@
           "message": "Опис"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Має публічно доступні репозиторії"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -576,7 +576,7 @@
           "message": "\nВказує, чи містить проект публічні репозиторії.\nЗауваження: приватні проекти не можуть містити публічні репозиторії."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Є приватним"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -656,11 +656,11 @@
           "message": "Власник"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Ім’я для відображення"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.bGlua3M.display_name": {
@@ -768,7 +768,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Оновлено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -836,11 +836,11 @@
           "message": "Опис"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Є приватним"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Політика форкання"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
@@ -864,7 +864,7 @@
           "message": "Мова"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Має проблеми"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
@@ -872,7 +872,7 @@
           "message": "\nТрекер проблем для цього репозиторію ввімкнено. Функції трекера\nпроблем не підтримуються для репозиторіїв у робочих областях,\nадміністрування яких здійснюється через admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Має вікі"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
@@ -884,7 +884,7 @@
           "message": "Проєкт"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -892,7 +892,7 @@
           "message": "Опис"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Має публічно доступні репозиторії"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -900,7 +900,7 @@
           "message": "\nВказує, чи містить проект публічні репозиторії.\nЗауваження: приватні проекти не можуть містити публічні репозиторії."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Є приватним"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1016,11 +1016,11 @@
           "message": "Власник"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Ім’я для відображення"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.bGlua3M.display_name": {
@@ -1140,7 +1140,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Оновлено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -1176,7 +1176,7 @@
           "message": "Головна гілка"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.display_name": {
-          "source": "Default Merge Strategy",
+          "source": "Default merge strategy",
           "message": "Стратегія об’єднання за замовчуванням"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Назва"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.display_name": {
-          "source": "Merge Strategies",
+          "source": "Merge strategies",
           "message": "Стратегії об’єднання"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.short_desc": {
@@ -1308,11 +1308,11 @@
           "message": "Користувач"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Ім’я для відображення"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.bGlua3M.display_name": {
@@ -1464,7 +1464,7 @@
           "message": "Схвалено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.display_name": {
-          "source": "Participated On",
+          "source": "Participated on",
           "message": "Участь у"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Репозиторій"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1520,7 +1520,7 @@
           "message": "Опис"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Політика форкання"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.desc": {
@@ -1540,7 +1540,7 @@
           "message": "no_forks"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.display_name": {
-          "source": "Full Name",
+          "source": "Full name",
           "message": "Повне ім'я"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Конкатенація імені користувача власника репозиторію та звуженої назви, наприклад, \"evzijst/interruptingcow\". Це той самий рядок, який використовується у URL Bitbucket."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "Має проблеми"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.desc": {
@@ -1560,7 +1560,7 @@
           "message": "\nТрекер проблем для цього репозиторію ввімкнено. Функції трекера\nпроблем не підтримуються для репозиторіїв у робочих областях,\nадміністрування яких здійснюється через admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "Має вікі"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.desc": {
@@ -1568,7 +1568,7 @@
           "message": "\nВікі для цього репозиторію ввімкнено. Функції вікі\nне підтримуються для репозиторіїв у робочих областях,\nадміністрування яких здійснюється через admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Є приватним"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.bGFuZ3VhZ2U.display_name": {
@@ -1712,7 +1712,7 @@
           "message": "Проєкт"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1720,7 +1720,7 @@
           "message": "Опис"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "Має публічно доступні репозиторії"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -1728,7 +1728,7 @@
           "message": "\nВказує, чи містить проект публічні репозиторії.\nЗауваження: приватні проекти не можуть містити публічні репозиторії."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Є приватним"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1772,7 +1772,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Оновлено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXVpZA.display_name": {
@@ -1804,7 +1804,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Оновлено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXVpZA.display_name": {
@@ -1868,7 +1868,7 @@
           "message": "Репозиторій для роботи, вказаний як його slug або як його UUID у дужках.\n\nУсе інше в межах репозиторію (коміти, гілки, пул-реквести) береться з цього репозиторію, тому його зміна призводить до їх повторного зчитування."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
-          "source": "Redirect To",
+          "source": "Redirect to",
           "message": "Перенаправити на"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Шлях до файлу, до якого прикріплений коментар."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Почати з"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -2384,7 +2384,7 @@
           "message": "Початкова номер рядка у старій версії файлу, якщо коментар — багаторядковий. У іншому випадку — null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Від"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Учасники, у яких запитується рецензування, у вигляді UUID їхніх облікових записів.\n\nBitbucket оголошує це як список об'єктів користувачів; тут він представлений як список ідентифікаторів і надсилається у форматі, якого очікує API.\n\nЦе значення надсилається як список об'єктів користувачів Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Закрити вихідну гілку"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Учасники, у яких запитується рецензування, у вигляді UUID їхніх облікових записів.\n\nBitbucket оголошує це як список об'єктів користувачів; тут він представлений як список ідентифікаторів і надсилається у форматі, якого очікує API.\n\nЦе значення надсилається як список об'єктів користувачів Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Закрити вихідну гілку"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Шлях до файлу, до якого прикріплений коментар."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Почати з"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Початкова номер рядка у старій версії файлу, якщо коментар — багаторядковий. У іншому випадку — null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Від"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3260,7 +3260,7 @@
           "message": "Текст, як ввів його користувач."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.ZGVsZXRlZA.display_name": {
@@ -3300,7 +3300,7 @@
           "message": "Шлях до файлу, до якого прикріплений коментар."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Почати з"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Початкова номер рядка у старій версії файлу, якщо коментар — багаторядковий. У іншому випадку — null."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Від"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Тип"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Оновлено"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXNlcg.display_name": {
@@ -3416,11 +3416,11 @@
           "message": "Користувач"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Створено"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Ім’я для відображення"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.bGlua3M.display_name": {
@@ -3692,7 +3692,7 @@
           "message": "Шлях до файлу, до якого прикріплений коментар."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Почати з"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Початкова номер рядка у старій версії файлу, якщо коментар — багаторядковий. У іншому випадку — null."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Від"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "Отримати список робочих просторів"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Кількість записів для повернення в одному запиті, максимум до `100` у Bitbucket.\n\n`next` у відповіді — це URL-адреса наступної сторінки; переходьте за її наявністю, а не за `size`, яку Bitbucket повертає не для всіх колекцій."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Пошук записів"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Таблиця для роботи: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` або `branches`"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Знайти один запис"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "Таблиця для роботи: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` або `branches`"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Створити записи"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "Таблиця для роботи: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` або `branches`"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "Таблиця для роботи: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` або `branches`"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {

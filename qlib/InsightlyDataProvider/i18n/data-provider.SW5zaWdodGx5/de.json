@@ -1632,7 +1632,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kontakts"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
+          "source": "Create organisation",
           "message": "Organisation erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Der Name der Gelegenheit (z. B. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
+          "source": "Update organisation",
           "message": "Organisation aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Der Name der Gelegenheit (z. B. `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
+          "source": "Delete organisation",
           "message": "Organisation löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Organisation"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
+          "source": "List organisations",
           "message": "Organisationen auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
+          "source": "Get organisation",
           "message": "Organisation abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "Die Organisations-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "Lead erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Der Name des Tags"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "Lead aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "Der Name des Tags"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "Lead löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Leads"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Leads auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -4080,7 +4080,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Lead abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Die Lead-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
+          "source": "Create opportunity",
           "message": "Verkaufschance erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Die Rolle, die die Beziehung zwischen den Objekten beschreibt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
+          "source": "Update opportunity",
           "message": "Verkaufschance aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4984,7 +4984,7 @@
           "message": "Die Rolle, die die Beziehung zwischen den Objekten beschreibt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
+          "source": "Delete opportunity",
           "message": "Opportunity löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -5008,7 +5008,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Opportunity"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Opportunities auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -5112,7 +5112,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
+          "source": "Get opportunity",
           "message": "Opportunity abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -5132,7 +5132,7 @@
           "message": "Die Opportunity-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Projekt erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -5508,7 +5508,7 @@
           "message": "Die Rolle, die die Beziehung zwischen den Objekten beschreibt"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Projekt aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -5896,7 +5896,7 @@
           "message": "Die Rolle, die die Beziehung zwischen den Objekten beschreibt"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "Projekt löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -5920,7 +5920,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Projekts"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Projekte auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Projekt abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "Die Projekt-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Aufgabe erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -6404,7 +6404,7 @@
           "message": "Die eindeutige Kennung des Aufgabeverknüpfung"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Aufgabe aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -6776,7 +6776,7 @@
           "message": "Die eindeutige Kennung des Aufgabeverknüpfung"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Aufgabe löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -6800,7 +6800,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Aufgabe"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Tasks auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
@@ -6904,7 +6904,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Task abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "Die Aufgaben-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Notiz erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -7052,7 +7052,7 @@
           "message": "Für das Team des Eigentümers sichtbar"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "Notiz aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -7192,7 +7192,7 @@
           "message": "Für das Team des Eigentümers sichtbar"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "Notiz löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -7216,7 +7216,7 @@
           "message": "Die eindeutige Kennung der zu löschenden Notiz"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Notizen auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -7320,7 +7320,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
+          "source": "Get note",
           "message": "Notiz abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
@@ -7340,7 +7340,7 @@
           "message": "Die Notiz-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
+          "source": "Create calendar event",
           "message": "Kalenderereignis erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7460,7 +7460,7 @@
           "message": "Die ID des Benutzers, dem dieses Ereignis gehört"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
+          "source": "Update calendar event",
           "message": "Kalenderereignis aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7592,7 +7592,7 @@
           "message": "Die ID des Benutzers, dem dieses Ereignis gehört"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
+          "source": "Delete calendar event",
           "message": "Kalenderereignis löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Kalenderereignisses"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
+          "source": "List calendar Events",
           "message": "Kalenderereignisse auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -7720,7 +7720,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
+          "source": "Get calendar event",
           "message": "Kalenderereignis abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7740,7 +7740,7 @@
           "message": "Die Ereignis-ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "Produkt erstellen"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -7944,7 +7944,7 @@
           "message": "Der Wert des benutzerdefinierten Felds. Kann eine Zeichenkette, Zahl, boolescher Wert oder Datum je nach Feldkonfiguration sein"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Produkt aktualisieren"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -8160,7 +8160,7 @@
           "message": "Der Wert des benutzerdefinierten Felds. Kann eine Zeichenkette, Zahl, boolescher Wert oder Datum je nach Feldkonfiguration sein"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "Produkt löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -8184,7 +8184,7 @@
           "message": "Die eindeutige Kennung des zu löschenden Produkts"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Produkte auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -8288,7 +8288,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Produkt abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -8308,7 +8308,7 @@
           "message": "Die Produkt-ID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "E-Mail löschen"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -8332,7 +8332,7 @@
           "message": "Die eindeutige Kennung der zu löschenden E-Mail"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "E-Mails auflisten"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -8436,7 +8436,7 @@
           "message": "Wert zum Abgleich mit `field_name`. Muss mit `field_name` kombiniert werden. Leitet die Anfrage über Insightlys Endpunkt `/Search` weiter."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "E-Mail abrufen"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Kontakt in Insightly erstellt wird"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
+          "source": "New organisation",
           "message": "Neue Organisation"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -8480,7 +8480,7 @@
           "message": "Wird ausgelöst, wenn eine neue Organisation in Insightly erstellt wird"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
+          "source": "New lead",
           "message": "Neuer Lead"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Lead in Insightly erstellt wird"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
+          "source": "New opportunity",
           "message": "Neue Opportunity"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
@@ -8504,7 +8504,7 @@
           "message": "Wird ausgelöst, wenn eine neue Verkaufschance in Insightly erstellt wird"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
+          "source": "New task",
           "message": "Neue Aufgabe"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {

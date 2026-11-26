@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
-          "source": "List Folder",
+          "source": "List folder",
           "message": "列出資料夾內容"
         },
         "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
@@ -556,7 +556,7 @@
           "message": "僅比對具有這些副檔名的檔案，提供時不含前導句點並以逗號分隔"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
-          "source": "Get File Info",
+          "source": "Get file info",
           "message": "取得檔案資訊"
         },
         "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
@@ -580,7 +580,7 @@
           "message": "要取得其詮釋資料的檔案或資料夾路徑"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "下載檔案"
         },
         "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -604,7 +604,7 @@
           "message": "要下載之檔案的路徑"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "上傳檔案"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -820,7 +820,7 @@
           "message": "不要向使用者顯示關於此變更的桌面通知；適用於大量上傳"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text File",
+          "source": "Create text file",
           "message": "建立文字檔案"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "不要向使用者顯示關於此變更的桌面通知"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
-          "source": "Get Temporary Link",
+          "source": "Get temporary link",
           "message": "取得臨時連結"
         },
         "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "要產生臨時連結的檔案路徑"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create Folder",
+          "source": "Create folder",
           "message": "建立資料夾"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -976,7 +976,7 @@
           "message": "當目的地已存在同名檔案時，選擇不衝突的名稱，而不是直接失敗"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File or Folder",
+          "source": "Delete file or folder",
           "message": "刪除檔案或資料夾"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "要刪除之檔案或資料夾的路徑；刪除資料夾將會刪除其中的所有內容"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
-          "source": "Copy File or Folder",
+          "source": "Copy file or folder",
           "message": "複製檔案或資料夾"
         },
         "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "當目的地已存在同名檔案時，選擇不衝突的名稱，而不是直接失敗"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
-          "source": "Move or Rename File or Folder",
+          "source": "Move or rename file or folder",
           "message": "移動或重新命名檔案或資料夾"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "當目的地已存在同名檔案時，選擇不衝突的名稱，而不是直接失敗"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
-          "source": "List File Revisions",
+          "source": "List file revisions",
           "message": "列出檔案修訂版本"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "要傳回的修訂版本最大數量"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
-          "source": "Restore File Revision",
+          "source": "Restore file revision",
           "message": "還原檔案修訂版本"
         },
         "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "要還原的修訂版本識別碼，由 `list-file-revisions` 傳回"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Create Shared Link",
+          "source": "Create shared link",
           "message": "建立共用連結"
         },
         "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "連結失效的時間；需要付費 Dropbox 帳戶"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
-          "source": "List Shared Links",
+          "source": "List shared links",
           "message": "列出共用連結"
         },
         "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "僅列出專門為該路徑建立的連結，排除同樣授予其存取權之父資料夾的連結"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
-          "source": "Revoke Shared Link",
+          "source": "Revoke shared link",
           "message": "撤銷分享連結"
         },
         "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "要撤銷的分享連結，由 `create-shared-link` 或 `list-shared-links` 傳回"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
-          "source": "Get Account Info",
+          "source": "Get account info",
           "message": "取得帳戶資訊"
         },
         "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "傳回連線驗證所代表之 Dropbox 帳戶的資訊：擁有者、註冊所用的電子郵件地址以及帳戶類型。\n\n帳戶類型對其他幾項操作至關重要：在 `basic` 帳戶上，共用連結無法受到密碼保護，且 `team_only` 連結可見度需要 `business` 帳戶。"
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
-          "source": "Get Space Usage",
+          "source": "Get space usage",
           "message": "取得空間使用量"
         },
         "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "Dropbox 要擷取的 URL。\n\n**Dropbox 會從其自己的伺服器擷取**，因此該 URL 必須可從公用網際網路連線，且內容絕不會經過此系統"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
-          "source": "Check Job Status",
+          "source": "Check job status",
           "message": "檢查作業狀態"
         },
         "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "由 `copy-batch` 啟動的批次複製"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
-          "source": "Delete Files (Batch)",
+          "source": "Delete files (batch)",
           "message": "刪除檔案（批次）"
         },
         "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "要刪除的路徑。\n\n當批次較大時，Dropbox 會在背景執行，因此回應可能會指定要追蹤的作業，而非結果本身"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
-          "source": "Move Files (Batch)",
+          "source": "Move files (batch)",
           "message": "移動檔案 (批次)"
         },
         "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "當目的地已存在同名檔案時，選擇不衝突的名稱，而不是直接失敗"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
-          "source": "Copy Files (Batch)",
+          "source": "Copy files (batch)",
           "message": "複製檔案（批次）"
         },
         "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "當目的地已存在同名檔案時，選擇不衝突的名稱，而不是直接失敗"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
-          "source": "Permanently Delete",
+          "source": "Permanently delete",
           "message": "永久刪除"
         },
         "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "要永久移除的檔案或資料夾路徑"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
-          "source": "Get Thumbnail",
+          "source": "Get thumbnail",
           "message": "取得縮圖"
         },
         "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "2048 x 1536 像素"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
-          "source": "Get Preview",
+          "source": "Get preview",
           "message": "取得預覽"
         },
         "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "要轉譯為 PDF 預覽的文件路徑"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
-          "source": "Share File with People",
+          "source": "Share file with people",
           "message": "與人員共享檔案"
         },
         "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "要包含在通知電子郵件中的訊息；設定 `quiet` 時會被忽略"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
-          "source": "List File Members",
+          "source": "List file members",
           "message": "列出檔案成員"
         },
         "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "要傳回的成員最大數量"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
-          "source": "Find Files in a Folder",
+          "source": "Find files in a folder",
           "message": "尋找資料夾中的檔案"
         },
         "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "每次請求要擷取的條目數量；Dropbox 將此視為提示。\n\n這會影響周遊如何分割為多個請求，而非傳回多少條記錄——迭代器會在需要時擷取更多頁面"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
-          "source": "Find Files by Search",
+          "source": "Find files by search",
           "message": "透過搜尋尋找檔案"
         },
         "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "每次請求要擷取的相符項目數量。\n\n這會影響周遊如何分割為多個請求，而非傳回的記錄數量"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
-          "source": "New File",
+          "source": "New file",
           "message": "新增檔案"
         },
         "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "監視器所記憶的項目識別身分數量，用以區分新檔案與已修改的檔案（預設為 `100000`）。\n\nDropbox 回報建立與修改的方式相同，因此差異只能透過記憶已看過的項目來判斷。達到此上限的監視器會記錄警告；建議使用 `path` 和 `recursive` 縮小範圍，而非提高此值"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "New Folder",
+          "source": "New folder",
           "message": "新增資料夾"
         },
         "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "監視器所記憶的項目識別身分數量，用以區分新檔案與已修改的檔案（預設為 `100000`）。\n\nDropbox 回報建立與修改的方式相同，因此差異只能透過記憶已看過的項目來判斷。達到此上限的監視器會記錄警告；建議使用 `path` 和 `recursive` 縮小範圍，而非提高此值"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "File Modified",
+          "source": "File modified",
           "message": "檔案已修改"
         },
         "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {

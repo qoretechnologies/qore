@@ -16,7 +16,7 @@
           "message": "Rileva frodi, prevedi vendite, segmenta clienti e semplifica dati complessi — tutto all'interno della tua pipeline di dati senza dipendenze esterne. Include rilevamento anomalie (segnala transazioni insolite o guasti dei sensori), clustering (scopri segmenti di clientela o hotspot geografici), forecasting (prevedi i ricavi con pattern stagionali), regressione (stima i prezzi dalle caratteristiche) e riduzione della dimensionalità (comprimi 50 campi in 3 valori chiave)."
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
+          "source": "Detect unusual data points",
           "message": "Rileva punti dati insoliti"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Un valore compreso tra `0.0` e `1.0` che determina quando un record viene contrassegnato come anomalo; i record con punteggio pari o superiore a questa soglia vengono classificati come anomalie; valori più bassi contrassegnano più record come anomali, valori più alti ne contrassegnano meno.\n\n**Valori tipici**: `0.5` (standard), `0.6`–`0.7` (conservativo — solo anomalie evidenti); predefinito: `0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
+          "source": "Find natural groups in data",
           "message": "Trova gruppi naturali nei dati"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
@@ -184,7 +184,7 @@
           "message": "Misura l'angolo tra i punti dati anziché la grandezza; ideale quando la direzione conta più della dimensione dei valori"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
+          "source": "Divide data into groups",
           "message": "Dividi dati in gruppi"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
@@ -288,7 +288,7 @@
           "message": "Quando `output_mode` è `dataframe`, include colonne `centroid_distance_<n>` per ciascun centroide del cluster. Disabilitare questa opzione quando i passaggi a valle necessitano solo dei valori `cluster` vincente e `distance` più vicino; predefinito: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
+          "source": "Simplify complex data",
           "message": "Semplifica dati complessi"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
@@ -380,7 +380,7 @@
           "message": "Quando `output_mode` è `dataframe`, include i campi di input originali accanto alle colonne `component_<n>`. Disabilitare questa opzione quando i passaggi a valle necessitano solo delle componenti principali per ridurre le dimensioni di output e migliorare il throughput; impostazione predefinita: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
+          "source": "Forecast future values",
           "message": "Prevedi valori futuri"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
@@ -528,7 +528,7 @@
           "message": "Un valore compreso tra `0.0` e `1.0` che controlla la rapidità con cui il trend si appiattisce nelle previsioni a lungo termine; valori più vicini a `1.0` consentono al trend di persistere più a lungo; valori più vicini a `0.0` appiattiscono il trend più rapidamente; utilizzato solo quando il trend smorzato è abilitato.\n\n**Valori tipici**: `0.8`–`0.98` (intervallo comune); lasciare non impostato per consentire all'algoritmo di scegliere automaticamente"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
+          "source": "Predict values from input data",
           "message": "Prevedi valori dai dati di input"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Se abilitato, i campi di input vengono ridimensionati per avere intervalli simili prima dell'adattamento; ciò può migliorare la precisione quando i campi di input hanno unità o ordini di grandezza molto diversi (ad es. combinando metri quadrati e numero di stanze); predefinito: `False` (disabilitato)"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
+          "source": "Detect local outliers",
           "message": "Rileva outlier locali"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
@@ -660,7 +660,7 @@
           "message": "La soglia per il punteggio di outlier; un punteggio di `1.0` indica che un punto ha la stessa densità dei suoi vicini (normale); punteggi significativamente superiori a `1.0` indicano che il punto si trova in una regione meno densa rispetto ai suoi vicini (anomalo); soglie più basse contrassegnano più record.\n\n**Valori tipici**: `1.5` (standard — individua outlier moderati), `2.0` (conservativo — solo outlier forti); predefinito: `1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
+          "source": "Group data with probabilities",
           "message": "Raggruppa dati con probabilità"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
@@ -736,7 +736,7 @@
           "message": "I cluster sono ellissi allineate agli assi; più veloce e più stabile con dati limitati ma non può catturare le correlazioni tra i campi"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
+          "source": "Run pre-trained model",
           "message": "Esegui modello pre-addestrato"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Quando `output_mode` è `columns` o `dataframe`, include le colonne delle feature di input originali insieme alle colonne di output ONNX. Disabilitare questa opzione quando i passaggi a valle necessitano solo degli output del modello per ridurre la dimensione dell'output e migliorare il throughput. Predefinito: `False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
+          "source": "Run registered model",
           "message": "Esegui modello registrato"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
@@ -1188,7 +1188,7 @@
           "message": "Nome dell'artefatto `tokenizer.json` opzionale da caricare dal registro dei modelli per l'esecuzione di `causal-lm`. Omettere se il manifesto del pacchetto identifica già l'artefatto del tokenizer."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
+          "source": "Separate trends and seasonal patterns",
           "message": "Separa trend e pattern stagionali"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Le variazioni stagionali scalano con il livello complessivo; ideale quando il pattern stagionale cresce all'aumentare dei valori dei dati"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
+          "source": "Put all fields on the same scale",
           "message": "Porta tutti i campi sulla stessa scala"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
@@ -1332,7 +1332,7 @@
           "message": "Quando `output_mode` è `dataframe`, include i campi di input originali accanto alle colonne `scaled_<field>`. Disabilitare questa opzione se i passaggi a valle necessitano solo delle colonne scalate per ridurre la dimensione dell'output e migliorare il throughput; predefinito: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
+          "source": "Normalize values to a range",
           "message": "Normalizza valori in un intervallo"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Quando `output_mode` è `dataframe`, include i campi di input originali accanto alle colonne `scaled_<field>`. Disabilitare questa opzione quando i passaggi successivi necessitano solo di colonne normalizzate per ridurre le dimensioni dell'output e migliorare la velocità di elaborazione; predefinito: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
+          "source": "Fill in missing data",
           "message": "Completa dati mancanti"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "Il numero da utilizzare per riempire le lacune quando il metodo di riempimento è impostato su \"Valore fisso\". Ad esempio, `0` per riempire con zero, o `-1` come valore sentinella; ignorato quando si usano altri metodi di riempimento; predefinito: `0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
+          "source": "Score your category predictions",
           "message": "Valuta le tue previsioni di categoria"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Quanti record raccogliere prima di calcolare un punteggio di qualità. Tutti i record nel batch vengono valutati insieme.\n\n**Suggerimento**: usa almeno `50` per punteggi significativi; `200`+ per una suddivisione dettagliata per categoria"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
+          "source": "Score your number predictions",
           "message": "Valuta le tue stime numeriche"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Numero di record da raccogliere prima di calcolare un punteggio di qualità. Tutti i record del batch vengono valutati insieme.\n\n**Suggerimento**: utilizzare almeno `30` per ottenere punteggi significativi; `200`+ per una valutazione stabile"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
+          "source": "Score your data groupings",
           "message": "Valuta i raggruppamenti dei dati"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Quanti record raccogliere prima di calcolare un punteggio di qualità. Tutti i record nel batch vengono valutati insieme. Il batch deve contenere almeno 2 gruppi distinti.\n\n**Suggerimento**: usa almeno `50` per ottenere punteggi significativi"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
+          "source": "Categorize records",
           "message": "Categorizza record"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
@@ -1784,7 +1784,7 @@
           "message": "Indica se includere una costante di base. Questa opzione dovrebbe essere quasi sempre abilitata: consente al modello di tenere conto della tendenza generale dei dati (ad esempio, se la maggior parte delle richieste viene approvata, la linea di base lo cattura).\n\nPredefinito: abilitato"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
+          "source": "Classify by similarity",
           "message": "Classifica per similarità"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "I vicini più simili al nuovo record hanno un'influenza maggiore sulla previsione: un record molto simile conta più di uno solo parzialmente simile"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
+          "source": "Predict numbers by similarity",
           "message": "Predici numeri per similarità"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "I record più simili al nuovo record hanno un effetto maggiore sul valore previsto"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
+          "source": "Classify with decision rules",
           "message": "Classifica con regole di decisione"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Misura le informazioni ottenute da ciascuna divisione. Può produrre alberi leggermente più bilanciati ma è computazionalmente più lento"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
+          "source": "Predict numbers with decision rules",
           "message": "Predici numeri con regole di decisione"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Il numero massimo di livelli nell'albero decisionale. Alberi più profondi possono catturare pattern più complessi ma potrebbero memorizzare i dati di training invece di apprendere regole generali.\n\n**Suggerimento**: inizia con `5`–`15`; aumenta se l'accuratezza è troppo bassa, diminuisci se il modello va in overfitting\n\nPredefinito: `10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
+          "source": "Classify with multiple decision trees",
           "message": "Classifica con più alberi decisionali"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Ogni albero considera il log2 del numero totale di campi a ogni split. Utilizza meno feature, aumentando la diversità degli alberi"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
+          "source": "Predict numbers with multiple trees",
           "message": "Prevedi numeri con più alberi"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "Ogni albero considera il log2 del numero totale di campi a ogni split. Utilizza meno feature, aumentando la diversità degli alberi"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
+          "source": "Classify with gradient boosting",
           "message": "Classifica con Gradient Boosting"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Il numero massimo di livelli in ciascun albero. Il gradient boosting usa tipicamente alberi poco profondi (stump o piccoli alberi) che catturano ciascuno un aspetto del pattern.\n\n**Suggerimento**: `2`–`6` funziona al meglio per il gradient boosting; alberi più profondi rischiano l'overfitting\n\nPredefinito: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
+          "source": "Predict numbers with gradient boosting",
           "message": "Prevedi numeri con Gradient Boosting"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
@@ -2628,7 +2628,7 @@
           "message": "Il numero massimo di livelli in ciascun albero. Il gradient boosting usa tipicamente alberi poco profondi, ciascuno dei quali cattura un aspetto del pattern.\n\n**Suggerimento**: `2`–`6` funziona meglio per il gradient boosting; alberi più profondi rischiano l'overfitting\n\nPredefinito: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
+          "source": "Compute rolling statistics",
           "message": "Calcola statistiche mobili"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "Il totale di tutti i valori nella finestra corrente. Utile per tracciare metriche cumulative come ricavi mobili o eventi totali"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
+          "source": "Smooth with moving average",
           "message": "Smussa con media mobile"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
@@ -2792,7 +2792,7 @@
           "message": "Quasi nessuno smussamento — segue fedelmente il segnale grezzo, ideale per rilevare immediatamente variazioni improvvise"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
+          "source": "Profile data quality",
           "message": "Profila la qualità dei dati"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Quanti record raccogliere prima di calcolare un report di profilo. Tutti i record nel batch vengono analizzati insieme.\n\n**Suggerimento**: usa almeno `50` per statistiche significative; `200`+ per un rilevamento affidabile degli outlier"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
+          "source": "Validate record schema",
           "message": "Convalida schema record"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Genera un'eccezione VALIDATION-ERROR quando un record non supera la convalida; arresta immediatamente la pipeline al primo record non valido"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
+          "source": "Clean up text",
           "message": "Pulisci testo"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Applica normalizzazione Unicode NFKC (segnaposto, attualmente di passaggio)"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
+          "source": "Count tokens in text",
           "message": "Conta token nel testo"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Indica se includere token speciali (come `[CLS]` e `[SEP]`) nel conteggio dei token. Impostare su `True` per corrispondere al conteggio che un modello vedrebbe effettivamente, o su `False` per il conteggio non elaborato dei token di contenuto."
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
+          "source": "Split text into searchable chunks",
           "message": "Dividi il testo in blocchi ricercabili"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "Ampia sovrapposizione per la massima conservazione del contesto a scapito di più blocchi e spazio di archiviazione"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
+          "source": "Convert text to search vectors",
           "message": "Converti testo in vettori di ricerca"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
@@ -3736,7 +3736,7 @@
           "message": "Identificatore tenant facoltativo per definire l'ambito degli artefatti del modello di registro."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
+          "source": "Extract structured data from text",
           "message": "Estrai dati strutturati dal testo"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
@@ -3904,7 +3904,7 @@
           "message": "Numero massimo di tentativi di riprova quando l'output di estrazione non supera la convalida dello schema. Il valore predefinito è 2."
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
+          "source": "Re-rank search results by relevance",
           "message": "Riordina i risultati di ricerca per pertinenza"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "Identificatore tenant facoltativo per definire l'ambito degli artefatti del modello di registro."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
+          "source": "Split text at semantic boundaries",
           "message": "Dividi testo sui confini semantici"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
@@ -4500,7 +4500,7 @@
           "message": "Identificatore tenant facoltativo per definire l'ambito degli artefatti del modello di registro."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
+          "source": "Block unsafe records",
           "message": "Blocca record non sicuri"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "Un elenco di configurazioni delle regole di guardrail. Ogni regola ha:\n- `type` — tipo di regola (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` o `critical`\n- `params` — parametri specifici della regola\n\nI record che non superano una qualsiasi regola vengono eliminati dalla pipeline."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
+          "source": "Check and annotate text safety",
           "message": "Controlla e annota la sicurezza del testo"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
@@ -4572,7 +4572,7 @@
           "message": "Un elenco di configurazioni delle regole di guardrail. Ogni regola ha:\n- `type` — tipo di regola (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high` o `critical`\n- `params` — parametri specifici della regola\n\nCiascun record viene arricchito con `_guardrail_passed` (bool) e `_guardrail_violations` (elenco). Se è configurata l'anonimizzazione dei PII, il campo di testo viene sostituito con la versione oscurata."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
+          "source": "Extract text from any document",
           "message": "Estrai testo da qualsiasi documento"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
@@ -4668,7 +4668,7 @@
           "message": "Se una pagina PDF contiene un numero di caratteri di testo estraibile inferiore a questo valore, viene considerata scansionata e viene applicato l'OCR. Predefinito: `50`."
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
+          "source": "Analyze images with vision AI",
           "message": "Analizza immagini con Vision AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {

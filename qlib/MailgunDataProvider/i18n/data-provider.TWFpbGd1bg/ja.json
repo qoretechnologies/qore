@@ -520,7 +520,7 @@
           "message": "検証するメールアドレス"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Add Mailing List Member",
+          "source": "Add mailing list member",
           "message": "メーリングリストメンバーの追加"
         },
         "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -604,7 +604,7 @@
           "message": "`True` の場合、メンバーが既に存在していれば更新します（デフォルト: `False`）"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Get Mailing List Member",
+          "source": "Get mailing list member",
           "message": "メーリングリストメンバーを取得"
         },
         "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -640,7 +640,7 @@
           "message": "取得するメンバーのメールアドレス"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
-          "source": "Delete Mailing List Member",
+          "source": "Delete mailing list member",
           "message": "メーリングリストメンバーを削除"
         },
         "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
@@ -676,7 +676,7 @@
           "message": "削除するメンバーのメールアドレス"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "List Mailing List Members",
+          "source": "List mailing list members",
           "message": "メーリングリストメンバー一覧"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
@@ -724,7 +724,7 @@
           "message": "返されるメンバーの最大数"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
-          "source": "Create Route",
+          "source": "Create route",
           "message": "ルートの作成"
         },
         "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
@@ -784,7 +784,7 @@
           "message": "このルートの動作の説明"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
-          "source": "List Routes",
+          "source": "List routes",
           "message": "ルート一覧"
         },
         "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
@@ -808,7 +808,7 @@
           "message": "返すルートの最大数"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
-          "source": "List Mailing Lists",
+          "source": "List mailing lists",
           "message": "メーリングリスト一覧"
         },
         "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "返すメーリングリストの最大数"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "ドメイン一覧"
         },
         "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
@@ -880,7 +880,7 @@
           "message": "返すドメインの最大数"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
+          "source": "Email link clicked",
           "message": "メールリンクがクリックされました"
         },
         "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "クリックイベントを監視するドメインを選択します"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
-          "source": "Email Delivered",
+          "source": "Email delivered",
           "message": "メール配信完了"
         },
         "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
@@ -928,7 +928,7 @@
           "message": "配信イベントを監視するドメインを選択"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
-          "source": "Email Opened",
+          "source": "Email opened",
           "message": "メールが開封された時"
         },
         "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
@@ -952,7 +952,7 @@
           "message": "開封イベントを監視するドメインを選択"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
-          "source": "Permanent Failure",
+          "source": "Permanent failure",
           "message": "恒久的な配信エラー"
         },
         "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
@@ -976,7 +976,7 @@
           "message": "恒久的な配信エラーイベントを監視するドメインを選択"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
-          "source": "Temporary Failure",
+          "source": "Temporary failure",
           "message": "一時的な配信エラー"
         },
         "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "一時的な配信エラーイベントを監視するドメインを選択"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
-          "source": "Spam Complaint",
+          "source": "Spam complaint",
           "message": "スパム苦情"
         },
         "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {

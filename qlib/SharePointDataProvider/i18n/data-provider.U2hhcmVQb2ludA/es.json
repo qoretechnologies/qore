@@ -1960,7 +1960,7 @@
           "message": "El elemento de lista al que dirigirse"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Documento añadido"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Se activa cuando se añade un documento a una biblioteca de documentos. Utiliza consultas delta, que se reanudan exactamente donde se quedaron en lugar de volver a leer la biblioteca"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Documento modificado"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Se activa cuando se modifica un documento que ya está en una biblioteca. Utiliza consultas delta, que se reanudan exactamente donde se quedaron en lugar de volver a leer la biblioteca"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Carpeta añadida"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Se activa cuando se añade una carpeta a una biblioteca de documentos"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Elemento de lista añadido"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

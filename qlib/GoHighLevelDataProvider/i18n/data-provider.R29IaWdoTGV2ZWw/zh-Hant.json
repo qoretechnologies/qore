@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "搜尋聯絡人"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -940,7 +940,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a Campaign",
+          "source": "Add a Contact to a campaign",
           "message": "將聯絡人新增至行銷活動"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "要將聯絡人新增至其中的行銷活動 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a Campaign",
+          "source": "Remove a Contact from a campaign",
           "message": "從行銷活動中移除聯絡人"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "要從中移除聯絡人的行銷活動 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a Note to the Contact",
+          "source": "Add a note to the Contact",
           "message": "為聯絡人新增備註"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "備註作者的使用者 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
-          "source": "Search Opportunities",
+          "source": "Search opportunities",
           "message": "搜尋商機"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "取得商機"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "商機 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "建立商機"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "指派此商機的使用者 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "更新商機"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "指派此商機的使用者 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "刪除商機"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "要刪除的商機"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "取得任務"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "要取得的任務 ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "建立任務"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "工作是否已完成（`True` 或 `False`）"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "更新任務"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "工作是否已完成（`True` 或 `False`）"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "刪除任務"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "新預約"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
-          "source": "New Message",
+          "source": "New message",
           "message": "新訊息"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {

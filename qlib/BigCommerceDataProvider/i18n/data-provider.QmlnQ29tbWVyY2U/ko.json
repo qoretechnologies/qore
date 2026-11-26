@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "고객 생성"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -436,7 +436,7 @@
           "message": "할당할 고객 그룹의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "고객 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -544,7 +544,7 @@
           "message": "할당할 고객 그룹의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "고객 삭제"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -568,7 +568,7 @@
           "message": "삭제할 고객의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "고객 가져오기"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -592,7 +592,7 @@
           "message": "조회할 고객의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
+          "source": "Search customers",
           "message": "고객 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
@@ -716,7 +716,7 @@
           "message": "수정 날짜 기준 내림차순 정렬"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Create a Customer Address",
+          "source": "Create a customer address",
           "message": "고객 주소 생성"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -880,7 +880,7 @@
           "message": "상업용 주소"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.display_name": {
-          "source": "Search Customer Addresses",
+          "source": "Search customer addresses",
           "message": "고객 주소 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.short_desc": {
@@ -940,7 +940,7 @@
           "message": "페이지 번호"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Update a Customer Address",
+          "source": "Update a customer address",
           "message": "고객 주소 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "상업용 주소"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
-          "source": "Delete a Customer Address",
+          "source": "Delete a customer address",
           "message": "고객 주소 삭제"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "삭제할 고객 주소의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "상품 생성"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1352,7 +1352,7 @@
           "message": "할인 가격(설정 시 기본 가격 대체)"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "제품 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "할인 가격(설정 시 기본 가격 대체)"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete a Product",
+          "source": "Delete a product",
           "message": "상품 삭제"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "삭제할 상품의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "상품 가져오기"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "조회할 상품의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
+          "source": "Search products",
           "message": "제품 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "내림차순"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Create a Blog Post",
+          "source": "Create a blog post",
           "message": "블로그 게시물 생성"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "SEO 메타 키워드"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.display_name": {
-          "source": "Get a Blog Post",
+          "source": "Get a blog post",
           "message": "블로그 게시물 가져오기"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "조회할 블로그 게시물의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Update a Blog Post",
+          "source": "Update a blog post",
           "message": "블로그 게시물 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "SEO 메타 키워드"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.display_name": {
-          "source": "Delete a Blog Post",
+          "source": "Delete a blog post",
           "message": "블로그 게시물 삭제"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "삭제할 블로그 게시물의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.display_name": {
-          "source": "Search Blog Posts",
+          "source": "Search blog posts",
           "message": "블로그 게시물 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.short_desc": {
@@ -2224,7 +2224,7 @@
           "message": "페이지 번호"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "주문 가져오기"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "조회할 주문의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "주문 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2380,7 +2380,7 @@
           "message": "주문의 청구 주소 객체"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
+          "source": "Search orders",
           "message": "주문 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "페이지 번호"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create a Shipment",
+          "source": "Create a shipment",
           "message": "배송 생성"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "배송에 대한 의견"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get a Shipment",
+          "source": "Get a shipment",
           "message": "배송 가져오기"
         },
         "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "조회할 배송의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.display_name": {
-          "source": "Update a Shipment",
+          "source": "Update a shipment",
           "message": "배송 업데이트"
         },
         "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "`order_product_id` 및 `quantity`이(가) 포함된 배송 내 품목 배열"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.display_name": {
-          "source": "Delete a Shipment",
+          "source": "Delete a shipment",
           "message": "배송 삭제"
         },
         "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.short_desc": {
@@ -2876,7 +2876,7 @@
           "message": "삭제할 배송의 ID"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "배송 검색"
         },
         "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -2912,7 +2912,7 @@
           "message": "페이지 번호"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.display_name": {
-          "source": "Watch Abandoned Cart",
+          "source": "Watch abandoned cart",
           "message": "포기된 장바구니 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.display_name": {
-          "source": "Watch New Cart",
+          "source": "Watch new cart",
           "message": "새 장바구니 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Customer",
+          "source": "Watch new customer",
           "message": "새 고객 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -2984,7 +2984,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.display_name": {
-          "source": "Watch New Customer Address",
+          "source": "Watch new customer address",
           "message": "새 고객 주소 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.short_desc": {
@@ -3008,7 +3008,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Watch New Order",
+          "source": "Watch new order",
           "message": "새 주문 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3032,7 +3032,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
-          "source": "Watch New Product",
+          "source": "Watch new product",
           "message": "새 상품 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Watch New Shipment",
+          "source": "Watch new shipment",
           "message": "새 배송 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Customer",
+          "source": "Watch updated customer",
           "message": "업데이트된 고객 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.display_name": {
-          "source": "Watch Updated Customer Address",
+          "source": "Watch updated customer address",
           "message": "업데이트된 고객 주소 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Watch Updated Order",
+          "source": "Watch updated order",
           "message": "업데이트된 주문 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "새 레코드를 확인하는 주기(최소 30초)"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Watch Updated Order Status",
+          "source": "Watch updated order status",
           "message": "업데이트된 주문 상태 감시"
         },
         "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.short_desc": {

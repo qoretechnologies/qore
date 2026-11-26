@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Buscar contactos"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -940,7 +940,7 @@
           "message": "El contacto que se eliminará"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a Campaign",
+          "source": "Add a Contact to a campaign",
           "message": "Añadir un contacto a una campaña"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "El ID de la campaña a la que añadir el contacto"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a Campaign",
+          "source": "Remove a Contact from a campaign",
           "message": "Eliminar un contacto de una campaña"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "El ID de la campaña de la que se eliminará el contacto"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a Note to the Contact",
+          "source": "Add a note to the Contact",
           "message": "Añadir una nota al contacto"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "El ID de usuario del autor de la nota"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
-          "source": "Search Opportunities",
+          "source": "Search opportunities",
           "message": "Buscar oportunidades"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Obtener una oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "El ID de la oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Crear una oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "ID de usuario al que asignar la oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Actualizar una oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "ID de usuario al que asignar la oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Eliminar una oportunidad"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "La oportunidad a eliminar"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Listar tareas"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Número máximo de resultados a devolver"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Obtener una tarea"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "El ID de la tarea que se va a recuperar"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Crear una tarea"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "Indica si la tarea está completada (`True` o `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Actualizar una tarea"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Indica si la tarea está completada (`True` o `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Eliminar una tarea"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "Nueva cita"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
-          "source": "New Message",
+          "source": "New message",
           "message": "Nuevo mensaje"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {

@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
-          "message": "Create Embeddings"
+          "source": "Create embeddings",
+          "message": "Create embeddings"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
           "source": "Create text, image, audio, video, PDF, and sparse search vectors",
@@ -796,8 +796,8 @@
           "message": "Output vector size. The selected `model` determines the supported range."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
-          "message": "Embedding Type"
+          "source": "Embedding type",
+          "message": "Embedding type"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
           "source": "Output encoding format: 'float', 'base64', 'binary', 'ubinary', or a list of…",
@@ -848,8 +848,8 @@
           "message": "If `true`, truncates input exceeding the model's max token limit instead of returning an error."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
-          "message": "Late Chunking"
+          "source": "Late chunking",
+          "message": "Late chunking"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
           "source": "If true, concatenates all inputs and processes as one sequence before splitting",
@@ -860,8 +860,8 @@
           "message": "Use `True` to process inputs as one sequence before splitting, preserving context across chunks."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
-          "message": "Return Multivector"
+          "source": "Return multivector",
+          "message": "Return multivector"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
           "source": "If true, returns one embedding per token",
@@ -872,8 +872,8 @@
           "message": "If `true`, returns one embedding per token. Cannot be used with `dimensions`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
-          "message": "Return Tokenized Input"
+          "source": "Return tokenized input",
+          "message": "Return tokenized input"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
           "source": "If true, returns tokens alongside multi-vector embeddings",
@@ -884,8 +884,8 @@
           "message": "If `true`, returns tokens alongside multi-vector embeddings. Requires `return_multivector=true`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
-          "message": "Input Type"
+          "source": "Input type",
+          "message": "Input type"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
           "source": "Role of the input: 'query' for search queries, 'document' for passages",
@@ -904,8 +904,8 @@
           "message": "document"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
-          "message": "Rerank Documents"
+          "source": "Rerank documents",
+          "message": "Rerank documents"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
           "source": "Rank text or image documents by relevance to a query",
@@ -1036,8 +1036,8 @@
           "message": "Image as a URL or base64-encoded string."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
-          "message": "Top N"
+          "source": "Top n",
+          "message": "Top n"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
           "source": "Number of top results to return",
@@ -1048,8 +1048,8 @@
           "message": "Number of top results to return. If not set, returns all documents."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
-          "message": "Return Documents"
+          "source": "Return documents",
+          "message": "Return documents"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
           "source": "If true (default), includes document content in each result",
@@ -1060,8 +1060,8 @@
           "message": "Use `True` (the default) to include document content in each result."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
-          "message": "Max Doc Length"
+          "source": "Max doc length",
+          "message": "Max doc length"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
           "source": "Maximum tokens per document (1-8192)",
@@ -1072,8 +1072,8 @@
           "message": "Maximum tokens per document (1-8192). Omit to use the model's default (2048 for jina-reranker-v3, 8192 for jina-reranker-v3.5)."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
-          "message": "Return Embeddings"
+          "source": "Return embeddings",
+          "message": "Return embeddings"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
           "source": "If true, returns the document embedding alongside the relevance score",
@@ -1084,8 +1084,8 @@
           "message": "If `true`, returns the document embedding alongside the relevance score."
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
-          "message": "Classify Content"
+          "source": "Classify content",
+          "message": "Classify content"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
           "source": "Assign labels to text or images without training a classifier",
@@ -1292,8 +1292,8 @@
           "message": "Candidate labels: a list of up to 512 labels, or a dict of up to 8 groups with max 64 labels each."
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
-          "message": "Train or Update Classifier"
+          "source": "Train or update classifier",
+          "message": "Train or update classifier"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
           "source": "Create a reusable classifier or add labeled training examples",
@@ -1572,8 +1572,8 @@
           "message": "Public"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
-          "message": "Num Iters"
+          "source": "Num iters",
+          "message": "Num iters"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
           "source": "Number of iterations for the training process",
@@ -1584,8 +1584,8 @@
           "message": "Number of iterations for the training process."
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
-          "message": "List Classifiers"
+          "source": "List classifiers",
+          "message": "List classifiers"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
           "source": "List reusable classifiers belonging to your account",
@@ -1656,8 +1656,8 @@
           "message": "The model whose capabilities and pricing to retrieve."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
-          "message": "Create Batch Embeddings"
+          "source": "Create batch embeddings",
+          "message": "Create batch embeddings"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
           "source": "Submit a large collection of documents for asynchronous embedding",
@@ -1864,8 +1864,8 @@
           "message": "The embedding batch to inspect or cancel."
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
-          "message": "List Batches"
+          "source": "List batches",
+          "message": "List batches"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
           "source": "List recent embedding batches for your account",
@@ -3268,8 +3268,8 @@
           "message": "Include site icons with the results."
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
-          "message": "Segment Text"
+          "source": "Segment text",
+          "message": "Segment text"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
           "source": "Count tokens and split text into manageable chunks",
@@ -3388,8 +3388,8 @@
           "message": "Return only this many trailing tokens."
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
-          "message": "Chat with Vision Model"
+          "source": "Chat with vision model",
+          "message": "Chat with vision model"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
           "source": "Answer questions about text and images with Jina OCR",
@@ -3540,8 +3540,8 @@
           "message": "Sampling temperature controlling response variation."
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
-          "message": "Deep Search"
+          "source": "Deep search",
+          "message": "Deep search"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
           "source": "Research a question across web sources and return a grounded answer",
@@ -3872,8 +3872,8 @@
           "message": "Read sources only from these domains."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
-          "message": "Download Batch Output"
+          "source": "Download batch output",
+          "message": "Download batch output"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
           "source": "Download and parse completed batch embeddings",
@@ -3896,8 +3896,8 @@
           "message": "Completed batch whose JSONL results or errors to download."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
-          "message": "Download Batch Errors"
+          "source": "Download batch errors",
+          "message": "Download batch errors"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {
           "source": "Download and parse errors from batch embedding jobs",

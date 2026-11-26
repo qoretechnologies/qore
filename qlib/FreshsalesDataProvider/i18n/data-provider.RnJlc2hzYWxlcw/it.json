@@ -904,7 +904,7 @@
           "message": "L'identificatore univoco del contatto da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Elenca contatti"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -968,7 +968,7 @@
           "message": "L'ID del contatto"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Crea account"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "L'ID dell'account/azienda principale"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "Aggiorna account"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -1436,7 +1436,7 @@
           "message": "L'ID dell'account/azienda principale"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "Elimina account"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "L'identificatore univoco dell'account da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "Elenca account"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Ottieni account"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "L'ID dell'account"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create Deal",
+          "source": "Create deal",
           "message": "Crea trattativa"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "La probabilità di vincere la trattativa (da `0` a `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update Deal",
+          "source": "Update deal",
           "message": "Aggiorna opportunità"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "La probabilità di vincere la trattativa (da `0` a `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
-          "source": "Delete Deal",
+          "source": "Delete deal",
           "message": "Elimina opportunità"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "L'identificatore univoco della trattativa da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Elenca trattative"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get Deal",
+          "source": "Get deal",
           "message": "Ottieni trattativa"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "L'ID della trattativa"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "Crea attività"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "L'ID del tipo di attività"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "Aggiorna attività"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -2308,7 +2308,7 @@
           "message": "L'ID del tipo di attività"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "Elimina attività"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -2332,7 +2332,7 @@
           "message": "L'identificatore univoco dell'attività da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Elenca attività"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "Ottieni attività"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "L'ID dell'attività"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "Crea appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "L'ID del contatto, account o trattativa da associare"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Update Appointment",
+          "source": "Update appointment",
           "message": "Aggiorna appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "L'ID del contatto, account o trattativa da associare"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Delete Appointment",
+          "source": "Delete appointment",
           "message": "Elimina appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "L'identificatore univoco dell'appuntamento da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
-          "source": "List Appointments",
+          "source": "List appointments",
           "message": "Elenca appuntamenti"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Risultati massimi"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
-          "source": "Get Appointment",
+          "source": "Get appointment",
           "message": "Ottieni appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "L'ID dell'appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "Crea nota"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "L'ID del contatto, account o trattativa da associare"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "Aggiorna nota"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Il contenuto/corpo aggiornato della nota"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "Elimina nota"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "L'identificatore univoco della nota da eliminare"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact Event",
+          "source": "New Contact event",
           "message": "Evento nuovo contatto"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "Verifica la presenza di nuovi contatti creati in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
-          "source": "New Deal Event",
+          "source": "New deal event",
           "message": "Evento nuova trattativa"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Esegui il polling per le nuove trattative create in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
-          "source": "New Account Event",
+          "source": "New account event",
           "message": "Evento nuovo account"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "Verifica la presenza di nuovi account creati in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task Event",
+          "source": "New task event",
           "message": "Evento nuova attività"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Esegui il polling per le nuove attività create in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment Event",
+          "source": "New appointment event",
           "message": "Evento nuovo appuntamento"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {

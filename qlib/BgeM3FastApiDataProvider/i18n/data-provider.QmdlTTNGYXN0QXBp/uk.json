@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Створити ембединги"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Максимальна кількість текстів, яку сайдкар обробляє за один внутрішній пакет енкодера. Якщо не вказано, використовується власне значення за замовчуванням сайдкара (`256`). Нижчі значення зменшують використання пам'яті за рахунок пропускної здатності."
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
+          "source": "Get health",
           "message": "Отримати стан працездатності"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Повертає статус працездатності sidecar (зазвичай `\"ok\"`) і дані про навантаження на пам’ять хоста. Маршрутизатори вищого рівня можуть використовувати поле `pressure` для керування затримкою перемикання між локальною та хмарною маршрутизацією."
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
+          "source": "Get metrics",
           "message": "Отримати метрики"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {

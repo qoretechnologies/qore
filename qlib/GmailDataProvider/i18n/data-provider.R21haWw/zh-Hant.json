@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "搜尋郵件"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "用於擷取清單中特定頁面結果的頁面權杖"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "擷取郵件"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "要擷取的訊息 ID"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "擷取附件"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "要擷取的附件 ID"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "新電子郵件"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "單一輪詢週期中傳遞的最大郵件數量；未設定或設為 `0` 表示沒有限制。\n\n此限制從待處理積壓中最**舊**的一端開始套用，因此監視游標仍會連續推進，其餘郵件將由後續週期傳遞而不是被略過。當可能累積大量積壓時，可用此選項限制單一週期可執行的工作量"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "新電子郵件附件"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "單一輪詢週期中傳遞的最大郵件數量；未設定或設為 `0` 表示沒有限制。\n\n此限制從待處理積壓中最**舊**的一端開始套用，因此監視游標仍會連續推進，其餘郵件將由後續週期傳遞而不是被略過。當可能累積大量積壓時，可用此選項限制單一週期可執行的工作量"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "將郵件移至垃圾桶"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "要移至垃圾桶的郵件 ID；監視事件會將此值作為 `message_id` 傳遞"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "刪除訊息"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "`References` 標頭值：所回覆對話中各郵件的 `Message-ID` 值，由最舊到最新排列，以空格分隔並包含角括號。若未設定，則使用 `in_reply_to`。監視事件會傳遞原始郵件的 `References` 標頭"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "搜尋郵件並取得中繼資料"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "每封相符郵件要擷取的郵件標頭；除非 `format` 為 `metadata`，否則會被忽略"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "從垃圾桶還原郵件"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "要從垃圾桶還原的郵件 ID；監視事件會將此值作為 `message_id` 傳遞"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "變更郵件的標籤"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "要從郵件移除的標籤 ID；標籤以其 ID（例如 `INBOX`、`UNREAD`、`Label_12`）識別，而非名稱"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "列出標籤"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "列出帳戶中的所有標籤，包括 Gmail 的系統標籤（`INBOX`、`UNREAD`、`STARRED` 等）與使用者建立的標籤，每個標籤都附有 `modify-message-labels` 與搜尋選項 `labelIds` 所使用的 ID"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "建立標籤"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "不在郵件清單中顯示帶有此標籤的郵件"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "建立草稿"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "`References` 標頭值：所回覆對話中各郵件的 `Message-ID` 值，由最舊到最新排列，以空格分隔並包含角括號。若未設定，則使用 `in_reply_to`。監視事件會傳遞原始郵件的 `References` 標頭"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "搜尋草稿"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "用於擷取清單中特定頁面結果的頁面權杖"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "擷取草稿"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "以 base64url 編碼的 MIME 資料形式置於 `raw` 中的完整郵件；不會解析內文"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "傳送草稿"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "要傳送的草稿 ID；`list-drafts` 與 `create-draft` 會將此值作為 `id` 傳回"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "刪除草稿"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

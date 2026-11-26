@@ -472,7 +472,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "追加で渡すパラメーター。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "コードブロック"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "各結果ごとに返すコードブロックの数。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "各ウェブページから返すURLの数。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "リッチ画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -544,7 +544,7 @@
           "message": "各結果ごとに返すリッチ画像リンク数。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "リッチリンク"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "非推奨。将来のリリースで削除されます。現在無視されています。ハイライトをデフォルトで有効にするにはhighlights: trueを指定、または独自のクエリで選択をガイドするには{ query }を指定してください。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "ハイライトの返還文字数の最大値。各URLごとのハイライトテキストの合計長を制御。サポートされる最大値は10000。highlights.dynamic と互換性なし"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "文数"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -680,7 +680,7 @@
           "message": "優先"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl タイムアウト"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -692,7 +692,7 @@
           "message": "ライブクロールのタイムアウト（ミリ秒）。"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "最大年齢（時間）"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -704,7 +704,7 @@
           "message": "キャッシュされた内容の最大経過時間（時間）。正の値は、その時間数より新しい場合にキャッシュされた内容を使用します。0 は新しい内容を取得し、新規取得したページにテキスト描画オプションを適用する際にサポートされる方法です。-1 は常にキャッシュを使用します。省略した場合、キャッシュされた内容がないときは代替の取得が行われます。サポートされる最大値は 720 時間です。"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "サブページの対象"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -776,7 +776,7 @@
           "message": "各結果のテキスト抽出オプション。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "セクションを除外"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -788,7 +788,7 @@
           "message": "これらの意味的ページセクションに分類されたコンテンツを除外。セクション分類はベストエフォートです。最新の取得コンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTMLタグを含む"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -800,7 +800,7 @@
           "message": "trueの場合、返されるテキストに軽量なHTMLタグを含め、プレーンなmarkdownスタイルのテキストではなくします。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用します。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "セクションを含む"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -812,7 +812,7 @@
           "message": "ベストエフォート。これらのセマンティックページセクションに分類されたコンテンツのみを含む。一部のページではセクション分類が利用不可または不完全な場合があるため、厳密なフィルタリングが必要な場合は出力を検証してください。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -932,7 +932,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "text"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "追加プロパティ"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.cHJvcGVydGllcw.display_name": {
@@ -1068,7 +1068,7 @@
           "message": "レスポンスをサーバー送信イベントのストリームとして返します。  呼び出し側が SSE を処理しない限り、オフのままにしてください。アクションはレスポンス全体を返します。"
         },
         "app.RXhh.action.YW5zd2Vy.display_name": {
-          "source": "Answer a Question",
+          "source": "Answer a question",
           "message": "質問に回答"
         },
         "app.RXhh.action.YW5zd2Vy.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "必要な回答を記述した [JSON Schema Draft 7](https://json-schema.org/draft-07) の定義。これにより結果は文章ではなく構造化データになります。"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "追加プロパティ"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "ユーザーの 2 文字の ISO 国コード（例: US）。"
         },
         "app.RXhh.action.Y29udGVudHM.display_name": {
-          "source": "Get Contents",
+          "source": "Get contents",
           "message": "内容を取得"
         },
         "app.RXhh.action.Y29udGVudHM.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "各結果のテキスト抽出オプション。"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "セクションを除外"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "これらの意味的ページセクションに分類されたコンテンツを除外。セクション分類はベストエフォートです。最新の取得コンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTMLタグを含む"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "trueの場合、返されるテキストに軽量なHTMLタグを含め、プレーンなmarkdownスタイルのテキストではなくします。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用します。"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "セクションを含む"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "ベストエフォート。これらのセマンティックページセクションに分類されたコンテンツのみを含む。一部のページではセクション分類が利用不可または不完全な場合があるため、厳密なフィルタリングが必要な場合は出力を検証してください。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "非推奨。将来のリリースで削除されます。現在無視されています。ハイライトをデフォルトで有効にするにはhighlights: trueを指定、または独自のクエリで選択をガイドするには{ query }を指定してください。"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "ハイライトの返還文字数の最大値。各URLごとのハイライトテキストの合計長を制御。サポートされる最大値は10000。highlights.dynamic と互換性なし"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "文数"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "追加で渡すパラメーター。"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "コードブロック"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "各結果ごとに返すコードブロックの数。"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "画像リンク"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "各ウェブページから返すURLの数。"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "リッチ画像リンク"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "各結果ごとに返すリッチ画像リンク数。"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "リッチリンク"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "検索結果の特定のサブページを見つけるための語。単一の文字列でも文字列の配列でもかまいません。"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
-          "source": "Find Similar Links",
+          "source": "Find similar links",
           "message": "類似リンクを検索"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "追加で渡すパラメーター。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "コードブロック"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "各結果ごとに返すコードブロックの数。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "各ウェブページから返すURLの数。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "リッチ画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "各結果ごとに返すリッチ画像リンク数。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "リッチリンク"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "非推奨。将来のリリースで削除されます。現在無視されています。ハイライトをデフォルトで有効にするにはhighlights: trueを指定、または独自のクエリで選択をガイドするには{ query }を指定してください。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "ハイライトの返還文字数の最大値。各URLごとのハイライトテキストの合計長を制御。サポートされる最大値は10000。highlights.dynamic と互換性なし"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "文数"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "優先"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl タイムアウト"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "ライブクロールのタイムアウト（ミリ秒）。"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "最大年齢（時間）"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "キャッシュされた内容の最大経過時間（時間）。正の値は、その時間数より新しい場合にキャッシュされた内容を使用します。0 は新しい内容を取得し、新規取得したページにテキスト描画オプションを適用する際にサポートされる方法です。-1 は常にキャッシュを使用します。省略した場合、キャッシュされた内容がないときは代替の取得が行われます。サポートされる最大値は 720 時間です。"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "サブページの対象"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "各結果のテキスト抽出オプション。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "セクションを除外"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "これらの意味的ページセクションに分類されたコンテンツを除外。セクション分類はベストエフォートです。最新の取得コンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTMLタグを含む"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "trueの場合、返されるテキストに軽量なHTMLタグを含め、プレーンなmarkdownスタイルのテキストではなくします。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用します。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "セクションを含む"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "ベストエフォート。これらのセマンティックページセクションに分類されたコンテンツのみを含む。一部のページではセクション分類が利用不可または不完全な場合があるため、厳密なフィルタリングが必要な場合は出力を検証してください。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "これより前の公開日を持つリンクのみが返されます。ISO 8601 形式で指定する必要があります。"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Start a Research Run",
+          "source": "Start a research run",
           "message": "リサーチ実行を開始"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "従量課金される作業量 `auto` と `max` に対する、実行ごとの任意の上限額。早く終了した実行は上限より少ない費用で済む場合があります。"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.display_name": {
-          "source": "Max Cost Dollars",
+          "source": "Max cost dollars",
           "message": "最大コスト（ドル）"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.short_desc": {
@@ -2484,7 +2484,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "試験的機能を有効にするための、カンマ区切りのベータ機能トークン。"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.display_name": {
-          "source": "List Research Runs",
+          "source": "List research runs",
           "message": "リサーチ実行の一覧"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.display_name": {
-          "source": "Last Event ID",
+          "source": "Last event ID",
           "message": "最後のイベント ID"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "エージェント実行 ID。新しい実行 ID は `agent_run_` の接頭辞付きで返されます。"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "エージェント実行 ID。新しい実行 ID は `agent_run_` の接頭辞付きで返されます。"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create a Batch",
+          "source": "Create a batch",
           "message": "バッチを作成"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "呼び出し側が指定し、バッチとともに保存されるメタデータ。"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "バッチの一覧"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "完了"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "バッチ ID。"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "バッチ ID。"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3004,7 +3004,7 @@
           "message": "バッチ ID。"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.display_name": {
-          "source": "Create a Search Monitor",
+          "source": "Create a search monitor",
           "message": "検索モニターを作成"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "追加で渡すパラメーター。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "コードブロック"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "各結果ごとに返すコードブロックの数。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "各ウェブページから返すURLの数。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "リッチ画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "各結果ごとに返すリッチ画像リンク数。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "リッチリンク"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "各結果ごとに返すリッチリンク数。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "空の結果をフィルタリング"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "非推奨。将来のリリースで削除されます。現在無視されています。ハイライトをデフォルトで有効にするにはhighlights: trueを指定、または独自のクエリで選択をガイドするには{ query }を指定してください。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3224,7 +3224,7 @@
           "message": "ハイライトの返還文字数の最大値。各URLごとのハイライトテキストの合計長を制御。サポートされる最大値は10000。highlights.dynamic と互換性なし"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "文数"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "ページコンテンツの取得用クロール戦略"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl タイムアウト"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "ライブクロールのタイムアウト（ミリ秒）。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "最大年齢（時間）"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -3308,7 +3308,7 @@
           "message": "キャッシュされた内容の最大経過時間（時間）。正の値は、その時間数より新しい場合にキャッシュされた内容を使用します。0 は新しい内容を取得し、新規取得したページにテキスト描画オプションを適用する際にサポートされる方法です。-1 は常にキャッシュを使用します。省略した場合、キャッシュされた内容がないときは代替の取得が行われます。サポートされる最大値は 720 時間です。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "サブページの対象"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -3344,7 +3344,7 @@
           "message": "LLM生成の要約を返す。`true` を指定するとデフォルト値が使用され、`query` と `maxTokens` を含むオブジェクトを指定することも可能。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "最大トークン数"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -3380,7 +3380,7 @@
           "message": "各結果のテキスト抽出オプション。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "セクションを除外"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "これらの意味的ページセクションに分類されたコンテンツを除外。セクション分類はベストエフォートです。最新の取得コンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTMLタグを含む"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "trueの場合、返されるテキストに軽量なHTMLタグを含め、プレーンなmarkdownスタイルのテキストではなくします。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用します。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "セクションを含む"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -3416,7 +3416,7 @@
           "message": "ベストエフォート。これらのセマンティックページセクションに分類されたコンテンツのみを含む。一部のページではセクション分類が利用不可または不完全な場合があるため、厳密なフィルタリングが必要な場合は出力を検証してください。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "フル"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "ドメインを除外"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -3464,7 +3464,7 @@
           "message": "検索結果からこれらのドメインを除外。"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "対象ドメイン"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "検索結果をこれらのドメインに制限。"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "結果数"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -3608,7 +3608,7 @@
           "message": "text"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "追加プロパティ"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -3636,7 +3636,7 @@
           "message": "Webhook の配信ごとにそのまま返されるキーと値のペア。受信側はモニターを参照しなくても更新を振り分けられます。"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.display_name": {
-          "source": "List Search Monitors",
+          "source": "List search monitors",
           "message": "検索モニターの一覧"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "非推奨: 代わりにハイライトまたはテキストを使用してください。ページの内容を 1 つにまとめたコンテキスト文字列として返します。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "追加で渡すパラメーター。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "コードブロック"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "各結果ごとに返すコードブロックの数。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "各ウェブページから返すURLの数。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "リッチ画像リンク"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "各結果ごとに返すリッチ画像リンク数。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "リッチリンク"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "各結果ごとに返すリッチリンク数。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "空の結果をフィルタリング"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "非推奨。将来のリリースで削除されます。現在無視されています。ハイライトをデフォルトで有効にするにはhighlights: trueを指定、または独自のクエリで選択をガイドするには{ query }を指定してください。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "ハイライトの返還文字数の最大値。各URLごとのハイライトテキストの合計長を制御。サポートされる最大値は10000。highlights.dynamic と互換性なし"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "文数"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "ページコンテンツの取得用クロール戦略"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl タイムアウト"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "ライブクロールのタイムアウト（ミリ秒）。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "最大年齢（時間）"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "キャッシュされた内容の最大経過時間（時間）。正の値は、その時間数より新しい場合にキャッシュされた内容を使用します。0 は新しい内容を取得し、新規取得したページにテキスト描画オプションを適用する際にサポートされる方法です。-1 は常にキャッシュを使用します。省略した場合、キャッシュされた内容がないときは代替の取得が行われます。サポートされる最大値は 720 時間です。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "サブページの対象"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "LLM生成の要約を返す。`true` を指定するとデフォルト値が使用され、`query` と `maxTokens` を含むオブジェクトを指定することも可能。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "最大トークン数"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "各結果のテキスト抽出オプション。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "セクションを除外"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "これらの意味的ページセクションに分類されたコンテンツを除外。セクション分類はベストエフォートです。最新の取得コンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTMLタグを含む"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -4160,7 +4160,7 @@
           "message": "trueの場合、返されるテキストに軽量なHTMLタグを含め、プレーンなmarkdownスタイルのテキストではなくします。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用します。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "セクションを含む"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "ベストエフォート。これらのセマンティックページセクションに分類されたコンテンツのみを含む。一部のページではセクション分類が利用不可または不完全な場合があるため、厳密なフィルタリングが必要な場合は出力を検証してください。新しく取得したコンテンツに適用するには、maxAgeHours: 0 を使用してください。"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "最大文字数"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -4208,7 +4208,7 @@
           "message": "フル"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "ドメインを除外"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "検索結果からこれらのドメインを除外。"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "対象ドメイン"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -4232,7 +4232,7 @@
           "message": "検索結果をこれらのドメインに制限。"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "結果数"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "text"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "追加プロパティ"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -4416,7 +4416,7 @@
           "message": "モニター ID"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.display_name": {
-          "source": "Act on Several Monitors",
+          "source": "Act on several monitors",
           "message": "複数のモニターを一括操作"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.short_desc": {

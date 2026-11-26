@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
+          "source": "List parcels",
           "message": "列出包裹"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "跨頁返回的彙總記錄最大數量"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "取得包裹"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "此包裹要產生的標籤數量（多件貨件）"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
+          "source": "Update parcel",
           "message": "更新包裹"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "運送方式的顯示名稱（例如：『未貼郵票的信件』）"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
+          "source": "Cancel parcel",
           "message": "取消包裹"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "要取消的包裹數值識別碼"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
+          "source": "Get parcel label",
           "message": "取得包裹標籤"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "要擷取其標籤 URL 的包裹數值 ID"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
+          "source": "Get parcel document",
           "message": "取得包裹文件"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "PNG 圖片（僅適用於特定文件類型，例如 QR 碼）"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "列出運送方式"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "若為 `True`，則在每種方式中包含詳細價格明細"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
+          "source": "List sender addresses",
           "message": "列出寄件人地址"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "擷取在您的 SendCloud 帳戶上設定的寄件人地址清單；當包裹未指定其他地址時，將使用預設寄件人地址。"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "列出使用者"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "擷取擁有目前 API 憑證的 SendCloud 使用者/帳戶。由於 API 僅返回已驗證的使用者，因此清單最多包含一筆項目。"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "取得使用者"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "擷取目前已驗證的 SendCloud 使用者（帳戶擁有者）資訊。"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
+          "source": "List service points",
           "message": "列出服務據點"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "用於搜尋附近服務據點的郵遞區號（會返回距離）"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
+          "source": "Search service points",
           "message": "搜尋服務點"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "與搜尋起點一起使用的門牌號碼"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
+          "source": "List returns",
           "message": "列出退貨"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "跨頁返回的彙總記錄最大數量"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "取得退貨"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "收件人電話號碼（部分運營商要求）"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
+          "source": "Update return",
           "message": "更新退貨"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "已更新的退貨原因"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
+          "source": "Cancel return",
           "message": "取消退貨"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "要取消的退貨數值識別碼"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
+          "source": "List brands",
           "message": "列出品牌"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "擷取在您的 SendCloud 帳戶上設定的品牌清單。品牌用於自訂追蹤頁面和出貨文件。"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
+          "source": "Parcel status changed",
           "message": "包裹狀態已變更"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "每當 SendCloud 包裹的狀態變更時觸發。輪詢間隔可設定；系統會強制執行最小間隔以符合 SendCloud API 限制。"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
+          "source": "Return updated",
           "message": "退貨已更新"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {

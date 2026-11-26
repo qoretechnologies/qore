@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create Form",
+          "source": "Create form",
           "message": "Створити форму"
         },
         "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "Ключ поля, який використовується для забезпечення унікальних надсилань"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get Form",
+          "source": "Get form",
           "message": "Отримати форму"
         },
         "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
@@ -1068,7 +1068,7 @@
           "message": "Унікальний ідентифікатор форми, яку потрібно отримати"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update Form",
+          "source": "Update form",
           "message": "Оновити форму"
         },
         "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Ключ поля, який використовується для забезпечення унікальних надсилань"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete Form",
+          "source": "Delete form",
           "message": "Видалити форму"
         },
         "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Унікальний ідентифікатор форми для видалення (переміщує в кошик)"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
-          "source": "Search Forms",
+          "source": "Search forms",
           "message": "Шукати форми"
         },
         "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Список ID робочих просторів для фільтрації результатів"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
-          "source": "Get Submission",
+          "source": "Get submission",
           "message": "Отримати надсилання"
         },
         "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "Унікальний ідентифікатор надсилання, яке потрібно отримати"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
-          "source": "Delete Submission",
+          "source": "Delete submission",
           "message": "Видалити надсилання"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Унікальний ідентифікатор надсилання для видалення"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
-          "source": "Search Submissions",
+          "source": "Search submissions",
           "message": "Пошук надсилань"
         },
         "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Отримати надсилання після конкретного ID надсилання"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
-          "source": "Search Questions",
+          "source": "Search questions",
           "message": "Пошук запитань"
         },
         "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "ID форми, з якої потрібно отримати запитання"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Створити вебхук"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -2152,7 +2152,7 @@
           "message": "Необов'язковий ідентифікатор зовнішнього підписника"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Оновити вебхук"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "Значення користувацького HTTP-заголовка"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Видалити вебхук"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -2300,7 +2300,7 @@
           "message": "Унікальний ідентифікатор вебхука для видалення"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
-          "source": "Search Webhooks",
+          "source": "Search webhooks",
           "message": "Пошук вебхуків"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
@@ -2336,7 +2336,7 @@
           "message": "Кількість вебхуків на сторінку (1–100, за замовчуванням `25`)"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
-          "source": "Search Webhook Events",
+          "source": "Search webhook Events",
           "message": "Пошук подій вебхука"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Номер сторінки для пагінації (за замовчуванням `1`)"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
-          "source": "Retry Webhook Event",
+          "source": "Retry webhook event",
           "message": "Повторити подію вебхука"
         },
         "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
@@ -2408,7 +2408,7 @@
           "message": "Ідентифікатор невдалої події вебхука для повторної спроби"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create Workspace",
+          "source": "Create workspace",
           "message": "Створити робочий простір"
         },
         "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2432,7 +2432,7 @@
           "message": "Відображуване ім'я для нового робочого простору"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Отримати робочий простір"
         },
         "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Унікальний ідентифікатор робочого простору, який потрібно отримати"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update Workspace",
+          "source": "Update workspace",
           "message": "Оновити робочий простір"
         },
         "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Нова відображувана назва робочого простору"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete Workspace",
+          "source": "Delete workspace",
           "message": "Видалити робочий простір"
         },
         "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Унікальний ідентифікатор робочого простору для видалення; це також видаляє всі форми в робочому просторі"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
-          "source": "Search Workspaces",
+          "source": "Search workspaces",
           "message": "Пошук робочих просторів"
         },
         "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Номер сторінки для пагінації (за замовчуванням `1`)"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
+          "source": "Get current user",
           "message": "Отримати поточного користувача"
         },
         "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Отримати інформацію про поточного автентифікованого користувача"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
-          "source": "New Form Submission",
+          "source": "New form submission",
           "message": "Нове надсилання форми"
         },
         "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {

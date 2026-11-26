@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
-          "source": "Find Customers",
+          "source": "Find customers",
           "message": "Nájsť zákazníkov"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
@@ -404,7 +404,7 @@
           "message": "Filtrovať zákazníkov podľa ich priezviska"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Získať zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -424,7 +424,7 @@
           "message": "ID zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "Vytvoriť zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Priezvisko zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
+          "source": "Update customer",
           "message": "Aktualizovať zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Meno zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Odstrániť zákazníka"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Zákazník na odstránenie"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "Find Subscriptions",
+          "source": "Find subscriptions",
           "message": "Nájsť predplatné"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Filtrovať predplatné podľa zákazníka, ktorému patria"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
+          "source": "Get subscription",
           "message": "Získať predplatné"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
@@ -600,7 +600,7 @@
           "message": "ID predplatného"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Subscription",
+          "source": "Create subscription",
           "message": "Vytvoriť predplatné"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -620,7 +620,7 @@
           "message": "Zákazník pre predplatné"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Update Subscription",
+          "source": "Update subscription",
           "message": "Aktualizovať predplatné"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Predplatné na aktualizáciu"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Delete Subscription",
+          "source": "Delete subscription",
           "message": "Odstrániť predplatné"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
@@ -660,7 +660,7 @@
           "message": "Predplatné na odstránenie"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
-          "source": "Find Invoices",
+          "source": "Find invoices",
           "message": "Nájsť faktúry"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Čakajúce"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Získať faktúru"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -728,7 +728,7 @@
           "message": "ID faktúry"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Vytvoriť faktúru"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Zákazník pre faktúru"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aktualizovať faktúru"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Faktúra na aktualizáciu"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Vymazať faktúru"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Faktúra na odstránenie"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
-          "source": "Collect Invoice Payment",
+          "source": "Collect invoice payment",
           "message": "Zinkasovať platbu za faktúru"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
@@ -816,7 +816,7 @@
           "message": "Suma platby v centoch"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
-          "source": "Record Invoice Payment",
+          "source": "Record invoice payment",
           "message": "Zaznamenať platbu faktúry"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "Suma platby v centoch"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
-          "source": "Refund Invoice",
+          "source": "Refund invoice",
           "message": "Refundovať faktúru"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Suma refundácie v centoch"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
-          "source": "Get Invoice Link",
+          "source": "Get invoice link",
           "message": "Získať odkaz na faktúru"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Faktúra, pre ktorú sa má získať odkaz na PDF"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
-          "source": "Find Coupons",
+          "source": "Find coupons",
           "message": "Nájsť kupóny"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Množstvo v ponuke"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
+          "source": "Get coupon",
           "message": "Získať kupón"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "ID kupónu"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
+          "source": "Create coupon",
           "message": "Vytvoriť kupón"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Obmedzené obdobie"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
+          "source": "Update coupon",
           "message": "Aktualizovať kupón"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
@@ -1076,7 +1076,7 @@
           "message": "Zobrazovaný názov kupónu"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
+          "source": "Delete coupon",
           "message": "Odstrániť kupón"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Kupón na odstránenie"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
-          "source": "Find Promotional Credits",
+          "source": "Find promotional credits",
           "message": "Nájsť propagačné kredity"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Nastavenie"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Get Promotional Credit",
+          "source": "Get promotional credit",
           "message": "Získať propagačný kredit"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "ID propagačného kreditu"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Add Promotional Credit",
+          "source": "Add promotional credit",
           "message": "Pridať propagačný kredit"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Mena pre kredity"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Deduct Promotional Credit",
+          "source": "Deduct promotional credit",
           "message": "Odpočítať propagačný kredit"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Mena pre kredity"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Set Promotional Credit",
+          "source": "Set promotional credit",
           "message": "Nastaviť propagačný kredit"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Mena pre kredity"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
+          "source": "Get transaction",
           "message": "Získať transakciu"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Transakcia na načítanie"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
-          "source": "Customer Created",
+          "source": "Customer created",
           "message": "Zákazník vytvorený"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Spustí sa pri vytvorení nového zákazníka v Chargebee. Poskytuje podrobnosti o udalosti zákazníka."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
-          "source": "Any Event (Instant)",
+          "source": "Any event (instant)",
           "message": "Akákoľvek udalosť (okamžitá)"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Spustí sa pri akejkoľvek udalosti v Chargebee. Poskytuje úplné podrobnosti o udalosti pre všetky typy udalostí."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
-          "source": "Invoice Generated",
+          "source": "Invoice generated",
           "message": "Faktúra vygenerovaná"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Spustí sa pri vygenerovaní novej faktúry v Chargebee. Poskytuje podrobnosti o udalosti faktúry."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
-          "source": "Subscription Created",
+          "source": "Subscription created",
           "message": "Predplatné vytvorené"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {

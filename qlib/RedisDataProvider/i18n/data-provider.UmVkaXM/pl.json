@@ -16,7 +16,7 @@
           "message": "Magazyn struktur danych w pamięci Redis, używany jako baza danych, pamięć podręczna, broker komunikatów i kolejka"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
-          "source": "Set String",
+          "source": "Set string",
           "message": "Ustaw ciąg znaków"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Ustawia wartość ciągu znaków dla klucza w Redis"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
-          "source": "Get String",
+          "source": "Get string",
           "message": "Pobierz ciąg znaków"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Pobierz wartość łańcuchową (string) klucza z Redis"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
-          "source": "Set Hash Field",
+          "source": "Set hash field",
           "message": "Ustaw pole hash"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Ustawia wartość pola skrótu (hash) w Redis"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
-          "source": "Get Hash Fields",
+          "source": "Get hash fields",
           "message": "Pobierz pola hasha"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Pobierz wartości pól hasha z Redis"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
-          "source": "Push to List",
+          "source": "Push to list",
           "message": "Dodaj do listy"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Dodaje elementy do listy w Redis"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
-          "source": "Pop from List",
+          "source": "Pop from list",
           "message": "Zdejmij z listy"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Zdejmuje elementy z listy w Redis"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
-          "source": "Publish Message",
+          "source": "Publish message",
           "message": "Opublikuj wiadomość"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {

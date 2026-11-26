@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "Seznam účtů"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Chyba odesílání"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "Vytvořit účet"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -488,7 +488,7 @@
           "message": "Aktivní"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Získat účet"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -512,7 +512,7 @@
           "message": "Jedinečné UUID účtu k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.display_name": {
-          "source": "Patch Account",
+          "source": "Patch account",
           "message": "Upravit účet (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Vlastní sledovací doména pro konfiguraci tohoto účtu"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "Smazat účet"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Jedinečné UUID účtu ke smazání"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.display_name": {
-          "source": "Pause Account",
+          "source": "Pause account",
           "message": "Pozastavit účet"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.short_desc": {
@@ -608,7 +608,7 @@
           "message": "Jedinečné UUID účtu k pozastavení"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.display_name": {
-          "source": "Resume Account",
+          "source": "Resume account",
           "message": "Obnovit účet"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Jedinečné UUID účtu k obnovení"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.display_name": {
-          "source": "Mark Account Fixed",
+          "source": "Mark account fixed",
           "message": "Označit účet jako opravený"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Jedinečné UUID účtu, který má být označen jako opravený"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.display_name": {
-          "source": "Test Account Vitals",
+          "source": "Test account vitals",
           "message": "Otestovat stav účtu"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Jedinečné UUID účtu pro otestování stavu"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.display_name": {
-          "source": "Get Warmup Analytics",
+          "source": "Get warmup analytics",
           "message": "Získat analytiku zahřívání"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Seznam e-mailových adres, pro které chcete získat analytiku zahřívání (1–100 položek)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.display_name": {
-          "source": "Get Custom Tracking Domain Status",
+          "source": "Get custom tracking domain status",
           "message": "Získat stav vlastní sledovací domény"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Volitelná vlastní sledovací doména, pro kterou se má zkontrolovat stav"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Seznam kampaní"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Filtrovat kampaně podle názvu"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "Vytvořit kampaň"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "Pokud je `True`, tato varianta nebude použita pro odesílání; ve výchozím stavu jsou všechny varianty povoleny"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Získat kampaň"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Jedinečné UUID kampaně k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.display_name": {
-          "source": "Patch Campaign",
+          "source": "Patch campaign",
           "message": "Upravit kampaň (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "Aktualizovaný maximální počet e-mailů, které lze odeslat za den"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "Smazat kampaň"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "Jedinečné UUID kampaně ke smazání"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.display_name": {
-          "source": "Update Campaign Status",
+          "source": "Update campaign status",
           "message": "Aktualizovat stav kampaně"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "Spuštěné dílčí sekvence"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.display_name": {
-          "source": "Share Campaign",
+          "source": "Share campaign",
           "message": "Sdílet kampaň"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Jedinečné UUID kampaně, pro kterou se má vygenerovat odkaz ke sdílení"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Analytics",
+          "source": "Get campaign analytics",
           "message": "Získat analytiku kampaně"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "Jedinečné UUID kampaně, pro kterou se má získat analytika"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.display_name": {
-          "source": "Get Campaign Analytics Overview",
+          "source": "Get campaign analytics overview",
           "message": "Získat analytický přehled kampaně"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "Jedinečné UUID kampaně, pro kterou se má získat analytický přehled"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Daily Analytics",
+          "source": "Get campaign daily analytics",
           "message": "Získat denní analytiku kampaně"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Jedinečné UUID kampaně, pro kterou se má získat denní analytika"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.display_name": {
-          "source": "Get Campaign Step Analytics",
+          "source": "Get campaign step analytics",
           "message": "Získat analytiku kroků kampaně"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Jedinečné UUID kampaně, pro kterou se má získat analytika kroků"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.display_name": {
-          "source": "List Campaign Subsequences",
+          "source": "List campaign subsequences",
           "message": "Vypsat dílčí sekvence kampaně"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Create Campaign Subsequence",
+          "source": "Create campaign subsequence",
           "message": "Vytvořit podsekvenci kampaně"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Název podsekvence, která se má vytvořit"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Get Campaign Subsequence",
+          "source": "Get campaign subsequence",
           "message": "Získat podsekvenci kampaně"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "Jedinečné UUID podsekvence, kterou chcete získat"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.display_name": {
-          "source": "Patch Campaign Subsequence",
+          "source": "Patch campaign subsequence",
           "message": "Upravit podsekvenci kampaně (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "Aktualizovaný název podsekvence"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Delete Campaign Subsequence",
+          "source": "Delete campaign subsequence",
           "message": "Smazat podsekvenci kampaně"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Jedinečné UUID podsekvence ke smazání"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.display_name": {
-          "source": "Pause Subsequence",
+          "source": "Pause subsequence",
           "message": "Pozastavit podsekvenci"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "Jedinečné UUID podsekvence k pozastavení"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Resume Subsequence",
+          "source": "Resume subsequence",
           "message": "Obnovit dílčí sekvenci"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Jedinečné UUID dílčí sekvence k obnovení"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Duplicate Subsequence",
+          "source": "Duplicate subsequence",
           "message": "Duplikovat dílčí sekvenci"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Jedinečné UUID dílčí sekvence k duplikaci"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Vypsat leady"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "Vytvořit leada"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "UUID seznamu leadů, do kterého se má lead přidat"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "Získat zájemce"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Jedinečný identifikátor (UUID) leadu k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.display_name": {
-          "source": "Patch Lead",
+          "source": "Patch lead",
           "message": "Částečně aktualizovat lead"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "URL webu leada"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "Odstranit zájemce"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Jedinečný identifikátor (UUID) leadu ke smazání"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.display_name": {
-          "source": "Merge Leads",
+          "source": "Merge leads",
           "message": "Sloučit leady"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Jedinečný identifikátor (UUID) druhého leada ke sloučení"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.display_name": {
-          "source": "Move Leads",
+          "source": "Move leads",
           "message": "Přesunout leady"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "UUID seznamu leadů, do kterého mají být leadi přesunuti"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Move Lead to Subsequence",
+          "source": "Move lead to subsequence",
           "message": "Přesunout lead do dílčí sekvence"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Jedinečný identifikátor (UUID) cílové podsekvence"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.display_name": {
-          "source": "Remove Lead from Subsequence",
+          "source": "Remove lead from subsequence",
           "message": "Odebrat lead z dílčí sekvence"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Jedinečný identifikátor (UUID) dílčí sekvence, ze které má být lead odebrán"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.display_name": {
-          "source": "Update Lead Interest Status",
+          "source": "Update lead interest status",
           "message": "Aktualizovat stav zájmu leadu"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Nesprávná osoba"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.display_name": {
-          "source": "Bulk Assign Leads",
+          "source": "Bulk assign leads",
           "message": "Hromadně přiřadit leady"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "Seznam UUID uživatelů, kterým se mají leady přiřadit"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.display_name": {
-          "source": "Export Leads",
+          "source": "Export leads",
           "message": "Exportovat leady"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "Formát pro export"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.display_name": {
-          "source": "List Lead Lists",
+          "source": "List lead lists",
           "message": "Vypsat seznamy leadů"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.short_desc": {
@@ -2196,7 +2196,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Create Lead List",
+          "source": "Create lead list",
           "message": "Vytvořit seznam leadů"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2220,7 +2220,7 @@
           "message": "Název seznamu leadů, který se má vytvořit"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.display_name": {
-          "source": "Get Lead List",
+          "source": "Get lead list",
           "message": "Získat seznam leadů"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.short_desc": {
@@ -2244,7 +2244,7 @@
           "message": "Jedinečný identifikátor (UUID) seznamu leadů k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.display_name": {
-          "source": "Patch Lead List",
+          "source": "Patch lead list",
           "message": "Částečně aktualizovat seznam leadů"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Nový název seznamu leadů"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Delete Lead List",
+          "source": "Delete lead list",
           "message": "Smazat seznam leadů"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Jedinečný identifikátor (UUID) seznamu leadů ke smazání"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.display_name": {
-          "source": "List Lead Labels",
+          "source": "List lead labels",
           "message": "Vypsat štítky leadů"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "Maximální počet výsledků k vrácení na stránku (1-100)"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Create Lead Label",
+          "source": "Create lead label",
           "message": "Vytvořit štítek leadu"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Popis štítku"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.display_name": {
-          "source": "Get Lead Label",
+          "source": "Get lead label",
           "message": "Získat štítek leadu"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Jedinečný identifikátor (UUID) štítku k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.display_name": {
-          "source": "Patch Lead Label",
+          "source": "Patch lead label",
           "message": "Částečně aktualizovat štítek leada"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Popis štítku"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Delete Lead Label",
+          "source": "Delete lead label",
           "message": "Smazat štítek leadu"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Stav zájmu, na který se mají znovu přiřadit leady a e-maily při smazání štítku"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Vypsat e-maily"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "Získat e-mail"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Jedinečné UUID e-mailu k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.display_name": {
-          "source": "Patch Email",
+          "source": "Patch email",
           "message": "Částečně aktualizovat e-mail"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Aktualizovaný obsah těla e-mailu"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "Smazat e-mail"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "Jedinečné UUID e-mailu ke smazání"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.display_name": {
-          "source": "Reply to Email",
+          "source": "Reply to email",
           "message": "Odpovědět na e-mail"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.short_desc": {
@@ -2776,7 +2776,7 @@
           "message": "E-mailová adresa, ze které se má odpověď odeslat"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.display_name": {
-          "source": "Count Unread Emails",
+          "source": "Count unread emails",
           "message": "Spočítat nepřečtené e-maily"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Získat počet nepřečtených e-mailů v doručené poště."
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.display_name": {
-          "source": "Mark Thread as Read",
+          "source": "Mark thread as read",
           "message": "Označit vlákno jako přečtené"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "Jedinečné UUID e-mailu pro označení vlákna jako přečteného"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.display_name": {
-          "source": "Get Campaign for Email",
+          "source": "Get campaign for email",
           "message": "Získat kampaň pro e-mail"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Jedinečné UUID e-mailu, pro který se má získat kampaň"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.display_name": {
-          "source": "List Block List",
+          "source": "List block list",
           "message": "Vypsat seznam blokovaných"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Create Block List Entry",
+          "source": "Create block list entry",
           "message": "Vytvořit záznam v seznamu blokovaných"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "E-mailová adresa nebo doména k přidání do seznamu blokovaných"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Delete Block List Entry",
+          "source": "Delete block list entry",
           "message": "Smazat položku seznamu blokovaných"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "Jedinečné UUID položky seznamu blokovaných ke smazání"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.display_name": {
-          "source": "Patch Block List",
+          "source": "Patch block list",
           "message": "Částečně aktualizovat seznam blokovaných"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "Aktualizovaná e-mailová adresa nebo doména pro položku seznamu blokovaných"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.display_name": {
-          "source": "List Custom Tags",
+          "source": "List custom tags",
           "message": "Vypsat vlastní štítky"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Create Custom Tag",
+          "source": "Create custom tag",
           "message": "Vytvořit vlastní štítek"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "Typ prostředku, na který se štítek vztahuje (např. účet, kampaň)"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.display_name": {
-          "source": "Get Custom Tag",
+          "source": "Get custom tag",
           "message": "Získat vlastní štítek"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "Jedinečné UUID vlastního štítku k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.display_name": {
-          "source": "Patch Custom Tag",
+          "source": "Patch custom tag",
           "message": "Upravit vlastní štítek (Patch)"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.short_desc": {
@@ -3088,7 +3088,7 @@
           "message": "Aktualizovaný typ prostředku pro vlastní štítek"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Delete Custom Tag",
+          "source": "Delete custom tag",
           "message": "Smazat vlastní tag"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Jedinečné UUID vlastního tagu ke smazání"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.display_name": {
-          "source": "Assign Custom Tag",
+          "source": "Assign custom tag",
           "message": "Přiřadit vlastní štítek"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Odebrat přiřazení štítku"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.display_name": {
-          "source": "List Inbox Placement Tests",
+          "source": "List inbox placement tests",
           "message": "Vypsat testy doručitelnosti do doručené pošty"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.short_desc": {
@@ -3204,7 +3204,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Create Inbox Placement Test",
+          "source": "Create inbox placement test",
           "message": "Vytvořit test doručitelnosti do doručené pošty"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Zvenčí"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Get Inbox Placement Test",
+          "source": "Get inbox placement test",
           "message": "Získat test doručitelnosti do doručené pošty"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Jedinečné UUID testu doručitelnosti do doručené pošty k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.display_name": {
-          "source": "Patch Inbox Placement Test",
+          "source": "Patch inbox placement test",
           "message": "Částečně aktualizovat test doručitelnosti do doručené pošty"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "Dokončeno"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Delete Inbox Placement Test",
+          "source": "Delete inbox placement test",
           "message": "Smazat test doručitelnosti do schránky"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "Jedinečné UUID testu doručitelnosti do schránky ke smazání"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.display_name": {
-          "source": "Get Inbox Placement Analytics",
+          "source": "Get inbox placement analytics",
           "message": "Získat analytiku doručitelnosti do doručené pošty"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Získejte analytická data doručitelnosti do doručené pošty zobrazující doručitelnost napříč poskytovateli."
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.display_name": {
-          "source": "Get IP Analytics Stats by Date",
+          "source": "Get IP analytics stats by date",
           "message": "Získat statistiky IP analytiky podle data"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "Koncové datum pro filtr časového rozsahu analytiky"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.display_name": {
-          "source": "Get IP Analytics Stats by Test",
+          "source": "Get IP analytics stats by test",
           "message": "Získat statistiky IP analytiky podle testu"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Jedinečné UUID testu doručitelnosti do doručené pošty, pro který se mají získat statistiky"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.display_name": {
-          "source": "Get IP Deliverability Insights",
+          "source": "Get IP deliverability insights",
           "message": "Získat přehledy doručitelnosti IP"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "Získejte přehledy doručitelnosti pro testy doručitelnosti do doručené pošty."
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.display_name": {
-          "source": "List IP Analytics",
+          "source": "List IP analytics",
           "message": "Vypsat analýzu doručitelnosti (IP)"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.display_name": {
-          "source": "Get IP Blacklist Report",
+          "source": "Get IP blacklist report",
           "message": "Získat zprávu o blacklistu IP adres"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "Jedinečné UUID zprávy o blacklistu k načtení"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.display_name": {
-          "source": "List IP Blacklist Reports",
+          "source": "List IP blacklist reports",
           "message": "Vypsat zprávy o blokování IP adres"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.short_desc": {
@@ -3556,7 +3556,7 @@
           "message": "E-mailová adresa k ověření"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.display_name": {
-          "source": "Get Email Verification Status",
+          "source": "Get email verification status",
           "message": "Získat stav ověření e-mailu"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.short_desc": {
@@ -3580,7 +3580,7 @@
           "message": "Jedinečné UUID ověření e-mailu, pro které se má zkontrolovat stav"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.display_name": {
-          "source": "List Background Jobs",
+          "source": "List background jobs",
           "message": "Vypsat úlohy na pozadí"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.display_name": {
-          "source": "Get Background Job",
+          "source": "Get background job",
           "message": "Získat úlohu na pozadí"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.short_desc": {
@@ -3628,7 +3628,7 @@
           "message": "Jedinečné UUID úlohy na pozadí k načtení"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "Získat pracovní prostor"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -3640,7 +3640,7 @@
           "message": "Získejte informace o aktuálním pracovním prostoru."
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get Workspace Admin",
+          "source": "Get workspace Admin",
           "message": "Získat správu pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "Získejte administrativní informace o pracovním prostoru."
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.display_name": {
-          "source": "Patch Workspace",
+          "source": "Patch workspace",
           "message": "Částečně aktualizovat pracovní prostor"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "Nový název pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "Vypsat členy pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Create Workspace Member",
+          "source": "Create workspace member",
           "message": "Vytvořit člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "Příjmení člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Get Workspace Member",
+          "source": "Get workspace member",
           "message": "Získat člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "Jedinečné UUID člena pracovního prostoru k načtení"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.display_name": {
-          "source": "Patch Workspace Member",
+          "source": "Patch workspace member",
           "message": "Částečně aktualizovat člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "Nové příjmení člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Member",
+          "source": "Delete workspace member",
           "message": "Smazat člena pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3868,7 +3868,7 @@
           "message": "Jedinečné UUID člena pracovního prostoru k odebrání"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "List Workspace Group Members",
+          "source": "List workspace group members",
           "message": "Vypsat členy skupiny pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Create Workspace Group Member",
+          "source": "Create workspace group member",
           "message": "Vytvořit člena skupiny pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "Role, která se má členovi ve skupině pracovního prostoru přiřadit"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Get Workspace Group Member",
+          "source": "Get workspace group member",
           "message": "Získat člena skupiny pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "Jedinečné UUID člena skupiny pracovního prostoru k načtení"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Group Member",
+          "source": "Delete workspace group member",
           "message": "Smazat člena skupiny pracovního prostoru"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "Jedinečné UUID člena skupiny pracovního prostoru k odebrání"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "Vypsat protokoly auditu"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -4072,7 +4072,7 @@
           "message": "Maximální počet výsledků, které se mají vrátit na stránku"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.display_name": {
-          "source": "Reply Received",
+          "source": "Reply received",
           "message": "Odpověď přijata"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "Tato událost se spustí při přijetí odpovědi na e-mail kampaně."
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "E-mail nedoručen"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "Tato událost se spustí, když se e-mail kampaně vrátí jako nedoručitelný."
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Interested",
+          "source": "Lead interested",
           "message": "Lead má zájem"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -4108,7 +4108,7 @@
           "message": "Tato událost se spustí, když se stav zájmu leadu změní na má zájem."
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.display_name": {
-          "source": "Campaign Completed",
+          "source": "Campaign completed",
           "message": "Kampaň dokončena"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.short_desc": {

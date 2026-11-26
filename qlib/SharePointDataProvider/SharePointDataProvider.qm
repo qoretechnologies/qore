@@ -685,7 +685,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_FILE,
             "action": EVENT_NEW_FILE,
-            "display_name": "Document Added",
+            "display_name": "Document added",
             "short_desc": "Trigger when a document is added to a library",
             "desc": "Fires when a document is added to a document library. Uses delta queries, which "
                 "resume exactly where they left off rather than re-reading the library",
@@ -698,7 +698,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/events/" + EVENT_FILE_MODIFIED,
             "action": EVENT_FILE_MODIFIED,
-            "display_name": "Document Modified",
+            "display_name": "Document modified",
             "short_desc": "Trigger when a document is modified",
             "desc": "Fires when a document already in a library is modified. Uses delta queries, which "
                 "resume exactly where they left off rather than re-reading the library",
@@ -711,7 +711,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_FOLDER,
             "action": EVENT_NEW_FOLDER,
-            "display_name": "Folder Added",
+            "display_name": "Folder added",
             "short_desc": "Trigger when a folder is added to a library",
             "desc": "Fires when a folder is added to a document library",
             "action_code": DPAT_EVENT,
@@ -723,7 +723,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_ROW,
             "action": EVENT_NEW_ROW,
-            "display_name": "List Item Added",
+            "display_name": "List item added",
             "short_desc": "Trigger when an item is added to a list",
             "desc": "Fires when an item is added to a SharePoint list. Uses delta queries, which "
                 "resume exactly where they left off rather than polling the head of the list",

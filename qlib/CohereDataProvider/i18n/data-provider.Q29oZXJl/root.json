@@ -472,8 +472,8 @@
           "message": "Citations"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.display_name": {
-          "source": "Content Index",
-          "message": "Content Index"
+          "source": "Content index",
+          "message": "Content index"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.short_desc": {
           "source": "Index of the content block in which this citation appears",
@@ -512,8 +512,8 @@
           "message": "The unique identifier of the document"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0VG9vbFNvdXJjZSNlY2M5ZjAyZGMyNzczOTUzZjNhNGNhNzJkNGM1ODIwY2ZkZWQxYTFlMTFlZDdlNDY3MDU3M2MwY2IwZWI3ODg1.field.dG9vbF9vdXRwdXQ.display_name": {
-          "source": "Tool Output",
-          "message": "Tool Output"
+          "source": "Tool output",
+          "message": "Tool output"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0RG9jdW1lbnRTb3VyY2UjMjA3M2MwZDYyZjk5ZGY0Yzk0ZmZlNzZhODAyNzY3ZDNjY2I3NjVkYjc3MTViZWMxYWI1ODFmNGQ5NjU4ZWUwNQ.field.ZG9jdW1lbnQ.display_name": {
           "source": "Document",
@@ -604,8 +604,8 @@
           "message": "assistant"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9jYWxscw.display_name": {
-          "source": "Tool Calls",
-          "message": "Tool Calls"
+          "source": "Tool calls",
+          "message": "Tool calls"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpUb29sQ2FsbFYyI2M3MjkxMWRkZTU4YzRkNThhMWI5ZGVlNzI3YzZjMTQyYTQ5ZDc0MWRhODA3YzI0ODZmYmY0ZTdiNmNhNDEwY2Q.field.ZnVuY3Rpb24.display_name": {
           "source": "Function",
@@ -632,8 +632,8 @@
           "message": "function"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.display_name": {
-          "source": "Tool Plan",
-          "message": "Tool Plan"
+          "source": "Tool plan",
+          "message": "Tool plan"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.short_desc": {
           "source": "A chain-of-thought style reflection and plan that the model generates when…",
@@ -720,8 +720,8 @@
           "message": "tool"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
-          "message": "Tool Call ID"
+          "source": "Tool call ID",
+          "message": "Tool call ID"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.short_desc": {
           "source": "The id of the associated tool call that has provided the given content",
@@ -800,8 +800,8 @@
           "message": "function"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.display_name": {
-          "source": "Strict Tools",
-          "message": "Strict Tools"
+          "source": "Strict tools",
+          "message": "Strict tools"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.short_desc": {
           "source": "When set to 'true', tool calls in the Assistant message will be forced to…",
@@ -848,8 +848,8 @@
           "message": "Unique identifier for this document which will be referenced in citations. If not provided an ID will be automatically generated."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.display_name": {
-          "source": "Citation Options",
-          "message": "Citation Options"
+          "source": "Citation options",
+          "message": "Citation options"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.short_desc": {
           "source": "Options for controlling citation generation",
@@ -924,8 +924,8 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
-          "message": "JSON Schema"
+          "source": "JSON schema",
+          "message": "JSON schema"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.short_desc": {
           "source": "A [JSON schema](https://json-schema.org/overview/what-is-jsonschema) object…",
@@ -956,8 +956,8 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.display_name": {
-          "source": "Safety Mode",
-          "message": "Safety Mode"
+          "source": "Safety mode",
+          "message": "Safety mode"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.short_desc": {
           "source": "Used to select the…",
@@ -1028,8 +1028,8 @@
           "message": "If specified, the backend will make a best effort to sample tokens\ndeterministically, such that repeated requests with the same\nseed and parameters should return the same result. However,\ndeterminism cannot be totally guaranteed.\n"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
-          "source": "Frequency Penalty",
-          "message": "Frequency Penalty"
+          "source": "Frequency penalty",
+          "message": "Frequency penalty"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Defaults to '0.0', min value of '0.0', max value of '1.0'",
@@ -1040,8 +1040,8 @@
           "message": "Defaults to `0.0`, min value of `0.0`, max value of `1.0`.\nUsed to reduce repetitiveness of generated tokens. The higher the value, the stronger a penalty is applied to previously present tokens, proportional to how many times they have already appeared in the prompt or prior generation.\n"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
-          "source": "Presence Penalty",
-          "message": "Presence Penalty"
+          "source": "Presence penalty",
+          "message": "Presence penalty"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
           "source": "Defaults to '0.0', min value of '0.0', max value of '1.0'",
@@ -1088,8 +1088,8 @@
           "message": "Defaults to `false`. When set to `true`, the log probabilities of the generated tokens will be included in the response.\n"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
-          "message": "Tool Choice"
+          "source": "Tool choice",
+          "message": "Tool choice"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
           "source": "Control whether the model calls a tool",
@@ -1120,8 +1120,8 @@
           "message": "Configuration for [reasoning features](https://docs.cohere.com/docs/reasoning).\n"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.display_name": {
-          "source": "Token Budget",
-          "message": "Token Budget"
+          "source": "Token budget",
+          "message": "Token budget"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.short_desc": {
           "source": "The maximum number of tokens the model can use for thinking, which must be set…",
@@ -1164,8 +1164,8 @@
           "message": "Controls how early the request is handled. Lower numbers indicate higher priority (default: 0, the highest). When the system is under load, higher-priority requests are processed first and are the least likely to be dropped."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1176,8 +1176,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
-          "source": "Create Embeddings",
-          "message": "Create Embeddings"
+          "source": "Create embeddings",
+          "message": "Create embeddings"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
           "source": "Embed text, images, or mixed content for search and retrieval",
@@ -1224,8 +1224,8 @@
           "message": "ID of one of the available [Embedding models](https://docs.cohere.com/docs/cohere-embed)."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
-          "message": "Input Type"
+          "source": "Input type",
+          "message": "Input type"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
           "source": "Choose how the embeddings will be used",
@@ -1324,8 +1324,8 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
-          "message": "Max Tokens"
+          "source": "Max tokens",
+          "message": "Max tokens"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to embed per input",
@@ -1336,8 +1336,8 @@
           "message": "The maximum number of tokens to embed per input. If the input text is longer than this, it will be truncated according to the `truncate` parameter."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
-          "source": "Output Dimension",
-          "message": "Output Dimension"
+          "source": "Output dimension",
+          "message": "Output dimension"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
           "source": "The number of dimensions of the output embedding",
@@ -1348,8 +1348,8 @@
           "message": "The number of dimensions of the output embedding. This is only available for `embed-v4` and newer models.\nPossible values are `256`, `512`, `1024`, and `1536`. The default is `1536`."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
-          "message": "Embedding Types"
+          "source": "Embedding types",
+          "message": "Embedding types"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
           "source": "Specifies the types of embeddings you want to get back",
@@ -1416,8 +1416,8 @@
           "message": "Controls how early the request is handled. Lower numbers indicate higher priority (default: 0, the highest). When the system is under load, higher-priority requests are processed first and are the least likely to be dropped."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1428,8 +1428,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
-          "message": "Rerank Documents"
+          "source": "Rerank documents",
+          "message": "Rerank documents"
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
           "source": "Rank candidate documents by relevance to a query",
@@ -1488,8 +1488,8 @@
           "message": "Number of top-ranked documents to return."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.display_name": {
-          "source": "Max Tokens per Doc",
-          "message": "Max Tokens per Doc"
+          "source": "Max tokens per doc",
+          "message": "Max tokens per doc"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.short_desc": {
           "source": "Defaults to '4096'",
@@ -1512,8 +1512,8 @@
           "message": "Controls how early the request is handled. Lower numbers indicate higher priority (default: 0, the highest). When the system is under load, higher-priority requests are processed first and are the least likely to be dropped."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1524,8 +1524,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Text",
-          "message": "Classify Text"
+          "source": "Classify text",
+          "message": "Classify text"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
           "source": "Classify text with an existing classification model",
@@ -1616,8 +1616,8 @@
           "message": "End"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1628,8 +1628,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "Find available models and their supported tasks",
@@ -1640,8 +1640,8 @@
           "message": "List models available to this account. Filter by `endpoint` to choose a compatible model. Follow `next_page_token` with `page_token` to retrieve subsequent pages."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
-          "message": "Page Size"
+          "source": "Page size",
+          "message": "Page size"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.short_desc": {
           "source": "Maximum number of models to include in a page",
@@ -1652,8 +1652,8 @@
           "message": "Maximum number of models to include in a page\nDefaults to `20`, min value of `1`, max value of `1000`."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
-          "message": "Page Token"
+          "source": "Page token",
+          "message": "Page token"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.short_desc": {
           "source": "Page token provided in the 'next_page_token' field of a previous response",
@@ -1704,8 +1704,8 @@
           "message": "Generate"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.display_name": {
-          "source": "Default Only",
-          "message": "Default Only"
+          "source": "Default only",
+          "message": "Default only"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.short_desc": {
           "source": "When provided, filters the list of models to only the default model to the…",
@@ -1732,8 +1732,8 @@
           "message": "Model"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1744,8 +1744,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.display_name": {
-          "source": "Tokenize Text",
-          "message": "Tokenize Text"
+          "source": "Tokenize text",
+          "message": "Tokenize text"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.short_desc": {
           "source": "Convert text to model-specific token IDs",
@@ -1780,8 +1780,8 @@
           "message": "The input will be tokenized by the tokenizer that is used by this model."
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1792,8 +1792,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.display_name": {
-          "source": "Detokenize Tokens",
-          "message": "Detokenize Tokens"
+          "source": "Detokenize tokens",
+          "message": "Detokenize tokens"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.short_desc": {
           "source": "Convert model-specific token IDs back into text",
@@ -1828,8 +1828,8 @@
           "message": "An optional parameter to provide the model name. This will ensure that the detokenization is done by the tokenizer used by that model."
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1840,8 +1840,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.cGFyc2U.display_name": {
-          "source": "Parse Document Image",
-          "message": "Parse Document Image"
+          "source": "Parse document image",
+          "message": "Parse document image"
         },
         "app.Q29oZXJl.action.cGFyc2U.short_desc": {
           "source": "Extract structured blocks or Markdown from a document image",
@@ -1904,8 +1904,8 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
-          "source": "Output Format",
-          "message": "Output Format"
+          "source": "Output format",
+          "message": "Output format"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
           "source": "Selects the page payload shape in the response",
@@ -1924,8 +1924,8 @@
           "message": "Markdown"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -1936,8 +1936,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
-          "message": "Transcribe Audio"
+          "source": "Transcribe audio",
+          "message": "Transcribe audio"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.short_desc": {
           "source": "Turn recorded speech into text",
@@ -2172,8 +2172,8 @@
           "message": "The filename"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
-          "message": "Create Dataset"
+          "source": "Create dataset",
+          "message": "Create dataset"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
           "source": "Upload data for embedding, batch inference, or fine-tuning",
@@ -2316,8 +2316,8 @@
           "message": "The filename"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.display_name": {
-          "source": "Eval Data",
-          "message": "Eval Data"
+          "source": "Eval data",
+          "message": "Eval data"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.short_desc": {
           "source": "An optional evaluation file to upload",
@@ -2520,8 +2520,8 @@
           "message": "Batch Chat V2 Input"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.display_name": {
-          "source": "Keep Original File",
-          "message": "Keep Original File"
+          "source": "Keep original file",
+          "message": "Keep original file"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.short_desc": {
           "source": "Indicates if the original file should be stored",
@@ -2532,8 +2532,8 @@
           "message": "Indicates if the original file should be stored."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.display_name": {
-          "source": "Skip Malformed Input",
-          "message": "Skip Malformed Input"
+          "source": "Skip malformed input",
+          "message": "Skip malformed input"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.short_desc": {
           "source": "Indicates whether rows with malformed input should be dropped…",
@@ -2544,8 +2544,8 @@
           "message": "Indicates whether rows with malformed input should be dropped (instead of failing the validation check). Dropped rows will be returned in the warnings field."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.display_name": {
-          "source": "Keep Fields",
-          "message": "Keep Fields"
+          "source": "Keep fields",
+          "message": "Keep fields"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.short_desc": {
           "source": "List of names of fields that will be persisted in the Dataset",
@@ -2556,8 +2556,8 @@
           "message": "List of names of fields that will be persisted in the Dataset. By default the Dataset will retain only the required fields indicated in the [schema for the corresponding Dataset type](https://docs.cohere.com/docs/datasets#dataset-types). For example, datasets of type `embed-input` will drop all fields other than the required `text` field. If any of the fields in `keep_fields` are missing from the uploaded file, Dataset validation will fail."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.display_name": {
-          "source": "Optional Fields",
-          "message": "Optional Fields"
+          "source": "Optional fields",
+          "message": "Optional fields"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.short_desc": {
           "source": "List of names of fields that will be persisted in the Dataset",
@@ -2568,8 +2568,8 @@
           "message": "List of names of fields that will be persisted in the Dataset. By default the Dataset will retain only the required fields indicated in the [schema for the corresponding Dataset type](https://docs.cohere.com/docs/datasets#dataset-types). For example, Datasets of type `embed-input` will drop all fields other than the required `text` field. If any of the fields in `optional_fields` are missing from the uploaded file, Dataset validation will pass."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.display_name": {
-          "source": "Text Separator",
-          "message": "Text Separator"
+          "source": "Text separator",
+          "message": "Text separator"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.short_desc": {
           "source": "Raw .txt uploads will be split into entries using the text_separator value",
@@ -2580,8 +2580,8 @@
           "message": "Raw .txt uploads will be split into entries using the text_separator value."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.display_name": {
-          "source": "CSV Delimiter",
-          "message": "CSV Delimiter"
+          "source": "CSV delimiter",
+          "message": "CSV delimiter"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.short_desc": {
           "source": "The delimiter used for .csv uploads",
@@ -2592,8 +2592,8 @@
           "message": "The delimiter used for .csv uploads."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2604,8 +2604,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
-          "message": "List Datasets"
+          "source": "List datasets",
+          "message": "List datasets"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.short_desc": {
           "source": "Find datasets by task, validation status, and creation time",
@@ -2616,8 +2616,8 @@
           "message": "Find datasets to process or review. Filter by type and validation status, and use `limit` and `offset` for pagination."
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.display_name": {
-          "source": "Dataset Type",
-          "message": "Dataset Type"
+          "source": "Dataset type",
+          "message": "Dataset type"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.short_desc": {
           "source": "optional filter by dataset type",
@@ -2724,8 +2724,8 @@
           "message": "optional offset to start of results"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.display_name": {
-          "source": "Validation Status",
-          "message": "Validation Status"
+          "source": "Validation status",
+          "message": "Validation status"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.short_desc": {
           "source": "optional filter by validation status: The validation status of the dataset",
@@ -2760,8 +2760,8 @@
           "message": "Skipped"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2788,8 +2788,8 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2816,8 +2816,8 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2828,8 +2828,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.display_name": {
-          "source": "Get Dataset Usage",
-          "message": "Get Dataset Usage"
+          "source": "Get dataset usage",
+          "message": "Get dataset usage"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.short_desc": {
           "source": "Inspect dataset storage usage",
@@ -2840,8 +2840,8 @@
           "message": "Review dataset storage usage before uploading additional data."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2852,8 +2852,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.display_name": {
-          "source": "Create Embedding Job",
-          "message": "Create Embedding Job"
+          "source": "Create embedding job",
+          "message": "Create embedding job"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.short_desc": {
           "source": "Generate embeddings for an uploaded dataset",
@@ -2888,8 +2888,8 @@
           "message": "ID of a [Dataset](https://docs.cohere.com/docs/datasets). The Dataset must be of type `embed-input` and must have a validation status `Validated`"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
-          "message": "Input Type"
+          "source": "Input type",
+          "message": "Input type"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.short_desc": {
           "source": "Specifies the type of input passed to the model",
@@ -2932,8 +2932,8 @@
           "message": "The name of the embed job."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
-          "message": "Embedding Types"
+          "source": "Embedding types",
+          "message": "Embedding types"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
           "source": "Specifies the types of embeddings you want to get back",
@@ -2964,8 +2964,8 @@
           "message": "End"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -2976,8 +2976,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.display_name": {
-          "source": "List Embedding Jobs",
-          "message": "List Embedding Jobs"
+          "source": "List embedding jobs",
+          "message": "List embedding jobs"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.short_desc": {
           "source": "Find submitted embedding jobs",
@@ -2988,8 +2988,8 @@
           "message": "List embedding jobs and inspect their current status."
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3024,8 +3024,8 @@
           "message": "The ID of the embed job to retrieve."
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3060,8 +3060,8 @@
           "message": "The ID of the embed job to cancel."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3072,8 +3072,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
-          "message": "Create Batch"
+          "source": "Create batch",
+          "message": "Create batch"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.short_desc": {
           "source": "Process a dataset with batch inference",
@@ -3096,8 +3096,8 @@
           "message": "Batch name (e.g. `foobar`)."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.display_name": {
-          "source": "Input Dataset ID",
-          "message": "Input Dataset ID"
+          "source": "Input dataset ID",
+          "message": "Input dataset ID"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.short_desc": {
           "source": "ID of the dataset the batch reads inputs from",
@@ -3120,8 +3120,8 @@
           "message": "The name of the model the batch uses."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3132,8 +3132,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
-          "message": "List Batches"
+          "source": "List batches",
+          "message": "List batches"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.short_desc": {
           "source": "Find batch inference jobs",
@@ -3144,8 +3144,8 @@
           "message": "List batch inference jobs. Follow `next_page_token` using `page_token` to retrieve subsequent pages."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
-          "message": "Page Size"
+          "source": "Page size",
+          "message": "Page size"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.short_desc": {
           "source": "The maximum number of batches to return",
@@ -3156,8 +3156,8 @@
           "message": "The maximum number of batches to return. The service may return fewer than\nthis value.\nIf unspecified, at most 50 batches will be returned.\nThe maximum value is 1000; values above 1000 will be coerced to 1000."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
-          "message": "Page Token"
+          "source": "Page token",
+          "message": "Page token"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.short_desc": {
           "source": "A page token, received from a previous 'ListBatches' call",
@@ -3168,8 +3168,8 @@
           "message": "A page token, received from a previous `ListBatches` call.\nProvide this to retrieve the subsequent page."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.display_name": {
-          "source": "Order By",
-          "message": "Order By"
+          "source": "Order by",
+          "message": "Order by"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.short_desc": {
           "source": "Batches can be ordered by creation time or last updated time",
@@ -3180,8 +3180,8 @@
           "message": "Batches can be ordered by creation time or last updated time.\nUse `created_at` for creation time or `updated_at` for last updated time."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3216,8 +3216,8 @@
           "message": "The batch ID."
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3252,8 +3252,8 @@
           "message": "The batch ID."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",
@@ -3264,8 +3264,8 @@
           "message": "The name of the project that is making the request.\n"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.display_name": {
-          "source": "Check API Key",
-          "message": "Check API Key"
+          "source": "Check API key",
+          "message": "Check API key"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.short_desc": {
           "source": "Check whether the connection API key is valid",
@@ -3276,8 +3276,8 @@
           "message": "Check the connection's API key without generating content. Inspect the boolean `valid` result; HTTP success alone does not mean that a key is valid. This does not check remaining trial quota."
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
-          "message": "X Client Name"
+          "source": "X client name",
+          "message": "X client name"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
           "source": "The name of the project that is making the request",

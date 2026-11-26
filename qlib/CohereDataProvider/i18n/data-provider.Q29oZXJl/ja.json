@@ -472,7 +472,7 @@
           "message": "引用元"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.display_name": {
-          "source": "Content Index",
+          "source": "Content index",
           "message": "コンテンツインデックス"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.short_desc": {
@@ -512,7 +512,7 @@
           "message": "ドキュメントの一意の識別子"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0VG9vbFNvdXJjZSNlY2M5ZjAyZGMyNzczOTUzZjNhNGNhNzJkNGM1ODIwY2ZkZWQxYTFlMTFlZDdlNDY3MDU3M2MwY2IwZWI3ODg1.field.dG9vbF9vdXRwdXQ.display_name": {
-          "source": "Tool Output",
+          "source": "Tool output",
           "message": "ツール出力"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0RG9jdW1lbnRTb3VyY2UjMjA3M2MwZDYyZjk5ZGY0Yzk0ZmZlNzZhODAyNzY3ZDNjY2I3NjVkYjc3MTViZWMxYWI1ODFmNGQ5NjU4ZWUwNQ.field.ZG9jdW1lbnQ.display_name": {
@@ -604,7 +604,7 @@
           "message": "assistant"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9jYWxscw.display_name": {
-          "source": "Tool Calls",
+          "source": "Tool calls",
           "message": "ツール呼び出し"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpUb29sQ2FsbFYyI2M3MjkxMWRkZTU4YzRkNThhMWI5ZGVlNzI3YzZjMTQyYTQ5ZDc0MWRhODA3YzI0ODZmYmY0ZTdiNmNhNDEwY2Q.field.ZnVuY3Rpb24.display_name": {
@@ -636,7 +636,7 @@
           "message": "関数"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.display_name": {
-          "source": "Tool Plan",
+          "source": "Tool plan",
           "message": "ツールプラン"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.short_desc": {
@@ -724,7 +724,7 @@
           "message": "tool"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ツール呼び出しID"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -800,7 +800,7 @@
           "message": "関数"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.display_name": {
-          "source": "Strict Tools",
+          "source": "Strict tools",
           "message": "厳密なツール"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "このドキュメントの固有識別子。引用では参照されます。指定しない場合、自動的にIDが生成されます。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.display_name": {
-          "source": "Citation Options",
+          "source": "Citation options",
           "message": "引用オプション"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.short_desc": {
@@ -924,7 +924,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "JSONスキーマ"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.short_desc": {
@@ -956,7 +956,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.display_name": {
-          "source": "Safety Mode",
+          "source": "Safety mode",
           "message": "セーフティモード"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "指定した場合、バックエンドはトークンをサンプリングするために最善の努力を行います。\n決定論的に、同じリクエストが繰り返されるようにする\nシードとパラメータは同じ結果を返す必要があります。ただし、\n決定性を完全に保証することはできません。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
-          "source": "Frequency Penalty",
+          "source": "Frequency penalty",
           "message": "頻度ペナルティ"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "デフォルトは `0.0`、最小値は `0.0`、最大値は `1.0` です。\n生成されたトークンの繰り返しを減らすために使用されます。値が大きいほど、プロンプトまたは以前の生成で既に出現した回数に比例して、以前に存在したトークンに対してより強力なペナルティが適用されます。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
-          "source": "Presence Penalty",
+          "source": "Presence penalty",
           "message": "存在ペナルティ"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "デフォルトは `false` です。 `true` に設定すると、生成されたトークンのログ確率が応答に含まれます。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "ツール選択"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "[推論機能](https://docs.cohere.com/docs/reasoning)の設定。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.display_name": {
-          "source": "Token Budget",
+          "source": "Token budget",
           "message": "トークン予算"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "リクエストがどのくらい早く処理されるかを制御します。数字が小さいほど優先度が高くなります (デフォルト: 0、最高)。システムに負荷がかかると、優先度の高いリクエストが最初に処理され、ドロップされる可能性が最も低くなります。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "埋め込みを作成"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "利用可能な [埋め込みモデル] (https://docs.cohere.com/docs/cohere-embed) のいずれかの ID。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "入力タイプ"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "画像URL"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "最大トークン数"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "入力ごとに埋め込むトークンの最大数。入力テキストがこれより長い場合、`truncate` パラメータに従って切り詰められます。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
-          "source": "Output Dimension",
+          "source": "Output dimension",
           "message": "出力寸法"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "出力埋め込みの次元数。これは、`embed-v4` 以降のモデルでのみ利用可能です。\n可能な値は、`256`、`512`、`1024`、`1536` です。デフォルトは `1536` です。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "埋め込みタイプ"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "リクエストがどのくらい早く処理されるかを制御します。数字が小さいほど優先度が高くなります (デフォルト: 0、最高)。システムに負荷がかかると、優先度の高いリクエストが最初に処理され、ドロップされる可能性が最も低くなります。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "ドキュメントの再ランク付け"
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "返される上位ドキュメントの数。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.display_name": {
-          "source": "Max Tokens per Doc",
+          "source": "Max tokens per doc",
           "message": "ドキュメントあたりの最大トークン数"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "リクエストがどのくらい早く処理されるかを制御します。数字が小さいほど優先度が高くなります (デフォルト: 0、最高)。システムに負荷がかかると、優先度の高いリクエストが最初に処理され、ドロップされる可能性が最も低くなります。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Text",
+          "source": "Classify text",
           "message": "テキストを分類"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "終了"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "モデルのリスト"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "このアカウントで利用可能なモデルをリストします。 `endpoint` でフィルターして、互換性のあるモデルを選択します。 `next_page_token` を `page_token` と続けて、後続のページを取得します。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "ページサイズ"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "ページに含めるモデルの最大数\nデフォルトは `20`、最小値は `1`、最大値は `1000` です。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "ページトークン"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "生成する"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.display_name": {
-          "source": "Default Only",
+          "source": "Default only",
           "message": "デフォルトのみ"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "モデル"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.display_name": {
-          "source": "Tokenize Text",
+          "source": "Tokenize text",
           "message": "テキストのトークン化"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "入力は、このモデルで使用されるトークナイザーによってトークン化されます。"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.display_name": {
-          "source": "Detokenize Tokens",
+          "source": "Detokenize tokens",
           "message": "トークンをテキストに変換"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "モデル名を指定する任意のパラメーター。そのモデルで使用されるトークナイザーを使って、トークンをテキストに戻します。"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.cGFyc2U.display_name": {
-          "source": "Parse Document Image",
+          "source": "Parse document image",
           "message": "文書画像を解析"
         },
         "app.Q29oZXJl.action.cGFyc2U.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "画像URL"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
-          "source": "Output Format",
+          "source": "Output format",
           "message": "出力フォーマット"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
@@ -1924,7 +1924,7 @@
           "message": "Markdown"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "音声の文字起こし"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "ファイル名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "データセットの作成"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "ファイル名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.display_name": {
-          "source": "Eval Data",
+          "source": "Eval data",
           "message": "評価データ"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "バッチチャット V2 入力"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.display_name": {
-          "source": "Keep Original File",
+          "source": "Keep original file",
           "message": "元のファイルを保持する"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.short_desc": {
@@ -2532,7 +2532,7 @@
           "message": "元のファイルを保存する必要があるかどうかを示します。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.display_name": {
-          "source": "Skip Malformed Input",
+          "source": "Skip malformed input",
           "message": "不正な入力をスキップする"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "不正な入力を含む行を (検証チェックに失敗する代わりに) 削除する必要があるかどうかを示します。ドロップされた行は警告フィールドに返されます。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.display_name": {
-          "source": "Keep Fields",
+          "source": "Keep fields",
           "message": "フィールドを保持する"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "データセットに保持されるフィールドの名前のリスト。デフォルトでは、データセットは [対応するデータセット タイプのスキーマ](https://docs.cohere.com/docs/datasets#dataset-types) に示されている必須フィールドのみを保持します。たとえば、タイプ `embed-input` のデータセットは、必須の `text` フィールド以外のすべてのフィールドを削除します。 `keep_fields` のフィールドのいずれかがアップロードされたファイルに欠落している場合、データセットの検証は失敗します。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.display_name": {
-          "source": "Optional Fields",
+          "source": "Optional fields",
           "message": "オプションのフィールド"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "データセットに保持されるフィールドの名前のリスト。デフォルトでは、データセットは [対応するデータセット タイプのスキーマ](https://docs.cohere.com/docs/datasets#dataset-types) に示されている必須フィールドのみを保持します。たとえば、タイプ `embed-input` のデータセットは、必須の `text` フィールド以外のすべてのフィールドを削除します。 `optional_fields` のフィールドのいずれかがアップロードされたファイルに欠落している場合、データセットの検証は合格します。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.display_name": {
-          "source": "Text Separator",
+          "source": "Text separator",
           "message": "テキスト区切り文字"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "未加工の .txt アップロードは、text_separator 値を使用してエントリに分割されます。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.display_name": {
-          "source": "CSV Delimiter",
+          "source": "CSV delimiter",
           "message": "CSV区切り文字"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": ".csv アップロードに使用される区切り文字。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2604,7 +2604,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "データセット一覧"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "処理またはレビューするデータセットを見つけます。タイプと検証ステータスでフィルターし、ページネーションに `limit` と `offset` を使用します。"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.display_name": {
-          "source": "Dataset Type",
+          "source": "Dataset type",
           "message": "データセットの種類"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "結果の先頭までのオプションのオフセット"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.display_name": {
-          "source": "Validation Status",
+          "source": "Validation status",
           "message": "検証ステータス"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "スキップ済み"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.display_name": {
-          "source": "Get Dataset Usage",
+          "source": "Get dataset usage",
           "message": "データセットの使用状況を取得する"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "追加のデータをアップロードする前に、データセット ストレージの使用状況を確認してください。"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2852,7 +2852,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.display_name": {
-          "source": "Create Embedding Job",
+          "source": "Create embedding job",
           "message": "埋め込みジョブの作成"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "[データセット](https://docs.cohere.com/docs/datasets)のID。データセットのタイプは `embed-input` であり、検証ステータス `Validated` が必要です。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "入力タイプ"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "埋め込みジョブの名前。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "埋め込みタイプ"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "終了"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.display_name": {
-          "source": "List Embedding Jobs",
+          "source": "List embedding jobs",
           "message": "埋め込みジョブの一覧表示"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "埋め込みジョブをリストし、現在のステータスを検査します。"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "取得する埋め込みジョブの ID。"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "キャンセルする埋め込みジョブの ID。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "バッチを作成"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "バッチ名 (例: `foobar`)。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.display_name": {
-          "source": "Input Dataset ID",
+          "source": "Input dataset ID",
           "message": "入力データセットID"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "バッチが使用するモデルの名前。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "バッチの一覧"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "バッチ推論ジョブをリストします。 `page_token` を使用して `next_page_token` をたどって、後続のページを取得します。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "ページサイズ"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.short_desc": {
@@ -3156,7 +3156,7 @@
           "message": "返されるバッチの最大数。サービスが返す数は以下の場合があります\nこの値。\n指定しない場合、最大 50 個のバッチが返されます。\n最大値は 1000 です。 1000 を超える値は強制的に 1000 に設定されます。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "ページトークン"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "前回の `ListBatches` 呼び出しから受信したページ トークン。\nこれを指定して後続のページを取得します。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.display_name": {
-          "source": "Order By",
+          "source": "Order by",
           "message": "並べ替え"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "バッチは作成時間または最終更新時間で並べ替えることができます。\n作成時刻には `created_at` を、最終更新時刻には `updated_at` を使用します。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "バッチID。"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "バッチID。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "リクエストを行っているプロジェクトの名前。"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.display_name": {
-          "source": "Check API Key",
+          "source": "Check API key",
           "message": "APIキーを確認する"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "コンテンツを生成せずに接続の API キーを確認します。ブール値 `valid` の結果を検査します。 HTTP が成功しただけでは、キーが有効であるとは限りません。これでは、残りのトライアル割り当てはチェックされません。"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X クライアント名"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {

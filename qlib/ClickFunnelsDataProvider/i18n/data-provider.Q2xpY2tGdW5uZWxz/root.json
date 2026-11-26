@@ -892,8 +892,8 @@
           "message": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List all contacts",
@@ -988,8 +988,8 @@
           "message": "The contact ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact Tag",
-          "message": "Create a Contact Tag"
+          "source": "Create a Contact tag",
+          "message": "Create a Contact tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Create a new contact tag",
@@ -1036,8 +1036,8 @@
           "message": "The color code for the tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact Tag",
-          "message": "Update a Contact Tag"
+          "source": "Update a Contact tag",
+          "message": "Update a Contact tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Update a contact tag",
@@ -1096,8 +1096,8 @@
           "message": "The new color code for the tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact Tag",
-          "message": "Delete a Contact Tag"
+          "source": "Delete a Contact tag",
+          "message": "Delete a Contact tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Delete a contact tag",
@@ -1132,8 +1132,8 @@
           "message": "The unique identifier of the tag to delete"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact Tags",
-          "message": "List Contact Tags"
+          "source": "List Contact tags",
+          "message": "List Contact tags"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
           "source": "List all contact tags",
@@ -1200,8 +1200,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact Tag",
-          "message": "Get a Contact Tag"
+          "source": "Get a Contact tag",
+          "message": "Get a Contact tag"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
           "source": "Get a single contact tag by ID",
@@ -1228,8 +1228,8 @@
           "message": "The tag ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
-          "message": "Apply Tag to Contact"
+          "source": "Apply tag to Contact",
+          "message": "Apply tag to Contact"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
           "source": "Apply a tag to a contact",
@@ -1276,8 +1276,8 @@
           "message": "The ID of the tag to apply to the contact"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
-          "message": "Remove Tag from Contact"
+          "source": "Remove tag from Contact",
+          "message": "Remove tag from Contact"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
           "source": "Remove a tag from a contact",
@@ -1320,8 +1320,8 @@
           "message": "The applied tag to remove from the contact"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
-          "message": "Create an Order"
+          "source": "Create an order",
+          "message": "Create an order"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -1472,8 +1472,8 @@
           "message": "The type of the origination channel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
-          "message": "Update an Order"
+          "source": "Update an order",
+          "message": "Update an order"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
           "source": "Update an existing order",
@@ -1532,8 +1532,8 @@
           "message": "The new status for the order"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List all orders",
@@ -1600,8 +1600,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
-          "message": "Get an Order"
+          "source": "Get an order",
+          "message": "Get an order"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -1628,8 +1628,8 @@
           "message": "The order ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
-          "message": "Create a Product"
+          "source": "Create a product",
+          "message": "Create a product"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -1748,8 +1748,8 @@
           "message": "Whether eligible for affiliate commissions"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
-          "message": "Update a Product"
+          "source": "Update a product",
+          "message": "Update a product"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -1880,8 +1880,8 @@
           "message": "Whether eligible for affiliate commissions"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List all products",
@@ -1940,8 +1940,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
-          "message": "Get a Product"
+          "source": "Get a product",
+          "message": "Get a product"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -1968,8 +1968,8 @@
           "message": "The product ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
-          "source": "Update a Funnel",
-          "message": "Update a Funnel"
+          "source": "Update a funnel",
+          "message": "Update a funnel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
           "source": "Update an existing funnel",
@@ -2016,8 +2016,8 @@
           "message": "The new name for the funnel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
-          "source": "List Funnels",
-          "message": "List Funnels"
+          "source": "List funnels",
+          "message": "List funnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
           "source": "List all funnels",
@@ -2076,8 +2076,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
-          "source": "Get a Funnel",
-          "message": "Get a Funnel"
+          "source": "Get a funnel",
+          "message": "Get a funnel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
           "source": "Get a single funnel by ID",
@@ -2104,8 +2104,8 @@
           "message": "The funnel ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
-          "message": "List Courses"
+          "source": "List courses",
+          "message": "List courses"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
           "source": "List all courses",
@@ -2164,8 +2164,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
-          "source": "Get a Course",
-          "message": "Get a Course"
+          "source": "Get a course",
+          "message": "Get a course"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
           "source": "Get a single course by ID",
@@ -2192,8 +2192,8 @@
           "message": "The course ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create an Enrollment",
-          "message": "Create an Enrollment"
+          "source": "Create an enrollment",
+          "message": "Create an enrollment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
           "source": "Enroll a contact in a course",
@@ -2264,8 +2264,8 @@
           "message": "The reason for suspending the enrollment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Update an Enrollment",
-          "message": "Update an Enrollment"
+          "source": "Update an enrollment",
+          "message": "Update an enrollment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
           "source": "Update a course enrollment",
@@ -2324,8 +2324,8 @@
           "message": "Whether the enrollment has been completed"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
-          "message": "List Enrollments"
+          "source": "List enrollments",
+          "message": "List enrollments"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
           "source": "List all enrollments",
@@ -2392,8 +2392,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
-          "source": "Get an Enrollment",
-          "message": "Get an Enrollment"
+          "source": "Get an enrollment",
+          "message": "Get an enrollment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
           "source": "Get a single enrollment by ID",
@@ -2420,8 +2420,8 @@
           "message": "The enrollment ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Create a Fulfillment",
-          "message": "Create a Fulfillment"
+          "source": "Create a fulfillment",
+          "message": "Create a fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
           "source": "Create a new fulfillment",
@@ -2564,8 +2564,8 @@
           "message": "Whether to ignore out-of-stock inventory checks when creating the fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Update a Fulfillment",
-          "message": "Update a Fulfillment"
+          "source": "Update a fulfillment",
+          "message": "Update a fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
           "source": "Update a fulfillment",
@@ -2648,8 +2648,8 @@
           "message": "Whether to send an email notification to the customer about the fulfillment update"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Delete a Fulfillment",
-          "message": "Delete a Fulfillment"
+          "source": "Delete a fulfillment",
+          "message": "Delete a fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
           "source": "Delete a fulfillment",
@@ -2684,8 +2684,8 @@
           "message": "The unique identifier of the fulfillment to delete"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Cancel a Fulfillment",
-          "message": "Cancel a Fulfillment"
+          "source": "Cancel a fulfillment",
+          "message": "Cancel a fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
           "source": "Cancel a fulfillment",
@@ -2720,8 +2720,8 @@
           "message": "The unique identifier of the fulfillment to cancel"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
-          "message": "List Fulfillments"
+          "source": "List fulfillments",
+          "message": "List fulfillments"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
           "source": "List all fulfillments",
@@ -2788,8 +2788,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
-          "source": "Get a Fulfillment",
-          "message": "Get a Fulfillment"
+          "source": "Get a fulfillment",
+          "message": "Get a fulfillment"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
           "source": "Get a single fulfillment by ID",
@@ -2816,8 +2816,8 @@
           "message": "The fulfillment ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create a Form",
-          "message": "Create a Form"
+          "source": "Create a form",
+          "message": "Create a form"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
           "source": "Create a new form",
@@ -2864,8 +2864,8 @@
           "message": "The URL to redirect to after form submission"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update a Form",
-          "message": "Update a Form"
+          "source": "Update a form",
+          "message": "Update a form"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
           "source": "Update an existing form",
@@ -2924,8 +2924,8 @@
           "message": "The new redirect URL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete a Form",
-          "message": "Delete a Form"
+          "source": "Delete a form",
+          "message": "Delete a form"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
           "source": "Delete a form",
@@ -2960,8 +2960,8 @@
           "message": "The unique identifier of the form to delete"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
-          "message": "List Forms"
+          "source": "List forms",
+          "message": "List forms"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
           "source": "List all forms",
@@ -3020,8 +3020,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get a Form",
-          "message": "Get a Form"
+          "source": "Get a form",
+          "message": "Get a form"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
           "source": "Get a single form by ID",
@@ -3048,8 +3048,8 @@
           "message": "The form ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
-          "source": "List Form Submissions",
-          "message": "List Form Submissions"
+          "source": "List form submissions",
+          "message": "List form submissions"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
           "source": "List all form submissions",
@@ -3116,8 +3116,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
-          "source": "Get a Form Submission",
-          "message": "Get a Form Submission"
+          "source": "Get a form submission",
+          "message": "Get a form submission"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
           "source": "Get a single form submission by ID",
@@ -3144,8 +3144,8 @@
           "message": "The submission ID to retrieve"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
-          "source": "List Applied Tags",
-          "message": "List Applied Tags"
+          "source": "List applied tags",
+          "message": "List applied tags"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
           "source": "List all applied tags",
@@ -3220,8 +3220,8 @@
           "message": "Maximum results"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
-          "message": "Contact Created"
+          "source": "Contact created",
+          "message": "Contact created"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new contact is created",
@@ -3232,8 +3232,8 @@
           "message": "Fires when a new contact is created in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
-          "message": "Contact Updated"
+          "source": "Contact updated",
+          "message": "Contact updated"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
           "source": "Trigger when a contact is updated",
@@ -3244,8 +3244,8 @@
           "message": "Fires when a contact is updated in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
-          "message": "Order Created"
+          "source": "Order created",
+          "message": "Order created"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new order is created",
@@ -3256,8 +3256,8 @@
           "message": "Fires when a new order is created in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
-          "message": "Order Updated"
+          "source": "Order updated",
+          "message": "Order updated"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when an order is updated",
@@ -3268,8 +3268,8 @@
           "message": "Fires when an order is updated in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
-          "source": "Order Completed",
-          "message": "Order Completed"
+          "source": "Order completed",
+          "message": "Order completed"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
           "source": "Trigger when an order is completed",
@@ -3280,8 +3280,8 @@
           "message": "Fires when an order is completed in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Form Submission Created",
-          "message": "Form Submission Created"
+          "source": "Form submission created",
+          "message": "Form submission created"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
           "source": "Trigger when a new form submission is created",
@@ -3292,8 +3292,8 @@
           "message": "Fires when a form is submitted in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
-          "source": "Enrollment Created",
-          "message": "Enrollment Created"
+          "source": "Enrollment created",
+          "message": "Enrollment created"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
           "source": "Trigger when a new enrollment is created",
@@ -3304,8 +3304,8 @@
           "message": "Fires when a new course enrollment is created in ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Fulfillment Created",
-          "message": "Fulfillment Created"
+          "source": "Fulfillment created",
+          "message": "Fulfillment created"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {
           "source": "Trigger when a new fulfillment is created",

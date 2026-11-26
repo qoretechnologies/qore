@@ -16,7 +16,7 @@
           "message": "Генерувати настроювані потоки записів для тестування конвеєрів даних без підключення до зовнішніх сервісів"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Генерувати записи"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Фіксоване значення дати/часу, яке використовується як опорна точка для генерації полів дати; при вказанні разом із початковим значенням (seed) це забезпечує повну відтворюваність полів дати між запусками; якщо не вказано, використовується поточна дата/час на момент початку генерації"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Згенерувати за шаблоном"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

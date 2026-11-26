@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Kontakte suchen"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -940,7 +940,7 @@
           "message": "Der zu löschende Kontakt"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a Campaign",
+          "source": "Add a Contact to a campaign",
           "message": "Kontakt zu einer Kampagne hinzufügen"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Die ID der Kampagne, zu der der Kontakt hinzugefügt werden soll"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a Campaign",
+          "source": "Remove a Contact from a campaign",
           "message": "Einen Kontakt aus einer Kampagne entfernen"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
@@ -1004,7 +1004,7 @@
           "message": "Die ID der Kampagne, aus der der Kontakt entfernt werden soll"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a Note to the Contact",
+          "source": "Add a note to the Contact",
           "message": "Notiz zum Kontakt hinzufügen"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Die Benutzer-ID des Notizautors"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
-          "source": "Search Opportunities",
+          "source": "Search opportunities",
           "message": "Verkaufschancen suchen"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Opportunity abrufen"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "Die Opportunity-ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Opportunity erstellen"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Benutzer-ID, der die Opportunity zugewiesen werden soll"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Eine Opportunity aktualisieren"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Benutzer-ID, der die Opportunity zugewiesen werden soll"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Eine Opportunity löschen"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Die zu löschende Opportunity"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Tasks auflisten"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Aufgabe abrufen"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
@@ -1508,7 +1508,7 @@
           "message": "Die ID der abzurufenden Aufgabe"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Aufgabe erstellen"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1592,7 +1592,7 @@
           "message": "Gibt an, ob die Aufgabe abgeschlossen ist (`True` oder `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Aufgabe aktualisieren"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Gibt an, ob die Aufgabe abgeschlossen ist (`True` oder `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Eine Aufgabe löschen"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "Neuer Termin"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
-          "source": "New Message",
+          "source": "New message",
           "message": "Neue Nachricht"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {

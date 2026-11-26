@@ -712,7 +712,7 @@
           "message": "Generacja zawartości, której metadane powinny zostać zaktualizowane; w przypadku pominięcia używana jest wersja aktywna"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "Prześlij obiekt"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Wykonaj zapis tylko wtedy, gdy bieżąca generacja obiektu jest zgodna z tą wartością; przekaż `0`, aby zapisać tylko wtedy, gdy obiekt jeszcze nie istnieje, co sprawia, że przesyłanie jest bezpiecznym utworzeniem, a nie nadpisaniem"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "Pobierz obiekt"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Generacja zawartości do pobrania; w przypadku pominięcia używana jest aktywna wersja"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Usuń obiekt"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Generacja zawartości do usunięcia; w przypadku pominięcia usuwana jest aktywna wersja. W zasobniku z włączonym wersjonowaniem usunięcie aktywnej wersji pozostawia wcześniejsze generacje, a usunięcie jej na stałe wymaga wskazania konkretnej generacji"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Kopiuj obiekt"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Metadane zdefiniowane przez użytkownika dla kopii jako pary klucz/wartość; w przypadku pominięcia zachowywane są metadane źródła"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "Scal obiekty"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Metadane zdefiniowane przez użytkownika dla połączonego obiektu jako pary klucz/wartość"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "Utwórz podpisany adres URL"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

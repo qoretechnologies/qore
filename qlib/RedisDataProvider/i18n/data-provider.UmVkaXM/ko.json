@@ -16,7 +16,7 @@
           "message": "데이터베이스, 캐시, 메시지 브로커 및 큐로 사용되는 Redis 인메모리 데이터 구조 저장소"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
-          "source": "Set String",
+          "source": "Set string",
           "message": "문자열 설정"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Redis에서 키의 문자열 값 설정"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
-          "source": "Get String",
+          "source": "Get string",
           "message": "문자열 가져오기"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Redis에서 키의 문자열 값을 가져옵니다."
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
-          "source": "Set Hash Field",
+          "source": "Set hash field",
           "message": "해시 필드 설정"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Redis에서 해시 필드의 값을 설정합니다."
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
-          "source": "Get Hash Fields",
+          "source": "Get hash fields",
           "message": "해시 필드 가져오기"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Redis에서 해시 필드의 값을 가져옵니다."
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
-          "source": "Push to List",
+          "source": "Push to list",
           "message": "목록에 푸시"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Redis의 목록에 요소 푸시"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
-          "source": "Pop from List",
+          "source": "Pop from list",
           "message": "목록에서 팝"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Redis의 목록에서 요소 팝"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
-          "source": "Publish Message",
+          "source": "Publish message",
           "message": "메시지 게시"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {

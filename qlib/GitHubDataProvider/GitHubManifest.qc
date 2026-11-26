@@ -413,7 +413,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/user/repos",
                 "operation_id": "repos/list-for-authenticated-user",
-                "display_name": "List My Repositories",
+                "display_name": "List my repositories",
                 "short_desc": "List the repositories the credential can see",
                 "desc": "Lists the repositories the authenticated user owns, collaborates on or can see "
                     "through an organization.\n\n"
@@ -452,7 +452,7 @@ public class GitHubManifest {
                 "method": "POST",
                 "path": "/user/repos",
                 "operation_id": "repos/create-for-authenticated-user",
-                "display_name": "Create Repository",
+                "display_name": "Create repository",
                 "short_desc": "Create a repository owned by the authenticated user",
                 "desc": "Creates a repository owned by the authenticated user.\n\n"
                     "`auto_init` creates an initial commit with a README, which matters because a repository "
@@ -677,7 +677,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/issues",
                 "operation_id": "issues/list",
-                "display_name": "List My Issues",
+                "display_name": "List my issues",
                 "short_desc": "List the issues assigned to the authenticated user",
                 "desc": "Lists issues across every repository the authenticated user can see, filtered by "
                     "their relationship to them - assigned, created, mentioned or subscribed.\n\n"
@@ -1130,7 +1130,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/user/orgs",
                 "operation_id": "orgs/list-for-authenticated-user",
-                "display_name": "List My Organizations",
+                "display_name": "List my organizations",
                 "short_desc": "List the organizations the credential belongs to",
                 "desc": "Lists the organizations the authenticated user is a member of.\n\n"
                     "This is what fills the **Organization** dropdown; the application this module replaces "
@@ -1165,7 +1165,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/search/repositories",
                 "operation_id": "search/repos",
-                "display_name": "Search Repositories",
+                "display_name": "Search repositories",
                 "short_desc": "Search public repositories with a query",
                 "desc": "Searches repositories.\n\n"
                     "`q` takes GitHub's search syntax - `qore user:qoretechnologies`, "
@@ -1190,7 +1190,7 @@ public class GitHubManifest {
                 "method": "GET",
                 "path": "/search/issues",
                 "operation_id": "search/issues-and-pull-requests",
-                "display_name": "Search Issues and Pull Requests",
+                "display_name": "Search issues and pull requests",
                 "short_desc": "Search issues and pull requests with a query",
                 "desc": "Searches issues and pull requests across repositories.\n\n"
                     "`q` takes GitHub's search syntax - `repo:owner/name is:open label:bug`. Add "

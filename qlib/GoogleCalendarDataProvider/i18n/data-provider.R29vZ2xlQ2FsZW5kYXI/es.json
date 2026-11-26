@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
+          "source": "Add event from text",
           "message": "Añadir evento a partir de texto"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
@@ -400,7 +400,7 @@
           "message": "No se envían notificaciones. Para tareas de migración de calendarios, considera usar el método `Events.import` en su lugar"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Crear evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
@@ -424,7 +424,7 @@
           "message": "El calendario al que se añadirá el evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
+          "source": "Update event",
           "message": "Actualizar evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
@@ -448,7 +448,7 @@
           "message": "El calendario al que se añadirá el evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
+          "source": "Delete event",
           "message": "Eliminar evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Si es `True`, los eventos eliminados (con `status` igual a `cancelled`) se incluyen en el resultado. Las instancias canceladas de eventos periódicos (pero no el evento periódico subyacente) se siguen incluyendo si `showDeleted` y `singleEvents` son ambos `False`; si ambos son `True`, solo se devuelven las instancias individuales de los eventos eliminados. El valor predeterminado es `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Obtener evento"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
@@ -636,7 +636,7 @@
           "message": "El ID del evento que se va a recuperar; los ID de los eventos se devuelven en el campo `id` de los eventos devueltos por la acción `list-events`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
+          "source": "List calendars",
           "message": "Listar calendarios"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {

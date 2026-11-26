@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.display_name": {
-          "source": "Create Measurements",
+          "source": "Create measurements",
           "message": "Utwórz pomiary"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Lista zdarzeń pomiarowych do utworzenia"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.display_name": {
-          "source": "Booking Ref",
+          "source": "Booking ref",
           "message": "Numer rezerwacji"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.short_desc": {

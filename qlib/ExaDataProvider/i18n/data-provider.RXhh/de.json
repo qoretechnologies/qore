@@ -472,7 +472,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Zusätzlich zu übergebende Parameter."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Codeblöcke"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Anzahl Codeblöcke, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Anzahl URLs, die von jeder Webseite zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Reiche Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Anzahl reicher Bild-Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Reiche Links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Veraltet und wird in einer zukünftigen Version entfernt. Derzeit ignoriert. Highlights übergeben: true für Standard-Highlights oder { query }, um die Auswahl mit Ihrer eigenen Abfrage zu steuern."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "Maximale Anzahl an Zeichen, die für Hervorhebungen zurückgegeben werden. Steuert die Gesamtlänge des zurückgegebenen Hervorhebungstextes pro URL. Höchstwert: 10000. Nicht kompatibel mit highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Anzahl Sätze"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Bevorzugt"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl-Timeout"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -692,7 +692,7 @@
           "message": "Das Zeitlimit für das Live-Crawling in Millisekunden."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Max. Alter in Stunden"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Höchstalter zwischengespeicherter Inhalte in Stunden. Positive Werte verwenden zwischengespeicherte Inhalte, sofern sie jünger als so viele Stunden sind; 0 ruft frische Inhalte ab und ist der unterstützte Weg, Textdarstellungsoptionen auf neu abgerufene Seiten anzuwenden; -1 verwendet immer den Cache; wird der Wert weggelassen, greift das Ersatzabrufverfahren, wenn keine zwischengespeicherten Inhalte verfügbar sind. Der höchste unterstützte Wert beträgt 720 Stunden."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Unterseitenziel"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -776,7 +776,7 @@
           "message": "Optionen für die Textextraktion je Ergebnis."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Abschnitte ausschließen"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Inhalt, der diesen semantischen Seitenabschnitten zugeordnet ist, ausschließen. Die Abschnittsklassifizierung erfolgt bestmöglicherweise. Verwenden Sie maxAgeHours: 0, wenn diese Anwendung auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML-Tags einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -800,7 +800,7 @@
           "message": "Wenn wahr, werden leichte HTML-Tags im zurückgegebenen Text enthalten, anstelle von reinem Markdown-Text. Verwenden Sie maxAgeHours: 0, wenn dies auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Abschnitte einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Best‑Effort. Nur Inhalte einbeziehen, die in diese semantischen Seitenabschnitte klassifiziert wurden. Die Abschnittsklassifizierung kann für einige Seiten fehlen oder unvollständig sein; prüfen Sie die Ausgabe, wenn strenge Filterung nötig ist. Verwenden Sie maxAgeHours: 0, wenn dies für frisch abgerufene Inhalte gelten soll."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -932,7 +932,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Text"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Zusätzliche Eigenschaften"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.cHJvcGVydGllcw.display_name": {
@@ -1068,7 +1068,7 @@
           "message": "Gibt die Antwort als Server-Sent-Event-Stream zurück.  Lassen Sie dies deaktiviert, sofern der Aufrufer keine SSE verarbeitet: Eine Aktion gibt die gesamte Antwort zurück."
         },
         "app.RXhh.action.YW5zd2Vy.display_name": {
-          "source": "Answer a Question",
+          "source": "Answer a question",
           "message": "Eine Frage beantworten"
         },
         "app.RXhh.action.YW5zd2Vy.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Eine Beschreibung der gewünschten Antwort nach [JSON Schema Draft 7](https://json-schema.org/draft-07), die aus dem Ergebnis strukturierte Daten statt Fließtext macht."
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Zusätzliche Eigenschaften"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "Der zweibuchstabige ISO-Ländercode des Benutzers, z. B. US."
         },
         "app.RXhh.action.Y29udGVudHM.display_name": {
-          "source": "Get Contents",
+          "source": "Get contents",
           "message": "Inhalte abrufen"
         },
         "app.RXhh.action.Y29udGVudHM.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Optionen für die Textextraktion je Ergebnis."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Abschnitte ausschließen"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Inhalt, der diesen semantischen Seitenabschnitten zugeordnet ist, ausschließen. Die Abschnittsklassifizierung erfolgt bestmöglicherweise. Verwenden Sie maxAgeHours: 0, wenn diese Anwendung auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML-Tags einbeziehen"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Wenn wahr, werden leichte HTML-Tags im zurückgegebenen Text enthalten, anstelle von reinem Markdown-Text. Verwenden Sie maxAgeHours: 0, wenn dies auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Abschnitte einbeziehen"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "Best‑Effort. Nur Inhalte einbeziehen, die in diese semantischen Seitenabschnitte klassifiziert wurden. Die Abschnittsklassifizierung kann für einige Seiten fehlen oder unvollständig sein; prüfen Sie die Ausgabe, wenn strenge Filterung nötig ist. Verwenden Sie maxAgeHours: 0, wenn dies für frisch abgerufene Inhalte gelten soll."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "Veraltet und wird in einer zukünftigen Version entfernt. Derzeit ignoriert. Highlights übergeben: true für Standard-Highlights oder { query }, um die Auswahl mit Ihrer eigenen Abfrage zu steuern."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "Maximale Anzahl an Zeichen, die für Hervorhebungen zurückgegeben werden. Steuert die Gesamtlänge des zurückgegebenen Hervorhebungstextes pro URL. Höchstwert: 10000. Nicht kompatibel mit highlights.dynamic."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Anzahl Sätze"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Zusätzlich zu übergebende Parameter."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Codeblöcke"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Anzahl Codeblöcke, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Bild-Links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Anzahl URLs, die von jeder Webseite zurückgegeben werden sollen."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Reiche Bild-Links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Anzahl reicher Bild-Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Reiche Links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "Begriff, um bestimmte Unterseiten der Suchergebnisse zu finden. Kann eine einzelne Zeichenfolge oder ein Array von Zeichenfolgen sein."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
-          "source": "Find Similar Links",
+          "source": "Find similar links",
           "message": "Ähnliche Links finden"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "Zusätzlich zu übergebende Parameter."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Codeblöcke"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Anzahl Codeblöcke, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "Anzahl URLs, die von jeder Webseite zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Reiche Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Anzahl reicher Bild-Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Reiche Links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Veraltet und wird in einer zukünftigen Version entfernt. Derzeit ignoriert. Highlights übergeben: true für Standard-Highlights oder { query }, um die Auswahl mit Ihrer eigenen Abfrage zu steuern."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "Maximale Anzahl an Zeichen, die für Hervorhebungen zurückgegeben werden. Steuert die Gesamtlänge des zurückgegebenen Hervorhebungstextes pro URL. Höchstwert: 10000. Nicht kompatibel mit highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Anzahl Sätze"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Bevorzugt"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl-Timeout"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Das Zeitlimit für das Live-Crawling in Millisekunden."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Max. Alter in Stunden"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Höchstalter zwischengespeicherter Inhalte in Stunden. Positive Werte verwenden zwischengespeicherte Inhalte, sofern sie jünger als so viele Stunden sind; 0 ruft frische Inhalte ab und ist der unterstützte Weg, Textdarstellungsoptionen auf neu abgerufene Seiten anzuwenden; -1 verwendet immer den Cache; wird der Wert weggelassen, greift das Ersatzabrufverfahren, wenn keine zwischengespeicherten Inhalte verfügbar sind. Der höchste unterstützte Wert beträgt 720 Stunden."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Unterseitenziel"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Optionen für die Textextraktion je Ergebnis."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Abschnitte ausschließen"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "Inhalt, der diesen semantischen Seitenabschnitten zugeordnet ist, ausschließen. Die Abschnittsklassifizierung erfolgt bestmöglicherweise. Verwenden Sie maxAgeHours: 0, wenn diese Anwendung auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML-Tags einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "Wenn wahr, werden leichte HTML-Tags im zurückgegebenen Text enthalten, anstelle von reinem Markdown-Text. Verwenden Sie maxAgeHours: 0, wenn dies auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Abschnitte einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "Best‑Effort. Nur Inhalte einbeziehen, die in diese semantischen Seitenabschnitte klassifiziert wurden. Die Abschnittsklassifizierung kann für einige Seiten fehlen oder unvollständig sein; prüfen Sie die Ausgabe, wenn strenge Filterung nötig ist. Verwenden Sie maxAgeHours: 0, wenn dies für frisch abgerufene Inhalte gelten soll."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "Es werden nur Links mit einem Veröffentlichungsdatum vor diesem Zeitpunkt zurückgegeben. Muss im ISO-8601-Format angegeben werden."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Start a Research Run",
+          "source": "Start a research run",
           "message": "Einen Rechercheauftrag starten"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "Optionale Ausgabengrenze je Auftrag für die abgerechneten Aufwandsstufen `auto` und `max`. Aufträge, die früher fertig werden, können weniger als die Grenze kosten."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.display_name": {
-          "source": "Max Cost Dollars",
+          "source": "Max cost dollars",
           "message": "Max. Kosten in Dollar"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.short_desc": {
@@ -2484,7 +2484,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Kommagetrennte Beta-Feature-Token zur Aktivierung experimenteller Funktionen."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.display_name": {
-          "source": "List Research Runs",
+          "source": "List research runs",
           "message": "Rechercheaufträge auflisten"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.display_name": {
-          "source": "Last Event ID",
+          "source": "Last event ID",
           "message": "Letzte Ereignis-ID"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Agentenauftrags-ID. Neue Auftrags-IDs werden mit dem Präfix `agent_run_` zurückgegeben."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "Agentenauftrags-ID. Neue Auftrags-IDs werden mit dem Präfix `agent_run_` zurückgegeben."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create a Batch",
+          "source": "Create a batch",
           "message": "Einen Stapel erstellen"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "Vom Aufrufer bereitgestellte Metadaten, die beim Stapel gespeichert werden."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Stapel auflisten"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Abgeschlossen"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "Stapel-ID."
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Stapel-ID."
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3004,7 +3004,7 @@
           "message": "Stapel-ID."
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.display_name": {
-          "source": "Create a Search Monitor",
+          "source": "Create a search monitor",
           "message": "Einen Suchmonitor erstellen"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Zusätzlich zu übergebende Parameter."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Codeblöcke"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Anzahl Codeblöcke, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Anzahl URLs, die von jeder Webseite zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Reiche Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "Anzahl reicher Bild-Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Reiche Links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "Anzahl reicher Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "Leere Ergebnisse filtern"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "Veraltet und wird in einer zukünftigen Version entfernt. Derzeit ignoriert. Highlights übergeben: true für Standard-Highlights oder { query }, um die Auswahl mit Ihrer eigenen Abfrage zu steuern."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3224,7 +3224,7 @@
           "message": "Maximale Anzahl an Zeichen, die für Hervorhebungen zurückgegeben werden. Steuert die Gesamtlänge des zurückgegebenen Hervorhebungstextes pro URL. Höchstwert: 10000. Nicht kompatibel mit highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Anzahl Sätze"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Crawler-Strategie zum Abrufen von Seiteninhalten"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl-Timeout"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "Das Zeitlimit für das Live-Crawling in Millisekunden."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Max. Alter in Stunden"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -3308,7 +3308,7 @@
           "message": "Höchstalter zwischengespeicherter Inhalte in Stunden. Positive Werte verwenden zwischengespeicherte Inhalte, sofern sie jünger als so viele Stunden sind; 0 ruft frische Inhalte ab und ist der unterstützte Weg, Textdarstellungsoptionen auf neu abgerufene Seiten anzuwenden; -1 verwendet immer den Cache; wird der Wert weggelassen, greift das Ersatzabrufverfahren, wenn keine zwischengespeicherten Inhalte verfügbar sind. Der höchste unterstützte Wert beträgt 720 Stunden."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Unterseitenziel"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -3344,7 +3344,7 @@
           "message": "Rückgabe einer von einer LLM generierten Zusammenfassung. Übergeben Sie `true` für Standardwerte oder ein Objekt mit `query` und `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Max. Tokens"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -3380,7 +3380,7 @@
           "message": "Optionen für die Textextraktion je Ergebnis."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Abschnitte ausschließen"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "Inhalt, der diesen semantischen Seitenabschnitten zugeordnet ist, ausschließen. Die Abschnittsklassifizierung erfolgt bestmöglicherweise. Verwenden Sie maxAgeHours: 0, wenn diese Anwendung auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML-Tags einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "Wenn wahr, werden leichte HTML-Tags im zurückgegebenen Text enthalten, anstelle von reinem Markdown-Text. Verwenden Sie maxAgeHours: 0, wenn dies auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Abschnitte einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -3416,7 +3416,7 @@
           "message": "Best‑Effort. Nur Inhalte einbeziehen, die in diese semantischen Seitenabschnitte klassifiziert wurden. Die Abschnittsklassifizierung kann für einige Seiten fehlen oder unvollständig sein; prüfen Sie die Ausgabe, wenn strenge Filterung nötig ist. Verwenden Sie maxAgeHours: 0, wenn dies für frisch abgerufene Inhalte gelten soll."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Vollständig"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "Domains ausschließen"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -3464,7 +3464,7 @@
           "message": "Diese Domänen aus Suchergebnissen ausschließen."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "Domains einschließen"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Einschränkung der Suchergebnisse auf diese Domänen."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "Anzahl Ergebnisse"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -3608,7 +3608,7 @@
           "message": "Text"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Zusätzliche Eigenschaften"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -3636,7 +3636,7 @@
           "message": "Schlüssel-Wert-Paare, die bei jeder Webhook-Lieferung zurückgegeben werden, damit ein Empfänger Aktualisierungen weiterleiten kann, ohne den Monitor nachzuschlagen."
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.display_name": {
-          "source": "List Search Monitors",
+          "source": "List search monitors",
           "message": "Suchmonitore auflisten"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "Veraltet: Verwenden Sie stattdessen Highlights oder Text. Gibt die Seiteninhalte als zusammengefasste Kontextzeichenfolge zurück."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "Zusätzlich zu übergebende Parameter."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "Codeblöcke"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Anzahl Codeblöcke, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Anzahl URLs, die von jeder Webseite zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "Reiche Bild-Links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Anzahl reicher Bild-Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "Reiche Links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "Anzahl reicher Links, die für jedes Ergebnis zurückgegeben werden sollen."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "Leere Ergebnisse filtern"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Veraltet und wird in einer zukünftigen Version entfernt. Derzeit ignoriert. Highlights übergeben: true für Standard-Highlights oder { query }, um die Auswahl mit Ihrer eigenen Abfrage zu steuern."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "Maximale Anzahl an Zeichen, die für Hervorhebungen zurückgegeben werden. Steuert die Gesamtlänge des zurückgegebenen Hervorhebungstextes pro URL. Höchstwert: 10000. Nicht kompatibel mit highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "Anzahl Sätze"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "Crawler-Strategie zum Abrufen von Seiteninhalten"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl-Timeout"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "Das Zeitlimit für das Live-Crawling in Millisekunden."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "Max. Alter in Stunden"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "Höchstalter zwischengespeicherter Inhalte in Stunden. Positive Werte verwenden zwischengespeicherte Inhalte, sofern sie jünger als so viele Stunden sind; 0 ruft frische Inhalte ab und ist der unterstützte Weg, Textdarstellungsoptionen auf neu abgerufene Seiten anzuwenden; -1 verwendet immer den Cache; wird der Wert weggelassen, greift das Ersatzabrufverfahren, wenn keine zwischengespeicherten Inhalte verfügbar sind. Der höchste unterstützte Wert beträgt 720 Stunden."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "Unterseitenziel"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "Rückgabe einer von einer LLM generierten Zusammenfassung. Übergeben Sie `true` für Standardwerte oder ein Objekt mit `query` und `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Max. Tokens"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "Optionen für die Textextraktion je Ergebnis."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "Abschnitte ausschließen"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Inhalt, der diesen semantischen Seitenabschnitten zugeordnet ist, ausschließen. Die Abschnittsklassifizierung erfolgt bestmöglicherweise. Verwenden Sie maxAgeHours: 0, wenn diese Anwendung auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML-Tags einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -4160,7 +4160,7 @@
           "message": "Wenn wahr, werden leichte HTML-Tags im zurückgegebenen Text enthalten, anstelle von reinem Markdown-Text. Verwenden Sie maxAgeHours: 0, wenn dies auf frisch abgerufene Inhalte angewendet werden soll."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "Abschnitte einbeziehen"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "Best‑Effort. Nur Inhalte einbeziehen, die in diese semantischen Seitenabschnitte klassifiziert wurden. Die Abschnittsklassifizierung kann für einige Seiten fehlen oder unvollständig sein; prüfen Sie die Ausgabe, wenn strenge Filterung nötig ist. Verwenden Sie maxAgeHours: 0, wenn dies für frisch abgerufene Inhalte gelten soll."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "Max. Zeichenanzahl"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -4208,7 +4208,7 @@
           "message": "Vollständig"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "Domains ausschließen"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "Diese Domänen aus Suchergebnissen ausschließen."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "Domains einschließen"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -4232,7 +4232,7 @@
           "message": "Einschränkung der Suchergebnisse auf diese Domänen."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "Anzahl Ergebnisse"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "Text"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "Zusätzliche Eigenschaften"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -4416,7 +4416,7 @@
           "message": "Die Monitor-ID"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.display_name": {
-          "source": "Act on Several Monitors",
+          "source": "Act on several monitors",
           "message": "Auf mehrere Monitore anwenden"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.short_desc": {

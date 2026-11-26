@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Index durchsuchen"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Wenn `true` (Standardwert `false`), wird die Dokumentversion als Teil eines Treffers zurückgegeben"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
-          "source": "k-NN Search",
+          "source": "k-NN search",
           "message": "k-NN-Suche"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "Optionaler Mindestwert-Schwellenwert"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
-          "source": "Neural Search",
+          "source": "Neural search",
           "message": "Neuronale Suche"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Optionaler Mindestwert-Schwellenwert"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
-          "source": "Hybrid Search",
+          "source": "Hybrid search",
           "message": "Hybride Suche"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
@@ -1696,7 +1696,7 @@
           "message": "Maximale Anzahl von Suchergebnissen, die für jede hybride Unterabfrage von jedem Shard abgerufen werden sollen"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector Index",
+          "source": "Create Vector index",
           "message": "Vektorindex erstellen"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Wartezeit auf eine Antwort"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Dokument hinzufügen"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "Wenn `true` (Standard `false`), muss das Ziel ein Index-Alias sein"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Massenoperationen"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Wenn 'true', muss das Ziel ein Index-Alias sein"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Scroll-Suche"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

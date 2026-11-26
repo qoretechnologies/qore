@@ -712,7 +712,7 @@
           "message": "メタデータを更新するコンテンツ世代。省略した場合はライブバージョンが使用されます"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "オブジェクトのアップロード"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "オブジェクトの現在の世代がこの値と一致する場合にのみ書き込みを実行します。オブジェクトがまだ存在しない場合にのみ書き込む（上書きではなく安全な新規作成にする）には `0` を渡します"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "オブジェクトのダウンロード"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "ダウンロードするコンテンツ世代。省略した場合はライブバージョンが使用されます"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "オブジェクトの削除"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "削除するコンテンツ世代。省略した場合はライブバージョンが削除されます。バージョニングが有効なバケットでは、ライブバージョンを削除しても以前の世代はそのまま残り、完全に削除するには特定の世代を指定する必要があります"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "オブジェクトをコピー"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "キー/値ペアとしてのコピー用のユーザー定義メタデータ。省略時はソースのメタデータが保持されます"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "オブジェクトの合成"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "キー/値ペア形式の合成オブジェクトのユーザー定義メタデータ"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "署名付きURLの作成"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

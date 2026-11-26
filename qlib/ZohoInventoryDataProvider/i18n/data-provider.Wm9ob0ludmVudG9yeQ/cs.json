@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Vyhledat kontakty"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Kontakt k odstranění"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
-          "source": "Mark Contact Active/Inactive",
+          "source": "Mark Contact active/inactive",
           "message": "Označit kontakt jako aktivní/neaktivní"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "`True` pro označení jako aktivní, `False` pro označení jako neaktivní"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
-          "source": "List Contact Persons",
+          "source": "List Contact persons",
           "message": "Zobrazit seznam kontaktních osob"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Nadřazený kontakt"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Create Contact Person",
+          "source": "Create Contact person",
           "message": "Vytvořit kontaktní osobu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Pracovní pozice nebo funkce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Get Contact Person",
+          "source": "Get Contact person",
           "message": "Získat kontaktní osobu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Kontaktní osoba k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Update Contact Person",
+          "source": "Update Contact person",
           "message": "Aktualizovat kontaktní osobu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Pracovní pozice nebo funkce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Delete Contact Person",
+          "source": "Delete Contact person",
           "message": "Smazat kontaktní osobu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Kontaktní osoba ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
-          "source": "Mark Contact Person Primary",
+          "source": "Mark Contact person primary",
           "message": "Označit kontaktní osobu jako primární"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Kontaktní osoba k označení jako primární"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Zobrazit položky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Prodejní a nákupní položky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Vytvořit položku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Skladový účet"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Získat položku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Položka k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Aktualizovat položku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "Nákupní cena položky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
-          "source": "Mark Item Active/Inactive",
+          "source": "Mark item active/inactive",
           "message": "Označit položku jako aktivní/neaktivní"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Stav aktivity"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Smazat položku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Položka ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
-          "source": "List Item Groups",
+          "source": "List item groups",
           "message": "Zobrazit seznam skupin položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Filtrovat podle názvu skupiny"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Create Item Group",
+          "source": "Create item group",
           "message": "Vytvořit skupinu položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Seznam položek ve skupině s atributy"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Get Item Group",
+          "source": "Get item group",
           "message": "Získat skupinu položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Skupina položek k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Update Item Group",
+          "source": "Update item group",
           "message": "Aktualizovat skupinu položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Položky ve skupině"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Delete Item Group",
+          "source": "Delete item group",
           "message": "Smazat skupinu položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "Skupina položek ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
-          "source": "List Item Adjustments",
+          "source": "List item adjustments",
           "message": "Zobrazit seznam úprav položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Organizace Zoho Inventory"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Create Item Adjustment",
+          "source": "Create item adjustment",
           "message": "Vytvořit úpravu položky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Referenční číslo úpravy"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Get Item Adjustment",
+          "source": "Get item adjustment",
           "message": "Získat úpravu zásob"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Úprava zásob k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Delete Item Adjustment",
+          "source": "Delete item adjustment",
           "message": "Smazat úpravu zásob"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Úprava zásob ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "Zobrazit balíky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Filtrovat podle čísla balíku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
-          "source": "Create Package",
+          "source": "Create package",
           "message": "Vytvořit balík"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Vlastní číslo balíku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
-          "source": "Get Package",
+          "source": "Get package",
           "message": "Získat balík"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Balík k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
-          "source": "Update Package",
+          "source": "Update package",
           "message": "Aktualizovat balík"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "Poznámky k balíku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
-          "source": "Delete Package",
+          "source": "Delete package",
           "message": "Smazat balík"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Balík ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "Zobrazit nákupní objednávky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Vyfakturované nákupní objednávky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
+          "source": "Create purchase order",
           "message": "Vytvořit nákupní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Poznámky k nákupní objednávce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "Získat nákupní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Nákupní objednávka, která se má načíst"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
+          "source": "Update purchase order",
           "message": "Aktualizovat nákupní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Poznámky k nákupní objednávce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
+          "source": "Delete purchase order",
           "message": "Smazat nákupní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "Nákupní objednávka ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "Zobrazit prodejní objednávky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Neplatné prodejní objednávky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Vytvořit prodejní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Obchodní podmínky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Získat prodejní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "Prodejní objednávka, která se má načíst"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Aktualizovat prodejní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "Obchodní podmínky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Odstranit prodejní objednávku"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Prodejní objednávka k odstranění"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Vypsat faktury"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Částečně zaplacené faktury"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Vytvořit fakturu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Přidružená prodejní objednávka"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Získat fakturu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Faktura k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Aktualizovat fakturu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Referenční číslo"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Smazat fakturu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Faktura ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
-          "source": "List Shipment Orders",
+          "source": "List shipment orders",
           "message": "Zobrazit seznam zásilek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "Filtrovat podle stavu zásilky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Create Shipment Order",
+          "source": "Create shipment order",
           "message": "Vytvořit objednávku zásilky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Poznámky k zásilce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Get Shipment Order",
+          "source": "Get shipment order",
           "message": "Získat objednávku zásilky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Objednávka zásilky k načtení"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Update Shipment Order",
+          "source": "Update shipment order",
           "message": "Aktualizovat objednávku zásilky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "Poznámky k zásilce"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Delete Shipment Order",
+          "source": "Delete shipment order",
           "message": "Smazat objednávku zásilky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "Objednávka zásilky ke smazání"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
-          "source": "Mark Shipment Delivered",
+          "source": "Mark shipment delivered",
           "message": "Označit zásilku jako doručenou"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
@@ -3076,7 +3076,7 @@
           "message": "Jak často kontrolovat nové kontakty (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nová faktura"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Jak často kontrolovat nové faktury (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "New Item Adjustment",
+          "source": "New item adjustment",
           "message": "Nová úprava položky"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Jak často kontrolovat nové úpravy položek (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "New Item Group",
+          "source": "New item group",
           "message": "Nová skupina položek"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Jak často kontrolovat nové skupiny položek (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Nová položka"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "Jak často kontrolovat nové položky (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
-          "source": "New Package",
+          "source": "New package",
           "message": "Nový balík"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "Jak často kontrolovat nové balíky (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nová objednávka"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Jak často kontrolovat nové nákupní objednávky (v sekundách)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "Nová prodejní objednávka"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {

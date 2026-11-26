@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
-          "source": "Create Issue",
+          "source": "Create issue",
           "message": "建立議題"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
@@ -524,7 +524,7 @@
           "message": "用於建立子議題的父議題"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
-          "source": "Search Issues",
+          "source": "Search issues",
           "message": "搜尋問題"
         },
         "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
@@ -640,7 +640,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
-          "source": "Get Issue",
+          "source": "Get issue",
           "message": "取得問題"
         },
         "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
@@ -664,7 +664,7 @@
           "message": "要擷取的議題"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
-          "source": "Update Issue",
+          "source": "Update issue",
           "message": "更新問題"
         },
         "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
@@ -848,7 +848,7 @@
           "message": "父問題 ID（用於將此問題設為子問題）"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
-          "source": "Archive Issue",
+          "source": "Archive issue",
           "message": "封存議題"
         },
         "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "要封存的議題"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create Comment",
+          "source": "Create comment",
           "message": "建立評論"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Markdown 格式的評論本文/內容"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "建立專案"
         },
         "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -1044,7 +1044,7 @@
           "message": "專案的目標完成日期"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
-          "source": "Search Projects",
+          "source": "Search projects",
           "message": "搜尋專案"
         },
         "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
-          "source": "Create Cycle",
+          "source": "Create cycle",
           "message": "建立週期"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "週期的結束日期"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
-          "source": "Search Cycles",
+          "source": "Search cycles",
           "message": "搜尋週期"
         },
         "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create Label",
+          "source": "Create label",
           "message": "建立標籤"
         },
         "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "要在其中建立標籤的團隊 (工作區標籤請留空)"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
-          "source": "Search Labels",
+          "source": "Search labels",
           "message": "搜尋標籤"
         },
         "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
-          "source": "Search Teams",
+          "source": "Search teams",
           "message": "搜尋團隊"
         },
         "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "要傳回的結果最大數量"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
-          "source": "Get Team",
+          "source": "Get team",
           "message": "取得團隊"
         },
         "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "要擷取的團隊"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
-          "source": "Issue Created",
+          "source": "Issue created",
           "message": "議題已建立"
         },
         "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "僅針對在此團隊中建立的議題觸發（選填）"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
-          "source": "Issue Updated",
+          "source": "Issue updated",
           "message": "議題已更新"
         },
         "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "僅針對在此團隊中更新的議題觸發（選填）"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
-          "source": "Comment Created",
+          "source": "Comment created",
           "message": "已建立評論"
         },
         "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {

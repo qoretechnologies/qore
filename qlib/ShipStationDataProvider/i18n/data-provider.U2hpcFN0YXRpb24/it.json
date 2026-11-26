@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Elenca ordini"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -396,7 +396,7 @@
           "message": "Filtra gli ordini in base al negozio di provenienza"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Ottieni ordine"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
@@ -420,7 +420,7 @@
           "message": "L'ID univoco dell'ordine ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Crea ordine"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "Array di ID dei tag da applicare all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update Order",
+          "source": "Update order",
           "message": "Aggiorna ordine"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -2464,7 +2464,7 @@
           "message": "Array di ID dei tag da applicare all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
-          "source": "Delete Order",
+          "source": "Delete order",
           "message": "Elimina ordine"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
@@ -2488,7 +2488,7 @@
           "message": "L'ID ordine ShipStation da eliminare"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
-          "source": "Mark Order as Shipped",
+          "source": "Mark order as shipped",
           "message": "Contrassegna ordine come spedito"
         },
         "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "Indica se inviare una notifica di spedizione al canale di vendita (marketplace)"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
-          "source": "Add Tag to Order",
+          "source": "Add tag to order",
           "message": "Aggiungi tag all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Seleziona il tag da aggiungere all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
-          "source": "Remove Tag from Order",
+          "source": "Remove tag from order",
           "message": "Rimuovi tag dall'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
@@ -2644,7 +2644,7 @@
           "message": "Seleziona il tag da rimuovere dall'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
-          "source": "Assign User to Order",
+          "source": "Assign user to order",
           "message": "Assegna utente all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Seleziona l'utente da assegnare all'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
-          "source": "Unassign User from Order",
+          "source": "Unassign user from order",
           "message": "Rimuovi assegnazione utente dall'ordine"
         },
         "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Array di ID ordine da cui rimuovere l'assegnazione dell'utente"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
-          "source": "List Carriers",
+          "source": "List carriers",
           "message": "Elenca corrieri"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
@@ -2716,7 +2716,7 @@
           "message": "Recupera un elenco di tutti i corrieri collegati al tuo account ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
-          "source": "Get Carrier",
+          "source": "Get carrier",
           "message": "Ottieni corriere"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
@@ -2740,7 +2740,7 @@
           "message": "Seleziona il corriere di cui recuperare i dettagli"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
-          "source": "List Services",
+          "source": "List services",
           "message": "Elenca servizi"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Seleziona il corriere per elencare i servizi disponibili"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "Elenca colli"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Seleziona il corriere per elencare i tipi di collo disponibili"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
-          "source": "Add Funds",
+          "source": "Add funds",
           "message": "Aggiungi fondi"
         },
         "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
@@ -2824,7 +2824,7 @@
           "message": "L'importo da aggiungere all'account del corriere (in USD)"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Elenca clienti"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "Recupera un elenco di clienti da ShipStation con filtri facoltativi."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
+          "source": "Get customer",
           "message": "Recupera cliente"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "L'ID univoco del cliente ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Elenca prodotti"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "Recupera un elenco di prodotti da ShipStation con filtri facoltativi per SKU, nome o categoria."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "Ottieni prodotto"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "L'ID univoco del prodotto ShipStation"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "Aggiorna Prodotto"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Il codice del paese di origine per la dogana"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "Elenca spedizioni"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -3184,7 +3184,7 @@
           "message": "Filtra le spedizioni per corriere"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "Elenca fulfillment"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Recupera un elenco di evasioni (spedizioni completate) da ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
-          "source": "Void Label",
+          "source": "Void label",
           "message": "Annulla etichetta"
         },
         "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "L'ID spedizione ShipStation univoco dell'etichetta da annullare"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
-          "source": "List Stores",
+          "source": "List stores",
           "message": "Elenca negozi"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "Recupera un elenco di tutti i negozi (canali di vendita) collegati al tuo account ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
-          "source": "Get Store",
+          "source": "Get store",
           "message": "Ottieni negozio"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Seleziona il negozio di cui recuperare i dettagli"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
-          "source": "Update Store",
+          "source": "Update store",
           "message": "Aggiorna negozio"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "Array di mappature dello stato per la sincronizzazione degli stati degli ordini"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Deactivate Store",
+          "source": "Deactivate store",
           "message": "Disattiva negozio"
         },
         "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "Seleziona il negozio da disattivare"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
-          "source": "Reactivate Store",
+          "source": "Reactivate store",
           "message": "Riattiva negozio"
         },
         "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
@@ -3400,7 +3400,7 @@
           "message": "Seleziona il negozio da riattivare"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
-          "source": "Refresh Store",
+          "source": "Refresh store",
           "message": "Aggiorna negozio"
         },
         "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
@@ -3436,7 +3436,7 @@
           "message": "La data da cui avviare l'aggiornamento. Se non specificata, aggiorna gli ordini recenti."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
-          "source": "List Marketplaces",
+          "source": "List marketplaces",
           "message": "Elenca marketplace"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "Recupera un elenco di tutti i marketplace che possono essere collegati a ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
-          "source": "List Warehouses",
+          "source": "List warehouses",
           "message": "Elenca warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "Recupera un elenco di tutti i magazzini (luoghi di partenza spedizione) nel tuo account ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
-          "source": "Get Warehouse",
+          "source": "Get warehouse",
           "message": "Ottieni warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "Seleziona il magazzino di cui recuperare i dettagli"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Create Warehouse",
+          "source": "Create warehouse",
           "message": "Crea warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -3832,7 +3832,7 @@
           "message": "Indica se questo magazzino deve essere quello predefinito per i nuovi ordini"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
-          "source": "Update Warehouse",
+          "source": "Update warehouse",
           "message": "Aggiorna warehouse"
         },
         "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
@@ -4192,7 +4192,7 @@
           "message": "Indica se questo magazzino deve essere quello predefinito per i nuovi ordini"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Elenca tag"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
@@ -4204,7 +4204,7 @@
           "message": "Recupera un elenco di tutti i tag disponibili per gli ordini."
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Elenca utenti"
         },
         "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
@@ -4216,7 +4216,7 @@
           "message": "Recupera un elenco di tutti gli utenti nel tuo account ShipStation."
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Ordine creato/aggiornato"
         },
         "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
@@ -4240,7 +4240,7 @@
           "message": "Filtra facoltativamente gli eventi per uno specifico negozio"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
-          "source": "Order Created/Updated (with Items)",
+          "source": "Order created/updated (with items)",
           "message": "Ordine creato/aggiornato (con articoli)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
@@ -4264,7 +4264,7 @@
           "message": "Filtra facoltativamente gli eventi per uno specifico negozio"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
-          "source": "Label Created",
+          "source": "Label created",
           "message": "Etichetta creata"
         },
         "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
@@ -4288,7 +4288,7 @@
           "message": "Filtra facoltativamente gli eventi per uno specifico negozio"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
-          "source": "Label Created (with Items)",
+          "source": "Label created (with items)",
           "message": "Etichetta creata (con articoli)"
         },
         "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {

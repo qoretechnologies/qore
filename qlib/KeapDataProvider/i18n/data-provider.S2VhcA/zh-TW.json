@@ -684,7 +684,7 @@
           "message": "要刪除的聯絡人"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
+          "source": "Merge contacts",
           "message": "合併聯絡人"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
@@ -712,7 +712,7 @@
           "message": "要合併並刪除的聯絡人"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "列出聯絡人"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -804,7 +804,7 @@
           "message": "聯絡人 ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
+          "source": "Create a company",
           "message": "建立公司"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
@@ -852,7 +852,7 @@
           "message": "公司網站"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
+          "source": "Update a company",
           "message": "更新公司"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
@@ -904,7 +904,7 @@
           "message": "公司網站"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
+          "source": "Delete a company",
           "message": "刪除公司"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
@@ -924,7 +924,7 @@
           "message": "要刪除的公司"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "列出公司"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
@@ -980,7 +980,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
+          "source": "Get a company",
           "message": "取得公司"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "公司 ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "建立商機"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "商機備註"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "更新商機"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "商機備註"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "刪除商機"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "要刪除的商機"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "列出商機"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "取得商機"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "商機 ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "建立訂單"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "促銷代碼"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "取得訂單"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "訂單 ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "建立標籤"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "標籤類別"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "刪除標籤"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "要刪除的標籤"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to Contact",
           "message": "套用標籤至聯絡人"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "整數標籤 ID 清單"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from Contact",
           "message": "從聯絡人移除標籤"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "要移除的標籤"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "取得標籤"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "標籤 ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "建立備註"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "備註類型"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "更新備註"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "備註本文"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "刪除備註"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "要刪除的筆記"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "列出筆記"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "建立任務"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "指派的使用者"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "更新任務"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "任務完成狀態"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "刪除任務"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "要刪除的任務"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "取得任務"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "任務 ID"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "列出電子郵件"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "上傳檔案"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "檔案可見度"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
+          "source": "Get a file",
           "message": "取得檔案"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "要擷取的檔案"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
+          "source": "Delete a file",
           "message": "刪除檔案"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "要刪除的檔案"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "列出檔案"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "取得商品"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "產品 ID"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "列出行銷活動"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
+          "source": "List affiliates",
           "message": "列出聯盟夥伴"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
@@ -2256,7 +2256,7 @@
           "message": "最大結果數"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
+          "source": "Contact added",
           "message": "已新增聯絡人"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "在 Keap 中建立新聯絡人時觸發"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "聯絡人已更新"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "在 Keap 中更新聯絡人時觸發"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
+          "source": "Tag applied",
           "message": "已套用標籤"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
@@ -2292,7 +2292,7 @@
           "message": "在 Keap 中將標籤套用至聯絡人時觸發"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
+          "source": "Opportunity added",
           "message": "已新增商機"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "在 Keap 中建立新商機時觸發"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
+          "source": "Order added",
           "message": "已新增訂單"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "在 Keap 中建立新訂單時觸發"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
+          "source": "Task created",
           "message": "已建立工作"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "在 Keap 中建立新工作時觸發"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
+          "source": "Note added",
           "message": "已新增備忘錄"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {

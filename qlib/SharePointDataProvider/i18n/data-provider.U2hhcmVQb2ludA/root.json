@@ -1960,8 +1960,8 @@
           "message": "The list item to address"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
-          "message": "Document Added"
+          "source": "Document added",
+          "message": "Document added"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
           "source": "Trigger when a document is added to a library",
@@ -1972,8 +1972,8 @@
           "message": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
-          "message": "Document Modified"
+          "source": "Document modified",
+          "message": "Document modified"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
           "source": "Trigger when a document is modified",
@@ -1984,8 +1984,8 @@
           "message": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
-          "message": "Folder Added"
+          "source": "Folder added",
+          "message": "Folder added"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
           "source": "Trigger when a folder is added to a library",
@@ -1996,8 +1996,8 @@
           "message": "Fires when a folder is added to a document library"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
-          "message": "List Item Added"
+          "source": "List item added",
+          "message": "List item added"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {
           "source": "Trigger when an item is added to a list",

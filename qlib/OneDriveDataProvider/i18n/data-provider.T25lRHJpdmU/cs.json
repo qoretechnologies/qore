@@ -1076,7 +1076,7 @@
           "message": "Datum a čas vypršení platnosti odkazu pro sdílení"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Změna souboru nebo složky"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

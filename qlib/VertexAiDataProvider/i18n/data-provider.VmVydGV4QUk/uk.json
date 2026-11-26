@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Згенерувати вміст"
         },
         "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Посилання на раніше створений кешований ресурс вмісту (наприклад, `projects/{project}/locations/{region}/cachedContents/{id}`); значне зниження витрат для повторюваних системних підказок"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
-          "source": "Embed Text",
+          "source": "Embed text",
           "message": "Створити ембединги тексту"
         },
         "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {

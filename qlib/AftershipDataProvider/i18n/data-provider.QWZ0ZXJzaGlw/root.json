@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
-          "source": "Create Tracking",
-          "message": "Create Tracking"
+          "source": "Create tracking",
+          "message": "Create tracking"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
           "source": "Create a new tracking",
@@ -772,8 +772,8 @@
           "message": "The Aftership tracking ID to retrieve"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
-          "source": "Search Trackings",
-          "message": "Search Trackings"
+          "source": "Search trackings",
+          "message": "Search trackings"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
           "source": "Search and list trackings",
@@ -1000,8 +1000,8 @@
           "message": "Number of trackings per page (max 200)"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
-          "source": "Update Tracking",
-          "message": "Update Tracking"
+          "source": "Update tracking",
+          "message": "Update tracking"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
           "source": "Update a tracking",
@@ -1360,8 +1360,8 @@
           "message": "Shipping service method chosen at checkout"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
-          "source": "Delete Tracking",
-          "message": "Delete Tracking"
+          "source": "Delete tracking",
+          "message": "Delete tracking"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
           "source": "Delete a tracking",
@@ -1408,8 +1408,8 @@
           "message": "The Aftership tracking ID to retrack (reactivates expired trackings)"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
-          "source": "Mark as Completed",
-          "message": "Mark as Completed"
+          "source": "Mark as completed",
+          "message": "Mark as completed"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
           "source": "Mark a tracking as completed",
@@ -1504,8 +1504,8 @@
           "message": "Retrieve a list of all couriers supported by Aftership"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
-          "source": "Detect Courier",
-          "message": "Detect Courier"
+          "source": "Detect courier",
+          "message": "Detect courier"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
           "source": "Auto-detect courier from tracking number",
@@ -1636,8 +1636,8 @@
           "message": "Courier group code for multi-slug detection (e.g., `fedex-group`)"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
-          "source": "Search Returns",
-          "message": "Search Returns"
+          "source": "Search returns",
+          "message": "Search returns"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
           "source": "Search and list returns",
@@ -1824,8 +1824,8 @@
           "message": "Number of returns per page (1-50, default `10`)"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
-          "message": "Create Return"
+          "source": "Create return",
+          "message": "Create return"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
           "source": "Create a new return request",
@@ -2036,8 +2036,8 @@
           "message": "The Aftership return ID or RMA number to retrieve"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
-          "source": "Approve Return",
-          "message": "Approve Return"
+          "source": "Approve return",
+          "message": "Approve return"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
           "source": "Approve a return request",
@@ -2060,8 +2060,8 @@
           "message": "The Aftership return ID to approve"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
-          "source": "Reject Return",
-          "message": "Reject Return"
+          "source": "Reject return",
+          "message": "Reject return"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
           "source": "Reject a return request",
@@ -2096,8 +2096,8 @@
           "message": "Reason for rejecting the return"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
-          "source": "Resolve Return",
-          "message": "Resolve Return"
+          "source": "Resolve return",
+          "message": "Resolve return"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
           "source": "Resolve a return",
@@ -2120,8 +2120,8 @@
           "message": "The Aftership return ID to mark as resolved"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
-          "source": "Add Return Shipment",
-          "message": "Add Return Shipment"
+          "source": "Add return shipment",
+          "message": "Add return shipment"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
           "source": "Add a shipment to a return",
@@ -2168,8 +2168,8 @@
           "message": "Courier code for the return shipment (e.g., `fedex`, `ups`)"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Tracking Status Changed",
-          "message": "Tracking Status Changed"
+          "source": "Tracking status changed",
+          "message": "Tracking status changed"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
           "source": "Watch for tracking status changes",

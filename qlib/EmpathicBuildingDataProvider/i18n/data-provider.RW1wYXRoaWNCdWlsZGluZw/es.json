@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.display_name": {
-          "source": "Create Measurements",
+          "source": "Create measurements",
           "message": "Crear mediciones"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Lista de eventos de medición para crear"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.display_name": {
-          "source": "Booking Ref",
+          "source": "Booking ref",
           "message": "Referencia de reserva"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.short_desc": {

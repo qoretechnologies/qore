@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
+          "source": "Add event from text",
           "message": "Termin aus Text hinzufügen"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Es werden keine Benachrichtigungen gesendet. Ziehen Sie für Kalendermigrationsaufgaben stattdessen die Verwendung der Methode `Events.import` in Betracht"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Ereignis erstellen"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Der Kalender, zu dem der Termin hinzugefügt werden soll"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
+          "source": "Update event",
           "message": "Termin aktualisieren"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Der Kalender, zu dem der Termin hinzugefügt werden soll"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
+          "source": "Delete event",
           "message": "Ereignis löschen"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Wenn `True`, werden gelöschte Termine (mit `status` gleich `cancelled`) in das Ergebnis einbezogen. Abgesagte Instanzen wiederkehrender Termine (nicht aber der zugrunde liegende wiederkehrende Termin) werden weiterhin einbezogen, wenn `showDeleted` und `singleEvents` beide `False` sind; wenn beide `True` sind, werden nur einzelne Instanzen gelöschter Termine zurückgegeben. Der Standardwert ist `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Termin abrufen"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Die ID des abzurufenden Termins; Termin-IDs werden im Feld `id` der von der Aktion `list-events` zurückgegebenen Termine zurückgegeben"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
+          "source": "List calendars",
           "message": "Kalender auflisten"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {

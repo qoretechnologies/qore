@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Створити рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Ідентифікатор шаблону PDF для цього рахунка-фактури"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Оновити рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Ідентифікатор шаблону PDF для цього рахунка-фактури"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Видалити рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -680,7 +680,7 @@
           "message": "Рахунок-фактура для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Отримати рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Рахунок-фактура для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Список рахунків-фактур"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -808,7 +808,7 @@
           "message": "Пошук рахунків-фактур за номером рахунку"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
+          "source": "Email invoice",
           "message": "Надіслати рахунок-фактуру електронною поштою"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Тіло електронного листа"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.display_name": {
-          "source": "Mark Invoice Status",
+          "source": "Mark invoice status",
           "message": "Позначити статус рахунка"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Позначити як чернетку"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Create Recurring Invoice",
+          "source": "Create recurring invoice",
           "message": "Створити регулярний рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "Ідентифікатор шаблону PDF для створених рахунків-фактур"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Update Recurring Invoice",
+          "source": "Update recurring invoice",
           "message": "Оновити періодичний рахунок"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1128,7 +1128,7 @@
           "message": "Ідентифікатор шаблону PDF для створених рахунків-фактур"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Get Recurring Invoice",
+          "source": "Get recurring invoice",
           "message": "Отримати регулярний рахунок-фактуру"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "Регулярний рахунок-фактура для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.display_name": {
-          "source": "List Recurring Invoices",
+          "source": "List recurring invoices",
           "message": "Список регулярних рахунків-фактур"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.short_desc": {
@@ -1184,7 +1184,7 @@
           "message": "Фільтрувати за клієнтом"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.display_name": {
-          "source": "Mark Recurring Invoice Status",
+          "source": "Mark recurring invoice status",
           "message": "Позначити статус періодичного рахунка"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Контакт, який потрібно отримати"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Пошук контактів за адресою електронної пошти"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact Status",
+          "source": "Mark Contact status",
           "message": "Позначити статус контакту"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Позначити як неактивний"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
+          "source": "Create expense",
           "message": "Створити витрату"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Номер чека або інший номер посилання"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
+          "source": "Update expense",
           "message": "Оновити витрату"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Номер чека або інший номер посилання"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
+          "source": "Delete expense",
           "message": "Видалити витрату"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Витрата для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
+          "source": "Get expense",
           "message": "Отримати витрату"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "Витрата для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
+          "source": "List expenses",
           "message": "Список витрат"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Фільтрувати витрати до цієї дати включно (`YYYY-MM-DD`)"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Create Recurring Expense",
+          "source": "Create recurring expense",
           "message": "Створити регулярні витрати"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Чи слід виставляти цю витрату клієнту"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Update Recurring Expense",
+          "source": "Update recurring expense",
           "message": "Оновити періодичну витрату"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Чи слід виставляти цю витрату клієнту"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Delete Recurring Expense",
+          "source": "Delete recurring expense",
           "message": "Видалити регулярні витрати"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2376,7 +2376,7 @@
           "message": "Регулярні витрати для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Get Recurring Expense",
+          "source": "Get recurring expense",
           "message": "Отримати регулярні витрати"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.short_desc": {
@@ -2404,7 +2404,7 @@
           "message": "Регулярні витрати для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.display_name": {
-          "source": "List Recurring Expenses",
+          "source": "List recurring expenses",
           "message": "Список регулярних витрат"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Організація Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
+          "source": "Create payment",
           "message": "Створити платіж"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Обмінний курс, якщо платіж здійснюється в іншій валюті"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
+          "source": "Update payment",
           "message": "Оновити платіж"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "Обмінний курс, якщо платіж здійснюється в іншій валюті"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
+          "source": "Delete payment",
           "message": "Видалити платіж"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
@@ -2708,7 +2708,7 @@
           "message": "Платіж для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
+          "source": "Get payment",
           "message": "Отримати платіж"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Платіж для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Список платежів"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Пошук платежів за номером чека, ідентифікатором транзакції або іншим референсом"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Повернути платіж"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Сума повернення"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
+          "source": "Create estimate",
           "message": "Створити кошторис"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Ідентифікатор шаблону PDF для цього кошторису"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
+          "source": "Update estimate",
           "message": "Оновити кошторис"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Ідентифікатор шаблону PDF для цього кошторису"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
+          "source": "Delete estimate",
           "message": "Видалити кошторис"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Кошторис для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
+          "source": "Get estimate",
           "message": "Отримати кошторис"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.short_desc": {
@@ -3236,7 +3236,7 @@
           "message": "Кошторис для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
+          "source": "List estimates",
           "message": "Список кошторисів"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Фільтрувати за клієнтом"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.display_name": {
-          "source": "Mark Estimate Status",
+          "source": "Mark estimate status",
           "message": "Позначити статус кошторису"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "Позначити як відхилений"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "Створити проєкт"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -3468,7 +3468,7 @@
           "message": "Значення бюджету (сума або години залежно від типу бюджету)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "Оновити проєкт"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -3588,7 +3588,7 @@
           "message": "Значення бюджету (сума або години залежно від типу бюджету)"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "Отримати проєкт"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -3616,7 +3616,7 @@
           "message": "Проєкт для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "Отримати список проєктів"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -3672,7 +3672,7 @@
           "message": "Пошук проєктів за назвою (частковий збіг)"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.display_name": {
-          "source": "Mark Project Status",
+          "source": "Mark project status",
           "message": "Позначити статус проєкту"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "Позначити як неактивний"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Створити позицію"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -3820,7 +3820,7 @@
           "message": "Послуги"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Оновити елемент"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -3916,7 +3916,7 @@
           "message": "Послуги"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Видалити елемент"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -3944,7 +3944,7 @@
           "message": "Елемент для видалення"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Отримати елемент"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.short_desc": {
@@ -3972,7 +3972,7 @@
           "message": "Елемент для отримання"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Список елементів"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.short_desc": {
@@ -3992,7 +3992,7 @@
           "message": "Організація Zoho Invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Новий рахунок-фактура"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.short_desc": {
@@ -4048,7 +4048,7 @@
           "message": "Як часто перевіряти наявність нових контактів (у секундах)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
+          "source": "New estimate",
           "message": "Новий кошторис"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.short_desc": {
@@ -4076,7 +4076,7 @@
           "message": "Як часто перевіряти наявність нових кошторисів (у секундах)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
+          "source": "New expense",
           "message": "Нова витрата"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.short_desc": {
@@ -4104,7 +4104,7 @@
           "message": "Як часто перевіряти наявність нових витрат (у секундах)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Новий елемент"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.short_desc": {
@@ -4132,7 +4132,7 @@
           "message": "Як часто перевіряти наявність нових товарів/послуг (у секундах)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.display_name": {
-          "source": "New Project",
+          "source": "New project",
           "message": "Новий проєкт"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.short_desc": {

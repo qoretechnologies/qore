@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "다중 채팅"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "최종 사용자를 나타내는 고유 식별자로, OpenAI가 오남용을 모니터링하고 감지하는 데 도움이 될 수 있습니다"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "파일 업로드"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "파일 이름"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "파일 삭제"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "삭제할 파일의 ID 또는 OpenAI 파일 이름"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
+          "source": "Create an assistant",
           "message": "어시스턴트 생성"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "모델이 출력 시 유효한 JSON을 생성해야 함을 지정합니다"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
+          "source": "Update assistant",
           "message": "어시스턴트 업데이트"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "모델이 출력 시 유효한 JSON을 생성해야 함을 지정합니다"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
+          "source": "Delete assistant",
           "message": "어시스턴트 삭제"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "삭제할 어시스턴트의 ID"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
+          "source": "Create a thread",
           "message": "스레드 생성"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "객체에 연결할 수 있는 16개의 키-값 쌍 세트입니다. 구조화된 형식으로 객체에 대한 추가 정보를 저장하는 데 유용할 수 있습니다. 키는 최대 64자, 값은 최대 512자까지 지정할 수 있습니다."
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
+          "source": "Update thread",
           "message": "스레드 업데이트"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "객체에 연결할 수 있는 16개의 키-값 쌍 세트입니다. 구조화된 형식으로 객체에 대한 추가 정보를 저장하는 데 유용할 수 있습니다. 키는 최대 64자, 값은 최대 512자까지 지정할 수 있습니다."
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
+          "source": "Delete thread",
           "message": "스레드 삭제"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "스레드 ID"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "모델로 요청 처리"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "최종 사용자를 나타내는 고유 식별자로, OpenAI가 오남용을 모니터링하고 감지하는 데 도움이 될 수 있습니다"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "응답 스트림"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "최종 사용자를 나타내는 고유 식별자로, OpenAI가 오남용을 모니터링하고 감지하는 데 도움이 될 수 있습니다"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
+          "source": "Create a conversation",
           "message": "대화 생성"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "대화 ID"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
+          "source": "Update a conversation",
           "message": "대화 업데이트"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6920,7 +6920,7 @@
           "message": "객체에 연결할 수 있는 16개의 키-값 쌍 세트입니다. 구조화된 형식으로 객체에 대한 추가 정보를 저장하고 API 또는 대시보드를 통해 객체를 쿼리하는 데 유용할 수 있습니다. 키는 최대 64자의 문자열이고, 값은 최대 512자의 문자열입니다."
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
+          "source": "Delete a conversation",
           "message": "대화 삭제"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "응답에 포함할 추가 필드입니다.\n\n지원되는 값은 [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) 설명서를 참조하세요."
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
+          "source": "Add items to a conversation",
           "message": "대화에 항목 추가"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -7468,7 +7468,7 @@
           "message": "응답에 포함할 추가 필드입니다.\n\n지원되는 값은 [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) 설명서를 참조하세요."
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
+          "source": "Delete a conversation item",
           "message": "대화 항목 삭제"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7504,7 +7504,7 @@
           "message": "대화 내의 항목이며, 선택한 대화에서 목록이 채워집니다"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
+          "source": "Cancel a response",
           "message": "응답 취소"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -7624,7 +7624,7 @@
           "message": "응답에 포함할 추가 필드입니다.\n\n지원되는 값은 [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) 설명서를 참조하세요."
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
+          "source": "Generate an image",
           "message": "이미지 생성"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "최종 사용자를 나타내는 고유 식별자로, OpenAI가 오남용을 모니터링하고 감지하는 데 도움이 될 수 있습니다"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "오디오 전사"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {

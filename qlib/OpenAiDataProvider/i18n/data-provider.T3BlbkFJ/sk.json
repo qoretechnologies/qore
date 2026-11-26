@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "Viacnásobný chat"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Odoslať súbor"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Názov súboru"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Odstrániť súbor"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "ID alebo OpenAI názov súboru, ktorý sa má odstrániť"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
+          "source": "Create an assistant",
           "message": "Vytvoriť asistenta"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
@@ -1892,7 +1892,7 @@
           "message": "Určuje, že model musí vytvoriť platný JSON na výstup"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
+          "source": "Update assistant",
           "message": "Aktualizovať asistenta"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
@@ -2248,7 +2248,7 @@
           "message": "Určuje, že model musí vytvoriť platný JSON na výstup"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
+          "source": "Delete assistant",
           "message": "Odstrániť asistenta"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
@@ -2272,7 +2272,7 @@
           "message": "ID asistenta, ktorý sa má odstrániť"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
+          "source": "Create a thread",
           "message": "Vytvoriť vlákno"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
@@ -2536,7 +2536,7 @@
           "message": "Množina 16 párov kľúč-hodnota, ktoré je možné pripojiť k objektu. To môže byť užitočné na ukladanie dodatočných informácií o objekte v štruktúrovanom formáte. Kľúče môžu mať maximálne 64 znakov a hodnoty maximálne 512 znakov"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
+          "source": "Update thread",
           "message": "Aktualizovať vlákno"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "Množina 16 párov kľúč-hodnota, ktoré je možné pripojiť k objektu. To môže byť užitočné na ukladanie dodatočných informácií o objekte v štruktúrovanom formáte. Kľúče môžu mať maximálne 64 znakov a hodnoty maximálne 512 znakov"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
+          "source": "Delete thread",
           "message": "Odstrániť vlákno"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "ID vlákna"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "Spracovať požiadavku pomocou modelu"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -4664,7 +4664,7 @@
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "Streamovať odpoveď"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
+          "source": "Create a conversation",
           "message": "Vytvoriť konverzáciu"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6884,7 +6884,7 @@
           "message": "ID konverzácie"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
+          "source": "Update a conversation",
           "message": "Aktualizovať konverzáciu"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -6920,7 +6920,7 @@
           "message": "Sada 16 párov kľúč – hodnota, ktoré je možné pripojiť k objektu. To môže byť užitočné na ukladanie dodatočných informácií o objekte v štruktúrovanom formáte a dopytovanie sa na objekty cez API alebo panel. Kľúče sú reťazce s maximálnou dĺžkou 64 znakov; hodnoty sú reťazce s maximálnou dĺžkou 512 znakov"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
+          "source": "Delete a conversation",
           "message": "Odstrániť konverzáciu"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
@@ -7040,7 +7040,7 @@
           "message": "Dodatočné polia, ktoré sa majú zahrnúť do odpovede.\n\nPodporované hodnoty nájdete v dokumentácii k [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
+          "source": "Add items to a conversation",
           "message": "Pridať položky do konverzácie"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
@@ -7468,7 +7468,7 @@
           "message": "Dodatočné polia, ktoré sa majú zahrnúť do odpovede.\n\nPodporované hodnoty nájdete v dokumentácii k [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
+          "source": "Delete a conversation item",
           "message": "Odstrániť položku konverzácie"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
@@ -7504,7 +7504,7 @@
           "message": "Položka v rámci konverzácie; zoznam sa napĺňa z vybratej konverzácie"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
+          "source": "Cancel a response",
           "message": "Zrušiť odpoveď"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
@@ -7624,7 +7624,7 @@
           "message": "Dodatočné polia, ktoré sa majú zahrnúť do odpovede.\n\nPodporované hodnoty nájdete v dokumentácii k [parametru include](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
+          "source": "Generate an image",
           "message": "Vygenerovať obrázok"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Prepísať zvuk"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {

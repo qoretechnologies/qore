@@ -504,8 +504,8 @@
           "message": "Whether to archive this repository. `false` will unarchive a previously archived repository."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security and Analysis",
-          "message": "Security and Analysis"
+          "source": "Security and analysis",
+          "message": "Security and analysis"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
           "source": "Specify which security and analysis features to enable or disable for the…",
@@ -516,8 +516,8 @@
           "message": "Specify which security and analysis features to enable or disable for the repository.\n\nTo use this parameter, you must have admin permissions for the repository or be an owner or security manager for the organization that owns the repository. For more information, see \"[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization).\"\n\nFor example, to enable GitHub Advanced Security, use this data in the body of the `PATCH` request:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nYou can check which security and analysis features are currently enabled by using a `GET /repos/{owner}/{repo}` request."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.YWR2YW5jZWRfc2VjdXJpdHk.display_name": {
-          "source": "Advanced Security",
-          "message": "Advanced Security"
+          "source": "Advanced security",
+          "message": "Advanced security"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.YWR2YW5jZWRfc2VjdXJpdHk.short_desc": {
           "source": "Use the 'status' property to enable or disable GitHub Advanced Security for…",
@@ -540,8 +540,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.Y29kZV9zZWN1cml0eQ.display_name": {
-          "source": "Code Security",
-          "message": "Code Security"
+          "source": "Code security",
+          "message": "Code security"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.Y29kZV9zZWN1cml0eQ.short_desc": {
           "source": "Use the 'status' property to enable or disable GitHub Code Security for this…",
@@ -564,8 +564,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5n.display_name": {
-          "source": "Secret Scanning",
-          "message": "Secret Scanning"
+          "source": "Secret scanning",
+          "message": "Secret scanning"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5n.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning for this…",
@@ -588,8 +588,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2FpX2RldGVjdGlvbg.display_name": {
-          "source": "Secret Scanning AI Detection",
-          "message": "Secret Scanning AI Detection"
+          "source": "Secret scanning AI detection",
+          "message": "Secret scanning AI detection"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2FpX2RldGVjdGlvbg.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning AI detection…",
@@ -612,8 +612,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9hbGVydF9kaXNtaXNzYWw.display_name": {
-          "source": "Secret Scanning Delegated Alert Dismissal",
-          "message": "Secret Scanning Delegated Alert Dismissal"
+          "source": "Secret scanning delegated alert dismissal",
+          "message": "Secret scanning delegated alert dismissal"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9hbGVydF9kaXNtaXNzYWw.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning delegated alert…",
@@ -636,8 +636,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3M.display_name": {
-          "source": "Secret Scanning Delegated Bypass",
-          "message": "Secret Scanning Delegated Bypass"
+          "source": "Secret scanning delegated bypass",
+          "message": "Secret scanning delegated bypass"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3M.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning delegated…",
@@ -660,8 +660,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3Nfb3B0aW9ucw.display_name": {
-          "source": "Secret Scanning Delegated Bypass Options",
-          "message": "Secret Scanning Delegated Bypass Options"
+          "source": "Secret scanning delegated bypass options",
+          "message": "Secret scanning delegated bypass options"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX2RlbGVnYXRlZF9ieXBhc3Nfb3B0aW9ucw.short_desc": {
           "source": "Feature options for secret scanning delegated bypass",
@@ -716,8 +716,8 @@
           "message": "The ID of the team or role selected as a bypass reviewer"
         },
         "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
-          "source": "Reviewer Type",
-          "message": "Reviewer Type"
+          "source": "Reviewer type",
+          "message": "Reviewer type"
         },
         "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
           "source": "The type of the bypass reviewer",
@@ -736,8 +736,8 @@
           "message": "ROLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX25vbl9wcm92aWRlcl9wYXR0ZXJucw.display_name": {
-          "source": "Secret Scanning Non Provider Patterns",
-          "message": "Secret Scanning Non Provider Patterns"
+          "source": "Secret scanning non provider patterns",
+          "message": "Secret scanning non provider patterns"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX25vbl9wcm92aWRlcl9wYXR0ZXJucw.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning non-provider…",
@@ -760,8 +760,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX3B1c2hfcHJvdGVjdGlvbg.display_name": {
-          "source": "Secret Scanning Push Protection",
-          "message": "Secret Scanning Push Protection"
+          "source": "Secret scanning push protection",
+          "message": "Secret scanning push protection"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.field.c2VjcmV0X3NjYW5uaW5nX3B1c2hfcHJvdGVjdGlvbg.short_desc": {
           "source": "Use the 'status' property to enable or disable secret scanning push protection…",
@@ -784,8 +784,8 @@
           "message": "Can be `enabled` or `disabled`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
-          "message": "Has Issues"
+          "source": "Has issues",
+          "message": "Has issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
@@ -796,8 +796,8 @@
           "message": "Either `true` to enable issues for this repository or `false` to disable them."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
-          "message": "Has Projects"
+          "source": "Has projects",
+          "message": "Has projects"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
           "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
@@ -808,8 +808,8 @@
           "message": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
-          "message": "Has Wiki"
+          "source": "Has wiki",
+          "message": "Has wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.short_desc": {
           "source": "Either 'true' to enable the wiki for this repository or 'false' to disable it",
@@ -820,8 +820,8 @@
           "message": "Either `true` to enable the wiki for this repository or `false` to disable it."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.display_name": {
-          "source": "Has Pull Requests",
-          "message": "Has Pull Requests"
+          "source": "Has pull requests",
+          "message": "Has pull requests"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
           "source": "Either 'true' to allow pull requests for this repository or 'false' to prevent…",
@@ -832,8 +832,8 @@
           "message": "Either `true` to allow pull requests for this repository or `false` to prevent pull requests."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
-          "source": "Pull Request Creation Policy",
-          "message": "Pull Request Creation Policy"
+          "source": "Pull request creation policy",
+          "message": "Pull request creation policy"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
           "source": "The policy that controls who can create pull requests for this repository:…",
@@ -852,8 +852,8 @@
           "message": "collaborators_only"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
-          "message": "Is Template"
+          "source": "Is template",
+          "message": "Is template"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
           "source": "Either 'true' to make this repo available as a template repository or 'false'…",
@@ -864,8 +864,8 @@
           "message": "Either `true` to make this repo available as a template repository or `false` to prevent it."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
-          "message": "Allow Squash Merge"
+          "source": "Allow squash merge",
+          "message": "Allow squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
           "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
@@ -876,8 +876,8 @@
           "message": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
-          "message": "Allow Merge Commit"
+          "source": "Allow merge commit",
+          "message": "Allow merge commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
           "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
@@ -888,8 +888,8 @@
           "message": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
-          "message": "Allow Rebase Merge"
+          "source": "Allow rebase merge",
+          "message": "Allow rebase merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
           "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
@@ -900,8 +900,8 @@
           "message": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
-          "message": "Allow Auto Merge"
+          "source": "Allow auto merge",
+          "message": "Allow auto merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
@@ -912,8 +912,8 @@
           "message": "Either `true` to allow auto-merge on pull requests, or `false` to disallow auto-merge."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
-          "message": "Delete Branch on Merge"
+          "source": "Delete branch on merge",
+          "message": "Delete branch on merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
@@ -924,8 +924,8 @@
           "message": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
-          "source": "Allow Update Branch",
-          "message": "Allow Update Branch"
+          "source": "Allow update branch",
+          "message": "Allow update branch"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
           "source": "Either 'true' to always allow a pull request head branch that is behind its…",
@@ -936,8 +936,8 @@
           "message": "Either `true` to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash PR Title as Default",
-          "message": "Use Squash PR Title as Default"
+          "source": "Use squash PR title as default",
+          "message": "Use squash PR title as default"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
           "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
@@ -948,8 +948,8 @@
           "message": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
-          "message": "Squash Merge Commit Title"
+          "source": "Squash merge commit title",
+          "message": "Squash merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
           "source": "Required when using 'squash_merge_commit_message'",
@@ -968,8 +968,8 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
-          "message": "Squash Merge Commit Message"
+          "source": "Squash merge commit message",
+          "message": "Squash merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
           "source": "The default value for a squash merge commit message:",
@@ -992,8 +992,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
-          "message": "Merge Commit Title"
+          "source": "Merge commit title",
+          "message": "Merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
           "source": "Required when using 'merge_commit_message'",
@@ -1012,8 +1012,8 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
-          "message": "Merge Commit Message"
+          "source": "Merge commit message",
+          "message": "Merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
           "source": "The default value for a merge commit message",
@@ -1036,8 +1036,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.display_name": {
-          "source": "Allow Forking",
-          "message": "Allow Forking"
+          "source": "Allow forking",
+          "message": "Allow forking"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.short_desc": {
           "source": "Either 'true' to allow private forks, or 'false' to prevent private forks",
@@ -1048,8 +1048,8 @@
           "message": "Either `true` to allow private forks, or `false` to prevent private forks."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.display_name": {
-          "source": "Web Commit Signoff Required",
-          "message": "Web Commit Signoff Required"
+          "source": "Web commit signoff required",
+          "message": "Web commit signoff required"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
           "source": "Either 'true' to require contributors to sign off on web-based commits, or…",
@@ -1096,8 +1096,8 @@
           "message": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`."
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItYXV0aGVudGljYXRlZC11c2Vy.display_name": {
-          "source": "List My Repositories",
-          "message": "List My Repositories"
+          "source": "List my repositories",
+          "message": "List my repositories"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1mb3ItYXV0aGVudGljYXRlZC11c2Vy.short_desc": {
           "source": "List the repositories the credential can see",
@@ -1392,8 +1392,8 @@
           "message": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\""
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.display_name": {
-          "source": "Create Repository",
-          "message": "Create Repository"
+          "source": "Create repository",
+          "message": "Create repository"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.short_desc": {
           "source": "Create a repository owned by the authenticated user",
@@ -1452,8 +1452,8 @@
           "message": "Whether the repository is private."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YXV0b19pbml0.display_name": {
-          "source": "Auto Init",
-          "message": "Auto Init"
+          "source": "Auto init",
+          "message": "Auto init"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YXV0b19pbml0.short_desc": {
           "source": "Whether the repository is initialized with a minimal README",
@@ -1464,8 +1464,8 @@
           "message": "Whether the repository is initialized with a minimal README."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.display_name": {
-          "source": "Gitignore Template",
-          "message": "Gitignore Template"
+          "source": "Gitignore template",
+          "message": "Gitignore template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
           "source": "The desired language or platform to apply to the .gitignore",
@@ -1476,8 +1476,8 @@
           "message": "The desired language or platform to apply to the .gitignore."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
-          "source": "License Template",
-          "message": "License Template"
+          "source": "License template",
+          "message": "License template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
           "source": "The license keyword of the open source license for this repository",
@@ -1488,8 +1488,8 @@
           "message": "The license keyword of the open source license for this repository."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
-          "message": "Has Issues"
+          "source": "Has issues",
+          "message": "Has issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Whether issues are enabled",
@@ -1500,8 +1500,8 @@
           "message": "Whether issues are enabled."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
-          "message": "Has Wiki"
+          "source": "Has wiki",
+          "message": "Has wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3dpa2k.short_desc": {
           "source": "Whether the wiki is enabled",
@@ -1512,8 +1512,8 @@
           "message": "Whether the wiki is enabled."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
-          "message": "Has Projects"
+          "source": "Has projects",
+          "message": "Has projects"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX3Byb2plY3Rz.short_desc": {
           "source": "Whether projects are enabled",
@@ -1524,8 +1524,8 @@
           "message": "Whether projects are enabled."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rpc2N1c3Npb25z.display_name": {
-          "source": "Has Discussions",
-          "message": "Has Discussions"
+          "source": "Has discussions",
+          "message": "Has discussions"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rpc2N1c3Npb25z.short_desc": {
           "source": "Whether discussions are enabled",
@@ -1548,8 +1548,8 @@
           "message": "The id of the team that will be granted access to this repository. This is only valid when creating a repository in an organization."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
-          "message": "Allow Squash Merge"
+          "source": "Allow squash merge",
+          "message": "Allow squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
           "source": "Whether to allow squash merges for pull requests",
@@ -1560,8 +1560,8 @@
           "message": "Whether to allow squash merges for pull requests."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
-          "message": "Allow Merge Commit"
+          "source": "Allow merge commit",
+          "message": "Allow merge commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
           "source": "Whether to allow merge commits for pull requests",
@@ -1572,8 +1572,8 @@
           "message": "Whether to allow merge commits for pull requests."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
-          "message": "Allow Rebase Merge"
+          "source": "Allow rebase merge",
+          "message": "Allow rebase merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
           "source": "Whether to allow rebase merges for pull requests",
@@ -1584,8 +1584,8 @@
           "message": "Whether to allow rebase merges for pull requests."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
-          "message": "Allow Auto Merge"
+          "source": "Allow auto merge",
+          "message": "Allow auto merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
           "source": "Whether to allow Auto-merge to be used on pull requests",
@@ -1596,8 +1596,8 @@
           "message": "Whether to allow Auto-merge to be used on pull requests."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
-          "message": "Delete Branch on Merge"
+          "source": "Delete branch on merge",
+          "message": "Delete branch on merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Whether to delete head branches when pull requests are merged",
@@ -1608,8 +1608,8 @@
           "message": "Whether to delete head branches when pull requests are merged"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
-          "message": "Squash Merge Commit Title"
+          "source": "Squash merge commit title",
+          "message": "Squash merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
           "source": "Required when using 'squash_merge_commit_message'",
@@ -1628,8 +1628,8 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
-          "message": "Squash Merge Commit Message"
+          "source": "Squash merge commit message",
+          "message": "Squash merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
           "source": "The default value for a squash merge commit message:",
@@ -1652,8 +1652,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
-          "message": "Merge Commit Title"
+          "source": "Merge commit title",
+          "message": "Merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
           "source": "Required when using 'merge_commit_message'",
@@ -1672,8 +1672,8 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
-          "message": "Merge Commit Message"
+          "source": "Merge commit message",
+          "message": "Merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
           "source": "The default value for a merge commit message",
@@ -1696,8 +1696,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rvd25sb2Fkcw.display_name": {
-          "source": "Has Downloads",
-          "message": "Has Downloads"
+          "source": "Has downloads",
+          "message": "Has downloads"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aGFzX2Rvd25sb2Fkcw.short_desc": {
           "source": "Whether downloads are enabled",
@@ -1708,8 +1708,8 @@
           "message": "Whether downloads are enabled."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
-          "message": "Is Template"
+          "source": "Is template",
+          "message": "Is template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
           "source": "Whether this repository acts as a template that can be used to generate new…",
@@ -1812,8 +1812,8 @@
           "message": "Whether the repository is private."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.display_name": {
-          "source": "Auto Init",
-          "message": "Auto Init"
+          "source": "Auto init",
+          "message": "Auto init"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.short_desc": {
           "source": "Pass 'true' to create an initial commit with empty README",
@@ -1824,8 +1824,8 @@
           "message": "Pass `true` to create an initial commit with empty README."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.display_name": {
-          "source": "Gitignore Template",
-          "message": "Gitignore Template"
+          "source": "Gitignore template",
+          "message": "Gitignore template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
           "source": "Desired language or platform…",
@@ -1836,8 +1836,8 @@
           "message": "Desired language or platform [.gitignore template](https://github.com/github/gitignore) to apply. Use the name of the template without the extension. For example, \"Haskell\"."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
-          "source": "License Template",
-          "message": "License Template"
+          "source": "License template",
+          "message": "License template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
           "source": "Choose an [open source license template](https://choosealicense.com/) that…",
@@ -1848,8 +1848,8 @@
           "message": "Choose an [open source license template](https://choosealicense.com/) that best suits your needs, and then use the [license keyword](https://docs.github.com/articles/licensing-a-repository/#searching-github-by-license-type) as the `license_template` string. For example, \"mit\" or \"mpl-2.0\"."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
-          "message": "Has Issues"
+          "source": "Has issues",
+          "message": "Has issues"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
@@ -1860,8 +1860,8 @@
           "message": "Either `true` to enable issues for this repository or `false` to disable them."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.display_name": {
-          "source": "Has Projects",
-          "message": "Has Projects"
+          "source": "Has projects",
+          "message": "Has projects"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
           "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
@@ -1872,8 +1872,8 @@
           "message": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
-          "message": "Has Wiki"
+          "source": "Has wiki",
+          "message": "Has wiki"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.short_desc": {
           "source": "Either 'true' to enable the wiki for this repository or 'false' to disable it",
@@ -1884,8 +1884,8 @@
           "message": "Either `true` to enable the wiki for this repository or `false` to disable it."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2Rvd25sb2Fkcw.display_name": {
-          "source": "Has Downloads",
-          "message": "Has Downloads"
+          "source": "Has downloads",
+          "message": "Has downloads"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2Rvd25sb2Fkcw.short_desc": {
           "source": "Whether downloads are enabled",
@@ -1896,8 +1896,8 @@
           "message": "Whether downloads are enabled."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.display_name": {
-          "source": "Is Template",
-          "message": "Is Template"
+          "source": "Is template",
+          "message": "Is template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
           "source": "Either 'true' to make this repo available as a template repository or 'false'…",
@@ -1920,8 +1920,8 @@
           "message": "The id of the team that will be granted access to this repository. This is only valid when creating a repository in an organization."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
-          "source": "Allow Squash Merge",
-          "message": "Allow Squash Merge"
+          "source": "Allow squash merge",
+          "message": "Allow squash merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
           "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
@@ -1932,8 +1932,8 @@
           "message": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
-          "source": "Allow Merge Commit",
-          "message": "Allow Merge Commit"
+          "source": "Allow merge commit",
+          "message": "Allow merge commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
           "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
@@ -1944,8 +1944,8 @@
           "message": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
-          "source": "Allow Rebase Merge",
-          "message": "Allow Rebase Merge"
+          "source": "Allow rebase merge",
+          "message": "Allow rebase merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
           "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
@@ -1956,8 +1956,8 @@
           "message": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.display_name": {
-          "source": "Allow Auto Merge",
-          "message": "Allow Auto Merge"
+          "source": "Allow auto merge",
+          "message": "Allow auto merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
@@ -1968,8 +1968,8 @@
           "message": "Either `true` to allow auto-merge on pull requests, or `false` to disallow auto-merge."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch on Merge",
-          "message": "Delete Branch on Merge"
+          "source": "Delete branch on merge",
+          "message": "Delete branch on merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
@@ -1980,8 +1980,8 @@
           "message": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to `true`.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash PR Title as Default",
-          "message": "Use Squash PR Title as Default"
+          "source": "Use squash PR title as default",
+          "message": "Use squash PR title as default"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
           "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
@@ -1992,8 +1992,8 @@
           "message": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.display_name": {
-          "source": "Squash Merge Commit Title",
-          "message": "Squash Merge Commit Title"
+          "source": "Squash merge commit title",
+          "message": "Squash merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.short_desc": {
           "source": "Required when using 'squash_merge_commit_message'",
@@ -2012,8 +2012,8 @@
           "message": "COMMIT_OR_PR_TITLE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.display_name": {
-          "source": "Squash Merge Commit Message",
-          "message": "Squash Merge Commit Message"
+          "source": "Squash merge commit message",
+          "message": "Squash merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.c3F1YXNoX21lcmdlX2NvbW1pdF9tZXNzYWdl.short_desc": {
           "source": "The default value for a squash merge commit message:",
@@ -2036,8 +2036,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X3RpdGxl.display_name": {
-          "source": "Merge Commit Title",
-          "message": "Merge Commit Title"
+          "source": "Merge commit title",
+          "message": "Merge commit title"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X3RpdGxl.short_desc": {
           "source": "Required when using 'merge_commit_message'",
@@ -2056,8 +2056,8 @@
           "message": "MERGE_MESSAGE"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.display_name": {
-          "source": "Merge Commit Message",
-          "message": "Merge Commit Message"
+          "source": "Merge commit message",
+          "message": "Merge commit message"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.short_desc": {
           "source": "The default value for a merge commit message",
@@ -2080,8 +2080,8 @@
           "message": "BLANK"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Y3VzdG9tX3Byb3BlcnRpZXM.display_name": {
-          "source": "Custom Properties",
-          "message": "Custom Properties"
+          "source": "Custom properties",
+          "message": "Custom properties"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Y3VzdG9tX3Byb3BlcnRpZXM.short_desc": {
           "source": "The custom properties for the new repository",
@@ -3016,8 +3016,8 @@
           "message": "A user that's mentioned in the issue."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
-          "message": "Issue Field Values"
+          "source": "Issue field values",
+          "message": "Issue field values"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
           "source": "A comma-separated list of issue field filters in 'field_slug:value' format",
@@ -3028,8 +3028,8 @@
           "message": "A comma-separated list of issue field filters in `field_slug:value` format.\nOnly issues matching all specified field values are returned.\nRequires issue fields to be enabled for the repository. Issue fields are\nnot available for user-owned repositories, and field availability for\norganization-owned public repositories depends on the organization's\nvisibility settings. For example, `priority:Urgent,severity:High` filters\nissues where the `priority` field is `Urgent` AND the `severity` field is\n`High`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.display_name": {
-          "source": "List My Issues",
-          "message": "List My Issues"
+          "source": "List my issues",
+          "message": "List my issues"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3Q.short_desc": {
           "source": "List the issues assigned to the authenticated user",
@@ -3372,8 +3372,8 @@
           "message": "GitHub only accepts an assignee with **push access** to the repository and silently ignores anyone else, so this dropdown lists the repository's collaborators."
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
-          "message": "Issue Field Values"
+          "source": "Issue field values",
+          "message": "Issue field values"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
           "source": "An array of issue field values to set on this issue",
@@ -3512,8 +3512,8 @@
           "message": "closed"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.c3RhdGVfcmVhc29u.display_name": {
-          "source": "State Reason",
-          "message": "State Reason"
+          "source": "State reason",
+          "message": "State reason"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.c3RhdGVfcmVhc29u.short_desc": {
           "source": "The reason for the state change",
@@ -3696,8 +3696,8 @@
           "message": "GitHub only accepts an assignee with **push access** to the repository and silently ignores anyone else, so this dropdown lists the repository's collaborators."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue ID",
-          "message": "Duplicate Issue ID"
+          "source": "Duplicate issue ID",
+          "message": "Duplicate issue ID"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
           "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is…",
@@ -3708,8 +3708,8 @@
           "message": "The ID of the issue to mark as the canonical duplicate when `state_reason` is `duplicate`. The issue must exist and be accessible to the authenticated user. Ignored when `state_reason` is not `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.display_name": {
-          "source": "Issue Field Values",
-          "message": "Issue Field Values"
+          "source": "Issue field values",
+          "message": "Issue field values"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.short_desc": {
           "source": "An array of issue field values to set on this issue",
@@ -4404,8 +4404,8 @@
           "message": "Indicates whether the pull request is a draft. See \"[Draft Pull Requests](https://docs.github.com/articles/about-pull-requests#draft-pull-requests)\" in the GitHub Help documentation to learn more."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
-          "source": "Maintainer Can Modify",
-          "message": "Maintainer Can Modify"
+          "source": "Maintainer can modify",
+          "message": "Maintainer can modify"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
           "source": "Indicates whether…",
@@ -4416,8 +4416,8 @@
           "message": "Indicates whether [maintainers can modify](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) the pull request."
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.aGVhZF9yZXBv.display_name": {
-          "source": "Head Repo",
-          "message": "Head Repo"
+          "source": "Head repo",
+          "message": "Head repo"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.aGVhZF9yZXBv.short_desc": {
           "source": "The name of the repository where the changes in the pull request were made",
@@ -4544,8 +4544,8 @@
           "message": "The name of the branch you want your changes pulled into. This should be an existing branch on the current repository. You cannot update the base branch on a pull request to point to another repository."
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
-          "source": "Maintainer Can Modify",
-          "message": "Maintainer Can Modify"
+          "source": "Maintainer can modify",
+          "message": "Maintainer can modify"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
           "source": "Indicates whether…",
@@ -5228,8 +5228,8 @@
           "message": "`true` to identify the release as a prerelease. `false` to identify the release as a full release."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.Z2VuZXJhdGVfcmVsZWFzZV9ub3Rlcw.display_name": {
-          "source": "Generate Release Notes",
-          "message": "Generate Release Notes"
+          "source": "Generate release notes",
+          "message": "Generate release notes"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.Z2VuZXJhdGVfcmVsZWFzZV9ub3Rlcw.short_desc": {
           "source": "Whether to automatically generate the name and body for this release",
@@ -5240,8 +5240,8 @@
           "message": "Whether to automatically generate the name and body for this release. If `name` is specified, the specified name will be used; otherwise, a name will be automatically generated. If `body` is specified, the body will be pre-pended to the automatically generated notes."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.display_name": {
-          "source": "Make Latest",
-          "message": "Make Latest"
+          "source": "Make latest",
+          "message": "Make latest"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
           "source": "Specifies whether this release should be set as the latest release for the…",
@@ -5264,8 +5264,8 @@
           "message": "legacy"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.display_name": {
-          "source": "Discussion Category Name",
-          "message": "Discussion Category Name"
+          "source": "Discussion category name",
+          "message": "Discussion category name"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
           "source": "If specified, a discussion of the specified category is created and linked to…",
@@ -5276,8 +5276,8 @@
           "message": "If specified, a discussion of the specified category is created and linked to the release. The value must be a category that already exists in the repository. For more information, see \"[Managing categories for discussions in your repository](https://docs.github.com/discussions/managing-discussions-for-your-community/managing-categories-for-discussions-in-your-repository).\""
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LWZvci1hdXRoZW50aWNhdGVkLXVzZXI.display_name": {
-          "source": "List My Organizations",
-          "message": "List My Organizations"
+          "source": "List my organizations",
+          "message": "List my organizations"
         },
         "app.R2l0aHVi.action.b3Jncy1saXN0LWZvci1hdXRoZW50aWNhdGVkLXVzZXI.short_desc": {
           "source": "List the organizations the credential belongs to",
@@ -5408,8 +5408,8 @@
           "message": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\""
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.display_name": {
-          "source": "Search Repositories",
-          "message": "Search Repositories"
+          "source": "Search repositories",
+          "message": "Search repositories"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.short_desc": {
           "source": "Search public repositories with a query",
@@ -5504,8 +5504,8 @@
           "message": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\""
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.display_name": {
-          "source": "Search Issues and Pull Requests",
-          "message": "Search Issues and Pull Requests"
+          "source": "Search issues and pull requests",
+          "message": "Search issues and pull requests"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.short_desc": {
           "source": "Search issues and pull requests with a query",
@@ -5528,8 +5528,8 @@
           "message": "The query contains one or more search keywords and qualifiers. Qualifiers allow you to limit your search to specific areas of GitHub. The REST API supports the same qualifiers as the web interface for GitHub. To learn more about the format of the query, see [Constructing a search query](https://docs.github.com/rest/search/search#constructing-a-search-query). See \"[Searching issues and pull requests](https://docs.github.com/search-github/searching-on-github/searching-issues-and-pull-requests)\" for a detailed list of qualifiers."
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.YWR2YW5jZWRfc2VhcmNo.display_name": {
-          "source": "Advanced Search",
-          "message": "Advanced Search"
+          "source": "Advanced search",
+          "message": "Advanced search"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.YWR2YW5jZWRfc2VhcmNo.short_desc": {
           "source": "Set to 'true' to use advanced search",
@@ -5640,8 +5640,8 @@
           "message": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\""
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.display_name": {
-          "source": "Search Type",
-          "message": "Search Type"
+          "source": "Search type",
+          "message": "Search type"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.short_desc": {
           "source": "The type of search to perform on issues",
@@ -5924,8 +5924,8 @@
           "message": "The name of the secret."
         },
         "app.R2l0aHVi.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
-          "message": "Search Records"
+          "source": "Search records",
+          "message": "Search records"
         },
         "app.R2l0aHVi.action.c2VhcmNo.short_desc": {
           "source": "Search for matching records in the given table in app \"Github\"",
@@ -5948,8 +5948,8 @@
           "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
-          "message": "Find a Single Record"
+          "source": "Find a single record",
+          "message": "Find a single record"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
           "source": "Search for a single matching record in the given table in app \"Github\"",
@@ -5972,8 +5972,8 @@
           "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
-          "message": "Create Records"
+          "source": "Create records",
+          "message": "Create records"
         },
         "app.R2l0aHVi.action.Y3JlYXRl.short_desc": {
           "source": "Create new records in the given table in app \"Github\"",
@@ -5996,8 +5996,8 @@
           "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.R2l0aHVi.action.dXBkYXRl.short_desc": {
           "source": "Update matching records in the given table in app \"Github\"",
@@ -6020,8 +6020,8 @@
           "message": "The table to work with: `issues`, `pulls`, `releases`, `repositories`, `labels`, `collaborators` or `contributors`"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.R2l0aHVi.action.ZGVsZXRl.short_desc": {
           "source": "Delete matching records in the given table in app \"Github\"",

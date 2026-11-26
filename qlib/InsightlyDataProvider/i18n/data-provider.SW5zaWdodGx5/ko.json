@@ -1632,7 +1632,7 @@
           "message": "삭제할 연락처의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "연락처 목록"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "연락처 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
+          "source": "Create organisation",
           "message": "조직 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2276,7 +2276,7 @@
           "message": "기념일의 이름(예: `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
+          "source": "Update organisation",
           "message": "조직 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "기념일의 이름(예: `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
+          "source": "Delete organisation",
           "message": "조직 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "삭제할 조직의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
+          "source": "List organisations",
           "message": "조직 목록 조회"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
@@ -2936,7 +2936,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
+          "source": "Get organisation",
           "message": "조직 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "조직 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "리드 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "태그 이름"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
+          "source": "Update lead",
           "message": "리드 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -3952,7 +3952,7 @@
           "message": "태그 이름"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "리드 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -3976,7 +3976,7 @@
           "message": "삭제할 리드의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "리드 나열"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -4080,7 +4080,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "리드 조회"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "리드 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
+          "source": "Create opportunity",
           "message": "기회 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4536,7 +4536,7 @@
           "message": "객체 간의 관계를 설명하는 역할"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
+          "source": "Update opportunity",
           "message": "영업 기회 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -4984,7 +4984,7 @@
           "message": "객체 간의 관계를 설명하는 역할"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
+          "source": "Delete opportunity",
           "message": "기회 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -5008,7 +5008,7 @@
           "message": "삭제할 영업 기회의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "기회 목록 조회"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -5112,7 +5112,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
+          "source": "Get opportunity",
           "message": "기회 조회"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -5132,7 +5132,7 @@
           "message": "기회 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "프로젝트 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -5508,7 +5508,7 @@
           "message": "객체 간의 관계를 설명하는 역할"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
+          "source": "Update project",
           "message": "프로젝트 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
@@ -5896,7 +5896,7 @@
           "message": "객체 간의 관계를 설명하는 역할"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
+          "source": "Delete project",
           "message": "프로젝트 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
@@ -5920,7 +5920,7 @@
           "message": "삭제할 프로젝트의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "프로젝트 목록 조회"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -6024,7 +6024,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
+          "source": "Get project",
           "message": "프로젝트 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
@@ -6044,7 +6044,7 @@
           "message": "프로젝트 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
+          "source": "Create task",
           "message": "작업 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -6404,7 +6404,7 @@
           "message": "작업 링크의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
+          "source": "Update task",
           "message": "작업 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -6776,7 +6776,7 @@
           "message": "작업 링크의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
+          "source": "Delete task",
           "message": "작업 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -6800,7 +6800,7 @@
           "message": "삭제할 작업의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "작업 목록 조회"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
@@ -6904,7 +6904,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "작업 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
@@ -6924,7 +6924,7 @@
           "message": "작업 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
+          "source": "Create note",
           "message": "노트 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -7052,7 +7052,7 @@
           "message": "소유자의 팀에 표시"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
+          "source": "Update note",
           "message": "메모 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -7192,7 +7192,7 @@
           "message": "소유자의 팀에 표시"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
+          "source": "Delete note",
           "message": "메모 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -7216,7 +7216,7 @@
           "message": "삭제할 메모의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "메모 목록 표시"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -7320,7 +7320,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
+          "source": "Get note",
           "message": "메모 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
@@ -7340,7 +7340,7 @@
           "message": "노트 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
+          "source": "Create calendar event",
           "message": "캘린더 이벤트 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7460,7 +7460,7 @@
           "message": "이 이벤트를 소유한 사용자의 ID"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
+          "source": "Update calendar event",
           "message": "캘린더 이벤트 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7592,7 +7592,7 @@
           "message": "이 이벤트를 소유한 사용자의 ID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
+          "source": "Delete calendar event",
           "message": "캘린더 이벤트 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "삭제할 캘린더 이벤트의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
+          "source": "List calendar Events",
           "message": "캘린더 이벤트 목록 조회"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
@@ -7720,7 +7720,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
+          "source": "Get calendar event",
           "message": "캘린더 이벤트 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
@@ -7740,7 +7740,7 @@
           "message": "이벤트 ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "제품 생성"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -7944,7 +7944,7 @@
           "message": "사용자 정의 필드의 값. 필드 구성에 따라 문자열, 숫자, 불리언 또는 날짜일 수 있음"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
+          "source": "Update product",
           "message": "제품 업데이트"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -8160,7 +8160,7 @@
           "message": "사용자 정의 필드의 값. 필드 구성에 따라 문자열, 숫자, 불리언 또는 날짜일 수 있음"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
+          "source": "Delete product",
           "message": "제품 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
@@ -8184,7 +8184,7 @@
           "message": "삭제할 제품의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "제품 목록"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -8288,7 +8288,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
+          "source": "Get product",
           "message": "제품 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -8308,7 +8308,7 @@
           "message": "제품 ID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "이메일 삭제"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -8332,7 +8332,7 @@
           "message": "삭제할 이메일의 고유 식별자"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "이메일 목록 표시"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -8436,7 +8436,7 @@
           "message": "`field_name`과(와) 일치시킬 값입니다. `field_name`와(과) 함께 지정해야 합니다. 요청을 Insightly의 `/Search` 엔드포인트를 통해 라우팅합니다."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "이메일 가져오기"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -8468,7 +8468,7 @@
           "message": "Insightly에서 새 연락처가 생성될 때 실행됩니다."
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
+          "source": "New organisation",
           "message": "새 조직"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
@@ -8480,7 +8480,7 @@
           "message": "Insightly에서 새 조직이 생성될 때 실행됩니다."
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
+          "source": "New lead",
           "message": "새 리드"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
@@ -8492,7 +8492,7 @@
           "message": "Insightly에서 새 리드가 생성될 때 실행됩니다."
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
+          "source": "New opportunity",
           "message": "새 기회"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
@@ -8504,7 +8504,7 @@
           "message": "Insightly에서 새 기회가 생성될 때 실행됩니다."
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
+          "source": "New task",
           "message": "새 작업"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {

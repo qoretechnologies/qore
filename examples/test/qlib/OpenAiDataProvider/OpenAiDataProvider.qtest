@@ -1792,7 +1792,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         );
         assertEq("/transcribe-audio", action.path);
         assertEq(DPAT_API, action.action_code);
-        assertEq("Transcribe Audio", action.display_name);
+        assertEq("Transcribe audio", action.display_name);
         assertFalse(action.mutates_state);
         assertEq(OpenAiTranscribeAudioDataProvider::ResponseType, action.output_type);
         # every request field is exposed as an action option; required and preselected options come first

@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Embeddings erstellen"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "Größe des Ausgabevektors. Das gewählte `model` bestimmt den unterstützten Bereich."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "Embedding-Typ"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Falls `true`, wird die Eingabe, die das maximale Token-Limit des Modells überschreitet, abgeschnitten, anstatt einen Fehler zurückzugeben."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "Late Chunking"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "Mit `True` werden Eingaben vor dem Aufteilen als eine Sequenz verarbeitet, um den Kontext zwischen Abschnitten zu erhalten."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "Multivektor zurückgeben"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Falls `true`, wird ein Embedding pro Token zurückgegeben. Kann nicht mit `dimensions` verwendet werden."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "Tokenisierte Eingabe zurückgeben"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Falls `true`, werden Tokens zusammen mit Multi-Vektor-Embeddings zurückgegeben. Erfordert `return_multivector=true`."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Eingabetyp"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Dokument"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Dokumente neu anordnen"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Bild als URL oder base64-codierte Zeichenkette."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "Top-N"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "Anzahl der besten Ergebnisse. Ohne Angabe werden alle Dokumente zurückgegeben."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "Dokumente zurückgeben"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Mit `True` (Standard) enthält jedes Ergebnis den Dokumentinhalt."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "Maximale Dokumentlänge"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Maximale Tokens pro Dokument (1-8192). Weglassen, um den Standardwert des Modells zu verwenden (2048 für jina-reranker-v3, 8192 für jina-reranker-v3.5)."
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "Embeddings zurückgeben"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Falls `true`, wird das Dokument-Embedding zusammen mit dem Relevanz-Score zurückgegeben."
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "Inhalt klassifizieren"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "Kandidaten-Labels: eine Liste von bis zu 512 Labels oder ein Dict von bis zu 8 Gruppen mit jeweils maximal 64 Labels."
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "Klassifikator trainieren oder aktualisieren"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "Öffentlich"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "Anzahl Iterationen"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Anzahl der Iterationen für den Trainingsprozess."
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "Klassifikatoren auflisten"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "Das Modell, dessen Funktionen und Preise abgerufen werden sollen."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "Batch-Embeddings erstellen"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "Der Einbettungs-Batch zur Überprüfung oder zum Abbrechen."
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Stapel auflisten"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Website-Symbole in den Ergebnissen einschließen."
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "Text segmentieren"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "Nur diese Anzahl nachfolgender Tokens zurückgeben."
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "Chat mit Vision Model"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "Sampling-Temperatur zur Steuerung der Antwortvariation."
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "Deep Search"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "Quellen nur von diesen Domains lesen."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "Batch-Ausgabe herunterladen"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "Abgeschlossener Batch, dessen JSONL-Ergebnisse oder Fehler heruntergeladen werden sollen."
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "Batch-Fehler herunterladen"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
+          "source": "Search index",
           "message": "Пошук в індексі"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Пошук даних в індексі ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
+          "source": "Add document",
           "message": "Додати документ"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Додати документ до ElasticSearch / завантажити дані в ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Масові операції"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Виконуйте масові операції індексації, створення, оновлення та видалення документів ElasticSearch"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
+          "source": "Scroll search",
           "message": "Пошук через скролінг"
         },
         "app.RWxhc3RpY1NlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {

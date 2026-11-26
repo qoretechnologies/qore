@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
+          "source": "List parcels",
           "message": "Zoznam zásielok"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Maximálny počet agregovaných záznamov, ktoré sa majú vrátiť naprieč stránkami"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Získať balík"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Počet štítkov, ktoré sa majú vygenerovať pre tento balík (viackusové zásielky)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
+          "source": "Update parcel",
           "message": "Aktualizovať zásielku"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "Názov spôsobu doručenia (napr. 'List bez známky')"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
+          "source": "Cancel parcel",
           "message": "Zrušiť zásielku"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "Číselné ID zásielky na zrušenie"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
+          "source": "Get parcel label",
           "message": "Získať štítok zásielky"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Číselné ID zásielky, ktorej URL adresy štítkov sa získavajú"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
+          "source": "Get parcel document",
           "message": "Získať dokument balíka"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Obrázok PNG (k dispozícii len pre určité typy dokumentov, napríklad QR kódy)"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Zoznam spôsobov dopravy"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Ak je nastavené na `True`, zahrnúť podrobný rozpis cien pri každom spôsobe"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
+          "source": "List sender addresses",
           "message": "Zoznam adries odosielateľa"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Získať zoznam adries odosielateľa nakonfigurovaných vo vašom účte SendCloud; predvolená adresa odosielateľa sa použije, ak nie je na zásielke špecifikovaná iná."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Zoznam používateľov"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Získať používateľa/účet SendCloud vlastniaceho aktuálne prihlasovacie údaje API. Zoznam obsahuje najviac jeden záznam, pretože API vracia iba overeného používateľa."
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "Získať používateľa"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Získať informácie o aktuálne overenom používateľovi SendCloud (vlastníkovi účtu)."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
+          "source": "List service points",
           "message": "Zoznam výdajných miest"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Poštové smerovacie číslo, v ktorého blízkosti sa majú vyhľadávať výdajné miesta (s vrátenou vzdialenosťou)"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
+          "source": "Search service points",
           "message": "Vyhľadať výdajné a podacie miesta"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Číslo domu použité spolu s východiskovým bodom vyhľadávania"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
+          "source": "List returns",
           "message": "Zoznam vrátení"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Maximálny počet agregovaných záznamov, ktoré sa majú vrátiť naprieč stránkami"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Získať vrátenie"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Telefónne číslo príjemcu (vyžadované niektorými dopravcami)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
+          "source": "Update return",
           "message": "Aktualizovať vratku"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Aktualizovaný dôvod vratky"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
+          "source": "Cancel return",
           "message": "Zrušiť vrátenie"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "Číselné ID vrátenia na zrušenie"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
+          "source": "List brands",
           "message": "Zoznam značiek"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Získať zoznam značiek nakonfigurovaných vo vašom účte SendCloud. Značky sa používajú na prispôsobenie stránok sledovania zásielok a prepravnej dokumentácie."
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
+          "source": "Parcel status changed",
           "message": "Stav zásielky sa zmenil"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Spustí sa pri každej zmene stavu zásielky v SendCloud. Interval dopytovania je konfigurovateľný; uplatňuje sa minimálny interval, aby sa dodržali limity SendCloud API."
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
+          "source": "Return updated",
           "message": "Vrátenie tovaru aktualizované"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {

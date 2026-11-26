@@ -16,7 +16,7 @@
           "message": "고정 길이 파일 데이터 읽기 및 쓰기"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
-          "source": "Read Fixed-Length Data",
+          "source": "Read fixed-length data",
           "message": "고정 길이 데이터 읽기"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
@@ -172,7 +172,7 @@
           "message": "날짜 파싱 시 사용할 표준 시간대 지역입니다(예: `Europe/Prague`). 유효한 값은 [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)를 참조하세요."
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
-          "source": "Write Fixed-Length Data",
+          "source": "Write fixed-length data",
           "message": "고정 길이 데이터 쓰기"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {

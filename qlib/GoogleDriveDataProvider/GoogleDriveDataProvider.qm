@@ -106,7 +106,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/list-files",
             "action": "list-files",
-            "display_name": "List Files",
+            "display_name": "List files",
             "short_desc": "List or search files and folders",
             "desc": "Lists or searches files and folders.\n\n"
                 "Set `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw "
@@ -126,7 +126,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/get-file",
             "action": "get-file",
-            "display_name": "Get File Info",
+            "display_name": "Get file info",
             "short_desc": "Get a file's metadata",
             "desc": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\n"
                 "Use `download-file` to retrieve the content itself.",
@@ -146,7 +146,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/download-file",
             "action": "download-file",
-            "display_name": "Download File",
+            "display_name": "Download file",
             "short_desc": "Download a file's content",
             "desc": "Downloads a file's content.\n\n"
                 "Google-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be "
@@ -167,7 +167,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/export-file",
             "action": "export-file",
-            "display_name": "Export Document",
+            "display_name": "Export document",
             "short_desc": "Export a Google-native document to a concrete format",
             "desc": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF "
                 "or a Microsoft Office format.\n\n"
@@ -189,7 +189,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/upload-file",
             "action": "upload-file",
-            "display_name": "Upload File",
+            "display_name": "Upload file",
             "short_desc": "Upload a file to Drive",
             "desc": "Uploads a file to Drive.\n\n"
                 "If `name` is not set, the file's own name is used.  Drive does not require names to be unique, "
@@ -211,7 +211,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/create-text-file",
             "action": "create-text-file",
-            "display_name": "Create Text File",
+            "display_name": "Create text file",
             "short_desc": "Create a file from text content",
             "desc": "Creates a file directly from text content, without needing a file.\n\n"
                 "Useful for writing generated reports, manifests, and notes.",
@@ -232,7 +232,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/replace-file",
             "action": "replace-file",
-            "display_name": "Replace File Content",
+            "display_name": "Replace file content",
             "short_desc": "Replace an existing file's content",
             "desc": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\n"
                 "Use this rather than uploading again when consumers hold a link to the file, since a new "
@@ -254,7 +254,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/create-folder",
             "action": "create-folder",
-            "display_name": "Create Folder",
+            "display_name": "Create folder",
             "short_desc": "Create a folder",
             "desc": "Creates a folder, optionally inside another folder.",
             "action_code": DPAT_API,
@@ -274,7 +274,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/copy-file",
             "action": "copy-file",
-            "display_name": "Copy File",
+            "display_name": "Copy file",
             "short_desc": "Copy a file",
             "desc": "Copies a file, optionally renaming it or placing the copy in a different folder.",
             "action_code": DPAT_API,
@@ -294,7 +294,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/move-file",
             "action": "move-file",
-            "display_name": "Move File",
+            "display_name": "Move file",
             "short_desc": "Move a file to a different folder",
             "desc": "Moves a file to a different folder, removing it from the folders it is currently in.",
             "action_code": DPAT_API,
@@ -312,7 +312,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/rename-file",
             "action": "rename-file",
-            "display_name": "Rename File",
+            "display_name": "Rename file",
             "short_desc": "Change a file's name",
             "desc": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\n"
                 "Drive addresses files by an immutable ID rather than by path, so renaming a file leaves every "
@@ -335,7 +335,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/delete-file",
             "action": "delete-file",
-            "display_name": "Delete File",
+            "display_name": "Delete file",
             "short_desc": "Delete a file or move it to the trash",
             "desc": "Moves a file to the trash, where it can still be recovered.\n\n"
                 "Set `permanently_delete` to remove it outright instead; **that cannot be undone**.",
@@ -356,7 +356,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/share-file",
             "action": "share-file",
-            "display_name": "Share File",
+            "display_name": "Share file",
             "short_desc": "Grant access to a file",
             "desc": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the "
                 "link.\n\n"
@@ -379,7 +379,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/untrash",
             "action": "untrash",
-            "display_name": "Restore from Trash",
+            "display_name": "Restore from trash",
             "short_desc": "Restore a file from the trash",
             "desc": "Restores a file from the trash, putting it back where it was.\n\n"
                 "`delete-file` moves a file to the trash by default precisely so that it can be recovered; "
@@ -399,7 +399,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/create-shortcut",
             "action": "create-shortcut",
-            "display_name": "Create Shortcut",
+            "display_name": "Create shortcut",
             "short_desc": "Create a shortcut pointing at a file or folder",
             "desc": "Creates a shortcut pointing at a file or folder.\n\n"
                 "A shortcut lets one file appear in several places without being copied, so the content stays "
@@ -422,7 +422,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/list-shared-drives",
             "action": "list-shared-drives",
-            "display_name": "List Shared Drives",
+            "display_name": "List shared drives",
             "short_desc": "List the shared drives the account can reach",
             "desc": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\n"
                 "A business account keeps most of its content on shared drives rather than in any one "
@@ -441,7 +441,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/get-storage-quota",
             "action": "get-storage-quota",
-            "display_name": "Get Storage Quota",
+            "display_name": "Get storage quota",
             "short_desc": "Get how much of the account's storage is in use",
             "desc": "Returns how much of the account's storage is in use, and how much is available.\n\n"
                 "Useful before a large upload: Drive rejects one that would exceed the quota, and reports it "
@@ -457,7 +457,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/list-permissions",
             "action": "list-permissions",
-            "display_name": "List Permissions",
+            "display_name": "List permissions",
             "short_desc": "List who has access to a file",
             "desc": "Lists the permissions granted on a file: who has access, and at what level.\n\n"
                 "Each permission carries the `id` needed to withdraw it with `remove-permission`.",
@@ -477,7 +477,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/remove-permission",
             "action": "remove-permission",
-            "display_name": "Remove Permission",
+            "display_name": "Remove permission",
             "short_desc": "Withdraw someone's access to a file",
             "desc": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\n"
                 "Use `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is "
@@ -497,7 +497,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/list-revisions",
             "action": "list-revisions",
-            "display_name": "List File Revisions",
+            "display_name": "List file revisions",
             "short_desc": "List the earlier versions Drive holds for a file",
             "desc": "Lists the revisions Drive holds for a file.\n\n"
                 "Drive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  "
@@ -519,7 +519,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/get-revision",
             "action": "get-revision",
-            "display_name": "Get File Revision",
+            "display_name": "Get file revision",
             "short_desc": "Get the details of one revision of a file",
             "desc": "Returns the details of one revision of a file: when it was made, how large it is, and "
                 "whether Drive will keep it indefinitely.",
@@ -539,7 +539,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/delete-revision",
             "action": "delete-revision",
-            "display_name": "Delete File Revision",
+            "display_name": "Delete file revision",
             "short_desc": "Remove one earlier version of a file",
             "desc": "Removes one revision of a file, freeing the storage it occupied.\n\n"
                 "**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to "
@@ -563,7 +563,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/list-files",
             "action": "find-files",
-            "display_name": "Find Files",
+            "display_name": "Find files",
             "short_desc": "Search Drive and read the results as records",
             "desc": "Searches Drive and reads the results as a stream of records.\n\n"
                 "Unlike `list-files`, which answers one page and leaves the page token to the caller, this "
@@ -589,7 +589,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_FILE,
             "action": EVENT_NEW_FILE,
-            "display_name": "New File",
+            "display_name": "New file",
             "short_desc": "React to a file being created in Drive",
             "desc": "Fires when a file is created in the drive being watched.\n\n"
                 "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "
@@ -612,7 +612,7 @@ module GoogleDriveDataProvider {
             "app": GoogleDriveDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_FOLDER,
             "action": EVENT_NEW_FOLDER,
-            "display_name": "New Folder",
+            "display_name": "New folder",
             "short_desc": "React to a folder being created in Drive",
             "desc": "Fires when a folder is created in the drive being watched.\n\n"
                 "Uses Drive's own change feed, so the cost of a poll does not grow with the size of the "

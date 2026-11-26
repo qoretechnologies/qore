@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.display_name": {
-          "source": "Create Measurements",
+          "source": "Create measurements",
           "message": "Créer des mesures"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Liste des événements de mesure à créer"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.display_name": {
-          "source": "Booking Ref",
+          "source": "Booking ref",
           "message": "Référence de réservation"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.short_desc": {

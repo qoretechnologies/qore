@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
-          "message": "Multi Chat"
+          "source": "Multi chat",
+          "message": "Multi chat"
         },
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
           "source": "Chat by sending several messages at once, with citations",
@@ -1060,8 +1060,8 @@
           "message": "An ISO 639-1 language code specifying the preferred language for the response"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
-          "source": "Simple Chat",
-          "message": "Simple Chat"
+          "source": "Simple chat",
+          "message": "Simple chat"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat by sending one message, with citations",
@@ -1768,8 +1768,8 @@
           "message": "An ISO 639-1 language code specifying the preferred language for the response"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
-          "source": "Stream Chat",
-          "message": "Stream Chat"
+          "source": "Stream chat",
+          "message": "Stream chat"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events",

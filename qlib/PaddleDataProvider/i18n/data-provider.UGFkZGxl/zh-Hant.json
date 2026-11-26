@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
@@ -448,7 +448,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
-          "source": "Create Customer",
+          "source": "Create customer",
           "message": "建立客戶"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "有效的 IETF BCP 47 簡短形式語言代碼標籤。如果省略，預設為 `en`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -508,7 +508,7 @@
           "message": "您自訂的結構化鍵值資料。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "行銷同意"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "此客戶是否同意接收您的行銷資訊。除非客戶在使用 Paddle Checkout 時勾選行銷同意方塊，否則為 `false`。\n由 Paddle 自動設定。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "匯入中繼資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -544,7 +544,7 @@
           "message": "此實體在匯入來源提供者中的參考或識別碼。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "匯入來源"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -648,7 +648,7 @@
           "message": "已封存"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -672,7 +672,7 @@
           "message": "有效的 IETF BCP 47 簡短形式語言地區代碼。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
-          "source": "Marketing Consent",
+          "source": "Marketing consent",
           "message": "行銷同意"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
@@ -684,7 +684,7 @@
           "message": "此客戶是否同意接收您的行銷資訊。除非客戶在使用 Paddle Checkout 時勾選行銷同意方塊，否則為 `false`。\n由 Paddle 自動設定。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "匯入中繼資料"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
@@ -708,7 +708,7 @@
           "message": "此實體在匯入來源提供者中的參考或識別碼。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "匯入來源"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -780,7 +780,7 @@
           "message": "傳回符合貨幣代碼的實體。使用逗號分隔清單指定多個貨幣代碼。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "列出產品"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
@@ -852,7 +852,7 @@
           "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "稅務類別"
         },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -908,7 +908,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
-          "source": "Create Product",
+          "source": "Create product",
           "message": "建立產品"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
@@ -932,7 +932,7 @@
           "message": "此產品的名稱。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "稅務類別"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1024,7 +1024,7 @@
           "message": "此產品的圖片。包含在結帳頁面以及某些客戶文件中。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "此產品的唯一 Paddle ID，前綴為 `pro_`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "匯入中繼資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "此實體在匯入來源提供者中的參考或識別碼。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "匯入來源"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "此產品的圖片。包含在結帳頁面以及某些客戶文件中。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -1232,7 +1232,7 @@
           "message": "標準"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "稅務類別"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "已封存"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
-          "source": "List Prices",
+          "source": "List prices",
           "message": "列出價格"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
@@ -1448,7 +1448,7 @@
           "message": "依指定的欄位與方向（`[ASC]` 或 `[DESC]`）排序傳回的實體。 例如 `?order_by=id[ASC]`。\n\n可用於排序的欄位： `billing_cycle.frequency`, `billing_cycle.interval`, `id`, `product_id`, `quantity.maximum`, `quantity.minimum`, `status`, `tax_mode`, `unit_price.amount`, 與 `unit_price.currency_code`."
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
-          "source": "Billing Cycle Interval",
+          "source": "Billing cycle interval",
           "message": "計費週期區間"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
-          "source": "Billing Cycle Frequency",
+          "source": "Billing cycle frequency",
           "message": "計費週期頻率"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
-          "source": "Create Price",
+          "source": "Create price",
           "message": "建立價格"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "此價格的內部說明，不向客戶顯示。通常供您的團隊備註使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "計費週期"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "試用期"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "需要付款方式"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -1820,7 +1820,7 @@
           "message": "此價格在試用時是否需要付款方式 (`true`) 或不需要 (`false`)。若為 `false`，客戶可於不輸入付款細節的情況下註冊訂閱，通常稱為「無卡試用」。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "試用定價的單價覆蓋清單。用於以自訂試用價和貨幣覆蓋基本試用價，適用於國家或國家群組。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "國家代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "支援的兩字母 ISO 3166-1 alpha-2 國家代碼。位於所列國家的客戶將收取覆蓋價格。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "此價格的名稱，在結帳和發票上向客戶顯示。通常描述相關產品的計費頻率。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "稅務模式"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2100,7 +2100,7 @@
           "message": "與此價格相關之產品最少可購買數量。若設定 `maximum`，則為必填。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2112,7 +2112,7 @@
           "message": "單價覆寫清單。用於以特定國家或國家群組的自訂價格與幣別覆寫基本價格。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "國家代碼"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "支援的兩字母 ISO 3166-1 alpha-2 國家代碼。位於所列國家的客戶將收取覆蓋價格。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2136,7 +2136,7 @@
           "message": "覆蓋價格。此價格適用於設定單位價格覆蓋的國家內的客戶"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "此價格的唯一 Paddle ID，以 `pri_` 為字首。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
-          "source": "Import Meta",
+          "source": "Import meta",
           "message": "匯入中繼資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "此實體在匯入來源提供者中的參考或識別碼。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.display_name": {
-          "source": "Imported From",
+          "source": "Imported from",
           "message": "匯入來源"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.field.aW1wb3J0ZWRfZnJvbQ.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "此價格的內部說明，不向客戶顯示。通常供您的團隊備註使用。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "已封存"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "計費週期"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "試用期"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Requires Payment Method",
+          "source": "Requires payment method",
           "message": "需要付款方式"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.cmVxdWlyZXNfcGF5bWVudF9tZXRob2Q.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "此價格在試用時是否需要付款方式 (`true`) 或不需要 (`false`)。若為 `false`，客戶可於不輸入付款細節的情況下註冊訂閱，通常稱為「無卡試用」。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6Kk1vbmV5T3B0aW9uYWxDdXJyZW5jeSM5Y2FjYjY1MWRmMTYxZWU5MTcxNDI5NDM3NGU1ZWJmYzhhM2JlNjEyZWUyYTY4NzJkZjZmMjdhNzA3ZGM3MjFh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "試用定價的單價覆蓋清單。用於以自訂試用價和貨幣覆蓋基本試用價，適用於國家或國家群組。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "國家代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "支援的兩字母 ISO 3166-1 alpha-2 國家代碼。位於所列國家的客戶將收取覆蓋價格。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6UHJpY2VUcmlhbFVuaXRQcmljZU92ZXJyaWRlIzliMjViYjhhZTkyYjZkMjkwOWNmMjgwNmJlOGM2YjlmNzVmYWM1MzYxYmMxZDJmZjdkZmIyNGQ4MWM1MWQzMTM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "此價格的名稱，在結帳和發票上向客戶顯示。通常描述相關產品的計費頻率。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "稅務模式"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "與此價格相關之產品最少可購買數量。若設定 `maximum`，則為必填。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "單價覆寫清單。用於以特定國家或國家群組的自訂價格與幣別覆寫基本價格。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "國家代碼"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "支援的兩字母 ISO 3166-1 alpha-2 國家代碼。位於所列國家的客戶將收取覆蓋價格。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.field.dW5pdF9wcmljZQ.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "覆蓋價格。此價格適用於設定單位價格覆蓋的國家內的客戶"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "標準"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
+          "source": "List subscriptions",
           "message": "列出訂閱"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "收款模式"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "手動"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
-          "source": "Scheduled Change Action",
+          "source": "Scheduled change action",
           "message": "排程變更動作"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
@@ -3056,7 +3056,7 @@
           "message": "傳回有排程變更的訂閱。使用逗號分隔清單指定多個排程變更動作。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
-          "source": "Next Billed At",
+          "source": "Next billed at",
           "message": "下一次計費時間"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
-          "source": "List Transactions",
+          "source": "List transactions",
           "message": "列出交易"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "傳回與指定訂閱相關的實體。使用逗號分隔清單以指定多個訂閱 ID。傳遞 `null` 可傳回不屬於任何訂閱的實體。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "更新時間"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
@@ -3200,7 +3200,7 @@
           "message": "傳回在特定時間更新的實體。傳遞 RFC 3339 日期時間字串，或使用 `[LT]` (小於)、`[LTE]` (小於或等於)、`[GT]` (大於) 或 `[GTE]` (大於或等於) 運算子。例如 `updated_at=2023-04-18T17:03:26` 或 `updated_at[LT]=2023-04-18T17:03:26`。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "建立時間"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "傳回在特定時間建立的實體。傳遞 RFC 3339 日期時間字串，或使用 `[LT]` (小於)、`[LTE]` (小於或等於)、`[GT]` (大於) 或 `[GTE]` (大於或等於) 運算子。例如 `created_at=2023-04-18T17:03:26` 或 `created_at[LT]=2023-04-18T17:03:26`。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
-          "source": "Billed At",
+          "source": "Billed at",
           "message": "計費時間"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
@@ -3272,7 +3272,7 @@
           "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
-          "source": "Invoice Number",
+          "source": "Invoice number",
           "message": "發票號碼"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "傳回與指定來源相關的實體。使用逗號分隔清單以指定多個來源。"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "收款模式"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3340,7 +3340,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
-          "source": "Create Transaction",
+          "source": "Create transaction",
           "message": "建立交易"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "年"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.display_name": {
-          "source": "Country Codes",
+          "source": "Country codes",
           "message": "國家代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.Y291bnRyeV9jb2Rlcw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "支援的兩字母 ISO 3166-1 alpha-2 國家代碼。位於所列國家的客戶將收取覆蓋價格。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpVbml0UHJpY2VPdmVycmlkZSMxNGM4Njg5ZGNlYmU4YmFmYWQxNmQ0MDhlZGQ5ZDY5NzAyZjMxOTkyYzRjZDQyNjFmMWIxYzhiMDJkNmZiZGY3.field.dW5pdF9wcmljZQ.short_desc": {
@@ -3552,7 +3552,7 @@
           "message": "past_due"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -3564,7 +3564,7 @@
           "message": "支援的三位字母 ISO 4217 幣別代碼。若 `collection_mode` 為 `manual`，則必須是 `USD`、`EUR` 或 `GBP`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
-          "source": "Collection Mode",
+          "source": "Collection mode",
           "message": "收款模式"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
@@ -3632,7 +3632,7 @@
           "message": "此交易所屬訂閱的 Paddle ID，以 `sub_` 為前綴。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
+          "source": "Billing period",
           "message": "計費週期"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
@@ -3644,7 +3644,7 @@
           "message": "此交易所屬的時間週期。由 Paddle 在訂閱續訂時自動設定，用以說明收費所屬的期間。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
+          "source": "Ends at",
           "message": "結束於"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.ZW5kc19hdA.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "此期間結束時間的 RFC 3339 時間字串。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
+          "source": "Starts at",
           "message": "開始於"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.field.c3RhcnRzX2F0.short_desc": {
@@ -3668,7 +3668,7 @@
           "message": "此期間開始時間的 RFC 3339 時間字串。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
-          "source": "Billing Details",
+          "source": "Billing details",
           "message": "帳單詳細資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
@@ -3680,7 +3680,7 @@
           "message": "開立發票的詳細資料。當 `collection_mode` 為 `manual` 時為必填。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.display_name": {
-          "source": "Additional Information",
+          "source": "Additional information",
           "message": "額外資訊"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.YWRkaXRpb25hbF9pbmZvcm1hdGlvbg.short_desc": {
@@ -3692,7 +3692,7 @@
           "message": "要包含在此發票中的備註或其他資訊。會出現在發票文件上。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.display_name": {
-          "source": "Enable Checkout",
+          "source": "Enable checkout",
           "message": "啟用結帳"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.ZW5hYmxlX2NoZWNrb3V0.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "相關交易是否可使用 Paddle Checkout 付款。若在建立交易時省略，預設為 `false`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.display_name": {
-          "source": "Payment Terms",
+          "source": "Payment terms",
           "message": "付款條件"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cGF5bWVudF90ZXJtcw.short_desc": {
@@ -3716,7 +3716,7 @@
           "message": "客戶在發票開立後需多久內付款。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.display_name": {
-          "source": "Purchase Order Number",
+          "source": "Purchase order number",
           "message": "採購單編號"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.field.cHVyY2hhc2Vfb3JkZXJfbnVtYmVy.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "客戶採購訂單號碼。會出現在發票文件上。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3812,7 +3812,7 @@
           "message": "需折扣的金額。對於 `percentage` 折扣，必須在 `0.01` 和 `100` 之間；對於 `flat` 和 `flat_per_seat` 折扣，以貨幣最低單位表示的金額。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "此優惠的簡短描述，供您參考。不會顯示給客戶。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.display_name": {
-          "source": "Maximum Recurring Intervals",
+          "source": "Maximum recurring intervals",
           "message": "最大重複間隔"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.bWF4aW11bV9yZWN1cnJpbmdfaW50ZXJ2YWxz.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "此優惠是否適用於多個訂閱計費週期 (`true`) 或否 (`false`)。若省略，預設為 `false`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.display_name": {
-          "source": "Restrict To",
+          "source": "Restrict to",
           "message": "限制至"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.field.cmVzdHJpY3RfdG8.short_desc": {
@@ -3956,7 +3956,7 @@
           "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "列出報表"
         },
         "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
@@ -4028,7 +4028,7 @@
           "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
-          "source": "Create Report",
+          "source": "Create report",
           "message": "建立報表"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
@@ -4712,7 +4712,7 @@
           "message": "報告實體的 Paddle ID。"
         },
         "app.UGFkZGxl.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "搜尋記錄"
         },
         "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
@@ -4736,7 +4736,7 @@
           "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "尋找單筆記錄"
         },
         "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4760,7 +4760,7 @@
           "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "建立記錄"
         },
         "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
@@ -4784,7 +4784,7 @@
           "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
         },
         "app.UGFkZGxl.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "更新記錄"
         },
         "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
@@ -5012,7 +5012,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5168,7 +5168,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5324,7 +5324,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXlPcHRpb25hbEN1cnJlbmN5I2MwMTQ1MTI2NDMyMDBjYTEzN2FlZTVkNmQzZmRjNDhlNDRmYjkwOTk3MDA2ZWZjOWEwYzdkYTBhZWRhNmEyMDg.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5480,7 +5480,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6TW9uZXkjNzU4MWJkM2RmNDQzZWE5YTkzY2UxYjc1ZWZmZjAyMjA0YmVlMDNmN2Y5MjM4NGZlNmRmOTZkMDMzOGFmN2Q4YQ.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5624,7 +5624,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "計費週期"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5636,7 +5636,7 @@
           "message": "此價格收取的頻率。若價格為非週期性（單次），則為 `null`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -5720,7 +5720,7 @@
           "message": "與此價格相關之產品最少可購買數量。若設定 `maximum`，則為必填。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "稅務模式"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dGF4X21vZGU.short_desc": {
@@ -5748,7 +5748,7 @@
           "message": "地點"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "試用期"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -5760,7 +5760,7 @@
           "message": "與此價格相關產品的試用期。計費週期在試用期結束後開始。無試用期請設為 `null`。需要 `billing_cycle`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZQ.short_desc": {
@@ -5784,7 +5784,7 @@
           "message": "以貨幣最低單位表示的金額，例如 10 美元 = 1000（美分）。雖然以字串表示，但此值必須為有效整數。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.display_name": {
-          "source": "Currency Code",
+          "source": "Currency code",
           "message": "貨幣代碼"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpNb25leSM3NTgxYmQzZGY0NDNlYTlhOTNjZTFiNzVlZmZmMDIyMDRiZWUwM2Y3ZjkyMzg0ZmU2ZGY5NmQwMzM4YWY3ZDhh.field.Y3VycmVuY3lfY29kZQ.short_desc": {
@@ -5928,7 +5928,7 @@
           "message": "ZAR"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3RJZCMyYzJlNjhhNDhkNDA0MTRiMTg4MGI3ZDYwNDc0MDM2NjczOTIyY2E0NTFkMzcxOWMxYWZjYmRlZjg1ZDJhY2Ew.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
@@ -5940,7 +5940,7 @@
           "message": "單價覆寫清單。用於以特定國家或國家群組的自訂價格與幣別覆寫基本價格。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.display_name": {
-          "source": "Billing Cycle",
+          "source": "Billing cycle",
           "message": "計費週期"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.YmlsbGluZ19jeWNsZQ.short_desc": {
@@ -5952,7 +5952,7 @@
           "message": "此價格收取的頻率。若價格為非週期性（單次），則為 `null`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6000,7 +6000,7 @@
           "message": "非目錄項目之產品物件，用於收費。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.display_name": {
-          "source": "Custom Data",
+          "source": "Custom data",
           "message": "自訂資料"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.Y3VzdG9tX2RhdGE.short_desc": {
@@ -6048,7 +6048,7 @@
           "message": "此產品的名稱。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.display_name": {
-          "source": "Tax Category",
+          "source": "Tax category",
           "message": "稅務類別"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblN1YnNjcmlwdGlvblByb2R1Y3RDcmVhdGUjNWFlMzZkYTg3OTgxM2JlZWYyNmYwZWZhYWQwYjkwMjQ3N2I3ZTc3MmI0ZDkxNGUxNWJmODBiZmJhYzRhNTMwOA.field.dGF4X2NhdGVnb3J5.short_desc": {
@@ -6108,7 +6108,7 @@
           "message": "可以此價格購買相關產品的次數限制。適用於折扣行銷活動。如果省略，預設為 1-100。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.display_name": {
-          "source": "Tax Mode",
+          "source": "Tax mode",
           "message": "稅務模式"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dGF4X21vZGU.short_desc": {
@@ -6136,7 +6136,7 @@
           "message": "地點"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.display_name": {
-          "source": "Trial Period",
+          "source": "Trial period",
           "message": "試用期"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dHJpYWxfcGVyaW9k.short_desc": {
@@ -6148,7 +6148,7 @@
           "message": "與此價格相關產品的試用期。計費週期在試用期結束後開始。無試用期請設為 `null`。需要 `billing_cycle`。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.display_name": {
-          "source": "Unit Price",
+          "source": "Unit price",
           "message": "單價"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZQ.short_desc": {
@@ -6160,7 +6160,7 @@
           "message": "基本價格。此價格適用於所有客戶，但位於您設定有 `unit_price_overrides` 國家/地區的客戶除外。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
-          "source": "Unit Price Overrides",
+          "source": "Unit price overrides",
           "message": "單價覆寫"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpUcmFuc2FjdGlvblByaWNlQ3JlYXRlV2l0aFByb2R1Y3QjZmQxY2RlYTU3NmZlZDEwODBjNTA3NDFmNjVjOTc4OGYzMTAwMTIyMjBiMTk1YzAxNzZjNzBmMGNiMDc1ZTJiOA.field.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {

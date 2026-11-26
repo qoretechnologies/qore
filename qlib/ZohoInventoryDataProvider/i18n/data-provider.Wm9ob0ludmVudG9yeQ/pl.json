@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Wyszukaj kontakty"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -648,7 +648,7 @@
           "message": "Kontakt do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
-          "source": "Mark Contact Active/Inactive",
+          "source": "Mark Contact active/inactive",
           "message": "Oznacz kontakt jako aktywny/nieaktywny"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "`True`, aby oznaczyć jako aktywny, `False`, aby oznaczyć jako nieaktywny"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
-          "source": "List Contact Persons",
+          "source": "List Contact persons",
           "message": "Wyświetl listę osób kontaktowych"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
@@ -716,7 +716,7 @@
           "message": "Kontakt nadrzędny"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Create Contact Person",
+          "source": "Create Contact person",
           "message": "Utwórz osobę kontaktową"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Stanowisko lub tytuł zawodowy"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Get Contact Person",
+          "source": "Get Contact person",
           "message": "Pobierz osobę kontaktową"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Osoba kontaktowa do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Update Contact Person",
+          "source": "Update Contact person",
           "message": "Zaktualizuj osobę kontaktową"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Stanowisko lub tytuł zawodowy"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
-          "source": "Delete Contact Person",
+          "source": "Delete Contact person",
           "message": "Usuń osobę kontaktową"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
@@ -908,7 +908,7 @@
           "message": "Osoba kontaktowa do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
-          "source": "Mark Contact Person Primary",
+          "source": "Mark Contact person primary",
           "message": "Oznacz osobę kontaktową jako główną"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Osoba kontaktowa do oznaczenia jako główna"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
+          "source": "List items",
           "message": "Wyświetl listę pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
@@ -996,7 +996,7 @@
           "message": "Pozycje sprzedaży i zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
+          "source": "Create item",
           "message": "Utwórz pozycję"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "Konto magazynowe"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
+          "source": "Get item",
           "message": "Pobierz pozycję"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Element do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
+          "source": "Update item",
           "message": "Zaktualizuj element"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "Cena zakupu przedmiotu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
-          "source": "Mark Item Active/Inactive",
+          "source": "Mark item active/inactive",
           "message": "Oznacz pozycję jako aktywną/nieaktywną"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Status aktywności"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
+          "source": "Delete item",
           "message": "Usuń element"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Element do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
-          "source": "List Item Groups",
+          "source": "List item groups",
           "message": "Wyświetl grupy pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "Filtruj według nazwy grupy"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Create Item Group",
+          "source": "Create item group",
           "message": "Utwórz grupę przedmiotów"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Lista przedmiotów w grupie z atrybutami"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Get Item Group",
+          "source": "Get item group",
           "message": "Pobierz grupę pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Grupa pozycji do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Update Item Group",
+          "source": "Update item group",
           "message": "Zaktualizuj grupę pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Przedmioty w grupie"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
-          "source": "Delete Item Group",
+          "source": "Delete item group",
           "message": "Usuń grupę pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
@@ -1516,7 +1516,7 @@
           "message": "Grupa pozycji do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
-          "source": "List Item Adjustments",
+          "source": "List item adjustments",
           "message": "Wyświetl korekty pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Organizacja Zoho Inventory"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Create Item Adjustment",
+          "source": "Create item adjustment",
           "message": "Utwórz korektę przedmiotu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "Numer referencyjny korekty"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Get Item Adjustment",
+          "source": "Get item adjustment",
           "message": "Pobierz korektę zapasów"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Korekta zapasów do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "Delete Item Adjustment",
+          "source": "Delete item adjustment",
           "message": "Usuń korektę zapasów"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "Korekta zapasów do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
-          "source": "List Packages",
+          "source": "List packages",
           "message": "Wyświetl paczki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Filtruj według numeru paczki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
-          "source": "Create Package",
+          "source": "Create package",
           "message": "Utwórz paczkę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
@@ -1776,7 +1776,7 @@
           "message": "Własny numer paczki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
-          "source": "Get Package",
+          "source": "Get package",
           "message": "Pobierz paczkę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Paczka do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
-          "source": "Update Package",
+          "source": "Update package",
           "message": "Zaktualizuj paczkę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "Notatki do paczki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
-          "source": "Delete Package",
+          "source": "Delete package",
           "message": "Usuń paczkę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "Paczka do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
-          "source": "List Purchase Orders",
+          "source": "List purchase orders",
           "message": "Wyświetl listę zamówień zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Zafakturowane zamówienia zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Create Purchase Order",
+          "source": "Create purchase order",
           "message": "Utwórz zamówienie zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Notatki do zamówienia zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Get Purchase Order",
+          "source": "Get purchase order",
           "message": "Pobierz zamówienie zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Zamówienie zakupu do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Update Purchase Order",
+          "source": "Update purchase order",
           "message": "Zaktualizuj zamówienie zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Notatki do zamówienia zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "Delete Purchase Order",
+          "source": "Delete purchase order",
           "message": "Usuń zamówienie zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "Zamówienie zakupu do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
-          "source": "List Sales Orders",
+          "source": "List sales orders",
           "message": "Wyświetl zamówienia sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Unieważnione zamówienia sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Create Sales Order",
+          "source": "Create sales order",
           "message": "Utwórz zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "Warunki i zasady"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
-          "source": "Get Sales Order",
+          "source": "Get sales order",
           "message": "Pobierz zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "Zamówienie sprzedaży do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Update Sales Order",
+          "source": "Update sales order",
           "message": "Zaktualizuj zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "Warunki i zasady"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
-          "source": "Delete Sales Order",
+          "source": "Delete sales order",
           "message": "Usuń zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Zamówienie sprzedaży do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Pobierz listę faktur"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Częściowo opłacone faktury"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Utwórz fakturę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -2608,7 +2608,7 @@
           "message": "Powiązane zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
+          "source": "Get invoice",
           "message": "Pobierz fakturę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Faktura do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
+          "source": "Update invoice",
           "message": "Zaktualizuj fakturę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "Numer referencyjny"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
+          "source": "Delete invoice",
           "message": "Usuń fakturę"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
@@ -2764,7 +2764,7 @@
           "message": "Faktura do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
-          "source": "List Shipment Orders",
+          "source": "List shipment orders",
           "message": "Wyświetl zamówienia wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
@@ -2800,7 +2800,7 @@
           "message": "Filtruj według statusu wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Create Shipment Order",
+          "source": "Create shipment order",
           "message": "Utwórz zlecenie wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Notatki do wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Get Shipment Order",
+          "source": "Get shipment order",
           "message": "Pobierz zlecenie wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Zlecenie wysyłki do pobrania"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Update Shipment Order",
+          "source": "Update shipment order",
           "message": "Zaktualizuj zlecenie wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -2992,7 +2992,7 @@
           "message": "Notatki do wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
-          "source": "Delete Shipment Order",
+          "source": "Delete shipment order",
           "message": "Usuń zlecenie wysyłki"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "Zlecenie wysyłki do usunięcia"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
-          "source": "Mark Shipment Delivered",
+          "source": "Mark shipment delivered",
           "message": "Oznacz wysyłkę jako doręczoną"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
@@ -3076,7 +3076,7 @@
           "message": "Jak często sprawdzać nowe kontakty (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nowa faktura"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Jak często sprawdzać nowe faktury (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
-          "source": "New Item Adjustment",
+          "source": "New item adjustment",
           "message": "Nowa korekta pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Jak często sprawdzać nowe korekty pozycji (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
-          "source": "New Item Group",
+          "source": "New item group",
           "message": "Nowa grupa pozycji"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "Jak często sprawdzać nowe grupy pozycji (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
+          "source": "New item",
           "message": "Nowy element"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
@@ -3188,7 +3188,7 @@
           "message": "Jak często sprawdzać nowe pozycje (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
-          "source": "New Package",
+          "source": "New package",
           "message": "Nowa paczka"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "Jak często sprawdzać nowe paczki (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
-          "source": "New Purchase Order",
+          "source": "New purchase order",
           "message": "Nowe zamówienie zakupu"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Jak często sprawdzać nowe zamówienia zakupu (w sekundach)"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
-          "source": "New Sales Order",
+          "source": "New sales order",
           "message": "Nowe zamówienie sprzedaży"
         },
         "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
