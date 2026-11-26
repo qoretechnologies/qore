@@ -1,0 +1,29 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# calls that AOT code compiled at -O3 makes through fast entries and inline summaries of their callees; the test
+# compiles it as it is and with %no-debugging (aot-debugger-events.qtest)
+
+int sub pure(int v) {
+    return v + 3;
+}
+class StaticCallee {
+    static int twice(int v) {
+        return v * 2;
+    }
+}
+int sub run(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += pure(i) + StaticCallee::twice(i);
+        try {
+            total += pure(i);
+        } catch (hash<ExceptionInfo> ex) {
+            total = -1;
+        }
+    }
+    return total;
+}
+printf("%d\n", run(10));

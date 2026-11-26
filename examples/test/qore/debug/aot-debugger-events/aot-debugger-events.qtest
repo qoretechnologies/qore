@@ -46,11 +46,43 @@ class AotDebuggerEventsTest inherits QUnit::Test {
             string name = worker;
             addTestCase(name, sub () { checkWorker(name); });
         }
+        addTestCase("calls of a Program that cannot be debugged", \noDebuggingTest());
         addTestCase("fused-call-debugger: events in running native frames", sub () {
             testSkip("known gap qore#7697: -O3 fused, projected and inline object-method calls give no events in "
                 "frames that ran native code when the debugger attached");
         });
         set_return_value(main());
+    }
+
+    #! a Program that cannot be debugged (%no-debugging) makes its calls without checking for a debugger
+    /** No debugger can be attached to it, so its code compiled at -O3 does not refer to the counter of the debuggers
+        that the code of any other Program checks before such a call
+    */
+    noDebuggingTest() {
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        TmpDir tmp("qore-aot-debugger-events-guard-");
+        string src = get_script_dir() + "/guard-calls.qr";
+        string no_debugging_src = tmp.path + DirSep + "guard-calls-no-debugging.qr";
+        {
+            string text = ReadOnlyFile::readTextFile(src);
+            File f();
+            f.open2(no_debugging_src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(replace(text, "%modern\n", "%modern\n%no-debugging\n"));
+        }
+        hash<string, string> exes;
+        foreach hash<auto> i in ({"default": src, "no-debugging": no_debugging_src}.pairIterator()) {
+            string exe = tmp.path + DirSep + "guard-calls-" + i.key;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O3 -o " + quote(exe) + " " + quote(i.value));
+            assertTrue(is_file(exe), i.key + ": qcc produced the executable");
+            assertEq("240\n", ExecModeHarness::run_any(prefix + quote(exe) + " -b"), i.key + ": result");
+            exes{i.key} = exe;
+        }
+        assertTrue(binary_to_string(ReadOnlyFile::readBinaryFile(exes."default"), "ISO-8859-1")
+            .find("qore_rt_aot_direct_call_mode") >= 0, "a Program that can be debugged checks for a debugger");
+        assertEq(-1, binary_to_string(ReadOnlyFile::readBinaryFile(exes."no-debugging"), "ISO-8859-1")
+            .find("qore_rt_aot_direct_call_mode"), "a Program that cannot be debugged does not");
     }
 
     private static string withoutKnownGapCounts(string output) {

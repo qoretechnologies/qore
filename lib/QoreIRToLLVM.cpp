@@ -14010,10 +14010,66 @@ llvm::Value* QoreIRToLLVM::emitAOTFixedHashRemap(const BatchCalleeInfo& info,
 //! Returns an i1 that is true when no Program of the process has a debugger attached (qore#7676)
 /** A call through a fast entry or a summary of the callee is not reported to a debugger, so AOT code takes one only
     while qore_rt_aot_direct_call_mode is below 2; with a debugger attached the call is made by the call path, which
-    reports it.  The counter is loaded at each call, as a debugger can be attached while the caller runs.  It is
+    reports it.  The counter is loaded at each call (a monotonic atomic load), as a debugger can be attached while
+    the caller runs.  It is
     referenced weakly so that an older libqore can map the module and refuse it with its runtime identity check
     before any generated code runs, instead of failing in dlopen() with an unresolved symbol
 */
+//! Returns the stores of the runtime location and of the call site that the block being lowered made after its last
+//! call (qore#7676)
+/** The stores of the thread's runtime location (@a loc_ptr) and call site (@a call_site_ptr) of a call instruction are
+    made before it is lowered; see qore_llvm_sink_stores().  Only runtime calls read them, so a store after the last
+    call of the block can be moved past any instruction but a call.
+*/
+static std::vector<llvm::StoreInst*> qore_llvm_location_stores(llvm::BasicBlock* bb, const llvm::Value* loc_ptr,
+        const llvm::Value* call_site_ptr) {
+    std::vector<llvm::StoreInst*> stores;
+    if (!loc_ptr && !call_site_ptr) {
+        return stores;
+    }
+    for (auto it = bb->rbegin(), e = bb->rend(); it != e; ++it) {
+        if (llvm::isa<llvm::CallBase>(*it)) {
+            break;
+        }
+        auto* store = llvm::dyn_cast<llvm::StoreInst>(&*it);
+        if (store && store->isSimple() && (store->getPointerOperand() == loc_ptr
+                || store->getPointerOperand() == call_site_ptr)) {
+            stores.push_back(store);
+        }
+    }
+    std::reverse(stores.begin(), stores.end());
+    return stores;
+}
+
+//! Makes the stores of qore_llvm_location_stores() on each path of the branch to @a fast_bb or @a slow_bb that ends
+//! their block, if no call is made between them and the branch (qore#7676)
+/** The call made without the runtime makes them where the code after it overwrites them before a call reads them (a
+    summary of the callee's body), and they are then dead there, as without the check of the debugger; the call
+    through the runtime, which reads them, makes them itself.
+*/
+static void qore_llvm_sink_stores(const std::vector<llvm::StoreInst*>& stores, llvm::BasicBlock* fast_bb,
+        llvm::BasicBlock* slow_bb) {
+    if (stores.empty()) {
+        return;
+    }
+    assert(fast_bb->empty() && slow_bb->empty());
+    llvm::BasicBlock* bb = stores.front()->getParent();
+    for (llvm::StoreInst* store : stores) {
+        if (store->getParent() != bb) {
+            return;
+        }
+    }
+    for (auto it = std::next(stores.front()->getIterator()), e = bb->end(); it != e; ++it) {
+        if (llvm::isa<llvm::CallBase>(*it) || it->isTerminator()) {
+            return;
+        }
+    }
+    for (llvm::StoreInst* store : stores) {
+        store->clone()->insertInto(slow_bb, slow_bb->end());
+        store->moveBefore(*fast_bb, fast_bb->end());
+    }
+}
+
 static llvm::Value* qore_llvm_emit_no_debugger_attached(llvm::IRBuilder<>& b, llvm::Module& module) {
     llvm::LLVMContext& ctx = module.getContext();
     llvm::Type* i32_type = llvm::Type::getInt32Ty(ctx);
@@ -14022,8 +14078,10 @@ static llvm::Value* qore_llvm_emit_no_debugger_attached(llvm::IRBuilder<>& b, ll
     mode_gv->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
     mode_gv->setAlignment(llvm::Align(4));
     llvm::LoadInst* mode = b.CreateAlignedLoad(i32_type, mode_gv, llvm::Align(4), "aot_direct_call_mode");
-    // pairs with the release increment of qore_aot_debug_program_change()
-    mode->setAtomic(llvm::AtomicOrdering::Acquire);
+    // monotonic: the call without the runtime reads nothing that the attach of a debugger publishes, and the call
+    // through the runtime synchronizes with it there; an atomic load is not hoisted out of a loop, so each call reads
+    // the counter, and it does not keep the stores before it that a later store overwrites on both paths
+    mode->setAtomic(llvm::AtomicOrdering::Monotonic);
     return b.CreateICmpULT(mode, llvm::ConstantInt::get(i32_type, 2), "aot_no_debugger");
 }
 
@@ -14044,6 +14102,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         const std::vector<uint8_t>* date_kind_guards,
         const FastEntryTakeOver* take_over,
         const AbstractQoreFunctionVariant* ref_fast_variant) {
+    // the location stores made before the call, made on each path (qore_llvm_sink_stores())
+    std::vector<llvm::StoreInst*> trailing_stores = qore_llvm_location_stores(builder->GetInsertBlock(),
+        loc_cache_ptr, call_site_cache_ptr);
     // a function of another module is called through the fast entry that its module registered (qore#6035)
     const bool cross_module = callee_info.cross_module;
     // the call hands the references of the temporaries in take_over over to the entry that takes them over
@@ -14237,8 +14298,12 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     if (take_over && !owned_fn) {
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
-    // a call that a debugger must see is made by the runtime path, which reports it (qore#7676)
-    can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, qore_llvm_emit_no_debugger_attached(*builder, module));
+    // a call that a debugger must see is made by the runtime path, which reports it (qore#7676); in a Program that
+    // cannot be debugged, only a call into another module's Program can be one
+    if (aot_debugger_can_attach || cross_module) {
+        can_use_fast_entry = builder->CreateAnd(can_use_fast_entry,
+            qore_llvm_emit_no_debugger_attached(*builder, module));
+    }
     llvm::AllocaInst* method_context = nullptr;
     if ((take_over && callee_info.guarded_method_entry) || (object_base && callee_info.receiver_context_fast_entry)) {
         auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
@@ -14272,6 +14337,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             object_base ? object_base : llvm::ConstantInt::get(i64_type, VAL_NOTHING), xsink_arg});
         can_use_fast_entry = builder->CreateICmpNE(entered, llvm::ConstantInt::get(i32_type, 0));
     }
+    qore_llvm_sink_stores(trailing_stores, fast_bb, fallback_bb);
     builder->CreateCondBr(can_use_fast_entry, fast_bb, fallback_bb);
 
     builder->SetInsertPoint(fast_bb);
@@ -14467,11 +14533,21 @@ llvm::Value* QoreIRToLLVM::emitAotDebuggerGuardedFastCall(llvm::Module& module, 
         llvm::BasicBlock* exception_target, const std::function<llvm::Value*(bool&)>& emit_fast,
         bool& fast_nothrow, std::string& error) {
     assert(raw_args.size() == static_cast<size_t>(nargs) && boxed_args.size() == static_cast<size_t>(nargs));
+    // no debugger can be attached to a Program that cannot be debugged: the call is made without the runtime
+    if (!aot_debugger_can_attach) {
+        fast_nothrow = false;
+        llvm::Value* fast_result = emit_fast(fast_nothrow);
+        assert(fast_result || !error.empty());
+        return fast_result;
+    }
     llvm::BasicBlock* fast_bb = llvm::BasicBlock::Create(ctx, "aot_no_debugger_call", llvm_func);
     llvm::BasicBlock* debugger_bb = llvm::BasicBlock::Create(ctx, "aot_debugger_call", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "aot_debugger_call_merge", llvm_func);
-    builder->CreateCondBr(qore_llvm_emit_no_debugger_attached(*builder, module), fast_bb, debugger_bb,
-        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+    std::vector<llvm::StoreInst*> trailing_stores = qore_llvm_location_stores(builder->GetInsertBlock(),
+        loc_cache_ptr, call_site_cache_ptr);
+    llvm::Value* no_debugger = qore_llvm_emit_no_debugger_attached(*builder, module);
+    qore_llvm_sink_stores(trailing_stores, fast_bb, debugger_bb);
+    builder->CreateCondBr(no_debugger, fast_bb, debugger_bb, llvm::MDBuilder(ctx).createBranchWeights(999, 1));
 
     builder->SetInsertPoint(fast_bb);
     fast_nothrow = false;
@@ -14506,6 +14582,9 @@ llvm::Value* QoreIRToLLVM::emitAotDebuggerGuardedFastCall(llvm::Module& module, 
         debugger_result = builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
             args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
     }
+    // the path is taken only while a debugger is attached: cold, so that the registers of the code are given to the
+    // call made without the runtime
+    llvm::cast<llvm::CallInst>(debugger_result)->addFnAttr(llvm::Attribute::Cold);
     debugger_result = emitFallbackResultToFastReturnKind(module, callee_info, debugger_result);
     if (fast_nothrow) {
         // the code after the call checks no exception: this call's exception is checked here
@@ -15444,6 +15523,7 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots, aot_direct_closure_fast_entry);
+        nested_lowering.setAOTDebuggerCanAttach(aot_debugger_can_attach);
         // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
         nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
@@ -34713,8 +34793,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // the call is made through the generic path while a debugger is attached (qore#7676), as
                         // when its arguments do not have the types of the fast entry's native parameters
                         {
-                            llvm::Value* args_assigned =
-                                qore_llvm_emit_no_debugger_attached(*builder, module);
+                            llvm::Value* args_assigned = aot_debugger_can_attach
+                                ? qore_llvm_emit_no_debugger_attached(*builder, module)
+                                : llvm::ConstantInt::getTrue(ctx);
                             for (int i = 0; guarded_native_args && i < native_nargs; ++i) {
                                 if (i && !(i % 100)
                                         && qore_check_cancel(nullptr,

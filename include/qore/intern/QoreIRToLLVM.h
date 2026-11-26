@@ -170,6 +170,14 @@ public:
         aot_direct_closure_fast_entry = direct_closure_fast_entry;
     }
 
+    //! Sets whether a debugger can be attached to the Program of the code (qore#7676)
+    /** False for a Program with PO_NO_DEBUGGING: its calls through fast entries of its own module then do not check
+        whether a debugger is attached; true (the default) otherwise.
+    */
+    void setAOTDebuggerCanAttach(bool can_attach) {
+        aot_debugger_can_attach = can_attach;
+    }
+
     //! Sets the name of the native function generated for the IR function, if not its own name
     /** Lets a function be compiled again under another symbol without changing the IR function, which is shared by
         every thread running it.
@@ -308,6 +316,8 @@ private:
 
     // AOT mode: emit _aot helper calls with slot indices instead of embedded pointers
     bool aot_mode = false;
+    //! False if no debugger can be attached to the Program of the code (see setAOTDebuggerCanAttach())
+    bool aot_debugger_can_attach = true;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
     //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
