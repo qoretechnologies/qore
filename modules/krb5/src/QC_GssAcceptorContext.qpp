@@ -141,7 +141,8 @@ nothing GssAcceptorContext::reset() {
     @throw KRB5-SANDBOX-ERROR if code that a sandbox governs gives no credential (the default keytab of the process
     is not visible to it, see @ref krb5sec_cache_isolation), or a credential that code of another isolation domain
     acquired from a keytab (it names the replay cache of that domain), or if the replay cache directory or file of a
-    credential that sandboxed code acquired from a keytab is not one of the effective user of the process
+    credential that sandboxed code acquired from a keytab is not one of the effective user of the process, or the
+    filesystem policy of the sandbox of the code that steps allows changes on the path of that replay cache
 */
 hash<GssStepInfo> GssAcceptorContext::step(string token_hex) {
     if (krb5_check_no_nul(token_hex, "token_hex", "hex strings", "KRB5-TOKEN-ERROR", true, xsink)) {

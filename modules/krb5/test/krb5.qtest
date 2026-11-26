@@ -136,6 +136,8 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("a sandboxed acceptor uses the replay cache of its domain", \testSandboxGssAcceptorReplayCache());
         addTestCase("the replay cache directory of sandboxed acceptors is the user's own",
             \testSandboxGssAcceptorReplayCacheDir());
+        addTestCase("a sandbox that may change the path of its replay cache does not accept",
+            \testSandboxGssAcceptorReplayCachePolicy());
         addTestCase("a sandboxed acceptor does not use the acceptor credential of another domain",
             \testSandboxGssAcceptorOtherDomainCredential());
         addTestCase("a sandboxed initiator does not use the client keytab of the process",
@@ -1088,8 +1090,9 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
     }
 
     #! a Program governed by a sandbox with the given isolation domain (or none), whose code uses credential caches;
-    #! with \a fs_root, its filesystem policy allows only that directory
-    private Program cacheTenant(*string domain, bool network = False, *string fs_root) {
+    #! with \a fs_root, its filesystem policy allows only that directory; \a fs_allow gives allowed paths and their
+    #! access modes
+    private Program cacheTenant(*string domain, bool network = False, *string fs_root, *hash<string, int> fs_allow) {
         Program p(PO_MODERN);
         p.loadModule("krb5");
         p.parse("
@@ -1202,6 +1205,9 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         }
         if (fs_root) {
             sm.setFilesystemSandboxRoot(fs_root);
+        }
+        if (fs_allow) {
+            map sm.addFilesystemAllowedPath($1.key, $1.value), fs_allow.pairIterator();
         }
         p.setSandboxManager(sm);
         return p;
@@ -1489,6 +1495,52 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
         assertRegex("replay cache directory", r.desc);
         assertEq((), listDir(other), "nothing is created in the directory that the link names");
+        unlink(dir);
+
+        # a temporary directory that other users can change entries of
+        chmod(tmp.path, 0777);
+        r = a.callFunction("gss_cred_from_keytab_result", a_kt);
+        assertEq("KRB5-SANDBOX-ERROR", r.err, r.desc);
+        assertRegex("writable by other users", r.desc);
+        chmod(tmp.path, 01777);
+        assertEq({}, a.callFunction("gss_cred_from_keytab_result", a_kt));
+        chmod(tmp.path, 0700);
+    }
+
+    #! a sandbox whose filesystem policy allows it to change the entries on the path of the replay cache could replace
+    #! them between the module's check and the library's open: its acceptor credentials and steps are refused
+    #! (qore#7756)
+    private testSandboxGssAcceptorReplayCachePolicy() {
+        TmpDir tmp("module-krb5-rcache-policy-");
+        *string tmpdir = getenv("TMPDIR");
+        on_exit if (exists tmpdir) { setenv("TMPDIR", tmpdir); } else { unsetenv("TMPDIR"); }
+        setenv("TMPDIR", tmp.path);
+
+        string kt_name = "MEMORY:module-krb5-rcache-policy-" + getpid();
+        string domain = "rcache-policy-tenant-" + getpid();
+        string tmp_real = realpath(tmp.path);
+        Program a = cacheTenant(domain);
+        auto a_kt = a.callFunction("keytab_add", kt_name, "HTTP/a.example.com@EXAMPLE.COM", getTestKeyHex1());
+        Qore::Krb5::GssCredential a_cred = a.callFunction("gss_cred_obj_from_keytab", a_kt);
+
+        foreach hash<auto> i in ({"path": tmp_real, "mode": QSEC_READ | QSEC_WRITE | QSEC_CREATE},
+                {"path": tmp_real, "mode": QSEC_DELETE},
+                {"path": replayCacheDir(), "mode": QSEC_WRITE}) {
+            # the same domain, with a policy that allows the change
+            Program b = cacheTenant(domain, False, NOTHING, {i.path: i.mode});
+            auto b_kt = b.callFunction("keytab_add", kt_name, "HTTP/b.example.com@EXAMPLE.COM", getTestKeyHex1());
+            hash<auto> r = b.callFunction("gss_cred_from_keytab_result", b_kt);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, sprintf("%y: %s", i, r.desc));
+            assertRegex("filesystem policy of the sandbox allows changes", r.desc);
+            # a credential of the domain that code with another policy acquired
+            r = b.callFunction("gss_accept_with", a_cred);
+            assertEq("KRB5-SANDBOX-ERROR", r.err, sprintf("%y: %s", i, r.desc));
+            assertRegex("filesystem policy of the sandbox allows changes", r.desc);
+        }
+        # read access is no change
+        Program c = cacheTenant(domain, False, NOTHING, {tmp_real: QSEC_READ});
+        hash<auto> r = c.callFunction("gss_accept_with", a_cred);
+        assertEq("KRB5-GSS-ERROR", r.err, r.desc);
     }
 
     #! an acceptor credential that code of another isolation domain acquired names the replay cache of that domain:

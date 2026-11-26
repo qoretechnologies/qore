@@ -42,6 +42,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
+#include <mutex>
 #include <random>
 #include <strings.h>
 #include <fcntl.h>
@@ -773,44 +774,89 @@ static std::string krb5_rcache_dir() {
 //! Checks the replay cache directory and, if it exists, the replay cache file of a GSSAPI acceptor of code that a
 //! sandbox governs (qore#7756)
 /** The library opens the replay cache by name, following links, for every authenticator that it accepts: the
-    directory must be a directory of the effective user that only it can use, and the file a regular file of the
-    effective user with one link, or the library could write to another file.  A change between this check and the
-    library's open is not detected; the module-private directory, which no sandbox is given access to, keeps others
-    from making one.
+    directory must be a directory of the effective user that only it can use, in a temporary directory that other
+    users cannot change entries of (sticky, or not writable by them), and the file a regular file of the effective
+    user with one link, or the library could write to another file; and the filesystem policy of the caller's sandbox
+    must not allow it to change the entries on that path (the temporary directory, the replay cache directory or the
+    file), as it could replace the directory or the file between this check and the library's open, which is not
+    detected.  The sandboxes of other code that may change them are not known here: no sandbox may be given that
+    access.
 
     @return 0 for OK, -1 if an exception was raised
 */
 static int krb5_check_rcache(const std::string& dir, const std::string& path, ExceptionSink* xsink,
         const char* context) {
+    std::string tmp = dir.substr(0, dir.rfind('/'));
+    if (tmp.empty()) {
+        tmp = "/";
+    }
     struct stat st;
+    if (stat(tmp.c_str(), &st) || !S_ISDIR(st.st_mode) || ((st.st_mode & (S_IWGRP | S_IWOTH))
+        && !(st.st_mode & S_ISVTX))) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the temporary directory '%s' of the replay caches of the "
+            "GSSAPI acceptors of code that a sandbox governs is writable by other users and not sticky", context,
+            tmp.c_str());
+        return -1;
+    }
     if (lstat(dir.c_str(), &st) || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077)) {
         xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache directory '%s' of the GSSAPI acceptors of "
             "code that a sandbox governs is not a directory that only the effective user of the process can use",
             context, dir.c_str());
         return -1;
     }
-    if (lstat(path.c_str(), &st)) {
-        if (errno == ENOENT) {
-            return 0;
-        }
-    } else if (S_ISREG(st.st_mode) && st.st_nlink == 1 && st.st_uid == geteuid()) {
-        return 0;
+    if (lstat(path.c_str(), &st) ? errno != ENOENT
+        : (!S_ISREG(st.st_mode) || st.st_nlink != 1 || st.st_uid != geteuid())) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache '%s' of the GSSAPI acceptor of code that a "
+            "sandbox governs is not a regular file of the effective user of the process with one link", context,
+            path.c_str());
+        return -1;
     }
-    xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache '%s' of the GSSAPI acceptor of code that a "
-        "sandbox governs is not a regular file of the effective user of the process with one link", context,
-        path.c_str());
-    return -1;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        for (const char* p : {tmp.c_str(), dir.c_str(), path.c_str()}) {
+            for (int mode : {QSEC_WRITE, QSEC_CREATE, QSEC_DELETE}) {
+                // a query of the policy: a denial is the expected answer
+                ExceptionSink probe;
+                bool allowed = smh->checkFilesystemAccess(p, mode, &probe);
+                probe.clear();
+                if (allowed) {
+                    xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the filesystem policy of the sandbox allows "
+                        "changes to '%s' on the path of the replay cache of its GSSAPI acceptors, with which it could "
+                        "make the library write to other files; no sandbox may be given write, create or delete "
+                        "access to the temporary directory or to the replay cache directory", context, p);
+                    return -1;
+                }
+            }
+        }
+    }
+    return 0;
 }
 
-//! A token of the process, which makes names of the module that are unique only in the process unique on the host
-static const std::string& krb5_process_token() {
-    static const std::string token = [] {
-        std::random_device rd;
-        std::string rv = std::to_string(getpid()) + '-';
-        krb5_append_hex(rv, std::to_string(rd()) + '-' + std::to_string(rd()));
-        return rv;
-    }();
-    return token;
+//! Gives a token of the process, which makes names of the module that are unique only in the process unique on the
+//! host; a new one after a fork
+/** @return 0 for OK, -1 if an exception was raised
+*/
+static int krb5_process_token(std::string& out, ExceptionSink* xsink) {
+    static std::mutex lck;
+    static pid_t token_pid = 0;
+    static std::string token;
+    std::lock_guard<std::mutex> guard(lck);
+    pid_t pid = getpid();
+    if (pid != token_pid) {
+        try {
+            std::random_device rd;
+            std::string rv = std::to_string(pid) + '-';
+            krb5_append_hex(rv, std::to_string(rd()) + '-' + std::to_string(rd()));
+            token = rv;
+            token_pid = pid;
+        } catch (const std::exception&) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from keytab: no random source "
+                "is available for the name of the replay cache of a GSSAPI acceptor of code that a sandbox governs");
+            return -1;
+        }
+    }
+    out = token;
+    return 0;
 }
 
 //! Gives the replay cache of the GSSAPI acceptor credentials of the caller's isolation domain (qore#7756)
@@ -840,7 +886,11 @@ static int krb5_sandbox_rcache_name(const Krb5CacheNamespace& ns, std::string& d
     std::string name = ns.prefix;
     if (ns.by_program) {
         // Program IDs are unique only in the process
-        name += krb5_process_token() + '-';
+        std::string token;
+        if (krb5_process_token(token, xsink)) {
+            return -1;
+        }
+        name += token + '-';
     }
     name += "krb5-rcache";
     if (name.size() > NAME_MAX) {

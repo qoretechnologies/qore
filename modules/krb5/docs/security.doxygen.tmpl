@@ -155,14 +155,32 @@
       the sandbox
     - the module creates the directory with mode 0700 and refuses (with
       \c KRB5-SANDBOX-ERROR) a directory that is a link, belongs to another
-      user or that other users can use, and a replay cache file that is not a
-      regular file of the effective user with one link, when the credential is
-      acquired and before each acceptor step, as the library opens the file by
-      name for every authenticator; no sandbox may be given access to the
-      directory (code that can create, remove or replace entries in it could
-      make the library write to other files, and code that can remove a replay
-      cache file turns off the replay protection of its acceptors until the
-      authenticators expire)
+      user or that other users can use, a temporary directory that other users
+      can write to without the sticky bit (which is not supported), and a
+      replay cache file that is not a regular file of the effective user with
+      one link, when the credential is acquired and before each acceptor step,
+      as the library opens the file by name for every authenticator
+    - no sandbox may be given access to the directory: code that can create,
+      remove or replace entries on its path could make the library write to
+      other files, and code that can remove a replay cache file turns off the
+      replay protection of its acceptors until the authenticators expire; a
+      grant of write, create or delete access to the temporary directory
+      itself (or to a tree that holds it) is such access, as the entry of the
+      directory in it can be replaced; the acceptor credentials and acceptor
+      steps of code whose own sandbox has such a grant raise
+      \c KRB5-SANDBOX-ERROR, and the grants of the sandboxes of other code
+      cannot be checked by the module
+    - another local user who creates
+      <tt><i>tmp</i>/qore-krb5-rcache-<i>euid</i></tt> first keeps the
+      acceptors of sandboxed code from working (they fail closed with
+      \c KRB5-SANDBOX-ERROR, as the default replay cache of MIT Kerberos
+      does with a file of another user); a temporary-file cleaner that removes
+      the directory or a file in it makes the acceptor credentials of sandboxed
+      code that exist fail in the same way until they are acquired again
+    - the replay cache file of a sandbox without an isolation domain is new
+      for each %Program and process and stays until the files of the
+      temporary directory are cleaned (removing it while the process runs
+      would reopen a replay window)
     - this needs \c gss_acquire_cred_from() in the GSSAPI library, and raises
       \c KRB5-SANDBOX-ERROR without it; an acceptor credential of another
       domain raises \c KRB5-SANDBOX-ERROR in an acceptor of the domain; a
