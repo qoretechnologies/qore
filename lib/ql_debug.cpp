@@ -8627,6 +8627,11 @@ public:
         UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
     }
 
+    //! Describes a failed call of a silent target for an assertion message: the call and its errno (qore#7732)
+    static std::string silentTargetError(const char* call, int err) {
+        return std::string("; ") + call + "() failed with errno " + std::to_string(err) + " (" + strerror(err) + ")";
+    }
+
     //! Makes a target that gets no answer for the connection tests; returns false if it cannot be made
     /** On Linux a listener whose accept queue is full, which drops the connection requests that it cannot queue;
         elsewhere a port that is bound and does not listen, which macOS does not answer.  The descriptors made are
@@ -8635,7 +8640,9 @@ public:
     static bool makeSilentTarget(UnitTestCounters& c, std::vector<int>& fds, struct sockaddr_in& sa,
             const std::string& when) {
         int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -8644,16 +8651,26 @@ public:
         sa.sin_family = AF_INET;
         sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         socklen_t salen = sizeof(sa);
-        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
-            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen);
-        UT_ASSERT(c, ok, ("connect close target is bound" + when).c_str());
-        if (!ok) {
+        const char* failed = nullptr;
+        if (::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)) {
+            failed = "bind";
+        } else if (::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen)) {
+            failed = "getsockname";
+        }
+        err = errno;
+        UT_ASSERT(c, !failed, ("connect close target is bound" + when
+            + (failed ? silentTargetError(failed, err) : std::string())).c_str());
+        if (failed) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds);
-        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen, fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
@@ -9327,28 +9344,51 @@ public:
         of a listener) exceeds its backlog (tcpi_sacked), where Linux drops a connection request (no timing is
         involved; the poll's limit only guards against a hang)
     */
-    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds) {
+    static bool fillAcceptQueue(int lfd, const struct sockaddr* sa, socklen_t salen, std::vector<int>& fds,
+            std::string* why = nullptr) {
+        auto fail = [why](const char* call) {
+            if (why) {
+                *why = silentTargetError(call, errno);
+            }
+            return false;
+        };
+        unsigned unacked = 0;
+        unsigned sacked = 0;
         for (int i = 0; i < 4; ++i) {
             struct tcp_info ti = {};
             socklen_t len = sizeof(ti);
             if (getsockopt(lfd, IPPROTO_TCP, TCP_INFO, &ti, &len)) {
-                return false;
+                return fail("getsockopt(TCP_INFO)");
             }
             if (ti.tcpi_unacked > ti.tcpi_sacked) {
                 return true;
             }
+            unacked = ti.tcpi_unacked;
+            sacked = ti.tcpi_sacked;
             int cfd = ::socket(sa->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0);
             if (cfd < 0) {
-                return false;
+                return fail("socket");
             }
             fds.push_back(cfd);
             if (::connect(cfd, sa, salen)) {
-                return false;
+                return fail("connect");
             }
             struct pollfd pfd = {lfd, POLLIN, 0};
-            if (::poll(&pfd, 1, 10000) != 1) {
+            int prc = ::poll(&pfd, 1, 10000);
+            if (prc != 1) {
+                if (prc < 0) {
+                    return fail("poll");
+                }
+                if (why) {
+                    *why = "; poll() timed out: the listener did not become readable within 10 s (attempt "
+                        + std::to_string(i + 1) + ")";
+                }
                 return false;
             }
+        }
+        if (why) {
+            *why = "; the accept queue did not fill in 4 attempts (tcpi_unacked " + std::to_string(unacked)
+                + ", tcpi_sacked " + std::to_string(sacked) + ")";
         }
         return false;
     }
@@ -9357,7 +9397,9 @@ public:
     //! Makes a target on ::1 with the given port that gets no answer, as makeSilentTarget() does on 127.0.0.1
     static bool makeSilentTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when) {
         int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
-        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when).c_str());
+        int err = errno;
+        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when
+            + (lfd < 0 ? silentTargetError("socket", err) : std::string())).c_str());
         if (lfd < 0) {
             return false;
         }
@@ -9369,14 +9411,20 @@ public:
         sa6.sin6_addr = in6addr_loopback;
         sa6.sin6_port = port;
         bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
-        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when).c_str());
+        err = errno;
+        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when
+            + (ok ? std::string() : silentTargetError("bind", err))).c_str());
         if (!ok) {
             return false;
         }
 #ifdef __linux__
-        UT_ASSERT(c, !::listen(lfd, 0), ("the IPv6 connect close target listens" + when).c_str());
-        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds);
-        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when).c_str());
+        bool listening = !::listen(lfd, 0);
+        err = errno;
+        UT_ASSERT(c, listening, ("the IPv6 connect close target listens" + when
+            + (listening ? std::string() : silentTargetError("listen", err))).c_str());
+        std::string why;
+        bool full = fillAcceptQueue(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6), fds, &why);
+        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when + why).c_str());
         if (!full) {
             return false;
         }
