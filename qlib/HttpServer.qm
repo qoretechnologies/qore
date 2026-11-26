@@ -381,6 +381,17 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a listener can serve only its own handlers
+      (@ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only"):
+      it never serves the handlers, the dynamic handlers or the default handler of the server, and while it has no
+      handler of its own, a request gets a 503 response; before, a listener without handlers served those of the
+      server (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
+    - the stop of a listener (@ref HttpServer::HttpServer::stopListenerID() "stopListenerID()") refuses new
+      connections before it waits for the requests in progress, and ends also when an error is raised during the
+      stop; before, a client could connect while the stop waited
+      (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
+    - the parse option @ref Qore::Option::HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION
+      "HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION" tells that this module has these behaviours
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
@@ -2258,6 +2269,10 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "sse_max_buffer_size": opts.sse_max_buffer_size,
             "stream_send_min_rate": opts.stream_send_min_rate,
             "stream_send_min_rate_window": opts.stream_send_min_rate_window,
+            # the listener's handlers and its setting for the handlers of the server: given before the listener
+            # receives a request (qore#7690)
+            "handler_info": opts.handler_info,
+            "own_handlers_only": opts.own_handlers_only,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -2275,8 +2290,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         http_listener.setServerStopWaitGroup(c);
 
         # the fast routes of the server, if any, are answered for the HTTP/3 requests of the listener's sessions; the
-        # socket is kept so that routes created later are attached to it as well
-        {
+        # socket is kept so that routes created later are attached to it as well; a listener that serves only its
+        # own handlers never answers the server's routes (qore#7690)
+        if (!opts.own_handlers_only) {
             fast_routes_lock.lock();
             on_exit fast_routes_lock.unlock();
             quic_udp_sockets{string(lid)} = udp_sock;
@@ -2565,6 +2581,50 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         }
     }
 
+    #! Stops accepting new connections on a listener whose stop has started, and on its paired QUIC listener
+    /** Only called from the listeners: the listener is no longer advertised as an HTTP/3 alternative service, and the
+        async I/O controller accepts no new connection or session for it; its connections in progress are served
+        (qore#7690)
+    */
+    stopListenerAccepting(HttpListener l) {
+        string lid = string(l.getID());
+        *HttpListener quic_l;
+        {
+            lm.enter();
+            on_exit lm.exit();
+
+            if (quic_listener_map.hasKey(lid)) {
+                quic_l = listeners{string(quic_listener_map{lid})};
+                # clients are no longer told to use the QUIC listener of this listener
+                remove quic_port_map{lid};
+                remove quic_alt_svc_max_age{lid};
+                updateAltSvcHeader();
+            }
+        }
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            remove alt_svc_targets{lid};
+        }
+        if (asyncIo) {
+            foreach *HttpListener sl in ((l, quic_l)) {
+                if (!sl) {
+                    continue;
+                }
+                try {
+                    asyncIo.stopAccepting(sl);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the listener may not be registered (it did not start, or the server is stopping); another error
+                    # does not keep the other listener from stopping to accept connections
+                    if (ex.err != "CONTROLLER-REMOVE-LISTENER-ERROR" && ex.err != "ASYNCSOCKETIO-CANCEL-ERROR") {
+                        logError("error refusing new connections on listener %d: %s: %s: %s", sl.getID(),
+                            get_ex_pos(ex), ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+    }
+
     # only called from the listeners - do not call externally
     listenerStopped(HttpListener l) {
         # decrement listener count (guard against double-call from async cleanup + stop)
@@ -2588,10 +2648,12 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             try {
                 asyncIo.removeListener(l);
             } catch (hash<ExceptionInfo> ex) {
-                # Ignore error if listener was not registered (can happen during shutdown)
+                # Ignore error if listener was not registered (can happen during shutdown); another error does not
+                # keep the listener's paired QUIC listener from being stopped below (qore#7690)
                 if (ex.err != "CONTROLLER-REMOVE-LISTENER-ERROR"
                         && ex.err != "ASYNCSOCKETIO-CANCEL-ERROR") {
-                    rethrow;
+                    logError("error removing listener %d from the async I/O controller: %s: %s: %s", l.getID(),
+                        get_ex_pos(ex), ex.err, ex.desc);
                 }
             }
         }
@@ -2618,10 +2680,20 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             # NOTE: stop() triggers the QUIC listener's own listenerStopped()
             # flow which removes it from listeners{}, nmap{}, and smap{}.
             if (listeners.hasKey(string(quic_lid))) {
+                HttpListener quic_l = listeners{quic_lid};
                 try {
-                    listeners{quic_lid}.stop();
+                    quic_l.stop();
                 } catch (hash<ExceptionInfo> ex) {
-                    # Best-effort cleanup
+                    # best effort: the QUIC listener, which accepts no new session since the stop of this listener
+                    # started, is removed from the async I/O controller in any case (qore#7690)
+                    logError("error stopping QUIC listener %d of listener %s: %s: %s: %s", quic_lid, lid,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                    try {
+                        removeAsyncListener(quic_l);
+                    } catch (hash<ExceptionInfo> ex1) {
+                        logError("error removing QUIC listener %d from the async I/O controller: %s: %s: %s", quic_lid,
+                            get_ex_pos(ex1), ex1.err, ex1.desc);
+                    }
                 }
             }
         }
@@ -2870,7 +2942,11 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! stops a single listener based on its listener ID; does not return until all connections on the listener have closed
-    /** @param id listener id
+    /** From the start of the stop, the listener accepts no new connection, its paired QUIC listener no new session,
+        and the QUIC listener is no longer advertised in the \c Alt-Svc header; the requests in progress are served
+        (qore#7690)
+
+        @param id listener id
 
         @throw INVALID-LISTENER-ERROR invalid listener ID
         @throw HTTP-SERVER-ERROR cannot stop last listener
@@ -3008,15 +3084,17 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! adds a request handler to a listener given the listener's name or bind address
-    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+    /** @note If the listener has a paired QUIC/HTTP3 listener, the handler is automatically propagated to it with a
+        \c "-h3" suffix on the name, as with addHandlerToListenerID() (qore#7690)
+
+        @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
         here, not when a request is matched
     */
     addHandlerToListener(softstring bind, string name, hash<HttpHandlerConfigInfo> info) {
         lm.enter();
         on_exit lm.exit();
 
-        softstring id = getListenerIdFromBindUnlocked(bind);
-        listeners{id}.addHandlers({name: info});
+        addHandlerToListenerID(getListenerIdFromBindUnlocked(bind), name, info);
     }
 
     #! adds a request handler to a listener given the listener's id
@@ -3074,20 +3152,14 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! adds a request handler to a listener given the listener's name or bind address
+    /** @note If the listener has a paired QUIC/HTTP3 listener, the handler is automatically propagated to it with a
+        \c "-h3" suffix on the name, as with addHandlerToListenerID() (qore#7690)
+    */
     addHandlerToListener(softstring bind, string name, HttpServer::AbstractUrlHandler obj) {
         lm.enter();
         on_exit lm.exit();
 
-        softstring id = getListenerIdFromBindUnlocked(bind);
-
-        hash<string, hash<HttpHandlerConfigInfo>> h = {
-            name: <HttpHandlerConfigInfo>{
-                "path": obj.url_root,
-                "isregex": False,
-                "handler": obj,
-            },
-        };
-        listeners{id}.addHandlers(h);
+        addHandlerToListenerID(getListenerIdFromBindUnlocked(bind), name, obj);
     }
 
     #! adds a request handler to a listener given the listener's id
@@ -3840,14 +3912,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         }
         if (created) {
             # a listener added from now on attaches the routes itself (see addListenerIntern()); the existing ones
-            # are attached here
+            # are attached here, except those that serve only their own handlers (qore#7690)
             *hash<string, HttpListener> llist;
             {
                 lm.enter();
                 on_exit lm.exit();
                 llist = listeners;
             }
-            map $1.setHttpFastRoutes(routes), llist.iterator();
+            map $1.setHttpFastRoutes(routes), llist.iterator(), !$1.ownHandlersOnly();
             # the sockets of the QUIC listeners (their sessions are created from them)
             list<Socket> usocks;
             {
@@ -4510,6 +4582,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         "get_remote_certs": info.get_remote_certs,
                         "ssl_verify_flags": info.ssl_verify_flags,
                         "ssl_accept_all_certs": info.ssl_accept_all_certs,
+                        # and the same handlers, with the names that addHandlerToListenerID() gives the handlers of
+                        # the QUIC listener, so that it does not open without its handlers, and the same setting for
+                        # the handlers of the server (qore#7690)
+                        "handler_info": info.handler_info
+                            ? map {$1.key + "-h3": $1.value}, info.handler_info.pairIterator()
+                            : NOTHING,
+                        "own_handlers_only": info.own_handlers_only,
                     };
                     if (info.additional_info) {
                         quic_opts.additional_info = info.additional_info;
@@ -4573,8 +4652,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 alt_svc_targets{string(l.getID())} = l;
             }
             applyAltSvcToFastRoutes(l);
-            if (*HttpFastRoutes fast = getFastRoutes()) {
-                l.setHttpFastRoutes(fast);
+            # a listener that serves only its own handlers never answers the server's routes (qore#7690)
+            if (!l.ownHandlersOnly()) {
+                if (*HttpFastRoutes fast = getFastRoutes()) {
+                    l.setHttpFastRoutes(fast);
+                }
             }
 
             # Add the TCP listener to the async I/O controller — start accepting.
@@ -5435,19 +5517,30 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (listener.hasHandlers()) {
                 hi = listener.findHandler(hdr, \score, True, \root_path);
                 if (!hi) {
-                    if (listener.defaultHandler) {
-                        hi = listener.defaultHandler;
-                    } else if (async_response_out) {
-                        # Capture the 404 response for the async I/O controller to send
-                        async_response_out = buildAsyncErrorResponse(404, "Not found", cx,
-                            listener, s, !is_multiplexed);
-                        return;
-                    } else {
-                        sendRequestError(listener, \cx, s, 404, "Not found", NOTHING, NOTHING,
-                            cx."response-encoding", head);
+                    # read once: a handler that is removed meanwhile clears it
+                    hi = listener.defaultHandler;
+                    if (!hi) {
+                        if (async_response_out) {
+                            # Capture the 404 response for the async I/O controller to send
+                            async_response_out = buildAsyncErrorResponse(404, "Not found", cx,
+                                listener, s, !is_multiplexed);
+                        } else {
+                            sendRequestError(listener, \cx, s, 404, "Not found", NOTHING, NOTHING,
+                                cx."response-encoding", head);
+                        }
                         return;
                     }
                 }
+            } else if (listener.ownHandlersOnly()) {
+                # a listener that serves only its own handlers has none now: not those of the server (qore#7690)
+                if (async_response_out) {
+                    async_response_out = buildAsyncErrorResponse(503, "Service Unavailable", cx,
+                        listener, s, !is_multiplexed);
+                } else {
+                    sendRequestError(listener, \cx, s, 503, "Service Unavailable", NOTHING, NOTHING,
+                        cx."response-encoding", head);
+                }
+                return;
             } else {
                 hi = handlers.findHandler(hdr, \score, False, \root_path);
                 if (score < 3) {
@@ -5468,7 +5561,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         }
 
         try {
-            if (!handler && defaultHandler) {
+            # never on a listener that serves only its own handlers (qore#7690)
+            if (!handler && defaultHandler && !listener.ownHandlersOnly()) {
                 handler = defaultHandler.obj;
                 handler_socket_view = defaultHandler.handler_socket_view;
                 hosts_code = defaultHandler.hosts_code;
@@ -7609,7 +7703,7 @@ class HttpHandlerThreadContexts {
 /** The connection, its transport and the request's stream (\c "header-info"), and the server's connection state;
     see HttpServer::handleRequest() (qore#6953)
 */
-const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "sock_key", "socket",
+const ServerContextKeys = ("header-info", "id", "listener", "listener-id", "logger", "sock_key", "socket",
     "socket-info", "peer", "peer-info", "peer-info-future", "client-cert", "ssl", "handler_name", "uctx");
 
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
@@ -7677,6 +7771,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         #! set once the listener was started (added to the async I/O controller); the stop notification is called
         #! only for a listener that started (qore#7430)
         bool started;
+
+        #! the listener serves only its own handlers, never those of the server (qore#7690)
+        bool own_handlers_only;
 
         string name;
 
@@ -7768,6 +7865,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         self.logger = opts.logger;
         self.stopc = opts.stopc;
 
+        own_handlers_only = opts.own_handlers_only;
         if (opts.handler_info) {
             addHandlers(opts.handler_info);
         }
@@ -7939,6 +8037,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return !handlers.empty();
     }
 
+    #! Returns @ref True "True" if the listener serves only its own handlers, never those of the server (qore#7690)
+    /** @see @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only"
+
+        @since HttpServer 1.7
+    */
+    bool ownHandlersOnly() {
+        return own_handlers_only;
+    }
+
     #! Returns the handler for inline check (no side effects)
     /** Looks up the handler for the given request headers without creating
         DynamicHandlerHelper objects or modifying any state.
@@ -7965,7 +8072,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (!hi) {
                 hi = defaultHandler;
             }
-        } else {
+        } else if (!own_handlers_only) {
+            # a listener that serves only its own handlers never serves those of the server (qore#7690)
             hi = serv.findGlobalHandler(hdr);
         }
         if (hi) {
@@ -8606,12 +8714,40 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             exit = True;
         }
 
+        # the stop ends with the server's notification also when it raises an exception: the server waits for the
+        # stop of each of its listeners (qore#7690)
+        on_exit finishStop(silent);
+        # the requests in progress are waited for and the connections of the listener are stopped also when an
+        # exception is raised below, before the server is notified (on_exit blocks run in reverse order)
+        on_exit stopConnections(silent);
+
+        # no new connection or session is accepted from here on, before the stop waits for the requests in progress;
+        # the listener is no longer advertised as an HTTP/3 alternative service (qore#7690); best effort: an error
+        # here does not prevent the stop
+        if (serv) {
+            try {
+                serv.stopListenerAccepting(self);
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("error refusing new connections on listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                        ex.desc);
+                }
+            }
+        }
+
         # test hook (a debug build of the library only): the listener is marked as stopping, so that another stop
-        # returns at once (see dbgSetStoppingHook())
+        # returns at once, and accepts no new connection (see dbgSetStoppingHook())
         if (Option::HAVE_LIBRARY_DEBUGGING && dbg_stopping_hook) {
             dbg_stopping_hook(self);
         }
+    }
 
+    #! Waits for the requests in progress of the listener whose stop has started, and stops its connections
+    /** Called by stop(), also when it raised an exception; an error removing the listener from the async I/O
+        controller, closing its socket or closing its dedicated connections is logged, and the next steps are taken
+        (qore#7690)
+    */
+    private stopConnections(*bool silent) {
         # wait for all connection threads to terminate
         cThreads.wait();
 
@@ -8627,28 +8763,42 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # By cancelling first, the callbacks fire with canceled=True (clean path,
         # no replenishment), and the fd is removed from the event loop before close.
         # listenerStopped() will skip the redundant removeListener() call.
-        if (serv) {
-            try {
+        try {
+            if (serv) {
                 serv.removeAsyncListener(self);
-            } catch (hash<ExceptionInfo> ex) {
-                # the server is being destroyed in another thread (a stop started with stopNoWait()), and cannot be
-                # called (qore#7509): its destructor stops its I/O controller itself
-                if (ex.err != "OBJECT-ALREADY-DELETED") {
-                    rethrow;
-                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the server is being destroyed in another thread (a stop started with stopNoWait()), and cannot be called
+            # (qore#7509): its destructor stops its I/O controller itself; any other error is logged (qore#7690)
+            if (ex.err != "OBJECT-ALREADY-DELETED" && !silent) {
+                logError("error removing listener %d from the async I/O controller: %s: %s: %s", id, get_ex_pos(ex),
+                    ex.err, ex.desc);
             }
         }
 
         # Close the listener socket to release the bound port.
-        shutdown();
-        close();
+        try {
+            shutdown();
+            close();
+        } catch (hash<ExceptionInfo> ex) {
+            if (!silent) {
+                logError("error closing the socket of listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err, ex.desc);
+            }
+        }
 
         # stop all dedicated socket connections
         {
             # their protocol's closing handshake runs first, on all connections at the same time
-            closeHandlerConnections(getDedicatedSocketHandlers(), id, silent ? NOTHING : sub (string fmt, ...) {
-                logError("%s", vsprintf(fmt, argv));
-            });
+            try {
+                closeHandlerConnections(getDedicatedSocketHandlers(), id, silent ? NOTHING : sub (string fmt, ...) {
+                    logError("%s", vsprintf(fmt, argv));
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                if (!silent) {
+                    logError("error closing the dedicated connections of listener %d: %s: %s: %s", id,
+                        get_ex_pos(ex), ex.err, ex.desc);
+                }
+            }
 
             *hash<string, AbstractHttpSocketHandlerInterface> shh_copy;
             {
@@ -8671,7 +8821,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # wait for all dedicated connection threads to terminate
         dThreads.wait();
+    }
 
+    #! Ends the stop of the listener: marks it as stopped and notifies the server and the stop notification closure
+    /** Called at the end of stop(), also when it raised an exception (qore#7690)
+    */
+    private finishStop(*bool silent) {
         stopped = True;
 
         # Notify the server BEFORE logging, because log() may access the server
