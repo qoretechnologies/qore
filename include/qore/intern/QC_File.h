@@ -54,4 +54,15 @@ DLLLOCAL inline int check_terminal_io(const QoreObject* self, const char* m, Exc
     return 0;
 }
 
+//! Refuses a call that changes the state of a process-wide standard I/O object for code that a sandbox governs (qore#7670)
+/** Called by the methods of File and ReadOnlyFile that change the state of the object, with the object they are called
+    with: the process-wide objects stdin, stdout and stderr (system objects) are shared by every Program of the process.
+    A file object that the caller makes is its own.
+
+    @return 0 if the call is allowed, -1 (with SHARED-OBJECT-ERROR raised) if not
+*/
+DLLLOCAL inline int check_system_object_change(const QoreObject* self, const char* m, ExceptionSink* xsink) {
+    return self->isSystemObject() ? qore_check_system_object_change(m, xsink) : 0;
+}
+
 #endif // _QORE_CLASS_FILE_H

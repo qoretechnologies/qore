@@ -142,6 +142,11 @@ public class QoreReplWebSocketHandler inherits WebSocketHandler::WebSocketHandle
         @return Response hash with code 101 to accept, or error code to reject
     */
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        # a request whose method cannot open a WebSocket is refused before it counts or is authenticated (qore#7668)
+        *hash<auto> refused = WebSocketHandler::checkRequestMethod(cx, hdr);
+        if (refused) {
+            return refused;
+        }
         # Check max connections with lock held for the entire check-and-increment
         # to prevent race conditions where multiple requests see the same count
         {

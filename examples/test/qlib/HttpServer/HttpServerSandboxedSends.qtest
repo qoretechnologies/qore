@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket and SSE connections and HTTP listeners of the async I/O controller used by sandboxed code
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ServerSentEventHandler
+
+%exec-class HttpServerSandboxedSendsTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the server of the test, which the host's functions that the tenant calls use
+our *HttpServer the_server;
+
+#! a host function that a tenant calls: adds a listener to the server for the tenant and returns its ID and port
+hash<auto> sub host_bind_http() {
+    hash<auto> info = the_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+    return {"id": info.id, "port": info.port};
+}
+
+#! a host function that a tenant calls: stops a listener of the server
+sub host_stop_listener(softstring id) {
+    the_server.stopListenerID(id);
+}
+
+#! the tenant's handlers, which send after their connections are set up
+const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires WebSocketHandler
+%requires ServerSentEventHandler
+
+class TenantWsConnection inherits WebSocketConnection {
+    private {
+        string cid;
+        Queue to_host;
+    }
+
+    constructor(WebSocketHandler handler, string cid, Queue to_host) : WebSocketConnection(handler) {
+        self.cid = cid;
+        self.to_host = to_host;
+    }
+
+    gotMessage(string msg) {
+        try {
+            # on the connection, to every connection, to this connection and from a thread of the tenant's
+            send(msg + \"-send\");
+            handler.sendAll(msg + \"-all\");
+            handler.sendOne(cid, msg + \"-one\");
+            Queue q();
+            background sub () {
+                try {
+                    handler.sendOne(cid, msg + \"-thread\");
+                    q.push(True);
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex.err + \": \" + ex.desc);
+                }
+            }();
+            to_host.push(q.get(60s));
+        } catch (hash<ExceptionInfo> ex) {
+            to_host.push(ex.err + \": \" + ex.desc);
+        }
+    }
+}
+
+class TenantWsHandler inherits WebSocketHandler {
+    private {
+        Queue to_host;
+    }
+
+    constructor(Queue to_host) : WebSocketHandler() {
+        self.to_host = to_host;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TenantWsConnection(self, cid, to_host);
+    }
+}
+
+class TenantSse inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue registered();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({\"heartbeat\": 0}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        registered.push(conn.cid);
+    }
+}
+
+AbstractHttpSocketHandler sub get_ws_handler(Queue to_host) {
+    return new TenantWsHandler(to_host);
+}
+
+TenantSse sub get_sse_handler() {
+    return new TenantSse();
+}
+
+auto sub sse_registered(TenantSse h) {
+    return h.registered.get(60s);
+}
+
+# sends to every connection and to one, after the stream was set up
+sub sse_send(TenantSse h, softstring id, string event) {
+    h.sendAll(<SseMessageInfo>{\"event\": event + \"-all\", \"data\": \"tenant\"});
+    h.sendOne(id, <SseMessageInfo>{\"event\": event + \"-one\", \"data\": \"tenant\"});
+}
+
+hash<auto> sub bind_http() {
+    return host_bind_http();
+}
+
+sub stop_listener(softstring id) {
+    host_stop_listener(id);
+}
+";
+
+#! The connections and listeners of the async I/O controller that sandboxed code uses (qore#7148)
+/** Host code that runs for sandboxed code acts for its application in the ownership checks of the async I/O
+    controller (qore#7148).  The handlers of a sandboxed Program send WebSocket messages and SSE events after their
+    connections are set up, on listeners that the host added and on listeners that host code added for the tenant
+    (as a host API that binds a listener for its caller does), and a tenant stops a listener that the host's code
+    added for it, which frees its port
+*/
+class HttpServerSandboxedSendsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("sandboxed WebSocket and SSE sends", "1.0", \ARGV) {
+        addTestCase("a sandboxed WebSocket handler sends on a listener of the host", \wsTest(), False);
+        addTestCase("a sandboxed WebSocket handler sends on a listener bound for the tenant", \wsTest(), True);
+        addTestCase("a sandboxed SSE handler sends on a listener of the host", \sseTest(), False);
+        addTestCase("a sandboxed SSE handler sends on a listener bound for the tenant", \sseTest(), True);
+        addTestCase("a tenant stops a listener that host code bound for it, which frees its port", \listenerTest());
+        set_return_value(main());
+    }
+
+    #! Returns a sandboxed Program with the tenant's handlers and the host's functions imported
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.importFunction("host_bind_http");
+        p.importFunction("host_stop_listener");
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! Returns the port of a new listener: one that the host adds, or one that host code adds for the tenant
+    private int getPort(Program tenant, bool tenant_listener) {
+        if (tenant_listener) {
+            return tenant.callFunction("bind_http").port;
+        }
+        return the_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    wsTest(bool tenant_listener) {
+        Queue to_host();
+        Program tenant = getTenant();
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_ws_handler", to_host);
+        the_server = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            the_server.stop();
+            remove the_server;
+        }
+        the_server.setHandler("ws", "^ws", NOTHING, handler);
+        int port = getPort(tenant, tenant_listener);
+        the_server.waitForAsyncIo();
+
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, {"url": sprintf("ws://127.0.0.1:%d/ws", port), "timeout": HangGuard});
+        wsc.connect();
+        on_exit wsc.disconnect();
+        # two rounds: the second after the connection has been used
+        foreach string round in (("m1", "m2")) {
+            wsc.send(round);
+            assertEq(True, to_host.get(HangGuard), round + ": the tenant's sends raise no exception");
+            hash<string, bool> got;
+            for (int i = 0; i < 4; ++i) {
+                got{msgs.get(HangGuard)} = True;
+            }
+            hash<string, bool> expected = map {round + "-" + $1: True}, ("send", "all", "one", "thread");
+            assertEq(expected, got,
+                round + ": every message of the tenant arrives");
+        }
+    }
+
+    sseTest(bool tenant_listener) {
+        Program tenant = getTenant();
+        object handler = tenant.callFunction("get_sse_handler");
+        the_server = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            the_server.stop();
+            remove the_server;
+        }
+        the_server.setDefaultHandler("sse", handler);
+        int port = getPort(tenant, tenant_listener);
+        the_server.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        on_exit c.close();
+        c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> hdr = c.readHTTPHeader(HangGuard);
+        assertEq(200, hdr.status_code, "the stream is accepted");
+        auto id = tenant.callFunction("sse_registered", handler);
+        string stream = "";
+        # two rounds, after the stream has been set up
+        foreach string round in (("e1", "e2")) {
+            tenant.callFunction("sse_send", handler, id, round);
+            while (stream.find("event: " + round + "-one\n") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            assertTrue(stream.find("event: " + round + "-all\n") >= 0, round + ": the event to all: " + stream);
+        }
+    }
+
+    listenerTest() {
+        Program tenant = getTenant();
+        the_server = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            the_server.stop();
+            remove the_server;
+        }
+        the_server.setDefaultHandler("ok", new OkHandler());
+        hash<auto> l = tenant.callFunction("bind_http");
+        the_server.waitForAsyncIo();
+        # the listener serves
+        HTTPClient hc({"url": "http://127.0.0.1:" + l.port, "timeout": HangGuard});
+        assertEq("ok", hc.get("/"));
+        hc.disconnect();
+        # stopped by the tenant through the host's code
+        tenant.callFunction("stop_listener", l.id);
+        assertFalse(the_server.getListeners().hasKey(string(l.id)), "the listener is gone");
+        # its port is free
+        Socket s();
+        on_exit s.close();
+        s.bind("127.0.0.1:" + l.port, True);
+        assertEq(l.port, s.getSocketInfo().port, "the port of the stopped listener can be bound again");
+    }
+}
+
+#! a handler of the host that answers every request
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "ok");
+    }
+}

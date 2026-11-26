@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class DeserializedObjectProgramTest
+
+#! Verifies that a deserialized object has the Program of its class, as a constructed or copied one does (qore#7517)
+class DeserializedObjectProgramTest inherits QUnit::Test {
+    public {
+        #! a module with a serializable class
+        const ModuleSource = "%modern
+module DeserializedObjectProgramModule {
+    version = \"1.0\";
+    desc = \"deserialized object Program test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public class DeserializedObjectProgramClass inherits Serializable {
+    public {
+        int a = 1;
+    }
+}
+";
+
+        #! the code of the sandboxed Program that uses the module's class
+        const SandboxedSource = "%modern
+%requires DeserializedObjectProgramModule
+
+class Local inherits Serializable {
+    public {
+        int a = 1;
+    }
+}
+
+object sub make() {
+    return new DeserializedObjectProgramClass();
+}
+
+object sub make_copy() {
+    return (new DeserializedObjectProgramClass()).copy();
+}
+
+object sub make_deserialized() {
+    return Serializable::deserialize(Serializable::serialize(new DeserializedObjectProgramClass()));
+}
+
+object sub make_local_deserialized() {
+    return Serializable::deserialize(Serializable::serialize(new Local()));
+}
+";
+    }
+
+    private {
+        TmpDir tmp("qore-deserialized-object-program-");
+    }
+
+    constructor() : Test("Deserialized object Program", "1.0", \ARGV) {
+        addTestCase("module class", \moduleClassTest());
+        set_return_value(main());
+    }
+
+    moduleClassTest() {
+        string path = tmp.path + DirSep + "DeserializedObjectProgramModule.qm";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ModuleSource);
+        f.close();
+        # loaded by the host: the module's class is not the sandboxed Program's
+        load_module(path);
+
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxedSource, "sandboxed");
+
+        foreach string func in ("make", "make_copy", "make_deserialized") {
+            object o = p.callFunction(func);
+            assertEq("DeserializedObjectProgramClass", o.className(), func);
+            assertEq(1, o.a, func);
+            assertFalse(SandboxManager::isFromSandboxedProgram(o), func);
+            assertNothing(SandboxManager::getSandboxedProgramId(o), func);
+        }
+
+        # an object of the sandboxed Program's own class
+        object o = p.callFunction("make_local_deserialized");
+        assertEq("Local", o.className());
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertEq(p.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+}

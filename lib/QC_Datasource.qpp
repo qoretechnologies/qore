@@ -2115,7 +2115,7 @@ string Datasource::getDriverName() [flags=CONSTANT] {
 
 //! Returns a description of the datasource for messages, with the user name, password and database name masked
 /** The description has the form
-    <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
+    <tt><em>driver</em>:****</tt><tt>/</tt><tt>****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>:
     the user name, the password and the database name are always replaced with \c "****", whether they are set or
     not, so that the description shows none of them, and not whether they are set; the host and port are shown if
     set; this is the description that %Qore uses for datasources in its own exception messages, and the one to use

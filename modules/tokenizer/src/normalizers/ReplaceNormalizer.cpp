@@ -10,82 +10,85 @@
 
 #include "normalizers/ReplaceNormalizer.h"
 #include "utils/qore_helpers.h"
+#include "utils/TokenizerError.h"
 
 using namespace QoreTokenizer;
 
 namespace QoreTokenizer {
 
-ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* xsink) {
-    if (!config) {
-        xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
-            "ReplaceNormalizer config is null");
+ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* xsink, const char* error)
+        : error(error) {
+    const QoreHashNode* patterns = config ? safeGetHashKey(config, "pattern") : nullptr;
+    bool regex = patterns && patterns->existsKey("Regex");
+    const char* key = patterns ? (regex ? "Regex" : "String") : "pattern";
+    const QoreHashNode* source = patterns ? patterns : config;
+    if (!source || source->getKeyValue(key).getType() != NT_STRING) {
+        xsink->raiseException(error, "Replace requires a string or regex pattern");
         return;
     }
-
-    // Read the "pattern" key: expected format is {"String": "..."} or {"Regex": "..."}
-    const QoreHashNode* pattern_hash = safeGetHashKey(config, "pattern");
-    if (pattern_hash) {
-        // Try to get "String" key from the pattern hash
-        std::string str_val = configStringKey(pattern_hash, "String", xsink);
-        if (*xsink) {
-            return;
-        }
-        if (!str_val.empty()) {
-            pattern = str_val;
-        } else {
-            // Check if it's a Regex type
-            std::string regex_val = configStringKey(pattern_hash, "Regex", xsink);
-            if (*xsink) {
-                return;
-            }
-            if (!regex_val.empty()) {
-                try {
-                    regex_pattern = std::regex(regex_val);
-                    regex_mode = true;
-                } catch (const std::regex_error& e) {
-                    xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
-                        "ReplaceNormalizer: invalid Regex pattern: %s", e.what());
-                    return;
-                }
-            } else {
-                xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
-                    "ReplaceNormalizer: pattern hash has no 'String' or 'Regex' key");
-                return;
-            }
-        }
-    } else {
-        // Maybe it's a plain string
-        std::string str = configStringKey(config, "pattern", xsink);
-        if (*xsink) {
-            return;
-        }
-        if (!str.empty()) {
-            pattern = std::move(str);
-        } else {
-            xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
-                "ReplaceNormalizer: missing or invalid 'pattern' field");
-            return;
-        }
-    }
-
-    // Read the "content" (replacement) string
-    std::string content_str = configStringKey(config, "content", xsink);
+    pattern = configStringKey(source, key, xsink);
     if (*xsink) {
         return;
     }
-    if (!content_str.empty()) {
-        replacement = content_str;
+    replacement = configStringKey(config, "content", xsink);
+    if (*xsink || (!regex && !pattern.empty())) {
+        return;
     }
-    // If no content specified, replacement defaults to empty string
+
+    // An empty literal, like an empty regex, matches at character boundaries.
+    int rc;
+    PCRE2_SIZE offset;
+    regex_pattern.reset(pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), pattern.size(),
+        PCRE2_UTF | PCRE2_UCP | PCRE2_NEVER_BACKSLASH_C, &rc, &offset, nullptr));
+    if (!regex_pattern) {
+        PCRE2_UCHAR msg[256];
+        pcre2_get_error_message(rc, msg, sizeof(msg));
+        xsink->raiseException(error, "invalid Replace pattern at byte offset %zu: %s", offset, msg);
+    }
 }
 
 std::string ReplaceNormalizer::normalize(const std::string& input) const {
-    if (regex_mode) {
-        return std::regex_replace(input, regex_pattern, replacement);
-    }
-
-    if (pattern.empty()) {
+    if (input.empty()) {
         return input;
+    }
+    if (regex_pattern) {
+        auto* md = pcre2_match_data_create_from_pattern(regex_pattern.get(), nullptr);
+        if (!md) {
+            throw TokenizerError(error, "could not allocate Replace match data");
+        }
+        ON_BLOCK_EXIT(pcre2_match_data_free, md);
+        std::string out;
+        size_t copied = 0;
+        size_t offset = 0;
+        bool first = true;
+        while (offset <= input.size()) {
+            int rc = pcre2_match(regex_pattern.get(), reinterpret_cast<PCRE2_SPTR>(input.data()), input.size(),
+                offset, first ? 0 : PCRE2_NO_UTF_CHECK, md, nullptr);
+            if (rc == PCRE2_ERROR_NOMATCH) {
+                break;
+            }
+            if (rc < 0) {
+                PCRE2_UCHAR msg[256];
+                pcre2_get_error_message(rc, msg, sizeof(msg));
+                throw TokenizerError(error, std::string("Replace match failed: ") + reinterpret_cast<char*>(msg));
+            }
+            const auto* match = pcre2_get_ovector_pointer(md);
+            // Like Hugging Face, skip an empty match immediately after a preceding match.
+            if (first || match[0] != copied || match[0] != match[1]) {
+                out.append(input, copied, match[0] - copied);
+                out.append(replacement);
+                copied = match[1];
+            }
+            first = false;
+            offset = match[1];
+            if (match[0] == match[1]) {
+                do {
+                    ++offset;
+                } while (offset < input.size() && (static_cast<unsigned char>(input[offset]) & 0xc0) == 0x80);
+            }
+        }
+        out.append(input, copied, std::string::npos);
+        return out;
     }
 
     std::string result;

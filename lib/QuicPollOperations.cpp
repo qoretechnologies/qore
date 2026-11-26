@@ -3127,10 +3127,11 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
 
                     // Collect extra fds from all sessions with active pollable InputStreams
                     std::vector<std::pair<int, int>> extra_fds;
-                    bool has_active_input_streams = false;
+                    // a pumped body that can be read now but has no descriptor to wait for
+                    bool needs_timed_pass = false;
                     for (auto& entry : sessions_) {
-                        if (entry.second->hasActiveStreamInputStreams()) {
-                            has_active_input_streams = true;
+                        if (entry.second->needsTimedInputStreamPass()) {
+                            needs_timed_pass = true;
                         }
                         entry.second->getExtraFds(extra_fds);
                     }
@@ -3144,10 +3145,23 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
-                        // If there are non-pollable active InputStreams (no extra
-                        // fds to watch), use a small poll timeout so the I/O thread
-                        // reads from them periodically without busy-looping.
-                        if (has_active_input_streams && extra_fds.empty()) {
+                        // a connection with a pumped body waiting for its client is checked in time (qore#7280)
+                        for (auto& entry : sessions_) {
+                            int ms = entry.second->getInputStreamPollTimeoutMs();
+                            if (ms < 0) {
+                                continue;
+                            }
+                            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+                            if (ptv.isNullOrNothing() || ptv.getAsBigInt() > ms) {
+                                poll_info->setKeyValue("poll_timeout_ms", static_cast<int64_t>(ms), xsink);
+                            }
+                        }
+                        // If there are active InputStreams that can be read now and have no
+                        // descriptor to wait for, use a small poll timeout so the I/O thread
+                        // reads from them periodically without busy-looping; a body that waits
+                        // for the peer's credit or for its descriptor needs no timed pass
+                        // (qoretechnologies/qore#7654)
+                        if (needs_timed_pass) {
                             QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
                             int64_t current_ms = ptv.isNullOrNothing() ? INT64_MAX
                                 : ptv.getAsBigInt();

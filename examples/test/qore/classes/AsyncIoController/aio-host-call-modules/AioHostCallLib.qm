@@ -1,0 +1,44 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module for asyncio_host_call_ownership.qtest: calls the code that it is given, in the caller's thread or
+#! in a thread that it starts
+module AioHostCallLib {
+    version = "1.0";
+    desc = "test library module that calls the code that it is given, also in threads that it starts";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace AioHostCallLib {
+public class Lib {
+    #! calls the code with the arguments and returns its result
+    static auto call(code c, auto arg) {
+        return c(arg);
+    }
+
+    #! cancels the operation with the key
+    static bool cancelByKey(string key) {
+        return AsyncIoController::cancelByKey(key);
+    }
+
+    #! calls the code with the arguments in a thread that the module starts, and returns its result
+    static auto callInThread(code c, auto arg, timeout hang_guard) {
+        Queue q();
+        background sub () {
+            try {
+                q.push({"result": c(arg)});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"error": ex.err});
+            }
+        }();
+        hash<auto> h = q.get(hang_guard);
+        if (h.hasKey("error")) {
+            throw h.error, "the code called in the module's thread raised an exception";
+        }
+        return h.result;
+    }
+}
+}

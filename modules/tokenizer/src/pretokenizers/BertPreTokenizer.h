@@ -26,15 +26,14 @@ public:
 
     std::vector<PreToken> pretokenize(const std::string& input) const override;
 
+    static bool isUnicodePunctuation(int32_t codepoint);
+
 private:
     //! Returns the byte length of a UTF-8 character starting at the given position
     static size_t utf8CharLen(const std::string& s, size_t pos);
 
     //! Decodes a UTF-8 character at the given position into a Unicode codepoint
     static int32_t decodeUtf8Codepoint(const std::string& s, size_t pos, size_t len);
-
-    //! Returns true if the codepoint is Unicode punctuation (category starts with 'P')
-    static bool isUnicodePunctuation(int32_t codepoint);
 
     //! Returns true if the codepoint is Unicode whitespace
     static bool isUnicodeWhitespace(int32_t codepoint);

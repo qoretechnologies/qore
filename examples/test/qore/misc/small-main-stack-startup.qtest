@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child interpreters started without an execution mode under a small stack rlimit
+# test-platform: macos - the main thread's stack limit from RLIMIT_STACK at library initialization
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class SmallMainStackStartupTest
+
+#! A process whose main thread stack is small fails with an error, not a crash, at startup (qore#7663)
+/** With a main thread stack of 192K or less (\c RLIMIT_STACK), the stack limit of the main thread left less than the
+    parse stack reserve above the depth of the library's initialization, which finalizes the builtin classes with the
+    stack checks of a parse but with no Program: the parse stack error raised there dereferenced the missing Program
+    and the process crashed (SIGSEGV) in qore_init().  The initialization raises no parse errors now, and the parse of
+    the program's code, or the program itself, fails with a stack error.
+*/
+class SmallMainStackStartupTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+
+        #! the stack limits in KiB: below and at the limit of the report
+        const Limits = (128, 160, 192);
+
+        #! the errors that a process whose stack is too small for its code fails with
+        const StackError = "(PARSE-STACK-LIMIT-EXCEEDED|STACK-LIMIT-EXCEEDED|IR-COMPILATION-ERROR: .*nested too deeply)";
+    }
+
+    constructor() : QUnit::Test("SmallMainStackStartupTest", "1.0", \ARGV) {
+        addTestCase("the interpreter starts with a small main stack", \testInterpreter());
+        addTestCase("a qcc executable starts with a small main stack", \testCompiled());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! runs a command with the given stack limit and checks that it printed "ok" or failed with a stack error
+    private checkRun(string label, string command, int kib) {
+        int rc;
+        string out = backquote(sprintf("sh -c %s 2>&1", quote(sprintf("ulimit -s %d && %s", kib, command))), \rc);
+        # a signal gives an exit status of 128 + the signal (SIGSEGV: 139)
+        assertTrue(rc < 128, sprintf("%s, %dK: exit status %d (output: %y)", label, kib, rc, out));
+        if (rc) {
+            assertRegex(StackError, out, sprintf("%s, %dK: a stack error", label, kib));
+        } else {
+            assertEq("ok\n", out, sprintf("%s, %dK", label, kib));
+        }
+    }
+
+    testInterpreter() {
+        if (PlatformOS == "Windows") {
+            testSkip("the main thread's stack size is not taken from RLIMIT_STACK on Windows");
+        }
+        foreach int kib in (Limits) {
+            checkRun("qore", sprintf("%s -e %s", quote(qore_bin), quote("print(\"ok\\n\");")), kib);
+        }
+    }
+
+    testCompiled() {
+        if (PlatformOS == "Windows") {
+            testSkip("the main thread's stack size is not taken from RLIMIT_STACK on Windows");
+        }
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("smallstack");
+        string src = tmp.path + "/small-stack.q";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nprint(\"ok\\n\");\n");
+        f.close();
+        string exe = tmp.path + "/small-stack";
+        int rc;
+        string out = backquote(sprintf("%s -O0 -o %s %s 2>&1", quote(qcc_bin), quote(exe), quote(src)), \rc);
+        assertEq(0, rc, "qcc compiles the program: " + out);
+        if (rc) {
+            return;
+        }
+        foreach int kib in (Limits) {
+            checkRun("qcc executable", quote(exe), kib);
+        }
+    }
+}

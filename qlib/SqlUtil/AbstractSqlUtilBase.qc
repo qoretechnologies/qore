@@ -154,8 +154,8 @@ string desc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
 
         @return the description of the datasource as returned by
         @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()":
-        <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>; the user name, the
-        password and the database name are never shown
+        <tt><em>driver</em>:****</tt><tt>/</tt><tt>****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>; the user
+        name, the password and the database name are never shown
 
         @note since %SqlUtil 3.11.0 the description shows no user name or database name (issue #6988); it is the same
         for all connections of a driver to a host and port, so it does not identify a connection; use
