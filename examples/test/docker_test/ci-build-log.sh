@@ -14,7 +14,9 @@ qore_ci_build_logged() {
     shift
     qore_ci_build_status=$(mktemp)
     printf 'qore-ci-build-log source-dir=%s\n' "${QORE_SRC_DIR}" > "${qore_ci_build_log}"
-    { "$@" 2>&1; echo $? > "${qore_ci_build_status}"; } | tee -a "${qore_ci_build_log}"
+    # the group is a subshell of the pipe: set -e of the calling script (build.sh) would end it at a failed command,
+    # before its status is written, so it is turned off there
+    { set +e; "$@" 2>&1; echo $? > "${qore_ci_build_status}"; } | tee -a "${qore_ci_build_log}"
     qore_ci_build_rc=$(cat "${qore_ci_build_status}")
     rm -f "${qore_ci_build_status}"
     if [ "${qore_ci_build_rc}" != 0 ]; then
