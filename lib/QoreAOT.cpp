@@ -25791,6 +25791,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 // native code is generated here before computeSlotIdsAndEmbed() runs: the release checks of the values
                 // that cannot hold an object go, and the containers of the others get their handler (qore#6072)
                 qore_ir_prune_release_checks(*ir_func);
+                // the generic += of an "auto" local is paired with its load and its store, as for a function, whose
+                // IR is marked by qore_ir_optimize() or computeSlotIdsAndEmbed(): without the marks, the operation
+                // changed a copy of a list or hash that the local holds alone or that a reference that it holds
+                // designates, which a weak reference to the container showed (qore#7421); the debug IR made from this
+                // IR below is marked again by computeSlotIdsAndEmbed()
+                qore_ir_mark_auto_string_appends(*ir_func);
                 // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
                 // closure-bound local of a block was not popped at the end of the block, so that the closures of all
                 // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local

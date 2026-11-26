@@ -4239,6 +4239,9 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
       \c "x86_64-linux-gnu", which names the C library (since %Qore 3.0)
     - \c InterproceduralOptimization: @ref True if the %Qore library was built with link-time optimization (since
       %Qore 3.0)
+    - \c TlsDescriptors: @ref True if the %Qore library accesses its thread-local variables through TLS descriptors
+      (<tt>-mtls-dialect=gnu2</tt>, the \c QORE_TLS_DESCRIPTORS build option, which applies to x86_64 Linux; since
+      %Qore 3.0)
     - \c Hardening: The hardening options in effect when the %Qore library was compiled, as the compiler defines
       them, many of them by default (since %Qore 3.0):
       - \c stack_protector: \c 0 none, \c 1 <tt>-fstack-protector</tt>, \c 2 <tt>-fstack-protector-strong</tt>,
@@ -4294,6 +4297,7 @@ hash<auto> get_qore_library_info() [flags=CONSTANT;dom=EXTERNAL_INFO] {
    h->setKeyValue("SingleCompilationUnit", (bool)QORE_LIB_SINGLE_COMPILATION_UNIT, xsink);
    h->setKeyValue("Target", new QoreStringNode(QORE_LIB_TARGET), xsink);
    h->setKeyValue("InterproceduralOptimization", (bool)QORE_LIB_IPO, xsink);
+   h->setKeyValue("TlsDescriptors", (bool)QORE_LIB_TLS_DESCRIPTORS, xsink);
    h->setKeyValue("Hardening", qore_get_library_hardening_info(), xsink);
 
    return h;

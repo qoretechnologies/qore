@@ -78,6 +78,12 @@ module SmtpClient {
             "app": SmtpClient::AppName,
             "path": "/send-email",
             "action": "send-email",
+            "message_formats": {"default": {
+                "plain": {"content": "body", "subject": "subject", "selector": "body-mime-type",
+                    "selector_value": "text/plain", "plain_alternative": False},
+                "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
+                    "selector_value": "text/html", "fallback": "plain-body", "plain_alternative": True},
+            }},
             "display_name": "Send an Email With SMTP",
             "short_desc": "Send an email through a generic SMTP server",
             "desc": "Send an email through a generic SMTP server",
@@ -182,6 +188,8 @@ smtp.sendMessage(msg);@endcode
     @subsection smtpclient_v2_2 SmtpClient 2.2
     - the \c EHLO and \c HELO commands sent for code restricted from external information name \c localhost
       instead of the hostname (see @ref sandbox_ambient_host_data)
+    - The \c send-email action accepts \c plain-body with a \c text/html body to send both representations
+      with @ref MailMessage::Message::addPlainAlternative(). SMTP uses blind-copy addresses only in the envelope.
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - The \c ssl_verify_cert option is now honored for synchronous and asynchronous SMTP connections.
@@ -1927,7 +1935,8 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     }
 
     #! Returns the message text to send after the \c DATA command, without the end-of-data line
-    /** The message is serialized with @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" and given
+    /** Blind-copy addresses are used for the envelope only. The message is serialized with
+        @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" and given
         SMTP transparency with @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()" whatever the
         SMTP mode of the message: every CR or LF character that is not part of a CRLF line break is sent as CRLF,
         and a \c "." is added at the start of every line that starts with \c ".", so that no line of the message
@@ -1943,7 +1952,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @since %SmtpClient 2.2
     */
     static string getData(MailMessage::Message message) {
-        return MailMessage::Message::encodeSmtpData(message.serializeRaw());
+        return MailMessage::Message::encodeSmtpData(message.serializeRaw(False));
     }
 
     #! Raises \c MESSAGE-ERROR if the sender or a recipient address cannot be written to an SMTP command line
@@ -2585,6 +2594,9 @@ public class SmtpClientSendEmailDataProvider inherits AbstractDataProvider {
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
+        if (exists req."plain-body") {
+            msg.addPlainAlternative(req."plain-body");
+        }
         foreach hash<auto> att in (req.attachments) {
             if (att."content-id".val()) {
                 # Inline attachment with Content-ID
@@ -2706,10 +2718,19 @@ public class SmtpSendEmailRequestDataType inherits HashDataType {
                 "desc": "One or more `Bcc:` addresses for the email",
             },
             "body": {
+                "metadata": {"message_role": "text"},
                 "display_name": "Message Body",
                 "type": DataType,
                 "short_desc": "The message body",
                 "desc": "The message body",
+            },
+            "plain-body": {
+                "metadata": {"message_role": "text"},
+                "display_name": "Plain-Text Alternative",
+                "type": StringOrNothingType,
+                "short_desc": "Plain-text representation of the HTML body",
+                "desc": "With a nonempty text/html string body, send this nonempty plain text first in a "
+                    "multipart/alternative message. Omit it to send the body by itself.",
             },
             "body-encoding": {
                 "display_name": "Body Encoding",
@@ -2734,10 +2755,16 @@ public class SmtpSendEmailRequestDataType inherits HashDataType {
                 ),
             },
             "body-mime-type": {
+                "metadata": {"message_role": "selector"},
                 "display_name": "Body Mime Type",
                 "type": StringOrNothingType,
                 "short_desc": "The MIME type of the message body",
                 "desc": "The MIME type of the message body",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "text/plain", "desc": "Plain text"},
+                    <AllowedValueInfo>{"value": "text/html", "desc": "HTML text"},
+                ),
+                "allowed_values_creatable": True,
             },
             "cc": {
                 "display_name": "CC",
@@ -2752,6 +2779,7 @@ public class SmtpSendEmailRequestDataType inherits HashDataType {
                 "desc": "The sender's address for the email",
             },
             "subject": {
+                "metadata": {"message_role": "subject"},
                 "display_name": "Subject",
                 "type": StringType,
                 "short_desc": "The subject for the email",

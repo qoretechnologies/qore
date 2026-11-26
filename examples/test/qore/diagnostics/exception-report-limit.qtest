@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# test-exec-mode: children - syntax checks run in child processes of the same interpreter
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%exec-class ExceptionReportLimitTest
+
+class ExceptionReportLimitTest inherits QUnit::Test {
+    constructor() : Test("Exception report limit", "1.0", \ARGV) {
+        addTestCase("syntax errors in one-line diagnostics (the default format)", \reportTest());
+        addTestCase("syntax errors in legacy reports", \legacyReportTest());
+        addTestCase("change the limit during execution", \runtimeTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    runtimeTest() {
+        string src = "setenv(\"QORE_EXCEPTION_REPORT_LIMIT\", \"1\"); on_exit throw \"SECOND\", \"later\"; "
+            "throw \"FIRST\", \"earlier\";";
+        string report = backquote("QORE_EXCEPTION_REPORT_LIMIT=10 " + quote(TestInterpreter::qore_interpreter())
+            + " -e " + quote(src) + " 2>&1");
+        assertTrue(report.find("FIRST: earlier") >= 0);
+        assertTrue(report.find("maximum exception count reached (1)") >= 0);
+        assertTrue(report.find("SECOND: later") < 0);
+    }
+
+    reportTest() {
+        checkReports("", "^[^ ]+: error: PARSE-EXCEPTION:", "qore: note: maximum exception count reached (%d)");
+    }
+
+    legacyReportTest() {
+        checkReports(" --diag-format=legacy", "^PARSE-EXCEPTION:", "maximum exception count reached (%d)");
+    }
+
+    #! checks the number of parse errors reported, and the notice of the limit, for each setting of the limit
+    /** @param opts the options of the interpreter that select the format
+        @param error_re a regex matching the line of an error in the report
+        @param notice_fmt the format of the notice of the limit, with the limit as its argument
+    */
+    private checkReports(string opts, string error_re, string notice_fmt) {
+        string src;
+        for (int i = 0; i < 13; ++i) {
+            src += sprintf("missing_%d();\n", i);
+        }
+        foreach list<auto> row in (((NOTHING, 10), ("", 10), ("0", 10), ("-1", 10), ("2x", 10),
+                ("4294967296", 10), ("1", 1), ("12", 12), ("13", 13), ("20", 13))) {
+            (*string value, int expected) = row;
+            string env = exists value ? "QORE_EXCEPTION_REPORT_LIMIT=" + quote(value) + " "
+                : "unset QORE_EXCEPTION_REPORT_LIMIT; ";
+            int status;
+            string report = backquote(env + quote(TestInterpreter::qore_interpreter()) + opts + " -e "
+                + quote(src) + " 2>&1", \status);
+            assertEq(2, status);
+            list<string> errors = select report.split("\n"), regex($1, error_re);
+            assertEq(expected, errors.size(), sprintf("%y", value));
+            assertEq(expected < 13, report.find(sprintf(notice_fmt, expected)) >= 0, sprintf("notice: %y", value));
+        }
+    }
+}

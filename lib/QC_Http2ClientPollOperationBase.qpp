@@ -1219,8 +1219,20 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         if (last_ping_sent_us == 0 || (now_us - last_ping_sent_us) >= ping_interval_us) {
             if (sock_obj) {
                 ExceptionSink ping_xsink;
-                qore_socket_object_private(sock_obj).submitHttp2PingForAsyncPoll(&ping_xsink);
+                int ping_events = qore_socket_object_private(sock_obj).submitHttp2PingForAsyncPoll(&ping_xsink);
                 ping_xsink.clear();
+                // a PING that the socket did not take waits for the readiness that its write needs: the controller
+                // does not run the operation again at once for output that the socket refused
+                // (qoretechnologies/qore#7641)
+                ping_events = ping_events > 0 ? (ping_events & (SOCK_POLLIN | SOCK_POLLOUT)) : 0;
+                if (ping_events && poll_info) {
+                    int events = poll_info->getKeyValue("events").getAsBigInt();
+                    poll_info->setKeyValue("events", events | ping_events, xsink);
+                    if (*xsink) {
+                        poll_info->deref(xsink);
+                        return nullptr;
+                    }
+                }
             }
             last_ping_sent_us = now_us;
         }
@@ -1369,14 +1381,23 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         }
     }
 
-    // A stream that a listener reads (WebSocket/SSE over HTTP/2) gets the end of the stream as a sentinel in its queue:
+    // A stream that a listener reads (WebSocket over HTTP/2) gets the end of the stream as a sentinel in its queue:
     // the listener is woken, as it is by the end of a stream that the peer ended (see handleReading()); otherwise it
-    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965)
-    // (the registrations are not checked: the connection's close has cleared them, and a stream without a listener
-    // only has its notification kept, on a connection that is gone)
-    for (int32_t sid32 : failed_streams) {
-        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
-            data_ready_streams.push_back(sid32);
+    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965).
+    // Only the streams with a listener are notified (notify_streams, which the connection's close does not clear):
+    // a stream without one has no listener to wake, and the operation of a connection whose streams have no
+    // listeners has no onStreamData() method to notify (an HTTPClient connection; issue #7695)
+    if (!failed_streams.empty()) {
+        AutoLocker al(sq_lock);
+        for (int32_t sid32 : failed_streams) {
+            std::vector<int32_t>::iterator i = std::find(notify_streams.begin(), notify_streams.end(), sid32);
+            if (i == notify_streams.end()) {
+                continue;
+            }
+            notify_streams.erase(i);
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
+                data_ready_streams.push_back(sid32);
+            }
         }
     }
 }
@@ -1400,6 +1421,10 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
     {
         AutoLocker al(sq_lock);
         pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj}});
+        // the stream's listener is notified when the connection fails (see notifyPendingStreams())
+        if (std::find(notify_streams.begin(), notify_streams.end(), stream_id) == notify_streams.end()) {
+            notify_streams.push_back(stream_id);
+        }
     }
 
     // the stream's data is credited as the drain takes it, so the data that a bounded queue has no room for stays in
@@ -1679,6 +1704,17 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
         if (it != stream_queues.end()) {
             released.push_back(it->second);
             stream_queues.erase(it);
+        }
+    }
+    // the listeners of the completed streams have been notified of their end: a failure of the connection has no
+    // more to tell them (see notifyPendingStreams())
+    if (!completed.empty()) {
+        AutoLocker al(sq_lock);
+        for (int32_t sid : completed) {
+            std::vector<int32_t>::iterator i = std::find(notify_streams.begin(), notify_streams.end(), sid);
+            if (i != notify_streams.end()) {
+                notify_streams.erase(i);
+            }
         }
     }
 }
@@ -2192,7 +2228,9 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
 
 void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* queue,
         QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool aws_event_stream) {
+    // the parser installed: server-sent events, or the AWS binary event stream (qore#7247)
+    const char* kind = aws_event_stream ? "AWS event-stream" : "SSE";
     ChannelAction* ch_action = nullptr;
     std::string sid = std::to_string(stream_id);
     bool completed_action = false;
@@ -2218,19 +2256,20 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
         if (!ch_action) {
             if (found_action) {
                 xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-                    "cannot install SSE state: stream %d action is not a ChannelAction",
-                    (int)stream_id);
+                    "cannot install %s state: stream %d action is not a ChannelAction",
+                    kind, (int)stream_id);
             } else {
                 xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
-                    "cannot install SSE state: stream %d not found or already complete",
-                    (int)stream_id);
+                    "cannot install %s state: stream %d not found or already complete",
+                    kind, (int)stream_id);
             }
             return;
         }
         ch_action->ref();
     }
 
-    ch_action->installSseState(queue, notifier, notifier_obj, initial_holder.release(), xsink);
+    ch_action->installSseState(queue, notifier, notifier_obj, initial_holder.release(), xsink,
+        aws_event_stream);
     ch_action->deref(xsink);
     if (completed_action) {
         ch_action->deref(xsink);
@@ -3038,9 +3077,56 @@ nothing Http2ClientPollOperationBase::installSseState(int stream_id,
     }
 }
 
-//! Returns the socket object
-/** @return the socket
+//! Installs a decoder of the AWS binary event stream on an active ChannelAction stream
+/** @param stream_id the H2 stream ID returned by submitRequestStreaming()
+    @param queue Queue for the decoded frames: untyped hashes with the keys of AwsEventStream::AwsEventStreamFrame,
+        \c headers and \c payload, as AwsEventStream::AwsEventStreamDecoder::nextFrame() decodes them; an error hash with \c err and
+        \c desc and the \c NOTHING sentinel when a frame is malformed or its CRC does not match; the sentinel
+        when the stream ends
+    @param notifier optional EventNotifier signaled after queue updates
+    @param initial_body optional body bytes already received before installing
+        the decoder
+
+    @since %Qore 3.0 (qore#7247)
 */
-Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
+nothing Http2ClientPollOperationBase::installEventStreamState(int stream_id,
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
+        *data initial_body) [flags=NAMED_ARGS] {
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+    Queue* queue_ptr = queue.release();
+    QoreValue initial;
+    if (initial_body) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("body", initial_body->refSelf(), xsink);
+        if (*xsink) {
+            queue_ptr->deref(xsink);
+            if (notifier_ptr) {
+                notifier_ptr->deref(xsink);
+            }
+            return QoreValue();
+        }
+        initial = h.release();
+    }
+    priv->installSseState(static_cast<int32_t>(stream_id), queue_ptr,
+        notifier_ptr, notifier_obj_ptr, initial, xsink, true);
+    queue_ptr->deref(xsink);
+    if (notifier_ptr) {
+        notifier_ptr->deref(xsink);
+    }
+}
+
+//! Returns the socket object to the subclass that implements the connection
+/** The socket is not given to other code: the poll operation's subclass of the HTTP client
+    (\c HttpClientIo::Http2ClientPollOperation) gives it out with the rules of a connection of a connection
+    manager (qore#7544)
+
+    @return the socket
+*/
+private Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
     return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

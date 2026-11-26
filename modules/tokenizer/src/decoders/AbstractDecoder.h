@@ -31,14 +31,17 @@ public:
     /** @param tokens the list of token strings to decode
         @return the decoded string
     */
-    virtual std::string decode(const std::vector<std::string>& tokens) const = 0;
+    std::string decode(std::vector<std::string> tokens) const;
+
+    //! Passes token boundaries to the next decoder in a sequence
+    virtual std::vector<std::string> decodeChain(std::vector<std::string> tokens) const = 0;
 
     //! Factory: creates a decoder from a parsed tokenizer.json "decoder" config hash
     /** Dispatches on config.type:
         - "WordPiece" -> WordPieceDecoder
         - "ByteLevel" -> ByteLevelDecoder
         - "Metaspace" -> MetaspaceDecoder
-        - "BPEDecoder" -> same as ByteFallbackDecoder + Fuse (legacy alias)
+        - "BPEDecoder" -> replace the end-of-word suffix (or use the legacy byte-fallback alias)
         - "ByteFallback" -> ByteFallbackDecoder
         - "Fuse" -> FuseDecoder (handled by SequenceDecoder)
         - "Strip" -> StripDecoder (handled by SequenceDecoder)

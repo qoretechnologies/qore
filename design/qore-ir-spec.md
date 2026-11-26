@@ -245,3 +245,74 @@ members whose local is written after the aggregate is built (compound
 assignments, increments, assignments, writes through a reference and by a
 closure, writes in loops and branches, member and element stores) or goes out of
 scope, in every execution mode and compiled code.
+
+### Constant locals and fused instructions
+
+Fixed-aggregate scalar replacement resolves a selector through a local that has
+one store dominating its loads (`constant_local_assignments`), and removes the
+store and the loads of such a local once the replacement leaves no read of it.
+The fused integer instructions name their locals in their own fields instead of
+taking the value of a `LoadLocal` as an operand: `BranchIfLtLocalInt` reads both
+of its locals, `AddAssignLocalInt` reads its source and reads and writes its
+target, and `IncrementLocalInt` reads and writes its local.  Their writes make a
+local variable (`otherwise_written_locals`), and the removal keeps the store of
+every local that one of them accesses (`fused_accessed_locals`, qore#7634), which
+would otherwise be removed as unused (the bound of a loop or the source of an
+addition then read a local that was never assigned).  A local that they only
+read still holds its one value, so it can still resolve a selector.
+`qore/misc/fixed-list-fused-locals.qtest` and `IRScalarFusedLocals.qtest` check
+loop bounds and counters, additions and increments next to replaced lists and
+hashes in every execution mode and compiled code.
+
+### Integer pairs read with a bounded index
+
+A local `list<int>` of two members whose reads have an index that is not a
+constant but can only be 0 or 1 (a native integer with a known range of 0 to 1,
+or the result of an AND with the constant 1, such as `pair[x & 1]`) is replaced
+like a list read with constant indexes: the list is not built, and each such read
+becomes `first ^ ((first ^ second) & -index)`, which selects a member without a
+branch; `-index` is 0 or -1, so no operation can overflow, whatever the members'
+values.  The members are native integers, which the interpreter's slots own
+whether they are inline or boxed (see above), so the selection can use them in
+later statements and loops.  Any other index (an AND with another mask, or an
+index that can be negative or larger), other element types and every condition
+of the replacement of a list read (one store of the list, no mutation, alias,
+capture, reference or handler on the read) keep the list.
+`QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT` disables it.
+`IRBoundedPairScalarReplacement.qtest` checks members in and out of the inline
+range, reads in one or more blocks and in a loop, and the lists that must stay,
+in every execution mode and compiled code, with the optimizer's statistics and the
+compiled code's calls to build lists.
+
+### Hash reads with a key chosen from literal keys
+
+A read of a local hash whose key is not a constant but a phi of literal keys of
+the hash (`h{c ? "a" : "b"}`, or through string locals with one store that
+dominates their loads, as in `string key = c ? "a" : "b"; h{key}`) is replaced by
+a phi of the values of the selected members on the same edges, when:
+
+- the members are native scalars (int, float or bool) of one representation and
+  type: they are owned by the interpreter's slots (see above), so the phi can
+  take them after the statement that built the hash;
+- the store of the hash dominates the phi, which dominates the read, so on every
+  path to the read the last join of the phi follows the last store of the hash;
+- the phi has two to four incoming edges, from distinct predecessors that it does
+  not dominate, each with a literal key that the hash has and whose member's
+  value dominates the end of the predecessor;
+- the function has no handlers: the graph that the replacement uses has no
+  exception edges, so its joins are not every path to the read.
+
+The reads with the same phi of keys share one phi of the members' values.  The
+hash is then removed as for constant keys.  The phi of keys, its literals and
+the string local that holds it (with its store, loads and releases) are removed
+too when nothing else uses them (`finite_hash_selector_removable()`); a key that
+is used otherwise (measured, copied, read through another local) stays.  A key
+computed before the hash, a key that the hash does not have, nested conditionals,
+hashdecls and hashes that are changed, aliased, captured or passed by reference
+keep the hash.  `QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT` disables the
+replacement, `QORE_DISABLE_IR_FINITE_HASH_KEY_SELECTOR_ELISION` only the removal
+of the keys.  `IRFiniteHashKeySelectorElision.qtest` checks integer members in
+and out of the inline range, float and bool members, `hash<auto>`, loops, keys
+that stay and hashes that must stay, in every execution mode and compiled code,
+with the optimizer's statistics and the compiled code's calls to build hashes and
+keys.

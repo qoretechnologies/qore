@@ -1752,6 +1752,11 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool auto_local_string_append = false;  // Transient: paired auto-local load or generic +=, guarded by runtime type
+    // Transient: the StoreLocal of the result of a generic += of an "auto" local back to the local, paired with its load
+    // and operation (qore_ir_mark_auto_string_appends()); it stores nothing after an operation made through a
+    // reference that the local holds, and it gives a container that the operation changed in place back to the local
+    // without a share copy (qore#7421)
+    bool paired_auto_add_store = false;
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
     // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)

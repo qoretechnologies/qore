@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) connections served by the async I/O handler thread pool
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  qore#7682: a handler can keep values in the user thread context of the listener
+    (HttpListenerInterface::addUserThreadContext()), which it reads in cx.uctx.  A thread of the handler pool serves
+    the requests of many connections one after the other: the values that a request's handler set must not reach a
+    later request that the thread serves, for another handler (of another Program, trusted or not), also when the
+    handler's code raised an exception.  The thread-local data of a pool task does not outlive the task, so they
+    never do; this test pins that.  The server runs one handler thread, so every request runs on the same thread.
+    (The thread of a dedicated persistent connection keeps its handlers' values apart itself: qore#6847.)
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerUctxSharedThreadTest
+
+#! a trusted handler that returns the thread it runs on and the user thread context that it sees
+class ReportHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": sprintf("%d %y", gettid(), cx.uctx)};
+    }
+}
+
+class HttpServerUctxSharedThreadTest inherits QUnit::Test {
+    public {
+        #! the tenant's handler: sets a value in the user thread context of the listener, then answers or raises
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+class TenantHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        listener.addUserThreadContext({\"tenant\": \"secret\"});
+        if (hdr.path =~ /raise/) {
+            throw \"TENANT-ERROR\", \"the tenant's handler raised an exception\";
+        }
+        return <HttpResponseInfo>{\"code\": 200, \"body\": sprintf(\"%d %y\", gettid(), cx.uctx)};
+    }
+}
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantHandler();
+}
+";
+    }
+
+    private {
+        #! the Programs of the handlers, which live as long as the test's servers
+        list<Program> programs;
+    }
+
+    constructor() : QUnit::Test("HTTP server: the user thread context of a shared handler thread", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1", \http11Test());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/3", \http3Test());
+        set_return_value(main());
+    }
+
+    #! returns a server with one handler thread, the tenant's handler (a Program with the default sandbox), a trusted
+    #! handler that sets a value and a trusted handler that reports what it sees
+    private HttpServer getServer() {
+        HttpServer server(<HttpServerOptionInfo>{"max_handler_threads": 1});
+        Program tenant(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.setSandboxManager(new SandboxManager());
+        tenant.parse(TenantSource, "tenant");
+        programs += tenant;
+        server.setHandler("tenant", "^tenant", NOTHING, tenant.callFunction("get_handler"));
+        Program trusted(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # a trusted handler that sets a value too, which the next request does not see either
+        trusted.parse(TenantSource, "trusted");
+        programs += trusted;
+        server.setHandler("trusted", "^trusted", NOTHING, trusted.callFunction("get_handler"));
+        server.setHandler("report", "^report", NOTHING, new ReportHandler());
+        return server;
+    }
+
+    #! sends the requests with the client and checks that no request sees the values of an earlier one
+    private checkRequests(HTTPClient hc, string proto) {
+        foreach string path in ("/tenant", "/tenant/raise", "/trusted") {
+            hash<auto> info;
+            string set_tid;
+            try {
+                set_tid = hc.get(path, NOTHING, \info).split(" ")[0];
+            } catch (hash<ExceptionInfo> ex) {
+                # the exception path: the server answers with an error
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, proto + " " + path + ": the handler's exception is answered");
+                assertRegex("status code 500", ex.desc, proto + " " + path + ": with an internal server error");
+            }
+            string rv = hc.get("/report");
+            (string tid, string uctx) = (rv =~ x/^([0-9]+) (.*)$/);
+            if (set_tid) {
+                assertEq(set_tid, tid, proto + " " + path + ": both requests run on the same thread");
+            }
+            assertEq("null", uctx, proto + " " + path + ": the next request does not see the handler's values");
+        }
+    }
+
+    http11Test() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port)});
+        checkRequests(hc, "HTTP/1.1");
+    }
+
+    http2Test() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "2.0"});
+        hc.connect();
+        assertEq("HTTP/2", hc.getHttpVersion(), "HTTP/2 is negotiated");
+        checkRequests(hc, "HTTP/2");
+    }
+
+    http3Test() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        server.waitForAsyncIo();
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "3"});
+        hc.connect();
+        if (hc.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", hc.getHttpVersion()));
+        }
+        checkRequests(hc, "HTTP/3");
+    }
+}

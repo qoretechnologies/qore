@@ -35,6 +35,7 @@
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/CallReferenceNode.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -2137,15 +2138,22 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns @ref True if a sandbox governs the Program of the class of the given object
-/** The object keeps the Program of its class (the Program whose code declares the class, or into which the class was
-    imported), not the Program of the code that created it: an object of a class of a module or of the application,
-    created by sandboxed code, gives @ref False.  The Program is governed by a sandbox: its own (see
+/** The Program of the class is the Program whose code declares the class or one of its base classes, wherever the
+    class is used (also when it was imported into another Program, see
+    @ref Qore::Program::importClass() "Program::importClass()"), and the Program into which the class was imported;
+    the answer is @ref True if a sandbox governs any of them.  It is not the Program of the code that created the
+    object: an object of a class of a module or of the application, created (also deserialized) by sandboxed code,
+    gives @ref False; an object of a builtin class, which has no Program, has the Program of the code that created
+    it.  A Program is governed by a sandbox: its own (see
     @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()"), now, whenever it was set, or that of
-    the code that created the Program.  Library code that gives an object of an application a more restricted
+    the code that created the Program or committed code in it; a Program that a sandbox governed once stays governed,
+    also once it has been deleted.  Library code that gives an object of an application a more restricted
     service when the application's code is sandboxed uses it, as an HTTP server decides which handlers get a socket
     of their request (qore#7305), for the objects of classes that the sandboxed code declares; unlike isSandboxed(), it
     does not depend on the code that is running, and it sees a sandbox that was set on the Program after the object
-    was created.
+    was created.  It tells whose code the class of the object is, not where the values of the object come from: an
+    object of a trusted class can still hold member values that sandboxed code chose, such as one that sandboxed code
+    deserialized.
 
     It reveals only whether the Program of the object's class is sandboxed, so it is not restricted.
 
@@ -2203,12 +2211,64 @@ static bool SandboxManager::isFromRestrictedProgram(object obj) [flags=RET_VALUE
     return qore_object_program_is_restricted(obj);
 }
 
+//! Returns @ref True if a sandbox that does not trust its code governs the code of the given closure or call reference
+/** As isFromRestrictedProgram() decides for an object: the code is restricted when the %Program whose code a call of it
+    runs is governed by a sandbox that does not trust its code (one that refuses uncontrolled APIs, see isRestricted()):
+    the %Program that defines a closure, that declares the class of the method that a method reference calls (the
+    object's class, which a call dispatches on), or the %Program of a function reference; or when the code that
+    created the closure or call reference was restricted so.  It is evaluated at each call, and fails closed: a
+    %Program whose sandboxes are gone, or whose sandboxes cannot be combined, is restricted.
+
+    Library code that hands data to code that another component registered with it, such as a request dispatcher that
+    calls the callbacks of an application, uses it to give restricted code only what it may see, also when trusted code
+    registered the callback; unlike isRestricted(), it does not depend on the code that is running.
+
+    A reference to builtin code, which has no %Program, is restricted only when restricted code created it.
+
+    It reveals only whether the code of a callable that the caller holds is restricted, so it is not restricted
+    itself.
+
+    @param c the closure or call reference
+
+    @return @ref True if a sandbox that does not trust its code governs the code of the closure or call reference
+
+    @par Example:
+    @code{.py}
+bool restricted = SandboxManager::isCodeFromRestrictedProgram(callback);
+    @endcode
+
+    @see isFromRestrictedProgram()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCodeFromRestrictedProgram(code c) [flags=RET_VALUE_ONLY] {
+    if (qore_program_is_restricted(qore_call_reference_code_program(c))) {
+        return true;
+    }
+    // a closure or call reference that restricted code created is that code's
+    QoreSandboxContext* creation = qore_get_call_reference_provenance(c);
+    if (!creation) {
+        return false;
+    }
+    bool restricted = false;
+    for (QoreSandboxManager* sm : {creation->manager, creation->policy_manager, creation->provenance_manager,
+            creation->provenance_policy_manager}) {
+        if (sm && !sm->trustsUncontrolledApis()) {
+            restricted = true;
+            break;
+        }
+    }
+    creation->deref();
+    return restricted;
+}
+
 //! Returns the ID of the Program of the class of the given object if a sandbox governs it
-/** The Program is that of isFromSandboxedProgram(): the Program whose code declares the class of the object (or into
-    which the class was imported), not the Program of the code that created the object or that calls it; an object of a
-    builtin class, which has no Program, has the Program of the code that created it.  As a Program that sandboxed code
-    creates is governed by its creator's sandbox, the ID can be that of such a Program, which the host did not create
-    itself.  Library code
+/** The Program is that of isFromSandboxedProgram(): the sandboxed Program whose code declares the class of the object,
+    or else one of its base classes (the class before its base classes), wherever the class is used, or else the
+    sandboxed Program into which the class was imported; not the Program of the code that created the object or that
+    calls it; an object of a builtin class, which has no Program, has the Program of the code that created it.  As a
+    Program that sandboxed code creates is governed by its creator's sandbox, the ID can be that of such a Program,
+    which the host did not create itself; it can also be that of a Program that has been deleted.  Library code
     that marks what the code of an object of a class that sandboxed code declares produces, such as the messages that
     such an object writes to a log that the host configured, uses it to name the tenant whose code chose them
     (qore#7110), as the code that calls the object can be another tenant's or the host's.

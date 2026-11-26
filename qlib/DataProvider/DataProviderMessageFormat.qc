@@ -237,6 +237,10 @@ public class DataProviderMessageFormat {
         string base = type.getBaseTypeName();
         bool compatible;
         switch (role) {
+            case "text":
+                # A data option accepts both strings and binary values. bindForm() supplies strings here.
+                compatible = base == "string" || base == "data";
+                break;
             case "native":
                 compatible = base == native_type || base == "auto" || base == "any";
                 break;

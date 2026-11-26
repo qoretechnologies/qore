@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerHandlerClassProvenanceTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! A handler whose class, or a base class, restricted code declares is restricted wherever it is used (qore#7576)
+/** The class of the handler is used in a trusted Program, into which the code that declares it imported it; the
+    server gives the handler the request without its credentials, as for a handler of the restricted Program itself
+*/
+class HttpServerHandlerClassProvenanceTest inherits QUnit::Test {
+    public {
+        #! the code that declares the handler class
+        const DeclaringSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+class DeclaredHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"body\": sprintf(\"authorization=%y cookie=%y\", exists hdr.authorization, exists hdr.cookie),
+        };
+    }
+}
+sub export_class(Program target) {
+    target.importClass(\"DeclaredHandler\");
+}
+";
+
+        #! the trusted code that uses the handler class
+        const UsingSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+class HostHandler inherits DeclaredHandler {
+}
+AbstractHttpRequestHandler sub get_handler(string name) {
+    return name == \"subclass\" ? new HostHandler() : new DeclaredHandler();
+}
+";
+
+        const Filtered = "authorization=False cookie=False";
+        const Unfiltered = "authorization=True cookie=True";
+    }
+
+    private {
+        #! the Programs that declare the handler classes, which the classes need while they are used
+        list<Program> declaring();
+    }
+
+    constructor() : QUnit::Test("HTTP server: handler classes used across Programs", "1.0", \ARGV) {
+        addTestCase("a handler class of restricted code", \restrictedTest());
+        addTestCase("a handler class of a sandbox that trusts its code", \trustingTest());
+        set_return_value(main());
+    }
+
+    restrictedTest() {
+        Program t = getUsing(new SandboxManager());
+        foreach string name in ("class", "subclass") {
+            AbstractHttpRequestHandler h = t.callFunction("get_handler", name);
+            assertTrue(h.handlerClassIsRestricted(), name);
+            assertTrue(h.handlerCodeIsRestricted(), name);
+            assertTrue(h.needsHandlerSocketView(), name);
+            assertEq(Filtered, request(h), name);
+        }
+    }
+
+    trustingTest() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        Program t = getUsing(sm);
+        foreach string name in ("class", "subclass") {
+            AbstractHttpRequestHandler h = t.callFunction("get_handler", name);
+            assertFalse(h.handlerClassIsRestricted(), name);
+            assertEq(Unfiltered, request(h), name);
+        }
+    }
+
+    #! returns a trusted Program that uses the handler class that the code governed by \a sm declares
+    private Program getUsing(SandboxManager sm) {
+        Program d(PO_NO_CHILD_PO_RESTRICTIONS);
+        d.setSandboxManager(sm);
+        d.parse(DeclaringSource, "declaring");
+        push declaring, d;
+        Program t(PO_NO_CHILD_PO_RESTRICTIONS);
+        d.callFunction("export_class", t);
+        t.parse(UsingSource, "using");
+        return t;
+    }
+
+    #! serves one request with the handler, on a listener of its own on port 0, and returns the response body
+    private string request(AbstractHttpRequestHandler handler) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("h", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        on_exit c.close();
+        c.send("GET /x HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer secret\r\nCookie: session=secret\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code, "the request is served");
+        return c.recv(h."content-length".toInt(), HangGuard);
+    }
+}

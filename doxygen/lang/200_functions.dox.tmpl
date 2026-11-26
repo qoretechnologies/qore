@@ -529,6 +529,11 @@ public class Registry {
     inherited, which is the same class; a call on an object of a subclass is resolved when it is made, and checked as
     a call made at run time.
 
+    The restrictions are those of the code as it was parsed: restricting code that is already parsed is not supported,
+    and a restricting option set with @ref Qore::Program::setParseOptions() "Program::setParseOptions()" after the code
+    was parsed must not be relied on to refuse its calls, also those made at run time; code that must run restricted
+    belongs in a new @ref Qore::Program "Program" (see @ref sandbox_po_limitations).
+
     A call reference or a @ref closure "closure" runs with the permissions of the context that created it: a call
     reference to code with a functional domain that code allowed to use the domain created can be called by code
     that is not allowed to use it.  A closure created in code that declares a functional domain does not inherit the

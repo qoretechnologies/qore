@@ -57,38 +57,17 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
     }
 }
 
-std::string MetaspaceDecoder::decode(const std::vector<std::string>& tokens) const {
-    // Join all tokens
-    std::string joined;
-    for (const auto& tok : tokens) {
-        joined += tok;
-    }
-
-    // Replace all occurrences of the metaspace character with spaces
-    if (!replacement.empty()) {
-        std::string result;
-        result.reserve(joined.size());
+std::vector<std::string> MetaspaceDecoder::decodeChain(std::vector<std::string> tokens) const {
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        auto& token = tokens[i];
+        const bool skip = i == 0 && prepend_scheme != "never";
         size_t pos = 0;
-        while (pos < joined.size()) {
-            size_t found = joined.find(replacement, pos);
-            if (found == std::string::npos) {
-                result += joined.substr(pos);
-                break;
-            }
-            result += joined.substr(pos, found - pos);
-            result += ' ';
-            pos = found + replacement.size();
+        while ((pos = token.find(replacement, pos)) != std::string::npos) {
+            token.replace(pos, replacement.size(), skip ? "" : " ");
+            pos += !skip;
         }
-        joined = result;
     }
-
-    // Strip leading space if prepend_scheme was "always" or "first"
-    if ((prepend_scheme == "always" || prepend_scheme == "first")
-            && !joined.empty() && joined[0] == ' ') {
-        joined = joined.substr(1);
-    }
-
-    return joined;
+    return tokens;
 }
 
 } // namespace QoreTokenizer

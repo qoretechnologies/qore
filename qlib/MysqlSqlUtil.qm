@@ -672,6 +672,10 @@ public namespace MysqlSqlUtil {
             byte_size = bs ?? 0;
         }
 
+        private string getIdentitySql(AbstractTable t) {
+            return ""; # MysqlNumericColumn includes AUTO_INCREMENT and its key in the native type
+        }
+
         #! returns a list of sql strings that can be used to add the column to an existing table
         /** @par Example:
             @code{.py}
@@ -685,6 +689,10 @@ list<auto> l = col.getAddColumnSql(t);
         }
 
         #! returns an sql string that can be used to add the column to a table
+        private bool canModifyIdentity(AbstractColumn target) {
+            return True; # MODIFY COLUMN specifies the complete new column definition on MySQL
+        }
+
         string getCreateSql(AbstractTable t) {
             # a string with a backslash is given as a hex literal (see MysqlTable::getSqlValue()), which MariaDB
             # stores incorrectly as the default value of a TEXT or BLOB column
@@ -816,6 +824,9 @@ string str = col.getRenameSql(t, "new_name");
                 : MysqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
             unsigned = n_unsigned;
             auto_increment = n_auto_increment;
+            if (auto_increment && qt == Type::Int) {
+                setIdentity("mysql");
+            }
             pk = n_pk;
             # default precision is 10
             if (!sz) {
@@ -837,6 +848,20 @@ string str = col.getRenameSql(t, "new_name");
                       sprintf("AUTO_INCREMENT can be used only with a subset of types. Used: %s, valid types: %y",
                               native_type, keys AUTO_INCREMENT_VALID_TYPES);
             }
+        }
+
+        hash<GenericColumnInfo> getDescriptionHash() {
+            hash<GenericColumnInfo> rv = MysqlColumn::getDescriptionHash();
+            if (identity_driver) {
+                if (qore_type == Type::Int) {
+                    # Integer display width is not a size option of a schema column.
+                    remove rv.driver.mysql.size;
+                }
+                if (unsigned) {
+                    rv.driver.mysql.unsigned = True;
+                }
+            }
+            return rv;
         }
 
         string getNativeTypeString() {
@@ -4201,7 +4226,7 @@ string str = table.getSqlValue(date);
         private preSetupTableImpl(reference<hash> desc, *hash opt) {
             # see if there is an auto-increment column and set the primary key flag if it matches the primary key declaraion
             foreach string k in (desc.columns.keyIterator()) {
-                if (desc.columns{k}.auto_increment) {
+                if (desc.columns{k}.auto_increment || desc.columns{k}.identity) {
                     if (!desc.columns{k}.pk) {
                         if (desc.primary_key.columns.lsize() == 1) {
                             softlist cl = desc.primary_key.columns;

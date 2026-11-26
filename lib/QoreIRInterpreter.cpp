@@ -681,6 +681,13 @@ static inline qore_type_t qore_ir_value_node_type(const QoreValue& value) {
     return n ? n->getType() : NT_NOTHING;
 }
 
+//! Returns true if the load of an "auto" local paired with a generic += (auto_local_string_append) borrows a value
+//! of the node type \a type: the operation changes a string, a list or a hash that the local holds alone in place
+//! (qore_rt_add_assign_local_any(); qore#6279, qore#7421)
+static inline bool qore_ir_auto_local_add_borrows(qore_type_t type) {
+    return type == NT_STRING || type == NT_LIST || type == NT_HASH;
+}
+
 // The mode in which a store assigns the given value: a store in AssignmentMode::Element (the variable of a foreach
 // loop) assigns a weak reference as it is, as the AST interpreter assigns each element, and any other value as a
 // Normal store does
@@ -1081,6 +1088,17 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 // dispatch otherwise.
 static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
 static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
+
+//! records the instruction that execute() dispatches, for silent-failure tracing
+/** Out of line, as qore_ir_restore_innermost_tls(): an inline store in execute()'s dispatch loop lets GCC keep the
+    address of the thread-local variables of this file live across execute(), in a slot of its frame, when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2, issue #7006); only called with tracing enabled
+*/
+static QORE_INTERN_NOINLINE void qore_ir_record_silent_fail(const QoreIRInstruction* inst) {
+    assert(inst);
+    tls_last_silent_fail_opcode = inst->opcode;
+    tls_last_silent_fail_loc = inst->loc;
+}
 
 void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
     const QoreProgramLocation* loc = tls_last_silent_fail_loc;
@@ -2358,6 +2376,18 @@ int64 q_get_ir_innermost_instantiated_local_entries() {
     return tls_innermost_ir_instantiated_locals
         ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
 }
+
+//! restores the innermost cleanup vector and instantiated locals of the caller of execute() on every exit of it
+/** Out of line: with the store at execute()'s exit inline, GCC keeps the address of the thread-local variables of
+    this file, which the stores at its entry computed, live across execute() in a slot of its frame when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2), which each level of a recursion of interpreted code pays
+    (issue #7006); a call here computes the address itself, as the stores at the entry do
+*/
+static QORE_INTERN_NOINLINE void qore_ir_restore_innermost_tls(const IRCleanupSlots* prev,
+        const std::vector<const LocalVar*>* prev_instantiated_locals) noexcept {
+    tls_innermost_ir_cleanup = prev;
+    tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+}
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
@@ -2861,6 +2891,14 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
+        } else if (locally_uninst) {
+            // a pre-instantiated local that UninstantiateLocal cleared at the end of its block stays on the stack,
+            // marked as cleared (LocalVarValue::del()); the block runs again, so the entry is active again, as an
+            // instantiation would make it, and reflection gives it (qore#7640); the interpreter's stores do not all
+            // take the variable's lvalue (see LocalVarValue::getLValue() for the compiled tiers)
+            if (LocalVarValue* lvar = thread_try_find_lvar(var)) {
+                lvar->block_cleared = false;
+            }
         }
         // Clear the "locally uninstantiated" flag if present
         if (locally_uninstantiated) {
@@ -11797,8 +11835,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const IRCleanupSlots* prev;
         const std::vector<const LocalVar*>* prev_instantiated_locals;
         ~CleanupTlsGuard() {
-            tls_innermost_ir_cleanup = prev;
-            tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+            qore_ir_restore_innermost_tls(prev, prev_instantiated_locals);
         }
     } cleanup_tls_guard{tls_innermost_ir_cleanup, tls_innermost_ir_instantiated_locals};
     tls_innermost_ir_cleanup = &cleanup;
@@ -13638,8 +13675,7 @@ next_instruction:
         // the caller (StatementBlock::execImpl / evalTiered fallback) can
         // read it post-return without plumbing it through the return value.
         if (trace_silent_fail) {
-            tls_last_silent_fail_opcode = inst->opcode;
-            tls_last_silent_fail_loc = inst->loc;
+            qore_ir_record_silent_fail(inst);
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
@@ -14896,6 +14932,18 @@ dispatch_folded_step_host:
                 prev_block = block;
                 block = inv->normal_target;
                 ip = 0;
+                if (inv->auto_local_string_append) [[unlikely]] {
+                    // a generic += of an "auto" local whose load gave the reference that the local holds, which the
+                    // load's slot still holds, was made through it, once, as the AST interpreter makes it: the store
+                    // paired with it, the first instruction of the normal target, stores nothing
+                    // (QoreIRInstruction::paired_auto_add_store, qore#7421); the referenced lvalue can be another
+                    // variable whose value a slot caches
+                    if (qore_ir_value_node_type(getIRValue(values, inv->operands[0])) == NT_REFERENCE) {
+                        assert(!block->instructions.empty() && block->instructions[0]->paired_auto_add_store);
+                        cleanupLocalCaches();
+                        ip = 1;
+                    }
+                }
                 break;
             }
             case QoreIROpcode::LandingPad: {
@@ -15253,6 +15301,14 @@ dbg_dismissed_exit:
                             goto load_local_done;
                         }
                         if (cache_has_value && cached_node_type == NT_REFERENCE) {
+                            if (local_inst->auto_local_string_append) [[unlikely]] {
+                                // the += paired with this load is made on the referenced lvalue, which it gets as the
+                                // reference itself (qore_rt_add_assign_local_any(), qore#7421)
+                                out = cached_val.refSelf();
+                                local_flags = IRCallFrame::LocalOwned;
+                                result_slot_owned = true;
+                                goto load_local_done;
+                            }
                             // a local holding a reference reads as the referenced lvalue: the slot holds the
                             // reference itself (see below), which is read every time, as the AST interpreter reads
                             // it; the slot of an IR-only local, such as a parameter, is the variable itself
@@ -15280,11 +15336,12 @@ dbg_dismissed_exit:
                         }
                         if (cache_has_value) {
                             if (!local_inst->auto_ref || local_inst->interpreter_borrow != QoreIRLocalInstruction::Borrow::None
-                                    || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
+                                    || (local_inst->auto_local_string_append
+                                        && qore_ir_auto_local_add_borrows(cached_node_type))) {
                                 // The consumer borrows this local until it mutates the value or the iterator
-                                // takes its own reference (#6638); a load that pairs with a local string append
-                                // and has no other consumers borrows the slot-cache reference so the builder
-                                // node stays unique at the mutation site (#6279; native code borrows via alloca
+                                // takes its own reference (#6638); a load that pairs with a += of a local string, list
+                                // or hash and has no other consumers borrows the slot-cache reference so the node
+                                // stays unique at the mutation site (#6279, #7421; native code borrows via alloca
                                 // loads)
                                 out = cached_val;
                                 if ((local_inst->auto_local_string_append || local_inst->string_append_local_cow
@@ -15378,7 +15435,7 @@ dbg_dismissed_exit:
                         if (((local_inst->borrowed_local_load
                                     && (local_inst->string_append_local_cow || local_inst->list_push_local_cow))
                                 || (local_inst->auto_local_string_append && !reference_value
-                                    && val.getType() == NT_STRING))
+                                    && qore_ir_auto_local_add_borrows(val.getType())))
                                 && !is_ir_only_local && !is_weak_ref_local && !weak_container_local) {
                             // eval() returned a temporary +1 ref while the TLS
                             // local remains the owner. Release that temporary
@@ -15397,6 +15454,17 @@ dbg_dismissed_exit:
                                 // the slot holds the reference itself, which the fast path above reads through on
                                 // every load; for an IR-only local an empty slot would read as no value
                                 locals_slot_cache.set(sid, reference_value->refRefSelf());
+                                if (local_inst->auto_local_string_append) [[unlikely]] {
+                                    // the += paired with this load is made on the referenced lvalue, which it gets as
+                                    // the reference itself (qore_rt_add_assign_local_any(), qore#7421)
+                                    if (needs_deref && val.needsRef()) {
+                                        val.discard(xsink);
+                                    }
+                                    out = QoreValue(reference_value->refRefSelf());
+                                    local_flags = IRCallFrame::LocalOwned;
+                                    result_slot_owned = true;
+                                    goto load_local_done;
+                                }
                             } else if (is_weak_ref_local || weak_container_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
@@ -16448,8 +16516,10 @@ load_local_done:
                     }
                     target_val = tv.getAsBigInt();
                     // the slot is set to the result below; until then it may only hold what the variable holds
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->target_slot_id, tv);
+                        locals_slot_cache.set(fused_inst->target_slot_id, tv.needsRef() ? tv.refSelf() : tv);
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -16715,8 +16785,10 @@ load_local_done:
                     lhs_val = lv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv);
+                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv.needsRef() ? lv.refSelf() : lv);
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -16745,8 +16817,9 @@ load_local_done:
                     rhs_val = rv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own, as for the left operand (qore#7637)
                     if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv);
+                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv.needsRef() ? rv.refSelf() : rv);
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);
@@ -17896,9 +17969,15 @@ load_local_done:
                         stored = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
                     }
                     // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a
-                    // weak or opaque store keeps the container that it designates
+                    // weak or opaque store keeps the container that it designates; the store paired with a += of the
+                    // local gives the container that the operation changed in place, which the local holds still, back
+                    // to the local and no new holder (QoreIRInstruction::paired_auto_add_store, qore#7421)
                     if (store_mode != AssignmentMode::Weak && store_mode != AssignmentMode::Opaque
-                            && qore_weak_shared_local(stored)) [[unlikely]] {
+                            && qore_weak_shared_local(stored)
+                            && !(local_inst->paired_auto_add_store
+                                // raw slot: the node that the local holds
+                                && locals_slot_cache.storage(local_inst->slot_id).getInternalNode()
+                                    == stored.getInternalNode())) [[unlikely]] {
                         stored = qore_weak_share_copy(stored, xsink);
                     }
                     if (xsink && *xsink) {
@@ -20593,6 +20672,45 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::AddAssignAny:
+                if (inst->auto_local_string_append) [[unlikely]] {
+                    // a generic += of an "auto" local paired with its load and its store
+                    // (qore_ir_mark_auto_string_appends()): the helper changes a string, a list or a hash that the
+                    // local holds alone in place, and an operation whose load gave the reference that the local holds
+                    // is made through it, once, as the AST interpreter makes it, and the paired store, the next
+                    // instruction, stores nothing then (QoreIRInstruction::paired_auto_add_store, qore#7421)
+                    assert(inst->operands.size() == 2);
+                    QoreValue left = getIRValue(values, inst->operands[0]);
+                    bool through_reference = qore_ir_value_node_type(left) == NT_REFERENCE;
+                    QoreValue res = fromBits(qore_rt_add_assign_local_any(toBits(left),
+                        toBits(getIRValue(values, inst->operands[1])), xsink));
+                    if (xsink && *xsink) {
+                        res.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                    if (res.isPlainPointer() && addAssignGaveOperand(res, getIRValue(values, inst->operands[1]))) {
+                        releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                            weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                    }
+                    setValueSlot(values, inst->result.id, res, xsink);
+                    if (res.needsRef()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                    ++ip;
+                    if (through_reference) {
+                        assert(ip < block->instructions.size() && block->instructions[ip]->paired_auto_add_store);
+                        // the referenced lvalue can be another variable whose value a slot caches
+                        cleanupLocalCaches();
+                        ++ip;
+                    }
+                    break;
+                }
+                [[fallthrough]];
             case QoreIROpcode::AddInt:
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::AddAny:
@@ -20626,7 +20744,6 @@ load_local_done:
             case QoreIROpcode::ShrAssignAny:
             case QoreIROpcode::AddAssignInt:
             case QoreIROpcode::AddAssignFloat:
-            case QoreIROpcode::AddAssignAny:
             case QoreIROpcode::SubAssignInt:
             case QoreIROpcode::SubAssignFloat:
             case QoreIROpcode::SubAssignAny:
@@ -20754,9 +20871,7 @@ load_local_done:
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
                 QoreValue right = getIRValue(values, inst->operands[1]);
-                QoreValue res = inst->auto_local_string_append && inst->opcode == QoreIROpcode::AddAssignAny
-                    ? fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink))
-                    : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
+                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     // an operation with a handler in this frame - such as a compound assignment to an element of a
@@ -26504,7 +26619,9 @@ static QORE_INTERN_ALWAYS_INLINE int qore_ir_plus_equals_on(LValueHelper& v, Qor
     if (*xsink) {
         return -1;
     }
-    result = rv.release();
+    // the value with its reference as the operation gave it: ValueHolder::release() would convert an opaque reference
+    // (the target of an opaque store) to an ordinary pointer, which the value of the operator is not
+    result.swap(*rv);
     return 0;
 }
 

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - the IR interpreter's slot cache, JIT and AOT code generation of fused int local instructions
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class IrFusedLocalBigIntTest
+
+#! locals that fused int instructions read keep their values when they hold an int above 2^47 in magnitude
+/** The IR interpreter cached such an int (a node) in the slot of the local without a reference of its own and then
+    released it, so the slot held a freed value: a crash or memory corruption (qore#7637).  Every execution mode and
+    a compiled executable must give the values of the AST interpreter.
+*/
+class IrFusedLocalBigIntTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC_BIN ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/ir-fused-local-bigint-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("IrFusedLocalBigInt", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("large ints in locals of fused int instructions in every execution mode", \checkModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkOutput(string out, string mode) {
+        list<string> lines = select out.split("\n"), $1;
+        assertEq(11, lines.size(), mode + ": all cases ran");
+        assertEq((), (select lines, !($1 =~ /^PASS /)), mode + ": every case gives the expected value");
+    }
+
+    checkModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker)), mode);
+        }
+        checkOutput(ExecModeHarness::run_ir_tier(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker)), ExecModeHarness::IRTierName);
+        TmpDir tmp("qore-fused-bigint-");
+        string exe = tmp.path + DirSep + "fused-bigint";
+        ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        checkOutput(ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"), "AOT");
+    }
+}
