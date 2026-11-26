@@ -95,7 +95,8 @@ class Http3ReadNextRequestMaxBodyTest inherits QUnit::Test {
             # the request was not refused yet: the client is told when the operation ends
             op.abort();
         }
+        # the request is never answered: the client gets the error of the aborted connection
         hash<auto> r = second.get(15s);
-        assertNeq(200, r.status_code, sprintf("the oversized request was not answered: %y", r));
+        assertTrue(exists r.err, sprintf("the oversized request was not answered: %y", r));
     }
 }
