@@ -2148,6 +2148,62 @@ void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreType
     }
 }
 
+//! Returns the binary module declarations that a declaration of a Program names (qore#7533): its names that are
+//! module declarations, and what the module classes among them name in their own types; the caller holds ctl
+static std::vector<QoreTypeOwner*> type_owner_module_names(const std::vector<QoreTypeOwner*>& names,
+        qore_type_owner_module_names_cache_t* module_class_names) {
+    std::vector<QoreTypeOwner*> mod_names;
+    for (QoreTypeOwner* n : names) {
+        if (n->isTypeOwnerModule() && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
+            mod_names.push_back(n);
+        }
+    }
+    // a class's type is shared with its copies, so the declaration names a module's original class, whose member and
+    // signature types the code of its Program reads (qore#7533)
+    qore_type_owner_add_module_class_names(mod_names, module_class_names);
+    return mod_names;
+}
+
+//! Gives a declaration the references to the binary module declarations that it names (type_owner_module_refs);
+//! does not throw; the caller holds ctl
+static void type_owner_set_module_refs(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& mod_names) {
+    assert(o->type_owner_module_refs.empty());
+    for (QoreTypeOwner* n : mod_names) {
+        n->refTypeOwner();
+    }
+    o->type_owner_module_refs.swap(mod_names);
+    o->type_owner_module_refs_taken = true;
+}
+
+void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners) {
+    if (owners.empty() || type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(ctl);
+    qore_type_owner_module_names_cache_t module_class_names;
+    // every list is made before any reference is taken, so that a failed allocation takes none: the declarations then
+    // take them at their batch, as a declaration of a Program does
+    std::vector<std::pair<QoreTypeOwner*, std::vector<QoreTypeOwner*>>> refs;
+    try {
+        refs.reserve(owners.size());
+        std::vector<QoreTypeOwner*> names;
+        for (QoreTypeOwner* o : owners) {
+            if (o->type_owner_module_refs_taken) {
+                continue;
+            }
+            names.clear();
+            o->getTypeOwnerNames(names);
+            refs.emplace_back(o, type_owner_module_names(names, &module_class_names));
+        }
+    } catch (std::bad_alloc&) {
+        return;
+    }
+    // nothing is thrown from here on
+    for (auto& i : refs) {
+        type_owner_set_module_refs(i.first, i.second);
+    }
+}
+
 QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
     // after library cleanup, declarations are freed when their last reference is released
     if (type_owner_cleanup.load(std::memory_order_acquire)) {
@@ -2201,23 +2257,8 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             // the binary module declarations that it names are not decided with the declarations of Programs: they
             // are referenced until it is destroyed, as their module can be deleted before it; a hashdecl copy, which
             // references them itself, does not list them (qore#7533)
-            assert(o->type_owner_module_refs.empty());
-            std::vector<QoreTypeOwner*> mod_names;
-            for (QoreTypeOwner* n : names) {
-                if (n->isTypeOwnerModule()
-                        && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
-                    mod_names.push_back(n);
-                }
-            }
-            // a class's type is shared with its copies, so the declaration names a module's original class, whose
-            // member and signature types the code of its Program reads (qore#7533)
-            qore_type_owner_add_module_class_names(mod_names, &module_class_names);
-            // nothing is thrown from here on
-            for (QoreTypeOwner* n : mod_names) {
-                n->refTypeOwner();
-            }
-            o->type_owner_module_refs.swap(mod_names);
-            o->type_owner_module_refs_taken = true;
+            std::vector<QoreTypeOwner*> mod_names = type_owner_module_names(names, &module_class_names);
+            type_owner_set_module_refs(o, mod_names);
         }
     }
 }
@@ -3401,12 +3442,62 @@ QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* 
     pname = build_parameterized_class_name(base_class, args, or_nothing, true).c_str();
     for (const QoreTypeInfo* arg : args) {
         if (qore_type_needs_decl_pin(arg)) {
-            user_type_args = true;
-            unsafe_receiver = true;
+            user_type_args.store(true, std::memory_order_relaxed);
+            unsafe_receiver.store(true, std::memory_order_relaxed);
             // tested with the type parameter flags by the calls with this receiver
             setUnsafeReceiverCache();
             break;
         }
+    }
+}
+
+void QoreParameterizedClassTypeInfo::upgradeUserTypeArgs() {
+    if (user_type_args.load(std::memory_order_relaxed)) {
+        return;
+    }
+    // the view of the type arguments is read in place: nothing is allocated under the type lock
+    for (const QoreTypeInfo* arg : getTypeArgs()) {
+        if (qore_type_needs_decl_pin(arg)) {
+            // stored before the value of the cache is read; see setUnsafeReceiverCache()
+            unsafe_receiver.store(true, std::memory_order_seq_cst);
+            user_type_args.store(true, std::memory_order_relaxed);
+            setUnsafeReceiverCache();
+            return;
+        }
+    }
+}
+
+#ifdef DEBUG
+//! the number of scans of qore_upgrade_program_local_derived_types(), for the tests of its gate
+static std::atomic<int64> program_local_derived_type_scans{0};
+
+int64 qore_dbg_program_local_derived_type_scans() {
+    return program_local_derived_type_scans.load(std::memory_order_relaxed);
+}
+#endif
+
+void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all) {
+    AutoLocker al(ctl);
+    // a type that names a declaration, directly or in a type that it contains, is a derived type of one of its types,
+    // which is then a key of derived_type_keys: the parameterized class types are scanned only if one is (or if \a all:
+    // the completion of a marking event that did not complete, whose marked types are not known)
+    bool keyed = all;
+    for (const QoreTypeInfo* t : marked_types) {
+        if (keyed) {
+            break;
+        }
+        if (t && derived_type_keys.count(t)) {
+            keyed = true;
+        }
+    }
+    if (!keyed) {
+        return;
+    }
+#ifdef DEBUG
+    program_local_derived_type_scans.fetch_add(1, std::memory_order_relaxed);
+#endif
+    for (auto& i : parameterized_class_map) {
+        i.second->upgradeUserTypeArgs();
     }
 }
 
@@ -3872,6 +3963,128 @@ public:
         return walk<true>(nullptr, ti, 0);
     }
 
+    //! References the mortal declarations that \a ti and the types in it name, also through the target of a reference
+    //! type; the caller holds the type lock (qore#7540)
+    /** A mortal declaration is one that the declaration lifetime system decides (QoreTypeOwner::isTypeOwnerSystem() is
+        false): the builtin declarations of a static namespace or of a module are not referenced.  The marks of
+        QoreTypeInfo::namesNoDeclarations() are not used, as they do not cover the targets of reference types.
+    */
+    DLLLOCAL static void addMortal(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti,
+            int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (!hp->type_owner.isTypeOwnerSystem()) {
+                    get(p).addHashDecl(hd);
+                }
+                // the type arguments of an instance of a generic hashdecl, which an immortal instance made before
+                // they became mortal does not keep
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                addMortalClass(p, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                addMortalClass(p, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                if (!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem()) {
+                    get(p).addEnum(ed);
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                addMortal(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                addMortal(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            addMortal(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                addMortal(p, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                addMortal(p, target, depth + 1);
+            }
+        }
+    }
+
+    //! Appends the own types of the declarations that \a ti names that are not mortal, as addMortal() walks it; the
+    //! caller holds the type lock (qore#7608)
+    DLLLOCAL static void getUnmarked(type_vec_t& out, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (hp->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(hp->getTypeInfo(false));
+                }
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                getUnmarkedClass(out, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                getUnmarkedClass(out, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                const qore_enum_decl_private* ep = qore_enum_decl_private::get(*ed);
+                if (ep->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(ep->getTypeInfo(false));
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                getUnmarked(out, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                getUnmarked(out, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            getUnmarked(out, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                getUnmarked(out, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                getUnmarked(out, target, depth + 1);
+            }
+        }
+    }
+
+    //! References the given declarations, which are distinct; the caller holds the type lock (qore#7607)
+    DLLLOCAL void addDistinct(const std::vector<const QoreClass*>& n_classes,
+            const std::vector<const TypedHashDecl*>& n_hashdecls, const std::vector<const QoreEnumDecl*>& n_enums) {
+        // reserved first, so that nothing can throw once the references are taken
+        classes.reserve(classes.size() + n_classes.size());
+        hashdecls.reserve(hashdecls.size() + n_hashdecls.size());
+        enums.reserve(enums.size() + n_enums.size());
+        for (const QoreClass* qc : n_classes) {
+            QoreClass* c = const_cast<QoreClass*>(qc);
+            classes.push_back(c);
+            qore_class_private::refClass(*c);
+        }
+        for (const TypedHashDecl* hd : n_hashdecls) {
+            hashdecls.push_back(hd);
+            hd->ref();
+        }
+        for (const QoreEnumDecl* ed : n_enums) {
+            enums.push_back(ed);
+            qore_enum_decl_private::get(*ed)->ref();
+        }
+    }
+
     DLLLOCAL ~qore_type_decl_refs_private() {
         for (QoreClass* c : classes) {
             qore_class_private::derefClass(*c, false, false, false);
@@ -3979,6 +4192,20 @@ private:
             qore_enum_decl_private::get(*ed)->ref();
         }
     }
+
+    //! Appends the type of a class for getUnmarked() if it is not mortal
+    DLLLOCAL static void getUnmarkedClass(type_vec_t& out, const QoreClass* qc) {
+        if (qc && qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            out.push_back(qc->getTypeInfo());
+        }
+    }
+
+    //! References a class for addMortal() if it is mortal
+    DLLLOCAL static void addMortalClass(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreClass* qc) {
+        if (qc && !qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            get(p).addClass(qc);
+        }
+    }
 };
 
 //! Returns true if \a ti is null or marked as naming no declaration (QoreTypeInfo::namesNoDeclarations())
@@ -4046,6 +4273,69 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
         }
     }
     priv = p.release();
+}
+
+void QoreTypeDeclRefs::addMortal(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    try {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        qore_type_decl_refs_private::addMortal(p, ti, 0);
+    } catch (...) {
+        // the references already taken are kept: the variant still reads the declarations that they keep
+        priv = p.release();
+        throw;
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types) {
+    if (!ti) {
+        return;
+    }
+    // under the type lock, as addMortal() walks the type
+    AutoLocker al(ctl);
+    qore_type_decl_refs_private::getUnmarked(types, ti, 0);
+}
+
+void QoreTypeDeclRefs::addMortalDecls(const std::vector<const QoreClass*>& classes,
+        const std::vector<const TypedHashDecl*>& hashdecls, const std::vector<const QoreEnumDecl*>& enums) {
+    assert(!priv);
+    if (classes.empty() && hashdecls.empty() && enums.empty()) {
+        return;
+    }
+#ifdef DEBUG
+    for (const QoreClass* qc : classes) {
+        assert(!qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem());
+    }
+    for (const TypedHashDecl* hd : hashdecls) {
+        assert(!typed_hash_decl_private::get(*hd)->type_owner.isTypeOwnerSystem());
+    }
+    for (const QoreEnumDecl* ed : enums) {
+        assert(!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem());
+    }
+#endif
+    std::unique_ptr<qore_type_decl_refs_private> p(new qore_type_decl_refs_private);
+    {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        p->addDistinct(classes, hashdecls, enums);
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::getDecls(std::vector<const QoreClass*>& classes,
+        std::vector<const TypedHashDecl*>& hashdecls, std::vector<const QoreEnumDecl*>& enums) const {
+    if (!priv) {
+        return;
+    }
+    classes.insert(classes.end(), priv->classes.begin(), priv->classes.end());
+    hashdecls.insert(hashdecls.end(), priv->hashdecls.begin(), priv->hashdecls.end());
+    enums.insert(enums.end(), priv->enums.begin(), priv->enums.end());
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {

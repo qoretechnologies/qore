@@ -74,6 +74,18 @@ public:
     //! the limit in bytes, 0 for none
     std::atomic<int64_t> limit{0};
 
+    //! the most time zones that code governed by the sandbox may load from paths (qore#7566); 0 = none (default)
+    /** Set only by code that is not restricted (see qore_sandbox_set_tz_path_limits()); zones are never freed, so the
+        zones and bytes charged below stay charged for the life of the account
+    */
+    std::atomic<int64_t> tz_max_zones{0};
+    //! the most memory in bytes that the time zones loaded from paths may use (qore#7566); 0 = none (default)
+    std::atomic<int64_t> tz_max_bytes{0};
+    //! the time zone name entries charged to the account (qore#7566)
+    std::atomic<int64_t> tz_zones{0};
+    //! the time zone memory in bytes charged to the account (qore#7566)
+    std::atomic<int64_t> tz_bytes{0};
+
 private:
     std::atomic<int> refs{1};
 };

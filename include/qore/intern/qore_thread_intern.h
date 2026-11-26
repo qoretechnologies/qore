@@ -919,6 +919,9 @@ DLLLOCAL int qore_check_background_direct_call(ExceptionSink* xsink);
 */
 DLLLOCAL bool qore_caller_is_untrusted();
 
+//! returns true while library code that untrusted code loaded is initialized on the current thread (qore#7566)
+DLLLOCAL bool qore_caller_in_untrusted_module_init();
+
 //! Returns the sandbox of the code running on the current thread, if any, for the modules that it chooses
 /** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
 */
@@ -2260,6 +2263,22 @@ DLLLOCAL bool qore_calling_code_is_sandboxed();
 */
 DLLLOCAL void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm);
 
+//! Sets the budget of a sandbox for time zones loaded from paths (qore#7566)
+/** Only code that is not restricted (see qore_caller_is_untrusted()) can raise either limit, also of a manager that
+    restricted code created; restricted code can only lower them.
+
+    @param sm the manager; a composite manager has no budget of its own (its members' budgets apply)
+    @param max_zones the most zones (name entries); 0 = path zones are refused
+    @param max_bytes the most memory in bytes; 0 = path zones are refused
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink);
+
+//! the type of SandboxManager::getTimeZonePathLimits() (qore#7566)
+DLLLOCAL extern const TypedHashDecl* hashdeclSandboxTimeZonePathInfo;
+
 //! Checks that the code running on the current thread may change \a sm (issue #5659)
 /** Trusted code may change any sandbox manager; code that is not trusted (see qore_calling_code_is_untrusted()) may
     change only one that code of its own Program created (see qore_sandbox_manager_record_creator()): not the one that governs
@@ -2419,6 +2438,16 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
+//! Returns true if restricted code is on the calling thread's call stack (qore#7635)
+/** Code of a Program that qore_program_is_restricted() reports restricted (a sandbox that does not trust its code
+    governs it, or it is sandboxed without a manager): the Programs on the call stack are walked as in
+    qore_caller_is_sandboxed(), also past a Program whose sandbox trusts its code, and a sandboxed caller that a parse
+    or module load hid from the walk (see QoreCallerSandboxHelper) counts if it was restricted.  Code that restricted
+    code calls acts for it: a class that it parses or loads is a class of restricted code, also when the sandbox of
+    its own Program trusts its code
+*/
+DLLLOCAL bool qore_caller_has_restricted_code();
+
 //! Returns the Program of the calling code whose per-Program cache a library class uses (see
 //! SandboxManager::setProgramCacheValue())
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
@@ -2483,6 +2512,11 @@ public:
         return barrier_depth;
     }
 
+    //! Returns true if restricted code was on the caller's call stack (qore_caller_has_restricted_code()) (qore#7635)
+    DLLLOCAL bool isRestricted() const {
+        return restricted;
+    }
+
     //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
     DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
         return sandboxed_pgm_id;
@@ -2499,6 +2533,8 @@ private:
     //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
     qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
+    //! see isRestricted()
+    bool restricted = false;
 };
 
 //! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program

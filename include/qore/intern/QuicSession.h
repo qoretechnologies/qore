@@ -642,6 +642,10 @@ public:
         with the session's next write, for example when a packet of the peer is processed.
     */
     DLLLOCAL static void dbgResumeHeldStreams();
+
+    //! Returns the nanoseconds until the session's earliest ngtcp2 timer (the pacing of its next send, for example),
+    //! 0 if it is due, or INT64_MAX if it has none (debug builds only; qore#7638)
+    DLLLOCAL int64_t dbgNsUntilExpiry();
 #endif
 
     //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)

@@ -435,7 +435,10 @@ class QuicSendRetryTest inherits QUnit::Test {
         on_exit call_function("dbg_quic_release_stream_data");
         assertEq(0, st.sock.submitQuicStreamData(st.session_id, st.stream_id, chunk, False),
             "the stream takes the data");
-        assertTrue(call_function("dbg_quic_wait_idle", st.session_id, HangGuard), "the session is idle");
+        # the session is idle and can send at once: the pacing of its earlier sends would otherwise keep the flush from
+        # writing, and the session's own timer would write the data shortly after, without the flush (qore#7638)
+        assertTrue(call_function("dbg_quic_wait_send_ready", st.session_id, HangGuard),
+            "the session is idle and can send");
 
         # the first datagram of the flush fails: the session keeps it and those after it, which the flush, or the
         # server's poll operation if it writes for the session first, sends after the backoff delay
