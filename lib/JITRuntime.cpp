@@ -6502,10 +6502,9 @@ extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_
         return;
     }
     QoreHashNode* hash = hash_val.get<QoreHashNode>();
-    if (value_val.needsRef()) {
-        value_val.refSelf();
-    }
-    qore_hash_private::setKeyValueCanonical(*hash, key_str.c_str(), value_val, xsink);
+    // the reference is taken once the member exists, so that memory that cannot be allocated never leaks the value
+    // (qore#7466)
+    qore_hash_private::setKeyValueCanonicalBorrowed(*hash, key_str.c_str(), value_val, xsink);
     // Do NOT discard key_val — the caller (JIT/IR) manages the key's lifetime.
     // Discarding here causes a double-free since the key is also cleaned up by
     // the JIT function's exit cleanup or the IR value map cleanup mechanism.
@@ -9317,9 +9316,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_impl(
             // the value of the assignment is the value stored, which the value type of the hash can convert
             // (qore#7589)
             if (res) {
-                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, *res);
+                qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, res);
             } else {
-                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+                qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink);
             }
         }
     } else if (hv.isNothing()) {
@@ -9335,9 +9334,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_impl(
             return toBits(QoreValue());
         }
         if (res) {
-            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink, *res);
+            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key, val, xsink, res);
         } else {
-            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key, val, xsink);
         }
         if (!*xsink) {
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
@@ -9394,9 +9393,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_aot_impl(
             // the value of the assignment is the value stored, which the value type of the hash can convert
             // (qore#7589)
             if (res) {
-                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, *res);
+                qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, res);
             } else {
-                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+                qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink);
             }
         }
     } else if (hv.isNothing()) {
@@ -9414,9 +9413,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_aot_impl(
             return toBits(QoreValue());
         }
         if (res) {
-            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink, *res);
+            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key, val, xsink, res);
         } else {
-            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key, val, xsink);
         }
         if (!*xsink) {
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
@@ -11541,7 +11540,7 @@ static uint64_t qore_rt_hash_map_two_keys_impl(uint64_t list_val, const char* ke
             return toBits(QoreValue());
         }
         type_state = qore_common_type_fold(type_state, mapped.getTypeInfo(), static_cast<int64_t>(i));
-        qore_hash_private::setKeyValueCanonical(**result, key_string.c_str(), mapped.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonicalBorrowed(**result, key_string.c_str(), mapped, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }

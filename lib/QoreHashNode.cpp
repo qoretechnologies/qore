@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -218,6 +219,12 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
 }
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
+#ifdef DEBUG
+    // the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466)
+    if (qore_dbg_allocation_fails(sizeof(HashMember))) {
+        throw std::bad_alloc();
+    }
+#endif
     return addMemberKnownAbsent(new HashMember(key));
 }
 
@@ -1103,6 +1110,28 @@ static QORE_INTERN_ALWAYS_INLINE int qore_hash_set_key_value_canonical(QoreHashN
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
     int rc = ha.assign(value, xsink);
+    if (!rc && res) {
+        *res = (*ha).refSelf();
+    }
+    return rc;
+}
+
+int qore_hash_private::setKeyValueCanonicalBorrowed(QoreHashNode& hash, const char* key, const QoreValue& value,
+        ExceptionSink* xsink, QoreValue* res) {
+    qore_hash_private* hp = qore_hash_private::get(hash);
+    assert(hash.reference_count() == 1 || hp->weakChangeAllowed());
+    // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
+    if (!hp->valid) {
+        if (xsink) {
+            hp->checkValid(xsink);
+        }
+        return -1;
+    }
+    // the member is created before the reference is taken: a std::bad_alloc from its creation leaves the value to
+    // the caller, and assign() takes the reference into a holder first, which releases it on any later failure
+    // (qore#7466)
+    hash_assignment_priv ha(*hp, key);
+    int rc = ha.assign(value.refSelf(), xsink);
     if (!rc && res) {
         *res = (*ha).refSelf();
     }
