@@ -197,6 +197,18 @@ string sub nested_trusted(CppApiTest::SharedObjectProbe p, CppApiTest::SharedObj
     return try_desc(auto sub () { return TrustedHelper::nestedTrusted(p, other); });
 }
 
+string sub update_open(CppApiTest::SharedObjectProbe p, string path) {
+    return try_desc(auto sub () { return p.update(NOTHING, False, False, path); });
+}
+
+string sub update_check_own(CppApiTest::SharedObjectProbe p) {
+    return try_desc(auto sub () { return p.update(auto sub () { return \"tenant\"; }, False, False, NOTHING, True); });
+}
+
+string sub update_check_trusted(CppApiTest::SharedObjectProbe p) {
+    return try_desc(auto sub () { return p.update(TrustedHelper::getClosure(), False, False, NOTHING, True); });
+}
+
 string sub nested_in_qore_scope(HostObject o, CppApiTest::SharedObjectProbe p) {
     return try_desc(auto sub () { return o.callBackInScope(auto sub () { return try_desc(auto sub () {
         return p.update(); }); }); });
@@ -234,6 +246,7 @@ printf("creates shared objects: %y, can share objects: %y\n", CppApiTest::Shared
     printf("update and share an object in the scope: %y\n", t.update(NOTHING, True));
     printf("a C++ update that throws: %s, can share objects: %y\n", try_desc(auto sub () { t.update(NOTHING, False, True); }),
         CppApiTest::SharedObjectProbe::canShareObjects());
+    printf("a file that the update opens: %y\n", t.update(NOTHING, False, False, get_script_path()));
     printf("run its own code locked: %y\n", t.runLocked(auto sub () { return "trusted code"; }));
     CppApiTest::SharedObjectProbe::checkCallback(t, NOTHING, "run code");
     printf("check no callback: ok\n");
@@ -296,6 +309,15 @@ foreach string name in (p.callFunction("probe_check_names")) {
     # rights of the scope, whoever supplied it; a module never calls code that its caller gives in a scope
     printf("(hazard) a closure of a trusted class that the tenant gives changes the object in the scope: %s, %y\n",
         p.callFunction("update_object_class", o), o.v);
+}
+{
+    # the update is trusted module code, but the tenant is still the caller that it serves: its sandbox (which denies
+    # every path by default) governs what the update does for it, and the update cannot run the tenant's code
+    CppApiTest::SharedObjectProbe t(1);
+    printf("a file that the update opens for the tenant: %s\n", p.callFunction("update_open", t, get_script_path()));
+    printf("the update checks a callback of the tenant: %s\n", p.callFunction("update_check_own", t));
+    printf("the update checks a closure of a trusted class that the tenant gives: %s\n",
+        p.callFunction("update_check_trusted", t));
 }
 {
     CppApiTest::SharedObjectProbe t(1);

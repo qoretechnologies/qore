@@ -5,6 +5,7 @@ set the value of a shared probe: "trusted"
 build the cache of a shared probe: "built from trusted" "built from trusted", updates: 1
 update and share an object in the scope: {can_share: True, child_shared: True}
 a C++ update that throws: SHARED-OBJECT-ERROR: the C++ update of a shared object of class 'SharedObjectProbe' threw a C++ exception: the probe update failed, can share objects: True
+a file that the update opens: {can_share: True, creates_shared: True, open: "ok"}
 run its own code locked: "trusted code"
 check no callback: ok
 a probe that it does not mark: shared: False, update: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
@@ -42,6 +43,9 @@ change a member of an object marked from C++: SHARED-OBJECT-ERROR, "orig"
 update an object of a Qore class from C++: ok: {can_share: True}
 its own code changes the object in the update scope: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot change member 'v' of an object of class 'HostObject': the object is shared by every Program of the process, "orig"
 (hazard) a closure of a trusted class that the tenant gives changes the object in the scope: ok: {can_share: True, inner: "set by a closure of the class"}, "set by a closure of the class"
+a file that the update opens for the tenant: ok: {can_share: True, creates_shared: False, open: "FILESYSTEM-ACCESS-DENIED"}
+the update checks a callback of the tenant: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot run code in the update scope of an object of class 'SharedObjectProbe' with code that is not a closure of a trusted class: the object is shared by every Program of the process
+the update checks a closure of a trusted class that the tenant gives: ok: {can_share: True, inner: "trusted closure"}
 a closure of a trusted class opens a nested C++ scope: ok: {can_share: True, inner: {can_share: True}}
 a C++ scope in a Qore update scope: ok: ["built from orig", "in scope"]
 its own code opens a C++ scope in a Qore update scope: ok: "SHARED-OBJECT-ERROR: code that sandboxed code called cannot open an update scope for an object of class 'SharedObjectProbe'"

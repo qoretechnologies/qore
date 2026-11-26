@@ -50,6 +50,10 @@ struct ProbeUpdateArg {
     bool make_child = false;
     // throws a C++ exception in the scope
     bool throw_cpp = false;
+    // a file to open in the scope with the sandbox check of a builtin (QoreFile::open2()), or nullptr
+    const char* open_path = nullptr;
+    // checks the inner code with qore_check_shared_object_callback() before it is called
+    bool check_inner = false;
 };
 
 // creates a probe that no Program owns, as C++ code of a module does
@@ -77,6 +81,24 @@ static QoreValue probe_update(QoreObject* obj, void* arg, ExceptionSink* xsink) 
             return QoreValue();
         }
         rv->setKeyValue("child_shared", qore_object_is_shared(*child), xsink);
+    }
+    if (a->open_path) {
+        // the update is trusted module code, but the caller that it serves is still the caller: the sandbox that
+        // governs the caller decides what the update does for it
+        rv->setKeyValue("creates_shared", qore_caller_creates_shared_objects(), xsink);
+        ExceptionSink open_xsink;
+        QoreFile f;
+        if (f.open2(&open_xsink, a->open_path)) {
+            rv->setKeyValue("open", open_xsink ? QoreValue(open_xsink.getExceptionErr().refSelf())
+                : QoreValue(new QoreStringNode("failed")), xsink);
+            open_xsink.clear();
+        } else {
+            rv->setKeyValue("open", new QoreStringNode("ok"), xsink);
+        }
+    }
+    if (a->inner && a->check_inner
+            && qore_check_shared_object_callback(obj, a->inner, "run code in the update scope", xsink)) {
+        return QoreValue();
     }
     if (a->inner) {
         ValueHolder v(a->inner->execValue(nullptr, xsink), xsink);
@@ -175,18 +197,25 @@ int SharedObjectProbe::updates() [flags=CONSTANT] {
 /** @param inner code to call in the scope, whose return value is given as \c inner
     @param make_child creates a probe with no Program in the scope and marks it as shared
     @param throw_cpp throws a C++ exception in the scope
+    @param open_path a file to open in the scope with QoreFile::open2(), which the caller's sandbox governs
+    @param check_inner checks \a inner with qore_check_shared_object_callback() before it is called
 
-    @return a hash with \c can_share: qore_caller_can_share_objects() in the scope, \c child_shared and \c inner
+    @return a hash with \c can_share: qore_caller_can_share_objects() in the scope, \c child_shared, \c inner, and
+    for \a open_path \c creates_shared: qore_caller_creates_shared_objects() in the scope and \c open: \c "ok" or
+    the error of the open
 
     @throw SHARED-OBJECT-ERROR the scope cannot be opened, the C++ update threw a C++ exception, or the child cannot
     be marked
 */
-hash<auto> SharedObjectProbe::update(*code inner, bool make_child = False, bool throw_cpp = False) {
+hash<auto> SharedObjectProbe::update(*code inner, bool make_child = False, bool throw_cpp = False,
+        *string open_path, bool check_inner = False) {
     ProbeUpdateArg arg;
     arg.probe = probe;
     arg.inner = inner;
     arg.make_child = make_child;
     arg.throw_cpp = throw_cpp;
+    arg.open_path = open_path ? open_path->c_str() : nullptr;
+    arg.check_inner = check_inner;
     return run_probe_update(self, arg, xsink);
 }
 
