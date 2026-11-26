@@ -785,9 +785,10 @@ QoreReflectionCaller::QoreReflectionCaller() : pgm(::getProgram()), po(runtime_g
     // module Programs carry the in-module domain, which restricts nothing that the caller asks for here
     QoreParseOptions restricting = po & (qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE));
     if (!restricting) {
-        // also through a policy barrier: it masks the sandbox's filesystem and network policy, not the sandbox
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        member_access = static_cast<bool>(governing);
+        // restricted code (rule B of qore#7635): also through a policy barrier, which masks the sandbox's filesystem
+        // and network policy, not the sandbox; code that a trusted (governed) sandbox governs may use every member, as
+        // other trusted code may (qore#7737); fails closed
+        member_access = qore_caller_is_restricted();
     } else {
         member_access = true;
     }

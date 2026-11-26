@@ -2378,9 +2378,24 @@ bool qore_object_program_is_restricted(const QoreObject* obj) {
     return qore_program_is_restricted(obj->getProgram());
 }
 
+bool qore_calling_class_is_restricted() {
+    const qore_class_private* cls = qore_innermost_frame_is_builtin() ? runtime_get_caller_class()
+        : runtime_get_class();
+    // a builtin class is trusted; sandbox_ctx is the permanent mark of a class that restricted code committed
+    // (qore#7635)
+    return cls && !cls->sys && (cls->sandbox_ctx || cls->isRestrictedCode());
+}
+
 bool qore_program_is_restricted(const QoreProgram* pgm) {
-    if (!pgm) {
+    // every restricted Program is sandboxed (a Program with a manager is); checked first, as it is cheap
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
         return false;
+    }
+    // restricted code created the Program or committed code in it with no restricting sandbox that the Program could
+    // keep (qore#7737): restricted for good
+    if (qore_program_private::get(*const_cast<QoreProgram*>(pgm))->restricted_marked.load(
+            std::memory_order_acquire)) {
+        return true;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
@@ -2518,6 +2533,11 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
         // the code would not be governed: the parse does not go ahead
         xsink->outOfMemory();
         return -1;
+    }
+    // restricted code with no restricting sandbox that the Program could keep (a Program restricted by its flag
+    // alone): the Program is marked restricted for good, as the sandbox that it keeps would not tell (qore#7737)
+    if (pcs.restricted && !(pcs.sm && !pcs.sm->trustsUncontrolledApis())) {
+        restricted_marked.store(true, std::memory_order_release);
     }
     return 0;
 }

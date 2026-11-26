@@ -1084,6 +1084,9 @@ public:
         //! the order in which it was set among the grants (GrantSnapshot::seq): a capability frame set after it lends
         //! what is created above it, one set before it does not (qore#7052)
         uint64_t seq = 0;
+        //! true if the code that loaded the library module is also restricted (see
+        //! qore_caller_is_restricted_or_untrusted()); never true unless \a loader_untrusted is (qore#7737)
+        bool loader_restricted = false;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
     // the module initialization barriers of library code (and of trusted builds) that could not be recorded for lack
@@ -7109,9 +7112,10 @@ void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgr
     if (pgm == td->current_pgm && (td->tlpd || !runtime)) {
         // the thread's local data is that of the current Program (qore#6185, qore#6537)
         assert(!td->tlpd || td->tlpd->pgm == pgm);
-        // sandboxed code never runs with cancellation deferred, also when it is called in its own Program from
-        // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown)
-        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
+        // restricted code never runs with cancellation deferred, also when it is called in its own Program from
+        // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown); the code
+        // of a trusted (governed) sandbox keeps the deferral of its caller, as other trusted code does (qore#7737)
+        if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_restricted(pgm)) {
             suspendDeferral(td);
         }
         // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
@@ -7297,9 +7301,11 @@ void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSin
     if (pp->hasSandboxManager() && enterSandboxedProgram(td, xsink, pp)) {
         return;
     }
-    // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
-    // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
-    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
+    // restricted code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or
+    // thread teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag
+    // decides with the sandbox that it keeps of its creator (qore_program_is_restricted()); the code of a trusted
+    // (governed) sandbox keeps the deferral, as other trusted code does (qore#7737)
+    if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_is_restricted(pgm)) {
         suspendDeferral(td);
     }
 
@@ -7982,6 +7988,57 @@ bool qore_scope_creator_is_sandboxed() {
         || !visit_thread_provenance(td, false, true, governs);
 }
 
+bool qore_scope_creator_is_restricted() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the code of qore_scope_creator_is_sandboxed(), where only restricted code counts (qore#7737): a Program that
+    // qore_program_is_restricted() reports restricted, and a sandbox that refuses uncontrolled APIs
+    auto restricted = [] (const QoreProgram* pgm) -> bool {
+        return qore_program_is_restricted(pgm);
+    };
+    if (restricted(td->current_pgm)) {
+        return true;
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (restricted(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    if (restricted(td->call_program_context)) {
+        return true;
+    }
+    // the first manager that refuses uncontrolled APIs ends the walks
+    auto trusts = [](QoreSandboxManager* sm) -> bool {
+        return sm->getUncontrolledApiPolicy();
+    };
+    return !visit_thread_sandbox_stack(td, nullptr, false, true, trusts)
+        || !visit_thread_provenance(td, false, true, trusts);
+}
+
+bool qore_sandbox_context_is_restricted(const QoreSandboxContext* ctx) {
+    assert(ctx);
+    // the restrictions of the code that created it
+    if (!ctx->origin_restrictions.empty()) {
+        return true;
+    }
+    bool any = false;
+    for (const QoreSandboxManager* sm : {ctx->manager, ctx->policy_manager, ctx->provenance_manager,
+            ctx->provenance_policy_manager}) {
+        if (!sm) {
+            continue;
+        }
+        any = true;
+        // a composition trusts its code only if every member does
+        if (!sm->trustsUncontrolledApis()) {
+            return true;
+        }
+    }
+    // fails closed: provenance of sandboxed code whose sandbox it did not record cannot be told trusted
+    return !any && (ctx->origin_sandboxed || ctx->capturer_sandboxed);
+}
+
 const char* thread_capability_call_refusal(const char* call_name) {
     ThreadData* td = thread_data.get();
     if (!td) {
@@ -7999,10 +8056,12 @@ const char* thread_capability_call_refusal(const char* call_name) {
     if (caller && caller->getCallType() != CT_USER) {
         return "it is not called directly by Qore code";
     }
-    // the Program of the calling code and the Program running on the thread, sandboxed by a manager or by their flag
-    // (a Program that sandboxed code created); sandboxed callers further up the stack do not count (qore#6737)
-    if (qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm)) {
-        return "a sandbox governs the calling code";
+    // the Program of the calling code and the Program running on the thread, restricted by a manager that refuses
+    // uncontrolled APIs or by their flag (a Program that sandboxed code created; see qore_program_is_restricted());
+    // sandboxed callers further up the stack do not count (qore#6737), nor does a trusted (governed) sandbox
+    // (qore#7737)
+    if (qore_program_is_restricted(own->getProgram()) || qore_program_is_restricted(td->current_pgm)) {
+        return "a restricting sandbox governs the calling code";
     }
     // the calling code must be allowed to control threads: judged by the options of its own Program, as a call
     // reference that host code created runs the builtin with the options of the reference's Program
@@ -8025,6 +8084,20 @@ bool qore_builtin_caller_is_sandboxed() {
         return true;
     }
     return qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm);
+}
+
+bool qore_builtin_caller_is_restricted() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // as qore_builtin_caller_is_sandboxed(), where only a restricted Program counts (qore#7737); fails closed without
+    // the builtin's own frame
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return true;
+    }
+    return qore_program_is_restricted(own->getProgram()) || qore_program_is_restricted(td->current_pgm);
 }
 
 QoreProgram* qore_builtin_caller_program() {
@@ -8096,6 +8169,33 @@ bool qore_caller_is_untrusted() {
     return static_cast<bool>(governing);
 }
 
+bool qore_caller_is_restricted_or_untrusted() {
+    // the in-module domain only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return false;
+    }
+    if (!!(td->runtime_po_state.po & restricting)) {
+        return true;
+    }
+    // library code that restricted code loaded, while it is initialized; library code that code that a trusted
+    // (governed) sandbox governs loaded is governed by that sandbox, but not restricted (qore#7737): the code entered
+    // since the barrier (a restricted Program, or a callback that restricted code created) is then looked at below,
+    // where the walk stops at the barrier
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (!mib.lift && mib.loader_untrusted && mib.loader_restricted) {
+            return true;
+        }
+    }
+    // the code that qore_caller_is_untrusted() looks at, where only a restricting sandbox counts (fails closed), and
+    // a Program sandboxed without a manager (see qore_caller_is_restricted())
+    return !qore_thread_sandbox_allows_uncontrolled_apis(false) || qore_caller_is_restricted();
+}
+
 void qore_caller_sandbox_refs(QoreSandboxManager*& sm, QoreSandboxManager*& policy_sm) {
     sm = nullptr;
     policy_sm = nullptr;
@@ -8152,6 +8252,19 @@ bool qore_program_code_is_untrusted(const QoreProgram* pgm) {
     return !!(pgm->getParseOptions() & restricting);
 }
 
+bool qore_program_code_is_restricted_or_untrusted(const QoreProgram* pgm) {
+    if (!pgm) {
+        return false;
+    }
+    if (qore_program_is_restricted(pgm)) {
+        return true;
+    }
+    // the in-module domain only marks the Programs of modules
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(QDOM_IN_MODULE);
+    return !!(pgm->getParseOptions() & restricting);
+}
+
 bool qore_calling_code_is_untrusted() {
     ThreadData* td = thread_data.get();
     return td && qore_program_code_is_untrusted(td->current_pgm);
@@ -8182,8 +8295,18 @@ bool qore_calling_code_is_sandboxed() {
     return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm);
 }
 
-//! qore_caller_sandbox_state(), also giving the ID of the sandboxed Program found (see qore_caller_is_sandboxed())
-static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
+//! qore_caller_sandbox_state() and qore_caller_restricted_state(), also giving the ID of the sandboxed Program found
+//! (see qore_caller_is_sandboxed())
+/** @param restricted_only if true, only restricted code counts (qore#7737): a Program that qore_program_is_restricted()
+    reports restricted, a hidden sandboxed caller that was restricted, and a governing sandbox that refuses uncontrolled
+    APIs (for a composition: any member that refuses them); the walk is the same, so that both classifications see
+    the same code
+*/
+static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id, bool restricted_only) {
+    // the ID is 0 unless a sandboxed (or restricted) Program is found
+    if (pgm_id) {
+        *pgm_id = 0;
+    }
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
     if (!td) {
@@ -8201,18 +8324,26 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     // a sandboxed caller that a parse or module load in another Program hid from the walk below; not one that called
-    // library code whose initialization runs now (see QoreCallerSandboxHelper)
-    if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
+    // library code whose initialization runs now (see QoreCallerSandboxHelper); one that was not restricted when the
+    // parse or load started does not end the walk for restricted code: the sandbox that governed it is applied as
+    // provenance and found below
+    if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())
+            && (!restricted_only || td->sandboxed_caller->isRestricted())) {
         if (pgm_id) {
             *pgm_id = td->sandboxed_caller->getSandboxedProgramId();
         }
         return 1;
     }
+    // the Program test: sandboxed, or for restricted code, sandboxed and restricted (qore_program_is_restricted()
+    // fails closed; the flag is checked first, as it is cheap and every restricted Program is sandboxed)
+    auto counts = [restricted_only] (const QoreProgram* pgm) -> bool {
+        return qore_program_is_sandboxed(pgm) && (!restricted_only || qore_program_is_restricted(pgm));
+    };
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
     // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
     // are walked as in find_thread_sandbox_stack_ref_intern()
     if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
-        if (qore_program_is_sandboxed(td->current_pgm)) {
+        if (counts(td->current_pgm)) {
             return found(td->current_pgm);
         }
     }
@@ -8220,12 +8351,12 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
         if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
             break;
         }
-        if (qore_program_is_sandboxed(ch->getOldProgram())) {
+        if (counts(ch->getOldProgram())) {
             return found(ch->getOldProgram());
         }
     }
     if (!mib && td->current_pgm != td->call_program_context
-        && qore_program_is_sandboxed(td->call_program_context)) {
+        && counts(td->call_program_context)) {
         return found(td->call_program_context);
     }
     // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
@@ -8239,10 +8370,18 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
         qore_program_id_t sm_pgm_id = 0;
         ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(pgm_id ? &sm_pgm_id : nullptr),
             nullptr);
-        if (sm && pgm_id) {
+        // a composition trusts its code only if every member does (QoreSandboxManager::trustsUncontrolledApis())
+        if (!sm || (restricted_only && sm->trustsUncontrolledApis())) {
+            // the code that runs is the code of a class that restricted code declared (qore#7737): it is restricted
+            // wherever it runs, also where no restricted Program is on the stack (code that restricted code committed
+            // into a Program that a trusted sandbox governs, called by trusted code); looked at last, so that the
+            // restricted Program found above gives its ID
+            return restricted_only && qore_calling_class_is_restricted() ? 1 : 0;
+        }
+        if (pgm_id) {
             *pgm_id = sm_pgm_id;
         }
-        return sm ? 1 : 0;
+        return 1;
     } catch (std::bad_alloc&) {
         // the sandbox cannot be resolved: each caller fails closed in its own direction
         if (pgm_id) {
@@ -8253,7 +8392,22 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
 }
 
 int qore_caller_sandbox_state() {
-    return qore_caller_sandbox_state_intern(nullptr);
+    return qore_caller_sandbox_state_intern(nullptr, false);
+}
+
+int qore_caller_restricted_state(qore_program_id_t* pgm_id) {
+    return qore_caller_sandbox_state_intern(pgm_id, true);
+}
+
+bool qore_caller_is_restricted(qore_program_id_t* pgm_id) {
+    // fails closed: code whose governing sandbox cannot be resolved is restricted
+    return qore_caller_sandbox_state_intern(pgm_id, true) != 0;
+}
+
+bool qore_calling_code_is_restricted() {
+    ThreadData* td = thread_data.get();
+    return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm)
+        && qore_program_is_restricted(td->current_pgm);
 }
 
 bool qore_caller_has_restricted_code() {
@@ -8291,7 +8445,7 @@ bool qore_caller_has_restricted_code() {
 
 bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
     // fails closed: code whose governing sandbox cannot be resolved is not trusted
-    return qore_caller_sandbox_state_intern(pgm_id) != 0;
+    return qore_caller_sandbox_state_intern(pgm_id, false) != 0;
 }
 
 QoreThreadProgramMarker qore_thread_program_marker() {
@@ -8309,11 +8463,17 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
     if (!td) {
         return false;
     }
-    // a sandboxed caller that a parse or module load started since hides from the walk below
-    if (td->sandboxed_caller && td->sandboxed_caller != marker.sandboxed_caller) {
+    // only restricted code counts (qore#7737): code that a trusted (governed) sandbox governs changes shared objects
+    // as trusted code
+    auto restricted = [] (const QoreProgram* pgm) -> bool {
+        return qore_program_is_restricted(pgm);
+    };
+    // a restricted caller that a parse or module load started since hides from the walk below
+    if (td->sandboxed_caller && td->sandboxed_caller != marker.sandboxed_caller
+            && td->sandboxed_caller->isRestricted()) {
         return true;
     }
-    if (qore_program_is_sandboxed(td->current_pgm)) {
+    if (restricted(td->current_pgm)) {
         return true;
     }
     // each Program context entered since the marker: the Program of each but the innermost is the Program that the
@@ -8323,7 +8483,7 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
         if (!ch) {
             return true;
         }
-        if (ch->getOldContext() != marker.ctx && qore_program_is_sandboxed(ch->getOldProgram())) {
+        if (ch->getOldContext() != marker.ctx && restricted(ch->getOldProgram())) {
             return true;
         }
     }
@@ -8335,7 +8495,9 @@ QoreProgram* qore_caller_cache_program() {
     if (!td) {
         return nullptr;
     }
-    if (qore_program_is_sandboxed(td->current_pgm)) {
+    // only restricted code has a cache of its own Program: code that a trusted (governed) sandbox governs uses the
+    // cache of the outermost Program, as other trusted code does (qore#7737)
+    if (qore_program_is_restricted(td->current_pgm)) {
         return td->current_pgm;
     }
     QoreProgram* outer = td->current_pgm;
@@ -8344,13 +8506,13 @@ QoreProgram* qore_caller_cache_program() {
         if (!pgm) {
             continue;
         }
-        if (qore_program_is_sandboxed(pgm)) {
+        if (qore_program_is_restricted(pgm)) {
             return pgm;
         }
         outer = pgm;
     }
-    // fails closed: sandboxed code whose sandboxed Program is not on the stack has no cache
-    if (qore_caller_is_sandboxed()) {
+    // fails closed: restricted code whose restricted Program is not on the stack has no cache
+    if (qore_caller_is_restricted()) {
         return nullptr;
     }
     return outer;
@@ -9134,6 +9296,8 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
     if (active) {
         // the code that loads the library module, which nested loads are checked for (see qore_caller_is_untrusted())
         const bool untrusted = qore_caller_is_untrusted();
+        // and whether it is restricted as well, for the rules that restrict what code may do (qore#7737)
+        const bool restricted = untrusted && qore_caller_is_restricted_or_untrusted();
         try {
             ReferenceHolder<QoreSandboxManager> owner(untrusted ? qore_caller_sandbox_ref() : nullptr, nullptr);
             // A nested initializer can have additional managers of its own. Keep their live composition as well
@@ -9151,6 +9315,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
                 untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr, nullptr,
                 qore_caller_may_load_native_code(), policy.operator->()});
             td->module_init_barriers.back().seq = ++td->grant_seq;
+            td->module_init_barriers.back().loader_restricted = restricted;
             owner.release();
             policy.release();
             pushed = true;
@@ -9176,11 +9341,13 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
         sm->ref();
     }
     const qore_program_id_t pgm_id = top.loader_pgm_id;
+    const bool loader_restricted = top.loader_restricted;
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
             td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr, nullptr,
             top.caller_may_select_native_file});
         td->module_init_barriers.back().seq = ++td->grant_seq;
+        td->module_init_barriers.back().loader_restricted = loader_restricted;
         pushed = true;
     } catch (std::bad_alloc&) {
         if (sm) {
@@ -9635,7 +9802,11 @@ bool qore_trusted_build_hides_nothing() {
     if (td->sandboxed_caller) {
         return false;
     }
-    if (qore_caller_sandbox_state_intern(nullptr)) {
+    // any governing sandbox, not only a restricting one (qore#7737): the barrier also hides the interrupts, limits and
+    // creation provenance of a trusted (governed) sandbox, which a builder run without it would attach to the
+    // process-shared value (qorus#1209); whether the value is process-shared at all follows the restricted
+    // classification (QoreLazySharedBase)
+    if (qore_caller_sandbox_state_intern(nullptr, false)) {
         return false;
     }
     if (!qore_get_calling_code_restrictions(td).empty() || !qore_get_lent_to_restrictions(td).empty()) {
@@ -10005,12 +10176,12 @@ private:
 QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, QoreProgram* governed,
         const QoreListNode* args, ExceptionSink* xsink) {
     ThreadData* td = thread_data.get();
-    // trusted code only: no sandbox governs it, it is not sandboxed by a flag, and its domains are not restricted
+    // trusted code only: no restricting sandbox governs it (code that a trusted, governed, sandbox governs is
+    // trusted; qore#7737), it is not restricted by a flag, and its domains are not restricted
     {
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing || qore_caller_is_sandboxed()) {
+        if (qore_caller_is_restricted()) {
             xsink->raiseException("SANDBOX-CALL-GOVERNED-ERROR", "SandboxManager::callGoverned() can only be called "
-                "by code that no sandbox governs");
+                "by code that no restricting sandbox governs");
             return QoreValue();
         }
     }

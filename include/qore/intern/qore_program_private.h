@@ -1429,6 +1429,10 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! true if restricted code created the Program or committed code in it with no restricting sandbox that the
+    //! Program keeps; never cleared once set (see qore_program_is_restricted(); qore#7737)
+    std::atomic<bool> restricted_marked{false};
+
 
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
@@ -5890,7 +5894,8 @@ public:
         if (checkDefine(loc, str, xsink))
             return;
 
-        const bool untrusted = qore_caller_is_untrusted();
+        // code that a trusted (governed) sandbox governs is the host (qore#7737)
+        const bool untrusted = qore_caller_is_restricted_or_untrusted();
         // the value replaced is released after plock (see runTimeUnDefine())
         ValueHolder old(xsink);
         AutoLocker al(plock);

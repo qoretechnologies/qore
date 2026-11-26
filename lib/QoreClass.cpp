@@ -10116,6 +10116,12 @@ bool qore_class_private::isSandboxedCode() const {
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
 
+bool qore_class_private::isRestrictedDestructorCode() const {
+    // builtin classes are trusted, also when a module created them while a sandboxed Program was current; the code of a
+    // class of a trusted (governed) sandbox runs its destructor with the deferral of trusted code (qore#7737)
+    return !sys && isRestrictedCode();
+}
+
 bool qore_class_private::isRestrictedCode() const {
     // a builtin class is judged by its source Program like any other class: a builtin class without one (as most are)
     // has no released state either and is not restricted; one that a module created for a Program has that Program's
@@ -10316,7 +10322,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
         {
             // the cancellation rule for destructors applies to each class in the hierarchy on its own; see
             // QoreDestructorCancelHelper
-            QoreDestructorCancelHelper dch(isSandboxedCode());
+            QoreDestructorCancelHelper dch(isRestrictedDestructorCode());
             if (!dch.skip()) {
                 if (destructor) {
                     destructor->priv->evalSystemDestructor(self, rc, &de);
@@ -10332,7 +10338,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
     } else {
         if (destructor || sys) {
             // see above
-            QoreDestructorCancelHelper dch(isSandboxedCode());
+            QoreDestructorCancelHelper dch(isRestrictedDestructorCode());
             if (!dch.skip()) {
                 if (destructor) {
                     destructor->priv->evalDestructor(self, rc, &de);
@@ -10361,7 +10367,7 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
     //  name.c_str(), destructor, sys);
     if (destructor || sys) {
         // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
-        QoreDestructorCancelHelper dch(isSandboxedCode());
+        QoreDestructorCancelHelper dch(isRestrictedDestructorCode());
         if (!dch.skip()) {
             if (destructor) {
                 destructor->priv->evalDestructor(self, rc, &de);
@@ -10384,7 +10390,7 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
     ExceptionSink de;
     if (destructor || sys) {
         // the cancellation rule for destructors is decided for this class; see QoreDestructorCancelHelper
-        QoreDestructorCancelHelper dch(isSandboxedCode());
+        QoreDestructorCancelHelper dch(isRestrictedDestructorCode());
         if (!dch.skip()) {
             if (destructor) {
                 destructor->priv->evalSystemDestructor(self, rc, &de);

@@ -79,11 +79,11 @@ private:
          // and the debugged code is cancelled where it would be without the debugger: a cancellation point in the
          // debugger's code (a loop, a lock or a wait, such as the wait of a stopped thread for its clients) does not
          // raise it, and a thread that is cancelled while it is stopped stays stopped until a client resumes it or
-         // the debugger releases it (qore#5794).  Sandboxed code never runs with the cancellation deferred, as with
-         // defer_thread_cancel()
+         // the debugger releases it (qore#5794).  Restricted code never runs with the cancellation deferred, as with
+         // defer_thread_cancel() (qore#7737)
          assert(qo->getProgram());
          std::optional<QoreCancelDeferralHelper> cdh;
-         if (!qore_program_is_sandboxed(qo->getProgram())) {
+         if (!qore_program_is_restricted(qo->getProgram())) {
             cdh.emplace();
          }
          // a debugger callback is not a call made by the debugged code that runs on the thread, which does not

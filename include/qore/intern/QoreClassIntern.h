@@ -5668,9 +5668,8 @@ public:
     //! Returns true if the code of the class is sandboxed: it was defined by a Program with a sandbox manager
     /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
         sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
-        once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
-        for the class's destructor (see QoreDestructorCancelHelper).  Out of line, so that its lock (dataLock()) is not
-        inlined in the callers, such as execDestructor() (qore#6732).
+        once the source Program has released the class, the state it had then is used.  Out of line, so that its lock
+        (dataLock()) is not inlined in the callers, such as execDestructor() (qore#6732).
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
@@ -5683,6 +5682,13 @@ public:
         (qore#7677): one without a source Program, as most are, is not restricted
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedCode() const;
+
+    //! Returns true if the destructor of the class runs as restricted code: never with cancellation deferred (see
+    //! QoreDestructorCancelHelper) (qore#7737)
+    /** A builtin class is trusted (as for isSandboxedCode()); any other class is judged by isRestrictedCode(): the
+        destructor of a class of a trusted (governed) sandbox runs with the deferral of trusted code
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedDestructorCode() const;
 
     //! Returns true if sandboxed code declared the class (qore#6843)
     /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,

@@ -927,9 +927,10 @@ bool qore_shared_object_trace() {
 }
 
 int qore_object_private::checkSharedChangeIntern(const char* mem, ExceptionSink* xsink, bool del) const {
-    // fails closed: true if the governing sandbox cannot be resolved; false under a module initialization barrier for
-    // the code that loads library code
-    if (!qore_caller_is_sandboxed()) {
+    // only restricted code (qore#7737): code that a trusted (governed) sandbox governs creates shared objects and
+    // changes them as trusted code (see qore_caller_creates_shared_objects()); fails closed: true if the governing
+    // sandbox cannot be resolved; false under a module initialization barrier for the code that loads library code
+    if (!qore_caller_is_restricted()) {
         return 0;
     }
     // a change in an update scope for the object, by the code of the Program that opened it: not by code that the
@@ -970,9 +971,9 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "for a shared object", theclass->getName());
         return QoreValue();
     }
-    // the code that calls: the code of a Program that no sandbox governs
+    // the code that calls: the code of a Program that no restricting sandbox governs (qore#7737)
     const QoreProgram* pgm = getProgram();
-    if (!pgm || qore_program_is_sandboxed(pgm)) {
+    if (!pgm || qore_program_is_restricted(pgm)) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed cannot open an update scope for an "
             "object of class '%s'", theclass->getName());
         return QoreValue();
@@ -984,7 +985,7 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     ClassAccess access;
     // sandbox_ctx is set for a class of restricted code (qore#7635); the closure's code is that of pgm, which no
-    // sandbox governs (checked above), which keeps the rule for a class of any sandboxed code
+    // restricting sandbox governs (checked above)
     if (!closure_class || closure_class->sandbox_ctx
         || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
         || qore_closure_code_program(closure) != pgm) {
@@ -995,12 +996,12 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
     // the closure runs in the Program that was current when it was created (the Program of the object's class for a
     // method of a base class of another module), which is the Program of the code that changes the object in it
     const QoreProgram* run_pgm = closure->getProgram();
-    if (!run_pgm || qore_program_is_sandboxed(run_pgm)) {
+    if (!run_pgm || qore_program_is_restricted(run_pgm)) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
-    // a scope is not opened in code that sandboxed code called in an open scope: such code acts for sandboxed code
+    // a scope is not opened in code that restricted code called in an open scope: such code acts for restricted code
     if (!qore_shared_update_scopes.empty()
         && qore_thread_sandboxed_entered_since(qore_shared_update_scopes.back().marker)) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "code that sandboxed code called cannot open an update scope "
@@ -1020,18 +1021,18 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
 int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
         ExceptionSink* xsink) const {
     // fails closed, as checkSharedChangeIntern()
-    if (!isShared() || !qore_caller_is_sandboxed()) {
+    if (!isShared() || !qore_caller_is_restricted()) {
         return 0;
     }
-    // a closure that the code of a trusted library class created; not code of the caller or of another sandboxed
+    // a closure that the code of a trusted library class created; not code of the caller or of another restricted
     // Program
     const QoreClosureBase* closure = callback->getType() == NT_RUNTIME_CLOSURE
         ? static_cast<const QoreClosureBase*>(callback) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
-    // sandbox_ctx is set for a class of restricted code (qore#7635); qore_program_is_sandboxed() refuses the closures
-    // of any sandboxed Program
-    if (closure_class && !closure_class->sandbox_ctx && code_pgm && !qore_program_is_sandboxed(code_pgm)) {
+    // sandbox_ctx is set for a class of restricted code (qore#7635); qore_program_is_restricted() refuses the closures
+    // of any restricted Program (qore#7737)
+    if (closure_class && !closure_class->sandbox_ctx && code_pgm && !qore_program_is_restricted(code_pgm)) {
         return 0;
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
@@ -1041,7 +1042,8 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
 }
 
 bool qore_caller_may_share_objects() {
-    if (!qore_caller_is_sandboxed()) {
+    // as qore_caller_creates_shared_objects(), but fails closed in the other direction (qore#7737)
+    if (!qore_caller_is_restricted()) {
         return true;
     }
     return !qore_shared_update_scopes.empty()
@@ -1064,7 +1066,7 @@ int qore_object_private::shareChecked(ExceptionSink* xsink) {
 
 int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink* xsink) const {
     // fails closed, as checkSharedChangeIntern()
-    if (!isShared() || !qore_caller_is_sandboxed()) {
+    if (!isShared() || !qore_caller_is_restricted()) {
         return 0;
     }
     xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot %s of an "
@@ -1075,7 +1077,7 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
 int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
     assert(isShared());
     // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
-    if (!qore_caller_is_sandboxed()) {
+    if (!qore_caller_is_restricted()) {
         return 0;
     }
     // the copy methods of the object's own class must run: a copy with the copy method of a base class (with
@@ -1102,7 +1104,7 @@ int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, Exc
 int qore_object_private::checkSharedSerialize(ExceptionSink* xsink) const {
     assert(isShared());
     // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
-    if (!qore_caller_is_sandboxed()) {
+    if (!qore_caller_is_restricted()) {
         return 0;
     }
     if (qore_shared_object_trace()) {
@@ -2165,8 +2167,9 @@ int qore_object_private::checkForeignBuiltinMemberWrite(const char* mem, const Q
     if (!cls->sys || theclass->hasPublicMembersInHierarchy()) [[likely]] {
         return 0;
     }
+    // only restricted code (qore#7737)
     QoreProgram* cpgm = getProgram();
-    if (pgm == cpgm || !cpgm || !qore_program_is_sandboxed(cpgm)) {
+    if (pgm == cpgm || !cpgm || !qore_program_is_restricted(cpgm)) {
         return 0;
     }
     // only a member that the class does not declare: the C++ code of the class writes its declared members

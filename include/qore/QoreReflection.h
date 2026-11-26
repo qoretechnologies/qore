@@ -876,9 +876,11 @@ public:
     DLLEXPORT int checkClassCallAccess(const QoreClass* cls, const QoreProgram* target, ExceptionSink* xsink) const;
 
     //! Returns true if the language's member access applies to the caller's use of reflection
-    /** It applies to code that a sandbox governs, also through a policy barrier or in a system-policy capability
-        (QoreSandboxManagerHelper::All), and to code whose runtime parse options restrict a functional domain; other
-        code may use every member of a class through reflection, whatever its access
+    /** It applies to restricted code: code that a sandbox that refuses uncontrolled APIs governs (a restricting
+        sandbox), also through a policy barrier or in a system-policy capability, and code of a Program that
+        restricted code created, and to code whose runtime parse options restrict a functional domain; other code,
+        also code that a trusted (governed) sandbox governs (one that allows uncontrolled APIs), may use every member
+        of a class through reflection, whatever its access
 
         @since %Qore 3.0
     */
