@@ -118,10 +118,13 @@ public hashdecl TabularProfileOptions {
     int header_search_rows = 20;
 
     #! The 1-based row holding the column names, or 0 if the sheets have none
-    /** When not set, the header row is found as described in @ref TabularProfiler::profile(); when set, it is used
-        for every sheet, as the user who knows the file says it: the rows above it are title rows, the data starts
-        on the next row, and the columns are named from it; with 0, every row from the first row with content is
-        data, and no @c no_header_row finding is reported
+    /** When not set, the header row of each sheet is found from its content: the first of the leading
+        @c header_search_rows rows that holds labels and has data under it (when every leading row holds labels, the
+        first label row as wide as the widest row); when set, it is used for every sheet,
+        as the user who knows the file says it: the rows with content above it are title rows, the data starts on
+        the next row, and the columns are named from it; a row below the last row with content gives no data region
+        and no column (the rows with content above it are still title rows); with 0, every row from the first row
+        with content is data, and no @c no_header_row finding is reported
 
         @since %DataProvider 3.13
     */
@@ -261,7 +264,7 @@ public hashdecl TabularSheetProfile {
     #! The number of rows in the sheet
     int row_count = 0;
 
-    #! The 1-based header row, if one was found
+    #! The 1-based header row: the one given in the @c header_row profile option, else the one found
     *int header_row;
 
     #! The 1-based rows above the header that hold titles or banners
@@ -977,11 +980,6 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         if (exists options.header_row) {
             if (options.header_row > 0) {
                 header = options.header_row - 1;
-                # below every row with content: no data
-                if (header > last_row) {
-                    rv.header_row = options.header_row;
-                    return rv;
-                }
             }
         } else {
             header = findHeaderRow(types, last_row, options.header_search_rows);
@@ -990,7 +988,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         if (exists header) {
             rv.header_row = header + 1;
             first_data = header + 1;
-            for (int r = 0; r < header; ++r) {
+            # the rows with content above the header; a header row the caller gave below every row with content
+            # has every row with content above it
+            int title_end = min(header, last_row + 1);
+            for (int r = 0; r < title_end; ++r) {
                 if (nonEmptyCount(types[r])) {
                     rv.title_rows += r + 1;
                 }
@@ -1000,6 +1001,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     "code": "title_rows",
                     "detail": rv.title_rows,
                 };
+            }
+            # below every row with content: no data and no column
+            if (header > last_row) {
+                return rv;
             }
         } else {
             # the caller said the sheet has none

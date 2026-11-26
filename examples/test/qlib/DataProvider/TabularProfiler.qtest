@@ -685,11 +685,43 @@ public class TabularProfilerTest inherits QUnit::Test {
         assertEq((NOTHING, NOTHING, NOTHING), (map $1.header, sheet.columns));
         assertNothing(finding(sheet, "no_header_row"), "the caller said the sheet has none");
 
-        # below every row with content: no data, and no column
-        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 9}).sheets[0];
-        assertEq(9, sheet.header_row);
+        # on the last row with content: the columns are named from it, and there is no data
+        sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": 5}).sheets[0];
+        assertEq(5, sheet.header_row);
+        assertEq((1, 2, 3, 4), sheet.title_rows);
         assertNothing(sheet.data_region);
-        assertEq((), sheet.columns);
+        assertEq(("A-2", "Brno", "12"), (map $1.header, sheet.columns));
+        assertEq((), sheet.samples);
+
+        # below every row with content: no data, and no column; the rows with content above it are title rows
+        foreach int row in ((6, 9)) {
+            sheet = TabularProfiler::profile(grid, <TabularProfileOptions>{"header_row": row}).sheets[0];
+            assertEq(row, sheet.header_row);
+            assertNothing(sheet.data_region);
+            assertEq((), sheet.columns);
+            assertEq((), sheet.samples);
+            assertEq((1, 2, 3, 4, 5), sheet.title_rows, "row " + row);
+            assertEq((1, 2, 3, 4, 5), finding(sheet, "title_rows").detail, "row " + row);
+            assertNothing(finding(sheet, "no_header_row"));
+        }
+
+        # leading and inner empty rows above the given header are not title rows
+        hash<TabularWorkbookGrid> gaps({
+            "format": "xlsx",
+            "sheets": (<TabularSheetGrid>{
+                "name": "Gaps",
+                "rows": ((), ("Report",), (), ("a", "b"), (1, 2)),
+            },),
+        });
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 4}).sheets[0];
+        assertEq((2,), sheet.title_rows);
+        assertEq(5, sheet.data_region.first_row);
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 7}).sheets[0];
+        assertEq((2, 4, 5), sheet.title_rows);
+        assertNothing(sheet.data_region);
+        sheet = TabularProfiler::profile(gaps, <TabularProfileOptions>{"header_row": 0}).sheets[0];
+        assertEq(2, sheet.data_region.first_row, "none: the data starts on the first row with content");
+        assertEq((), sheet.title_rows);
 
         assertThrows("TABULAR-PROFILE-ERROR", "header_row", \TabularProfiler::profile(), (grid,
             <TabularProfileOptions>{"header_row": -1}));
