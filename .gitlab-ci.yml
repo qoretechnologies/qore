@@ -261,13 +261,14 @@ check-build-separate-units:
     - when: on_success
 
 # The compiler warnings in Qore's own sources (not in bundled third-party code or system headers) in the logs of the
-# jobs that build Qore (ci-build-log.sh: build/build.log of the build jobs and of test-macos, and
-# build-separate-units/build.log of check-build-separate-units, whose separate compilation units show warnings that
-# the single compilation unit hides), qore#7757: the job downloads only that file of each job's artifacts, prints the
-# warnings and keeps them as a report.  It exits with 3 when there are any, which is allowed, so the pipeline passes
-# with a warning (the job is orange) and the warnings are fixed in the next batch; any other failure of the check is a
-# failure.  pipeline-passed does not need it, so it does not wait for it (it waits for test-macos, which
-# pipeline-passed also waits for).  The checker's tests: examples/test/runner/test_check_build_warnings.py
+# jobs that build Qore (ci-build-log.sh: build/build.log of the build jobs, of test-macos and of build-perf, the only
+# release build with gcc, and build-separate-units/build.log of check-build-separate-units, whose separate compilation
+# units show warnings that the single compilation unit hides), reported by platform and build type, qore#7757: the job
+# downloads only that file of each job's artifacts, prints the warnings and keeps them as a report.  It exits with 3
+# when there are any, which is allowed, so the pipeline passes with a warning (the job is orange) and the warnings are
+# fixed in the next batch; any other failure of the check is a failure.  pipeline-passed does not need it, so it does
+# not wait for it (it waits for test-macos, which pipeline-passed also waits for).  The checker's tests:
+# examples/test/runner/test_check_build_warnings.py
 check-build-warnings:
   stage: test
   needs:
@@ -290,6 +291,9 @@ check-build-warnings:
       optional: true
       artifacts: false
     - job: check-build-separate-units
+      optional: true
+      artifacts: false
+    - job: build-perf
       optional: true
       artifacts: false
   image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE

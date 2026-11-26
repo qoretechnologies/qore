@@ -198,23 +198,33 @@ class FetchTest(unittest.TestCase):
             # the macOS job failed in its tests, after its build: its log is checked
             {"id": 6, "name": "test-macos", "status": "failed"},
             {"id": 7, "name": "check-build-separate-units", "status": "success"},
+            # the gcc release build: a warning that only its optimizations find
+            {"id": 8, "name": "build-perf", "status": "success"},
         ]
         logs = {(1, "build/build.log"): SAMPLE_LOG, (2, "build/build.log"): "[100%] Built target qore\n",
                 (6, "build/build.log"): CLANG_LOG,
                 (7, "build-separate-units/build.log"):
                     f"{SRC}/include/qore/intern/QoreHttp1ClientConnection.h:76:7: warning: 'Http1ClientConnection' "
-                    "declared with greater visibility than the type of its field [-Wattributes]\n"}
+                    "declared with greater visibility than the type of its field [-Wattributes]\n",
+                (8, "build/build.log"):
+                    f"qore-ci-build-log source-dir={SRC}\n"
+                    f"{SRC}/lib/QuicPollOperations.cpp:648:9: warning: unused variable 'count' [-Wunused-variable]\n"}
         api = GitLab(jobs, logs)
         self.addCleanup(api.close)
         rc, report = self.run_fetch(api)
         self.assertEqual(cbw.WARNINGS_FOUND, rc)
         data = json.loads(report.with_suffix(".json").read_text())
-        self.assertEqual({"ubuntu-amd64", "ubuntu-arm64", "macos", "ubuntu-amd64-non-scu"}, set(data))
-        self.assertEqual([], data["ubuntu-arm64"])
+        self.assertEqual({"ubuntu-amd64-debug", "ubuntu-arm64-debug", "macos-release", "ubuntu-amd64-non-scu-debug",
+                          "ubuntu-amd64-release"}, set(data))
+        self.assertEqual([], data["ubuntu-arm64-debug"])
         self.assertEqual(["lib/QoreLib.cpp", "include/qore/intern/QoreLibIntern.h"],
-                         [w["file"] for w in data["macos"]])
+                         [w["file"] for w in data["macos-release"]])
         self.assertEqual(["include/qore/intern/QoreHttp1ClientConnection.h"],
-                         [w["file"] for w in data["ubuntu-amd64-non-scu"]])
+                         [w["file"] for w in data["ubuntu-amd64-non-scu-debug"]])
+        self.assertEqual([("lib/QuicPollOperations.cpp", 648, "-Wunused-variable")],
+                         [(w["file"], w["line"], w["flag"]) for w in data["ubuntu-amd64-release"]])
+        text = report.read_text()
+        self.assertIn("ubuntu-amd64-release: lib/QuicPollOperations.cpp:648 [-Wunused-variable]", text)
         self.assertTrue(all(r[1] == "jt" for r in api.requests))
 
     def test_fetch_clean(self):
@@ -242,9 +252,38 @@ class CiConfigTest(unittest.TestCase):
     def test_builds_keep_their_logs(self):
         # every script that builds Qore keeps its compiler output where the checker reads it
         for script, log in (("build.sh", "build.log"), ("test-macos.sh", '"${BUILD_DIR}/build.log"'),
-                            ("build-separate-units.sh", '"${BUILD_DIR}/build.log"')):
+                            ("build-separate-units.sh", '"${BUILD_DIR}/build.log"'), ("build-perf.sh", "build.log")):
             text = (ROOT / "test/docker_test" / script).read_text()
             self.assertIn(f"qore_ci_build_logged {log} ", text, script)
+
+    def test_labels_name_the_build_type(self):
+        # each log is labelled with the platform and the build type that the job's script configures, and the job's
+        # artifacts keep it
+        text = CI.read_text()
+        for label, (job, log) in cbw.BUILD_JOBS.items():
+            # the job's lines: indented or empty, up to the next top-level line
+            m = re.search(rf"^{re.escape(job)}:\n(?P<body>(?:(?: .*)?\n)+)", text, re.M)
+            self.assertTrue(m, f"{job} is a job of the pipeline")
+            body = m.group("body")
+            # the script that builds (tree-tested-skip.sh only ends a job whose tree has already passed)
+            scripts = sorted(set(re.findall(r"test/docker_test/([\w-]+\.sh)", body)) - {"tree-tested-skip.sh"})
+            self.assertEqual(1, len(scripts), f"{job} builds with one script: {scripts}")
+            script = (ROOT / "test/docker_test" / scripts[0]).read_text()
+            types = {t.lower() for t in re.findall(r"-DCMAKE_BUILD_TYPE=(?:\$\{CMAKE_BUILD_TYPE:-)?(\w+)", script)}
+            self.assertEqual(1, len(types), f"{scripts[0]} configures one build type: {types}")
+            build_type = types.pop()
+            self.assertIn(build_type, ("debug", "release"))
+            self.assertTrue(label.endswith(f"-{build_type}"), f"{label}: {job} makes a {build_type} build")
+            self.assertNotIn("CMAKE_BUILD_TYPE", body, f"{job} keeps the build type of its script")
+            paths = re.search(r"^\s+artifacts:\n(?:\s+when:.*\n)?\s+paths:\n(?P<paths>(?:\s+- .*\n)+)", body, re.M)
+            self.assertTrue(paths, f"{job} keeps artifacts")
+            kept = [p.strip()[2:].strip() for p in paths.group("paths").splitlines()]
+            self.assertTrue(any(log == k or log.startswith(k.rstrip("/") + "/") for k in kept),
+                            f"{job} keeps {log} in its artifacts: {kept}")
+
+    def test_the_gcc_release_build_is_checked(self):
+        # warnings that only the optimizations of a release build find (qore#7757) are reported from build-perf
+        self.assertEqual(("build-perf", "build/build.log"), cbw.BUILD_JOBS["ubuntu-amd64-release"])
 
     def test_logged_build_keeps_the_status(self):
         # the helper shows the output, keeps it with the source directory in its first line, and returns the

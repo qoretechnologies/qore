@@ -120,7 +120,8 @@
   `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
 - The `check-build-warnings` CI job reports the compiler warnings in Qore's own sources (not in bundled third-party
   code) from the logs of the jobs that build Qore (`examples/test/docker_test/ci-build-log.sh`: the Linux build jobs,
-  the macOS job and the build of separate compilation units, which shows warnings that the single unit hides), with
+  the macOS job, the build of separate compilation units, which shows warnings that the single unit hides, and
+  `build-perf`, the only gcc release build), by platform and build type, with
   `examples/test/docker_test/check-build-warnings.py`: it exits with 3, which the job allows, so a pipeline with
   warnings passes with a warning (an orange job) and the warnings are fixed in the next batch; keep the build free of
   them (qore#7757).
