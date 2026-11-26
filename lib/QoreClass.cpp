@@ -10398,7 +10398,7 @@ bool qore_class_private::hasUserCopyMethod() const {
     }
     // the copy methods of the base classes that run (see BCSMList::execCopyMethodsImpl())
     if (scl) {
-        for (const class_virt_pair_t& i : scl->sml) {
+        for (const class_virt_pair_t& i : scl->sml.view()) {
             if (!i.second) {
                 const QoreMethod* m = i.first->priv->copyMethod;
                 if (m && m->isUser()) {
