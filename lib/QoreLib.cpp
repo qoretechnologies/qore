@@ -6011,6 +6011,11 @@ void qore_raise_allocation_failure(ExceptionSink* xsink, const char* context) no
     abort();
 }
 
+void qore_native_allocation_failure() noexcept {
+    // called while the std::bad_alloc is handled: the terminate handler reports it
+    std::terminate();
+}
+
 //! the terminate handler that was installed before qore_terminate_handler()
 static std::terminate_handler qore_prev_terminate_handler = nullptr;
 
@@ -6060,5 +6065,16 @@ void qore_dbg_fail_allocation(int64 n, size_t min_size) {
 
 bool qore_dbg_allocation_fails(size_t size) {
     return qore_dbg_alloc_fail_countdown && size >= qore_dbg_alloc_fail_min_size && !--qore_dbg_alloc_fail_countdown;
+}
+
+//! the creations of hash members left in this thread before one fails; 0: none fails
+static thread_local int64 qore_dbg_hash_member_fail_countdown = 0;
+
+void qore_dbg_fail_hash_member(int64 n) {
+    qore_dbg_hash_member_fail_countdown = n > 0 ? n : 0;
+}
+
+bool qore_dbg_hash_member_fails() {
+    return qore_dbg_hash_member_fail_countdown && !--qore_dbg_hash_member_fail_countdown;
 }
 #endif

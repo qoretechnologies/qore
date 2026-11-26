@@ -13174,6 +13174,9 @@ static void runAOTModuleDelClosure(const std::string& mod_name, const std::strin
                 qore_aot_call_body(fn_ptr, ctx, &xsink);
             } catch (const QoreJITException&) {
                 // xsink is already populated at the raise site
+            } catch (const std::bad_alloc&) {
+                // native frames were left without their cleanup: the process ends (qore#7466)
+                qore_native_allocation_failure();
             }
             for (int k = instantiated - 1; k >= 0; --k) {
                 LocalVar* lv = body_locals[k];
@@ -14350,6 +14353,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
             raw_result = 0;
+        } catch (const std::bad_alloc&) {
+            // native frames were left without their cleanup: the process ends (qore#7466)
+            qore_native_allocation_failure();
         }
         set_module_context_path(old_path);
         set_module_context_name(old_name);
@@ -14806,6 +14812,9 @@ static int executeInitFunctions(
                         raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                     } catch (const QoreJITException&) {
                         raw_result = 0;
+                    } catch (const std::bad_alloc&) {
+                        // native frames were left without their cleanup: the process ends (qore#7466)
+                        qore_native_allocation_failure();
                     }
                 }
                 for (int k = instantiated - 1; k >= 0; --k) {
@@ -14819,6 +14828,9 @@ static int executeInitFunctions(
                     raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                 } catch (const QoreJITException&) {
                     raw_result = 0;
+                } catch (const std::bad_alloc&) {
+                    // native frames were left without their cleanup: the process ends (qore#7466)
+                    qore_native_allocation_failure();
                 }
             }
         }  // end shadow-context scope (init_ctx_helper destroyed here)

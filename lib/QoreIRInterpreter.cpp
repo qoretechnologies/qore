@@ -2853,6 +2853,14 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
     cleanup.clear();
 }
 
+//! releases the values of a frame whose unwinding failed for lack of memory (qore#7466); out of line and given only
+//! the frame, so that the handler of QoreIRInterpreter::execute() that calls it does not enlarge its frame
+static __attribute__((noinline, cold)) void qore_ir_release_failed_unwind_values(IRCallFrame& frame,
+        const QoreIRFunction& func, ExceptionSink* xsink, std::vector<std::string>* cleanup_log) {
+    IRValueSlots values{frame.values};
+    cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
+}
+
 //! Returns true if a local variable of the given type can hold a reference (reference r = \x;), whose value is that
 //! of the referenced lvalue
 static bool qore_ir_type_may_hold_reference(const QoreTypeInfo* ti) {
@@ -3623,7 +3631,7 @@ static __attribute__((noinline)) void qore_ir_store_hash_key_result(QoreHashNode
         uint32_t result_id) {
     QoreValue rv;
     if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink, rv)) {
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+        qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, &rv);
     }
     qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
 }
@@ -3633,7 +3641,7 @@ static __attribute__((noinline)) void qore_ir_store_new_hash_key_result(QoreHash
         const QoreValue& val, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
         uint32_t result_id) {
     QoreValue rv;
-    qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+    qore_hash_private::setKeyValueCanonicalBorrowed(*h, key, val, xsink, &rv);
     qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
 }
 
@@ -9366,7 +9374,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue push_val = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             if (inv->list_push_in_place && list_val.getType() == NT_LIST) {
                 QoreListNode* l = list_val.get<QoreListNode>();
-                qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
+                qore_list_private::pushCanonicalRaising(*l, push_val.refSelf(), xsink);
                 // refSelf: result shares same list pointer as operand; both are in
                 // cleanup, so both need their own reference
                 return xsink && *xsink ? QoreValue() : list_val.refSelf();
@@ -13635,6 +13643,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
     };
 
+    // memory that an instruction needed and that no runtime helper or builtin call turned into an exception
+    // (std::bad_alloc) fails the call of the function: the frame is left as on an exception that no handler in it
+    // catches, and the caller gets MEMORY-ALLOCATION-ERROR (qore#7466); a try block of the same function does not
+    // catch it, as the dispatch of the instruction is left; the dispatch loop is not indented for the try block, which
+    // adds no instruction to the path that does not fail, though GCC allocates its registers differently
+    try {
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -14062,7 +14076,7 @@ dispatch_folded_step_host:
                     // Track element type for correct list<T> type info at runtime
                     qore_list_private::get(*list)->setListTypeFromNewElementType(
                         push_val.getFullTypeInfo());
-                    qore_list_private::pushCanonical(*list, push_val, xsink);
+                    qore_list_private::pushCanonicalRaising(*list, push_val, xsink);
                 }
                 ++ip;
                 break;
@@ -14073,7 +14087,7 @@ dispatch_folded_step_host:
                 QoreValue result;
                 if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
-                    qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
+                    qore_list_private::pushCanonicalRaising(*l, push_val.refSelf(), xsink);
                     // an in-place push borrows the list from the local, which keeps its reference: when the value is
                     // rejected, the result stays empty, so the discard below does not release the local's list (the
                     // frame's locals release it); no flag is used, as execute() is at its stack budget
@@ -15997,7 +16011,7 @@ load_local_done:
                                 hks_inst->result.id);
                         } else if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()),
                                 val, xsink)) {
-                            qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(),
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*h, hks_inst->key_name.c_str(), val,
                                 xsink);
                         }
 
@@ -16042,8 +16056,8 @@ load_local_done:
                             qore_ir_store_new_hash_key_result(new_h, hks_inst->key_name.c_str(), val, xsink, values,
                                 cleanup, hks_inst->result.id);
                         } else {
-                            qore_hash_private::setKeyValueCanonical(*new_h, hks_inst->key_name.c_str(),
-                                val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, hks_inst->key_name.c_str(), val,
+                                xsink);
                         }
                         if (xsink && *xsink) {
                             // the hash was created for this store only, so the rejected store leaves no value behind
@@ -16167,7 +16181,7 @@ load_local_done:
                                 hksd_inst->result.id);
                         } else if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val,
                                 xsink)) {
-                            qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*h, key_str.c_str(), val, xsink);
                         }
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
@@ -16204,7 +16218,7 @@ load_local_done:
                             qore_ir_store_new_hash_key_result(new_h, key_str.c_str(), val, xsink, values, cleanup,
                                 hksd_inst->result.id);
                         } else {
-                            qore_hash_private::setKeyValueCanonical(*new_h, key_str.c_str(), val.refSelf(), xsink);
+                            qore_hash_private::setKeyValueCanonicalBorrowed(*new_h, key_str.c_str(), val, xsink);
                         }
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
@@ -24360,6 +24374,24 @@ weak_receiver_raised:
         } // end of current_block scope
 
     }
+    } catch (const std::bad_alloc&) {
+        if (!xsink) {
+            throw;
+        }
+        // the IR frame is unwound by its own code, which releases its values and runs its handlers: the exception is
+        // raised exactly where the native code would leave frames without their cleanup (qore#7466)
+        qore_raise_allocation_failure(xsink, "compiled code");
+        if (frame.unwinding_function) {
+            // the frame was already being unwound when the memory could not be allocated: its values are released,
+            // and the handlers that had not run yet are skipped, as running them again could run some twice
+            qore_ir_release_failed_unwind_values(frame, func, xsink, cleanup_log);
+            cleanupLocalCaches(false);
+            return false;
+        }
+        unwindForException();
+        cleanupLocalCaches(false);
+        return exitAfterUnwind();
+    }
 
     if (xsink) {
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
@@ -26428,7 +26460,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                     rc = lp->checkVal(right_holder, xsink);
                 }
                 if (!rc) {
-                    lp->pushIntern(right_holder.release());
+                    lp->pushHeld(right_holder, xsink);
                 }
             }
         }
@@ -26507,7 +26539,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 return QoreValue();
             }
             QoreStringNode* vs = v.getValue().get<QoreStringNode>();
-            vs->concat(*str, xsink);
+            // memory that cannot be allocated raises the exception (qore#7466)
+            qore_string_private::get(*vs)->concatRaising(*str, xsink);
         }
     } else if (vtype == NT_NUMBER) {
         // a char is added as its one-character string is (LValueHelper::plusEqualsNumber())

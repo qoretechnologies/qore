@@ -10357,6 +10357,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 } catch (const QoreJITException&) {
                     result_bits = 0;
+                } catch (const std::bad_alloc&) {
+                    // native frames were left without their cleanup: the process ends (qore#7466)
+                    qore_native_allocation_failure();
                 }
 
                 // Check for JIT guard failure requesting deopt to AST.

@@ -440,6 +440,8 @@ struct qore_list_private {
     }
 
     DLLLOCAL static int pushCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink);
+    //! pushCanonical() with pushRaising() (qore#7466)
+    DLLLOCAL static int pushCanonicalRaising(QoreListNode& list, QoreValue val, ExceptionSink* xsink);
     DLLLOCAL static int insertCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink);
     DLLLOCAL static int mergeCanonical(QoreListNode& list, const QoreListNode* other, ExceptionSink* xsink) {
         return list.priv->merge(other, xsink);
@@ -453,6 +455,17 @@ struct qore_list_private {
         }
         pushIntern(holder.release());
         return 0;
+    }
+
+    //! pushes a value as push() above, raising MEMORY-ALLOCATION-ERROR in \a xsink if the list cannot grow, which
+    //! leaves it unchanged and releases the value (qore#7466); for the runtime helpers of native code and the IR
+    //! interpreter, whose callers check the sink: the other callers of push() keep its code
+    DLLLOCAL int pushRaising(QoreValue val, const QoreTypeInfo* vtype, ExceptionSink* xsink) {
+        ValueHolder holder(val, xsink);
+        if (checkVal(holder, vtype, xsink)) {
+            return -1;
+        }
+        return pushHeld(holder, xsink);
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink) {
@@ -546,6 +559,54 @@ struct qore_list_private {
     DLLLOCAL void pushIntern(QoreValue val) {
         initEntry(length, val);
     }
+
+    //! pushes the value of the holder; memory that cannot be allocated raises MEMORY-ALLOCATION-ERROR in \a xsink (if
+    //! there is one), leaves the list unchanged and releases the value with the holder (qore#7466)
+    /** The storage is grown before the value is taken from the holder, by the test that pushIntern() makes
+    */
+    DLLLOCAL int pushHeld(ValueHolder& holder, ExceptionSink* xsink) {
+        if (__builtin_expect(length + 1 >= allocated, 0) && growOrRaise(length + 1, xsink)) {
+            return -1;
+        }
+        // the storage holds the entry: it is stored as initEntry() stores it, without growing the list; a list or hash
+        // that a weak reference designates is replaced by a copy of its own (qore#7342)
+        QoreValue val = holder.release();
+        bool scan = qore_store_needs_scan(val);
+        entry[length++] = val;
+        if (scan) {
+            incScanCount(1);
+        }
+        return 0;
+    }
+
+    //! grows the storage for \a num entries, as reserve() does; memory that cannot be allocated raises
+    //! MEMORY-ALLOCATION-ERROR in \a xsink and returns -1, or, with no sink, fails with std::bad_alloc (qore#7466)
+    DLLLOCAL int reserve(size_t num, ExceptionSink* xsink) {
+        if (num < length || num < allocated) {
+            return 0;
+        }
+        return growOrRaise(num, xsink);
+    }
+
+    //! grows the storage for \a num entries as grow() does; memory that cannot be allocated leaves the list unchanged
+    //! and raises MEMORY-ALLOCATION-ERROR in \a xsink (or, with no sink, fails with std::bad_alloc) (qore#7466)
+    DLLLOCAL int growOrRaise(size_t num, ExceptionSink* xsink) {
+        size_t d = num >> 2;
+        allocated = num + (d < LIST_PAD ? LIST_PAD : d);
+        QoreValue* p = static_cast<QoreValue*>(qore_realloc_or_null(static_cast<void*>(entry),
+            sizeof(QoreValue) * allocated));
+        if (__builtin_expect(!p, 0)) {
+            allocated = length;
+            return raiseGrowFailure(xsink);
+        }
+        entry = p;
+        sb.sync(sizeof(QoreValue) * allocated);
+        return 0;
+    }
+
+    //! raises MEMORY-ALLOCATION-ERROR for a list that could not grow, or, with no sink, throws std::bad_alloc; returns
+    //! -1 (qore#7466)
+    DLLLOCAL static int raiseGrowFailure(ExceptionSink* xsink) __attribute__((noinline, cold));
 
     DLLLOCAL size_t checkOffset(ptrdiff_t offset) {
         if (offset < 0) {

@@ -204,6 +204,28 @@ sub copy_on_write() {
     printf("copy on write hash: hsrc: %y, hb: %y\n", hsrc, hb);
 }
 
+# a container that push, map, select and += store in a list (the runtime helpers of native code grow the list with an
+# exception sink, qore#7466)
+sub list_growth() {
+    list<int> src = (1, 2);
+    auto wl;
+    wl := src;
+    list<auto> l = ();
+    push l, src;
+    list<auto> m = map src, (1,);
+    list<auto> s = select (src,), True;
+    list<auto> p = ();
+    p += (src,);
+    hash<auto> hsrc = {"a": 1};
+    auto wh;
+    wh := hsrc;
+    list<auto> hl = ();
+    push hl, hsrc;
+    wl[0] = 9;
+    wh.a = 9;
+    printf("list growth: push: %y, map: %y, select: %y, +=: %y, hash push: %y\n", l, m, s, p, hl);
+}
+
 our auto gw;
 our hash<auto> gstore;
 
@@ -440,6 +462,7 @@ sub run_case(string name) {
         case "self_assignment": self_assignment(); break;
         case "copy_on_write": copy_on_write(); break;
         case "share_points_of_moves": share_points_of_moves(); break;
+        case "list_growth": list_growth(); break;
     }
 }
 
@@ -457,6 +480,7 @@ const CaseNames = (
     "moves",
     "copy_on_write",
     "share_points_of_moves",
+    "list_growth",
     "untyped_plus_equals",
     "reference_plus_equals",
     "self_assignment",

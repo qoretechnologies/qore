@@ -32,6 +32,7 @@ move into a parameter: {}
 move into an untyped parameter that the function returns: {}
 move into an untyped parameter that a method returns: {}
 move into an untyped parameter that a static method returns: {}
+list growth: push: [[1, 2]], map: [[1, 2]], select: [[1, 2]], +=: [[1, 2]], hash push: [{a: 1}]
 list += scalar: [1, 5], [1, 5]
 list += list: [1, 5, 6, 7], [1, 5, 6, 7], [1, 5, 6, 7]
 hash += hash: {a: 1, b: 2}, {a: 1, b: 2}

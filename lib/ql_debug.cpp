@@ -38404,6 +38404,11 @@ static QoreValue f_dbg_release_thread_start(const QoreListNode* params, RuntimeC
 //! thread fail with std::bad_alloc; 0 disarms it (qore#7466)
 static QoreValue f_dbg_fail_allocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64 min_size = get_param_value(params, 1).getAsBigInt();
+    // a negative size makes the creation of a hash member fail instead (qore#7466)
+    if (min_size < 0) {
+        qore_dbg_fail_hash_member(get_param_value(params, 0).getAsBigInt());
+        return QoreValue();
+    }
     qore_dbg_fail_allocation(get_param_value(params, 0).getAsBigInt(), min_size > 0 ? (size_t)min_size : 0);
     return QoreValue();
 }

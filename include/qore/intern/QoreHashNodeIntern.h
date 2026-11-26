@@ -841,6 +841,12 @@ public:
     DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
         ExceptionSink* xsink);
 
+    //! assigns a key as setKeyValueCanonical() does, taking a reference of its own to \a value, which the caller
+    //! keeps, once the member exists: memory that cannot be allocated for the member or the assignment never leaks
+    //! the value (qore#7466); \a res, if not nullptr, takes a reference to the value stored
+    DLLLOCAL static int setKeyValueCanonicalBorrowed(QoreHashNode& hash, const char* key, const QoreValue& value,
+        ExceptionSink* xsink, QoreValue* res = nullptr);
+
     //! assigns a key as setKeyValueCanonical() does; \a res takes a reference to the value stored after a successful
     //! assignment, which the value type of the hash can convert (the value of an assignment, qore#7589)
     DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
