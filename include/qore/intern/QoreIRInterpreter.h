@@ -321,6 +321,15 @@ DLLLOCAL QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& 
 DLLLOCAL QoreValue qore_add_assign_unique_container(QoreValue container, const QoreValue& right,
         ExceptionSink* xsink);
 
+//! Adds \a right to the lvalue that the reference \a ref, held by an "auto" local, designates (qore#7421)
+/** The lvalue is changed under its lock, as the AST interpreter changes it, so that a list or a hash that it holds is
+    changed in place; the store of the result to the local follows, and assigns it through the reference.
+
+    @return the value of the lvalue after the operation, holding a reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_add_assign_through_reference(const ReferenceNode& ref, const QoreValue& right,
+        ExceptionSink* xsink);
+
 //! Execute a previously resolved direct-call descriptor when its cached IR is
 //! a supported native scalar leaf. Returns false without side effects when the
 //! body or runtime argument types require normal call semantics.

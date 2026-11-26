@@ -156,6 +156,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
     { "qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any) },
     { "qore_rt_add_assign_local_any", reinterpret_cast<void*>(&qore_rt_add_assign_local_any) },
+    { "qore_rt_auto_local_add_operand", reinterpret_cast<void*>(&qore_rt_auto_local_add_operand) },
+    { "qore_rt_auto_local_add_operand_var", reinterpret_cast<void*>(&qore_rt_auto_local_add_operand_var) },
+    { "qore_rt_auto_local_add_operand_aot", reinterpret_cast<void*>(&qore_rt_auto_local_add_operand_aot) },
     { "qore_rt_drop_local_string_cache", reinterpret_cast<void*>(&qore_rt_drop_local_string_cache) },
     { "qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any) },
     { "qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any) },
@@ -956,8 +959,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t rig
 }
 
 // Only the duplicate references to this string, list or hash can be dropped: the deferred tracker can keep
-// a previous value live for another SSA use, including an object with an observable destructor.  The local holds a
-// reference of its own, so the node stays alive, and a node that the local then holds alone is changed in place by
+// a previous value live for another SSA use, including an object with an observable destructor.  The local, or the
+// lvalue that a reference that it holds designates (the slots of a read through the reference), holds a reference of
+// its own, so the node stays alive, and a node that it then holds alone is changed in place by
 // qore_rt_add_assign_local_any() (qore#6279, qore#7421)
 extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry,
         uint64_t* current, uint64_t* previous) {
@@ -968,8 +972,8 @@ extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_
             if (slot && *slot == left) {
                 *slot = toBits(QoreValue());
                 AbstractQoreNode* node = value.get<AbstractQoreNode>();
-                // never the last reference: the local holds one, so no destructor runs and nothing is raised
-                assert(node->reference_count() > 1);
+                // the local or the referenced lvalue holds a reference to it, so no destructor runs and nothing is
+                // raised
                 ExceptionSink xsink;
                 node->deref(&xsink);
             }
@@ -980,6 +984,12 @@ extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_
 extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue value = fromBits(left);
     QoreValue rhs = fromBits(right);
+    // a local that holds a reference gives the reference itself (qore_rt_auto_local_add_operand()): the operation is
+    // made on the referenced lvalue, as the AST interpreter makes it (qore#7421)
+    if (value.isPlainPointer() && value.getType() == NT_REFERENCE) [[unlikely]] {
+        return qore_rt_result_or_nothing(qore_add_assign_through_reference(
+            *value.get<const ReferenceNode>(), rhs, xsink), xsink);
+    }
     // Converting a built-in scalar, date or binary cannot call back into the program and replace
     // the borrowed left side. Other operands take the normal path, which owns it during conversion.
     if (value.isPlainPointer() && value.getType() == NT_STRING
@@ -999,6 +1009,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64
         return qore_rt_result_or_nothing(qore_add_assign_unique_container(value, rhs, xsink), xsink);
     }
     return qore_rt_result_or_nothing(qore_compound_assign_value(LVCompoundOp::AddAssign, value, rhs, xsink), xsink);
+}
+
+//! the left operand of the += of an "auto" local paired with its store (qore_rt_add_assign_local_any()): the reference
+//! that the local holds, borrowed, if \a raw, the value that the local holds, is a reference, else \a left (qore#7421)
+extern "C" DLLEXPORT uint64_t qore_rt_auto_local_add_operand(uint64_t left, uint64_t raw) {
+    QoreValue r = fromBits(raw);
+    return r.isPlainPointer() && r.getType() == NT_REFERENCE ? raw : left;
+}
+
+//! as qore_rt_auto_local_add_operand(), for a local on the runtime stack (qore#7421)
+extern "C" DLLEXPORT uint64_t qore_rt_auto_local_add_operand_var(uint64_t left, const LocalVar* var) {
+    LocalVarValue* lvv = var ? thread_try_find_lvar(var) : nullptr;
+    if (lvv && lvv->val.getType() == NT_REFERENCE) [[unlikely]] {
+        // borrowed: the local keeps the reference until its store, which follows the operation
+        return toBits(QoreValue(lvv->val.getInternalNode()));
+    }
+    return left;
+}
+
+//! as qore_rt_auto_local_add_operand_var(), for AOT code (qore#7421)
+extern "C" DLLEXPORT uint64_t qore_rt_auto_local_add_operand_aot(uint64_t left, QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_auto_local_add_operand_var(left, ctx->locals[idx]);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
@@ -3330,10 +3363,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionS
 }
 
 //! as qore_rt_weak_share_copy(), for a store to an IR-only local that holds \a held: the container that the local holds
-//! already, which a += changed in place (qore_add_assign_unique_container()), gets no new holder from the store, which
-//! replaces the local's reference, and is stored as it is (qore#7421)
+//! already, which a += changed in place (qore_take_in_place_store()), gets no new holder from the store, which
+//! replaces the local's reference, and is stored as it is; a store through a reference that the local holds is
+//! checked by the assignment to the referenced lvalue (qore#7421)
 extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy_store(uint64_t value, uint64_t held, ExceptionSink* xsink) {
-    if (value == held) {
+    QoreValue h = fromBits(held);
+    // a local that holds a reference assigns the value through it (qore_rt_reference_slot_write()), and the
+    // assignment makes the check for the referenced lvalue (LValueHelper::assign())
+    if (h.isPlainPointer() && h.getType() == NT_REFERENCE) {
+        return value;
+    }
+    if (value == held && qore_take_in_place_store(fromBits(value))) {
         return value;
     }
     return qore_rt_weak_share_copy(value, xsink);
@@ -19504,7 +19544,48 @@ QoreValue qore_add_assign_unique_container(QoreValue container, const QoreValue&
             result = container.refSelf();
         }
     }
+    if (result.hasNode()) {
+        qore_set_in_place_store(result);
+    }
     return result;
+}
+
+// the container that the last += of an "auto" local changed in place in this thread, which the store of the result
+// that follows the operation gives back to the lvalue that holds it (qore#7421)
+static thread_local const AbstractQoreNode* qore_in_place_store = nullptr;
+
+// documented in QoreLibIntern.h
+void qore_set_in_place_store(const QoreValue& v) {
+    // only a container that a weak reference designates is copied by a store (qore#7342)
+    qore_in_place_store = (v.getType() == NT_LIST || v.getType() == NT_HASH)
+        && qore_weak_designated_container(v.getInternalNode()) ? v.getInternalNode() : nullptr;
+}
+
+// documented in QoreLibIntern.h
+bool qore_take_in_place_store(const QoreValue& v) {
+    const AbstractQoreNode* n = qore_in_place_store;
+    qore_in_place_store = nullptr;
+    return n && n == v.getInternalNode();
+}
+
+// documented in QoreIRInterpreter.h
+QoreValue qore_add_assign_through_reference(const ReferenceNode& ref, const QoreValue& right,
+        ExceptionSink* xsink) {
+    // += takes the operand's reference when it stores the value (see qore_rt_apply_lvalue_compound())
+    ValueHolder rhs_holder(right.refSelf(), xsink);
+    bool resolve_failed;
+    // the referenced lvalue is changed under its lock, as the AST interpreter changes it; the store of the result to
+    // the local that follows assigns it through the reference again
+    QoreValue res = qore_rt_lvalue_compound_with_bind_retry(LVCompoundOp::AddAssign, rhs_holder, xsink,
+        [](LValueHelper& lvh, void* arg) -> int {
+            return lvh.set(*static_cast<const ReferenceNode*>(arg));
+        }, const_cast<ReferenceNode*>(&ref), resolve_failed);
+    if (*xsink) {
+        res.discard(xsink);
+        return QoreValue();
+    }
+    qore_set_in_place_store(res);
+    return res;
 }
 
 //! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder

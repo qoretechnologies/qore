@@ -121,6 +121,9 @@ uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 //! Add two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_auto_local_add_operand(uint64_t left, uint64_t raw);
+uint64_t qore_rt_auto_local_add_operand_var(uint64_t left, const LocalVar* var);
+uint64_t qore_rt_auto_local_add_operand_aot(uint64_t left, QoreAOTContext* ctx, int32_t idx);
 void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry, uint64_t* current, uint64_t* previous);
 
 //! Subtract two QoreValues with compound-assignment dynamic dispatch

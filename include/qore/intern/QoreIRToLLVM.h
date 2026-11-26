@@ -1282,6 +1282,8 @@ private:
     // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
     // only if it holds the value (qore_rt_release_reference_read())
     std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the slot of each read site of emitReferenceLocalRead() -> the slot of the value read before it at the site
+    std::unordered_map<llvm::AllocaInst*, llvm::AllocaInst*> reference_read_previous_slots;
     // the arrays of given argument slots that are null when no read through a reference holds its value (see
     // buildArgCleanupArray())
     std::unordered_set<llvm::Value*> nullable_arg_cleanups;
@@ -3233,8 +3235,9 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
-    //! Releases compiler-held duplicate owners before a dynamic local string append.
-    void prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
+    //! Releases compiler-held duplicate owners before a dynamic local string append; returns the left operand of the
+    //! += helper: \a lhs, or the reference that the local holds, through which the operation is made (qore#7421)
+    llvm::Value* prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
         llvm::Function* llvm_func);
 
     //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)

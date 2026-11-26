@@ -3488,6 +3488,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_defined_by_variable_read.clear();
     reused_call_args.clear();
     reference_read_slots.clear();
+    reference_read_previous_slots.clear();
     nullable_arg_cleanups.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
@@ -9136,6 +9137,7 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     registerInvokeCleanupAlloca(current);
     registerInvokeCleanupAlloca(previous);
     last_reference_read_slot = current;
+    reference_read_previous_slots[current] = previous;
 
     llvm::Value* is_ref = builder->CreateICmpNE(builder->CreateLoad(i8_type, ref_flag),
         llvm::ConstantInt::get(i8_type, 0));
@@ -17613,6 +17615,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
     reference_read_slots.clear();
+    reference_read_previous_slots.clear();
     nullable_arg_cleanups.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
@@ -20096,12 +20099,66 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 }
 
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs,
+llvm::Value* QoreIRToLLVM::prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs,
         llvm::Module& module, llvm::Function* llvm_func) {
     const auto* load = static_cast<const QoreIRLocalInstruction*>(value_definitions.at(inst.operands[0].id));
     auto key = reinterpret_cast<const void*>(load->local);
-    if (!local_allocas.count(key) || (ir_only_locals_set && ir_only_locals_set->count(key))) {
-        return;
+    bool ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+    llvm::Value* operand = lhs;
+    // a local that can hold a reference gives the operation the reference that it holds, through which the operation
+    // changes the referenced lvalue, as the AST interpreter changes it (qore_rt_add_assign_local_any(), qore#7421);
+    // the load read the referenced value, and set the flag
+    if (llvm::AllocaInst* ref_flag = localReferenceFlag(key, llvm_func)) {
+        llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+        llvm::Value* holds_ref = builder->CreateICmpNE(builder->CreateLoad(i8_type, ref_flag),
+            llvm::ConstantInt::get(i8_type, 0));
+        llvm::BasicBlock* from_bb = builder->GetInsertBlock();
+        llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "auto_add_reference", llvm_func);
+        llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "auto_add_operand", llvm_func);
+        builder->CreateCondBr(holds_ref, ref_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+        builder->SetInsertPoint(ref_bb);
+        // the load's read through the reference holds the referenced value in the slots of its read site (see
+        // emitReferenceLocalRead()): their references to it are released, so that the referenced lvalue holds a list
+        // or a hash alone, as when the AST interpreter changes it; it keeps it alive
+        auto read_slot = reference_read_slots.find(inst.operands[0].id);
+        if (read_slot != reference_read_slots.end() && read_slot->second) {
+            auto previous = reference_read_previous_slots.find(read_slot->second);
+            llvm::Value* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+            auto drop_fn = module.getOrInsertFunction("qore_rt_drop_local_string_cache",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
+            builder->CreateCall(drop_fn, {lhs, null_ptr, read_slot->second,
+                previous != reference_read_previous_slots.end() ? static_cast<llvm::Value*>(previous->second)
+                    : null_ptr});
+        }
+        llvm::Value* ref_operand;
+        if (ir_only && local_allocas.count(key)) {
+            // raw local cache: the reference that an IR-only local holds (see QoreIRFunction::reference_slot_locals)
+            auto operand_fn = module.getOrInsertFunction("qore_rt_auto_local_add_operand",
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            ref_operand = builder->CreateCall(operand_fn,
+                {lhs, builder->CreateLoad(i64_type, local_allocas.find(key)->second.storage())});
+        } else if (aot_mode) {
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            auto operand_fn = module.getOrInsertFunction("qore_rt_auto_local_add_operand_aot",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type}, false));
+            ref_operand = builder->CreateCall(operand_fn, {lhs, aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot)});
+        } else {
+            auto operand_fn = module.getOrInsertFunction("qore_rt_auto_local_add_operand_var",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* var_as_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(key)), ptr_type);
+            ref_operand = builder->CreateCall(operand_fn, {lhs, var_as_ptr});
+        }
+        llvm::BasicBlock* ref_end_bb = builder->GetInsertBlock();
+        builder->CreateBr(done_bb);
+        builder->SetInsertPoint(done_bb);
+        llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "auto_add_left");
+        phi->addIncoming(lhs, from_bb);
+        phi->addIncoming(ref_operand, ref_end_bb);
+        operand = phi;
+    }
+    if (!local_allocas.count(key) || ir_only) {
+        return operand;
     }
     ensureLocalReloadDeferred(key, llvm_func);
     auto slot = [&](const auto& slots) -> llvm::Value* {
@@ -20112,6 +20169,7 @@ void QoreIRToLLVM::prepareAutoLocalStringAppend(const QoreIRInstruction& inst, l
         llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
     builder->CreateCall(helper, {lhs, slot(preinstantiated_entry_cleanup_by_local),
         slot(local_reload_trackers), slot(local_reload_deferred)});
+    return operand;
 }
 
 llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed,
@@ -23104,8 +23162,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a weak
                 // or opaque store keeps the container that it designates
                 if (!qore_assignment_mode_converts_value(linst->mode)) {
+                    // the first assignment of a local that keeps a reference in its cache replaces the reference
+                    // (see below), so its check is made as for any other value
                     owned_boxed = emitWeakShareCheck(module, llvm_func, owned_boxed, xsink_arg,
-                        it->second.storage());
+                        linst->initial_assignment && isReferenceSlotLocal(key) ? nullptr : it->second.storage());
                 }
                 auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -24888,11 +24948,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!lhs || !rhs) {
                     return false;
                 }
-                prepareAutoLocalStringAppend(*inv, boxValue(lhs, inv->operands[0].id), module, llvm_func);
+                llvm::Value* left = prepareAutoLocalStringAppend(*inv, boxValue(lhs, inv->operands[0].id), module,
+                    llvm_func);
                 auto helper = module.getOrInsertFunction("qore_rt_add_assign_local_any",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                 llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
-                result = builder->CreateCall(helper, {boxValue(lhs, inv->operands[0].id), rhs_boxed, xsink_arg});
+                result = builder->CreateCall(helper, {left, rhs_boxed, xsink_arg});
                 emitAddAssignOperandRelease(inv, rhs_boxed, result, llvm_func, module);
             } else if (!inv->operands.empty() && isBinaryInvokeOpcode(inv->invoke_opcode)
                     && inv->operands.size() >= 2) {
@@ -42995,8 +43056,10 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 
     // Slow path: call runtime helper
     builder->SetInsertPoint(slow_bb);
+    // the left operand of the helper: the reference that a local paired with the operation holds, if any
+    llvm::Value* slow_lhs = lhs;
     if (inst && inst->auto_local_string_append && inst->opcode == QoreIROpcode::AddAssignAny) {
-        prepareAutoLocalStringAppend(*inst, lhs, module, llvm_func);
+        slow_lhs = prepareAutoLocalStringAppend(*inst, lhs, module, llvm_func);
     }
     auto ca_ft = llvm::FunctionType::get(i64_type,
             {i64_type, i64_type, ptr_type}, false);
@@ -43004,7 +43067,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     std::string ca_throwing_name = std::string(slow_helper) + "_throwing";
     auto ca_helper_throwing = module.getOrInsertFunction(ca_throwing_name, ca_ft);
     llvm::Value* slow_result_val = emitMaybeInvoke(ca_helper, ca_helper_throwing,
-            {lhs, rhs, xsink_arg}, module, llvm_func, inst);
+            {slow_lhs, rhs, xsink_arg}, module, llvm_func, inst);
     // as in emitAnyArithFastPath(): the exception raises here, and an invoke's skip flag stays with this call
     if (llvm::isa<llvm::InvokeInst>(slow_result_val)) {
         skip_next_exception_check = false;

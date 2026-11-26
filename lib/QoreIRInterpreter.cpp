@@ -15124,6 +15124,15 @@ dbg_dismissed_exit:
                             result_slot_owned = false;
                             goto load_local_done;
                         }
+                        if (cache_has_value && cached_node_type == NT_REFERENCE
+                                && local_inst->auto_local_string_append) [[unlikely]] {
+                            // the += paired with this load is made on the referenced lvalue, which it gets as the
+                            // reference itself (qore_rt_add_assign_local_any(), qore#7421)
+                            out = cached_val.refSelf();
+                            local_flags = IRCallFrame::LocalOwned;
+                            result_slot_owned = true;
+                            goto load_local_done;
+                        }
                         if (cache_has_value && cached_node_type == NT_REFERENCE) {
                             // a local holding a reference reads as the referenced lvalue: the slot holds the
                             // reference itself (see below), which is read every time, as the AST interpreter reads
@@ -15283,6 +15292,17 @@ dbg_dismissed_exit:
                             } else {
                                 locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
+                        }
+                        if (reference_value && local_inst->auto_local_string_append) [[unlikely]] {
+                            // the += paired with this load is made on the referenced lvalue, which it gets as the
+                            // reference itself (qore_rt_add_assign_local_any(), qore#7421)
+                            if (needs_deref && val.needsRef()) {
+                                val.discard(xsink);
+                            }
+                            out = QoreValue(reference_value->refRefSelf());
+                            local_flags = IRCallFrame::LocalOwned;
+                            result_slot_owned = true;
+                            goto load_local_done;
                         }
                         if (is_weak_ref_local && val.hasNode()) {
                             out = val;
@@ -17769,14 +17789,15 @@ load_local_done:
                         stored = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
                     }
                     // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a
-                    // weak or opaque store keeps the container that it designates; the container that the local
-                    // holds already, which a += changed in place (qore_add_assign_unique_container(), qore#7421), gets
-                    // no new holder from the store, which replaces the local's reference
+                    // weak or opaque store keeps the container that it designates; the store of the result of a += that
+                    // changed the container that the local holds in place gives it back to the local and no new
+                    // holder (qore_take_in_place_store(), qore#7421)
                     if (store_mode != AssignmentMode::Weak && store_mode != AssignmentMode::Opaque
                             && qore_weak_shared_local(stored)
                             // raw slot: the node that the local holds
-                            && locals_slot_cache.storage(local_inst->slot_id).getInternalNode()
-                                != stored.getInternalNode()) [[unlikely]] {
+                            && !(locals_slot_cache.storage(local_inst->slot_id).getInternalNode()
+                                    == stored.getInternalNode()
+                                && qore_take_in_place_store(stored))) [[unlikely]] {
                         stored = qore_weak_share_copy(stored, xsink);
                     }
                     if (xsink && *xsink) {
