@@ -158,6 +158,9 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         #! The record of the event threads that ended without being able to call this object (qore#7509)
         SseClientThreadEnd thread_end;
 
+        #! the test hook that the event thread calls before each iteration of its loop (see dbgSetLoopHook())
+        static *code<nothing()> dbg_loop_hook;
+
         #! Unique sse connection ID; -1 when not connected
         int cid = -1;
 
@@ -237,6 +240,31 @@ ServerSentEventClient sse(\event(), {
     constructor(hash<auto> opts) {
         constructorInit(opts);
     }
+
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that the event thread calls before each iteration of its loop; a debug build of the library only
+    /** For tests: the event thread holds its client only by a weak reference there, so a test can release the last
+        reference to the client meanwhile (qore#7509).  The hook is process-wide (it is called by the event threads of
+        every client in the process), so only trusted code with process control can set it, and the method exists only
+        in a debug build of the library
+
+        @param hook the hook, called in the event thread, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetLoopHook(*code<nothing()> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the loop hook of server-sent event clients");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            throw "PERMISSION-DENIED", "cannot set the loop hook of server-sent event clients from a context with "
+                "restricted process control";
+        }
+        dbg_loop_hook = hook;
+    }
+    #! @endcond
+%endif
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
@@ -1039,6 +1067,11 @@ sse.setEventQueue();
         # that lets the destructor fire between iterations.
         bool done = False;
         while (!done) {
+            # test hook (a debug build of the library only): the thread holds the client only by its weak reference
+            # here (see dbgSetLoopHook())
+            if (Option::HAVE_LIBRARY_DEBUGGING && dbg_loop_hook) {
+                call_function(dbg_loop_hook);
+            }
             if (!client) {
                 thread_end.threadEnded();
                 return;
