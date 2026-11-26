@@ -53,7 +53,8 @@ sub check(object o) {
     QoreDataField f("f", NOTHING, StringType);
     f.freeze();
     check(f);
-    # a type that is not shared is the tenant's to serialize
+    # a type that is not shared is not refused as a shared object, but the non-public state of a class of a module
+    # is not the tenant's to serialize (SERIALIZATION-ERROR, qore#7146)
     HashDataType own();
     own.addField(new QoreDataField("a", NOTHING, StringType));
     check(own);
