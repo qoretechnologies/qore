@@ -12,6 +12,13 @@
 
 %requires LazySharedProbe
 
+# the checks wait for the threads and see the state of the library with the debug hooks of debug builds (dbg_*()):
+# without them a check would fail in a thread of its own, and leave the others waiting for it
+if (!Option::HAVE_LIBRARY_DEBUGGING) {
+    throw "LAZY-SHARED-TEST-ERROR", "the library is not a debug build, which this script needs for its debug hooks "
+        "(dbg_trusted_build_hides_nothing(), dbg_call_with_sandboxed_caller_record(), dbg_lazy_shared_wait_waiting())";
+}
+
 # the code of a tenant (a sandboxed Program) and of a restricted Program
 const CallerCode = "
 %modern
@@ -272,7 +279,7 @@ printf("the values for an unrestricted caller: tenant: %s; restricted: %s\n",
     # a caller with a timeout gives up while the build runs
     printf("a caller with a timeout while another builds: %s\n", tenant.callFunction("get_key", "race", 1ms));
     LazySharedProbe::Probe::releaseRace();
-    done.waitForZero();
+    LazySharedProbe::Probe::waitForZero(done, "the first callers of the race build");
     printf("race: builds: %d, results: %y\n", LazySharedProbe::Probe::builds("race"), sort(results));
 }
 
@@ -316,7 +323,7 @@ printf("a builder that returns an object that the tenant created: %s, built: %y\
     # the builder of cycB waits for cycA, which the first thread builds
     bool waiting = call_function("dbg_lazy_shared_wait_waiting", t2, 30000);
     LazySharedProbe::Probe::releaseCycA();
-    done.waitForZero();
+    LazySharedProbe::Probe::waitForZero(done, "the builders of the cycle");
     printf("cycle: the second builder waited: %y, results: %y, new entries: %d\n", waiting, sort(results),
         LazySharedProbe::Probe::size() - before);
 }

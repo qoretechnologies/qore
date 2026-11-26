@@ -141,6 +141,7 @@ Program sub get_importing(Program from, string name) {
 }
 
 # another thread holds a reference to the deleted Program: it stays allocated, but no thread can enter it
+# debug-builtin-guard: imported-function-deleted-program.qtest passes "debug" only with library debugging
 if (ARGV[0] == "debug") {
     Program defining = get_defining();
     Program user = get_importing(defining, "user");

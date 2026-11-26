@@ -44,6 +44,7 @@ class PipeBodyHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         hash<auto> hi = cx."header-info";
+        # debug-builtin-guard: HTTP/3 only, whose case testPump() skips without library debugging
         if (hi.http3) {
             # the client's credit is withheld
             call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id);
@@ -100,6 +101,7 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         hs.setDefaultHandler("pipe", h);
         hs.waitForAsyncIo();
         on_exit hs.stop();
+        # debug-builtin-guard: HTTP/3 only, which skips above without library debugging
         if (http3) {
             on_exit call_function("dbg_quic_release_stream_data");
         }
@@ -188,6 +190,7 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
             "credit", used, WaitSecs));
 
         # the credit comes: the whole body arrives
+        # debug-builtin-guard: HTTP/3 only, which skips above without library debugging
         if (http3) {
             call_function("dbg_quic_release_stream_data");
             hash<auto> r = h3_result.get(120s);

@@ -62,6 +62,8 @@ class BoundBodyHandler inherits AbstractHttpRequestHandler {
             AutoLock al(m);
             sock = socks{cx.raw_path};
         }
+        # debug-builtin-guard: only testHeld() and testTailNotWritten() request these paths, which skip without library
+        # debugging
         switch (cx.raw_path) {
             case "/pumped-held":
             case "/buffered-held":

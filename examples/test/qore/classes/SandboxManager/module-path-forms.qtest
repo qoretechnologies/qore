@@ -349,6 +349,7 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
                 i.value[1]));
         }
         writeFile(dir + "/scripts/by-name.q", ByName);
+        # debug-builtin-guard: only checkDebug() runs the script, which skips without library debugging
         writeFile(dir + "/scripts/debug-checks.q", DebugChecks);
         foreach hash<auto> i in (PathPrograms.pairIterator()) {
             string code = replace(replace(ByPathRecorded, "@LOAD@", PathLoads{i.value[2]}), "@FILE@", i.value[0]);
@@ -433,6 +434,9 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
 
     #! checks the forms that the loaders normalize with the debug hook of a debug build of the library
     private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug hook exists in a debug build of the library only");
+        }
         string out = backquote(sprintf("%s %s %s 2>&1", env("@D@/mods"), shellQuote(qore_bin),
             shellQuote(dir + "/scripts/debug-checks.q")));
         if (out =~ /NO-FUNCTION: function 'dbg_module_path_trust' does not exist/) {
