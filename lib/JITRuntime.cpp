@@ -19482,7 +19482,11 @@ QORE_INTERN_NOINLINE QoreValue qore_rt_lvalue_compound_with_bind_retry(LVCompoun
         if (*xsink) {
             return QoreValue();
         }
-        return res.release();
+        // the value with its reference as the operation gave it: ValueHolder::release() would convert an opaque
+        // reference (the target of an opaque store) to an ordinary pointer, which the value of the operator is not
+        QoreValue rv;
+        rv.swap(*res);
+        return rv;
     } while (retry.again());
     return QoreValue();
 }
