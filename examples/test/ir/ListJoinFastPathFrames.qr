@@ -130,3 +130,20 @@ show("tmpjoin", auto sub () { return f_tmpjoin(l2); });
 show("tmpjoin-try", auto sub () { return f_tmpjoin_try(l2); });
 show("mapjoin-two", auto sub () { return f_mapjoin(l4); });
 show("mlmapjoin", auto sub () { return f_mlmapjoin(l2); });
+# values in inline short string storage, which a step of the fused join appends as they are (in a release build,
+# the values of a constant hash are inline in AOT code)
+const Short = {"a": "a", "bb": "bb"};
+string sub ss(string s) {
+    # a value in another encoding is given as it is: its lookup in the hash would convert it
+    if (s.encoding() != "UTF-8") {
+        return s;
+    }
+%ifdef QoreDebug
+    return exists Short{s} ? dbg_make_short_string(s) : s;
+%else
+    return Short{s} ?? s;
+%endif
+}
+string sub f_ssjoin(list<string> l) { return (map ss($1), l).join(","); }
+show("ssjoin", auto sub () { return f_ssjoin(("a", "bb", "日", "a")); });
+show("ssjoin-bad", auto sub () { return f_ssjoin(("a", "bb", badsj, "a")); });

@@ -106,7 +106,10 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
         # the first value's error is at byte offset 0, the second's at byte offset 1
         assertRegex("(?m)^mapjoin-two: \\{.*desc: \"illegal character sequence at byte offset 0 ", out);
         # the expression on three lines: the frame has the location of the call
-        assertRegex("(?m)^  0: \\{function: \"<list>::join\", line: 124, endline: 126,", out);
+        assertRegex("(?m)^mlmapjoin: \\{.*\n  0: \\{function: \"<list>::join\", line: 124, endline: 126,", out);
+        # values in inline short string storage
+        assertRegex("(?m)^ssjoin: !!binary " + make_base64_string("a,bb,日,a") + "$", out);
+        assertFrame(out, "ssjoin-bad", "ENCODING-CONVERSION-ERROR", "<list>::join", 147);
     }
 
     #! checks the exception of a case and the top frame of its call stack
