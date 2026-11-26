@@ -8458,14 +8458,9 @@ static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
 //! join(), of join(), so that an exception has the frame of the builtin that the code calls (qore#7731)
 static QoreValue qore_ir_eval_list_join(const QoreIRInstruction* inst, QoreIROpcode op, QoreValue separator,
         QoreValue list, ExceptionSink* xsink) {
-    const bool function = qore_ir_is_list_join_function_form(inst);
-    if (op == QoreIROpcode::ListStringJoin) {
-        return fromBits(function ? qore_fast_join_list(toBits(separator), toBits(list), xsink)
-            : qore_rt_list_string_join_checked(toBits(separator), toBits(list), xsink));
-    }
-    assert(op == QoreIROpcode::ListStringJoinIdentityMap);
-    return fromBits(function ? qore_fast_join_list_identity_map(toBits(separator), toBits(list), xsink)
-        : qore_rt_list_string_join_identity_map_checked(toBits(separator), toBits(list), xsink));
+    assert(op == QoreIROpcode::ListStringJoin || op == QoreIROpcode::ListStringJoinIdentityMap);
+    return fromBits(qore_rt_list_string_join_inst(inst, op == QoreIROpcode::ListStringJoinIdentityMap,
+        toBits(separator), toBits(list), xsink));
 }
 
 // Evaluate an invoke instruction by dispatching to the appropriate eval method.

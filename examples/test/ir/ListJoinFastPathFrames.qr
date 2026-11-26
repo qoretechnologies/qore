@@ -110,3 +110,23 @@ show("cl-mjoin", auto sub () { return cl_mjoin(l1, asep); });
 show("cl-fjoin", auto sub () { return cl_fjoin(l1, asep); });
 show("cl-mapjoin", auto sub () { return cl_mapjoin(l2); });
 show("cl-nested-mapjoin", auto sub () { return cl_nested_mapjoin(l2); });
+# a temporary source; two values that cannot be converted (the first raises); the map on a line of its own
+list<string> sub get_list(list<string> l) { return l; }
+string sub f_tmpjoin(list<string> l) { return (map tr($1), get_list(l)).join(","); }
+string sub f_tmpjoin_try(list<string> l) {
+    try {
+        return (map tr($1), get_list(l)).join(",");
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %s %d", ex.err, ex.callstack[0].function, ex.callstack[0].line);
+    }
+}
+string sub f_mlmapjoin(list<string> l) {
+    return (map tr($1),
+        l)
+        .join(",");
+}
+list<string> l4 = ("a", badsj, binary_to_string(<7882>, "SHIFT_JIS"), "d");
+show("tmpjoin", auto sub () { return f_tmpjoin(l2); });
+show("tmpjoin-try", auto sub () { return f_tmpjoin_try(l2); });
+show("mapjoin-two", auto sub () { return f_mapjoin(l4); });
+show("mlmapjoin", auto sub () { return f_mlmapjoin(l2); });

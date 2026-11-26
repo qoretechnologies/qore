@@ -96,6 +96,17 @@ class ListJoinFastPathFramesTest inherits QUnit::Test {
         assertFrame(out, "cl-fjoin", "ENCODING-CONVERSION-ERROR", "join", 58);
         assertFrame(out, "cl-mapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 59);
         assertFrame(out, "cl-nested-mapjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 61);
+        # a temporary source, also in a try block
+        assertFrame(out, "tmpjoin", "ENCODING-CONVERSION-ERROR", "<list>::join", 115);
+        assertRegex("(?m)^tmpjoin-try: !!binary " + make_base64_string("ENCODING-CONVERSION-ERROR <list>::join 118")
+            + "$", out);
+        # two values that cannot be converted: the map gives all four, and the join raises for the first
+        assertRegex("(?m)^tr \"UTF-8\"\ntr \"Shift_JIS\"\ntr \"Shift_JIS\"\ntr \"UTF-8\"\nmapjoin-two: ", out);
+        assertFrame(out, "mapjoin-two", "ENCODING-CONVERSION-ERROR", "<list>::join", 27);
+        # the first value's error is at byte offset 0, the second's at byte offset 1
+        assertRegex("(?m)^mapjoin-two: \\{.*desc: \"illegal character sequence at byte offset 0 ", out);
+        # the expression on three lines: the frame has the location of the call
+        assertRegex("(?m)^  0: \\{function: \"<list>::join\", line: 124, endline: 126,", out);
     }
 
     #! checks the exception of a case and the top frame of its call stack
