@@ -1561,6 +1561,10 @@ struct AOTCompiledFunc {
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Owned full function IR for source-stripped debugging and handler IR lifetime.
     std::unique_ptr<QoreIRFunction> debug_ir;
+    //! The IR that the native code was lowered from, when it is not debug_ir (see aotLowerUnrewrittenDebugIR())
+    /** The slot map refers to its instructions (QoreIRLValuePathInstruction slots), so it is kept with the function.
+    */
+    std::unique_ptr<QoreIRFunction> native_ir;
     //! the source file of the function's code (the file of its first location; see aotIRFunctionSourceFile())
     std::string source_file;
 };
@@ -3164,6 +3168,39 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     return 0;
+}
+
+//! Lowers the debug IR of a function whose IR the AOT-only interprocedural rewrites changed (#7696)
+/** The debug IR runs in the IR interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()), so
+    it must run as the source does and make every call that the source makes: the rewrites of the native code's IR
+    (fusions of calls with the expressions that consume their results, projections that replace calls by their known
+    results, specializations from the facts of the callees) are not serialized and are unknown to the interpreter.
+    The function is therefore lowered again from its parse tree, as for a generic specialized fast entry, without
+    them.
+
+    @return the unrewritten IR, or nullptr with \a error set if the lowering failed
+*/
+static std::unique_ptr<QoreIRFunction> aotLowerUnrewrittenDebugIR(const QoreIRFunction& native_ir,
+        UserVariantBase* uvb, const char* name, QoreProgram* pgm, const QoreFunction* source_qf,
+        const AOTConstantReverseMap* constant_reverse_map, std::string& error) {
+    QoreIRFunction* ir_func = nullptr;
+    if (tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, nullptr, nullptr, constant_reverse_map)
+            || !ir_func) {
+        delete ir_func;
+        if (error.empty()) {
+            error = "no IR";
+        }
+        return nullptr;
+    }
+#ifndef NDEBUG
+    // the slot map takes the local slots of both from their IR slot IDs (buildAOTSlotMap()), which the lowering
+    // assigns alike
+    for (const auto& [lv, slot_id] : ir_func->local_var_slots) {
+        auto it = native_ir.local_var_slots.find(lv);
+        assert(it == native_ir.local_var_slots.end() || it->second == slot_id);
+    }
+#endif
+    return std::unique_ptr<QoreIRFunction>(ir_func);
 }
 
 // AOTConstantReverseMap typedef is in QoreAOTBinary.h
@@ -20256,7 +20293,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         }
     }
 
-    auto refine_interprocedural = [&](QoreIRFunction& func) {
+    // returns true if a rewrite changed the function (see aotLowerUnrewrittenDebugIR())
+    auto refine_interprocedural = [&](QoreIRFunction& func) -> bool {
         size_t exact_boxed_call_facts = 0;
         if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
             QoreIRExactBoxedReturnQuery query =
@@ -20348,7 +20386,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         if (++call_count % 100 == 0
                                 && qore_check_cancel(nullptr,
                                     "AOT aggregate-return fact refinement")) {
-                            return;
+                            // the compilation is cancelled; the function may have been rewritten already
+                            return true;
                         }
                         if (!inst_ptr
                                 || inst_ptr->opcode
@@ -22015,8 +22054,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             string_consumers += qore_ir_fuse_string_producer_consumers(
                 func, string_producer_query);
         }
-        if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
-                || aggregate_projections
+        const bool rewritten = exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
+                || aggregate_projections || borrowed_aggregate_projections
                 || object_scalar_projections
                 || boxed_return_calls
                 || changed
@@ -22028,8 +22067,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 || boxed_specializations
                 || collection_specializations
                 || native_specializations || exception_edges_elided
-                || post_rewrite_rounds)
-                && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
+                || post_rewrite_rounds;
+        if (rewritten && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
                 " fresh-list-size-calls=%zu"
@@ -22064,6 +22103,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 native_specializations,
                 exception_edges_elided);
         }
+        return rewritten;
     };
 
     // Track compiled variant keys to skip duplicates from iterator yielding
@@ -22224,17 +22264,31 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 AOTFunctionOutliner outline_probe;
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
-                if (!will_outline) {
-                    refine_interprocedural(*ir_func);
+                // the debug IR, when the rewrites of the native code's IR changed it (#7696)
+                std::unique_ptr<QoreIRFunction> debug_ir_func;
+                if (!will_outline && refine_interprocedural(*ir_func)) {
+                    std::string debug_error;
+                    debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, function_name.c_str(), pgm, func,
+                        const_reverse_map, debug_error);
+                    if (!debug_ir_func) {
+                        ++failed_count;
+                        setAOTCompileFatal(fatal_error, "function", variant_key, "debug IR lowering", debug_error);
+                        delete ir_func;
+                        return;
+                    }
                 }
 
                 // Build slot map for AOT pointer indirection
                 // (computeIROnlyLocals already called inside tryLowerFunction)
                 // NOTE: the slot map is built from the un-outlined function so
                 // slot id assignment is identical in metadata-only compiles
-                // (function-body outlining only moves instructions).
+                // (function-body outlining only moves instructions).  The slots
+                // of the debug IR follow those of the native code's IR.
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
+                if (debug_ir_func) {
+                    buildAOTSlotMap(*debug_ir_func, slots);
+                }
 
                 // Automatic function-body outlining for pathological
                 // functions (see design/aot-function-outlining.md).  The
@@ -22597,7 +22651,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
-                    // Extract slot identities for source-stripped mode
+                    // Extract slot identities for source-stripped mode; a separate
+                    // debug IR first adds the locals of its handlers to the slot map
+                    if (debug_ir_func) {
+                        AOTSlotIdentities debug_slot_ids;
+                        extractAOTSlotIdentities(*debug_ir_func, slots, uvb, debug_slot_ids,
+                            const_reverse_map, pgm);
+                    }
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                         const_reverse_map, pgm);
                     // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
@@ -22607,6 +22667,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                    if (debug_ir_func) {
+                        cf.feature_flags |= scanIRFeatureFlags(*debug_ir_func);
+                        cf.native_ir.reset(ir_func);
+                        ir_func = debug_ir_func.release();
+                    }
                     // Keep the serialized debug IR source-visible.  The LLVM
                     // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
                     // to avoid dynamic-linker interposition; stack traces and
@@ -22741,16 +22806,31 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     AOTFunctionOutliner outline_probe;
                     bool will_outline = outline_probe.run(ir_func, false);
                     outline_probe.undo();
-                    if (!will_outline) {
-                        refine_interprocedural(*ir_func);
+                    // the debug IR, when the rewrites of the native code's IR changed it (#7696)
+                    std::unique_ptr<QoreIRFunction> debug_ir_func;
+                    if (!will_outline && refine_interprocedural(*ir_func)) {
+                        std::string debug_error;
+                        debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, method_name.c_str(), pgm, nullptr,
+                            const_reverse_map, debug_error);
+                        if (!debug_ir_func) {
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "method", variant_key, "debug IR lowering",
+                                debug_error);
+                            delete ir_func;
+                            return;
+                        }
                     }
 
                     // Build slot map for AOT pointer indirection
                     // (computeIROnlyLocals already called inside tryLowerFunction)
                     // NOTE: built from the un-outlined method so slot id
-                    // assignment matches metadata-only compiles.
+                    // assignment matches metadata-only compiles.  The slots of
+                    // the debug IR follow those of the native code's IR.
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
+                    if (debug_ir_func) {
+                        buildAOTSlotMap(*debug_ir_func, slots);
+                    }
 
                     // Automatic function-body outlining for pathological
                     // methods (see design/aot-function-outlining.md); the
@@ -23085,7 +23165,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
-                        // Extract slot identities for source-stripped mode
+                        // Extract slot identities for source-stripped mode; a separate
+                        // debug IR first adds the locals of its handlers to the slot map
+                        if (debug_ir_func) {
+                            AOTSlotIdentities debug_slot_ids;
+                            extractAOTSlotIdentities(*debug_ir_func, slots, uvb, debug_slot_ids,
+                                const_reverse_map, pgm);
+                        }
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                             const_reverse_map, pgm);
                         // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
@@ -23095,6 +23181,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.source_file = aotIRFunctionSourceFile(*ir_func);
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                        if (debug_ir_func) {
+                            cf.feature_flags |= scanIRFeatureFlags(*debug_ir_func);
+                            cf.native_ir.reset(ir_func);
+                            ir_func = debug_ir_func.release();
+                        }
                         // Keep the serialized debug IR source-visible.  The LLVM
                         // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
                         // to avoid dynamic-linker interposition; stack traces and

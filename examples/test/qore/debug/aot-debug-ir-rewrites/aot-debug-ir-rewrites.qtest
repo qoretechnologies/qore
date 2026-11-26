@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - AOT code generation and the serialized debug IR of compiled code under a debugger
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotDebugIrRewritesTest
+
+#! the debug IR of AOT code runs as the source, without the rewrites of the native code
+/** AOT code compiled at -O3 serialized the IR that its native code was lowered from as the debug IR, which the IR
+    interpreter runs while a debugger is attached: the AOT-only rewrites of that IR (fused consumers of call results,
+    projections that replace calls) are not serialized, so the interpreter gave other results and the debugger missed
+    calls (qore#7696).  The worker calls its functions through the runtime with a debugger attached; every execution
+    mode and the programs compiled at -O0 and -O3 must print what the AST interpreter prints.
+*/
+class AotDebugIrRewritesTest inherits QUnit::Test {
+    public {
+        const Worker = "debug-ir-rewrites";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AotDebugIrRewrites", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("debug IR", \debugIrTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    debugIrTest() {
+        string worker = get_script_dir() + "/" + Worker + ".qr";
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast "
+            + quote(worker), ExecModeHarness::NativeCheck::None);
+        # the debugger gets the events of the producers called by the debug IR
+        assertRegex("debug IR entry counts: \\{.*concatPair: [1-9]", ast, "the AST interpreter reports the calls");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        TmpDir tmp("qore-aot-debug-ir-rewrites-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + Worker + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), opt + ": qcc produced the executable");
+            assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt);
+        }
+    }
+}
