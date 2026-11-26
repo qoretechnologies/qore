@@ -743,7 +743,9 @@ public:
         whose search gives the bucket of the key by its keyed hash (qore_hash_member_map::findSlow(), qore#7557)
     */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key) const {
-        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : (hm.empty() ? nullptr : hm.findSlow(key));
+        // the miss path is only the call of findSlow(), which returns nullptr for a map without members, for the
+        // same reason as in findMember(const char*, size_t)
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : hm.findSlow(key);
     }
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
