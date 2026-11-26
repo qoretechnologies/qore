@@ -11819,7 +11819,8 @@ enum Http1ResponseSend : int {
     timeout.  So is its maximum size of a chunked body (getMaxChunkedBodySize(), the connection's until it is set),
     which applies to its read of the request's chunked body; restricted code can set it only to a limit that the
     server set for the request (the listener's limit of a body read as a stream, or the connection's), so that it
-    cannot choose a limit of its own (qore#7567).
+    cannot choose a limit of its own, and a limit that it set applies to the reads that give the body in parts only:
+    the reads that return the whole body keep at most the connection's limit (qore#7567).
 
     Its readHTTPHeader() and readHTTPHeaderString(), which would read the next request on the connection, raise an
     exception, as do shutdown(), shutdownWrite(), shutdownSSL() and close() (a handler closes the connection after
@@ -11865,6 +11866,9 @@ class Http1HandlerSocket inherits Qore::Socket {
         int recv_to = -1;
         #! the object's own maximum size of a chunked body, once it was set; the connection's until then
         *int max_chunked;
+        #! True if restricted code set the object's own maximum size of a chunked body: then it applies to the reads
+        #! that give the body in parts only
+        bool max_chunked_restricted;
         #! the limit of the body of the request that its handler reads as a stream (the listener's), which any code
         #! can set as the object's maximum size of a chunked body
         int stream_max_body;
@@ -12068,12 +12072,14 @@ class Http1HandlerSocket inherits Qore::Socket {
         refuse("setUserTimeout");
     }
 
-    #! Raises an exception
     #! Sets the object's own maximum size of a chunked body, which applies to its read of the request's chunked body
     /** Restricted code can set only the limits that the server set for the request: that of a body that the handler
         reads as a stream (the listener's), which the code of the server's modules that reads the body of a stream
-        request sets, and the connection's; other code can set any limit (qore#7567).  The connection's limit does
-        not change
+        request sets, and the connection's; other code can set any limit (qore#7567).  A limit that restricted code
+        set applies to the reads that give the body in parts (with a callback or to an output stream) only: the
+        reads that return the whole body (readHTTPChunkedBody(), readHTTPChunkedBodyBinary()), which hold it in
+        memory, keep at most the connection's limit, so that restricted code cannot lift the server's bound on the
+        memory of a body.  The connection's limit does not change
 
         @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
         @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), and the limit is neither of the
@@ -12091,6 +12097,7 @@ class Http1HandlerSocket inherits Qore::Socket {
         # the value is checked as the socket checks it
         Socket::setMaxChunkedBodySize(max_body_size);
         max_chunked = max_body_size;
+        max_chunked_restricted = SandboxManager::isRestricted();
     }
 
     # the other methods of Socket, of the connection's other uses (TLS settings, HTTP/2 and HTTP/3 streams, poll
@@ -12774,7 +12781,13 @@ class Http1HandlerSocket inherits Qore::Socket {
         if (!real.pendingHttpChunkedBody() && !rh.h1BodyLeft()) {
             return False;
         }
-        return real.isDataAvailable(timeout_ms ? recvTimeout(timeout_ms) : 0);
+        if (!real.isDataAvailable(timeout_ms ? recvTimeout(timeout_ms) : 0)) {
+            return False;
+        }
+        # a read of another thread may have taken the rest of the body while this one waited: the data that is then
+        # available is the next request's (a chunked read takes the body before it reads it, and a read of the rest of
+        # a body with a Content-Length takes its bytes before it reads them)
+        return !rh.h1ChunkedBodyTaken() && (real.pendingHttpChunkedBody() || rh.h1BodyLeft() > 0);
     }
 
     #! Returns @ref True "True" if the data sent on the connection was written
@@ -13139,7 +13152,7 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
-        *int conn_max = applyChunkedLimit();
+        *int conn_max = applyChunkedLimit(True);
         on_exit if (exists conn_max) {
             real.setMaxChunkedBodySize(conn_max);
         }
@@ -13157,7 +13170,7 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
-        *int conn_max = applyChunkedLimit();
+        *int conn_max = applyChunkedLimit(True);
         on_exit if (exists conn_max) {
             real.setMaxChunkedBodySize(conn_max);
         }
@@ -13212,15 +13225,23 @@ class Http1HandlerSocket inherits Qore::Socket {
     /** There is one read of the chunked body of a request (h1EnterChunkedRead()), and the server uses the connection's
         socket only after it ended
     */
-    private:internal *int applyChunkedLimit() {
+    /** @param whole True for a read that returns the whole body, which holds it in memory: a limit that restricted
+        code set is then at most the connection's
+    */
+    private:internal *int applyChunkedLimit(*bool whole) {
         if (!exists max_chunked) {
             return;
         }
         int conn_max = real.getMaxChunkedBodySize();
-        if (conn_max == max_chunked) {
+        int limit = max_chunked;
+        if (whole && max_chunked_restricted && conn_max && (!limit || limit > conn_max)) {
+            # 0 is no limit
+            limit = conn_max;
+        }
+        if (conn_max == limit) {
             return;
         }
-        real.setMaxChunkedBodySize(max_chunked);
+        real.setMaxChunkedBodySize(limit);
         return conn_max;
     }
 

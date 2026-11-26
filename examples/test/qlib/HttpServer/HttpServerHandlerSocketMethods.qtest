@@ -63,6 +63,24 @@ class TenantLimitHandler inherits AbstractHttpRequestHandler {
 AbstractHttpRequestHandler sub get_handler(int listener_limit) {
     return new TenantLimitHandler(listener_limit);
 }
+
+# sets the listener's limit of a body read as a stream (0: none) for a read of the whole chunked body
+class TenantWholeReadHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string set = tenant_try(sub () { s.setMaxChunkedBodySize(0); });
+        string read = tenant_try(sub () { s.readHTTPChunkedBody(20s); });
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"body\": sprintf(\"set=%s\\nread=%s\", set, read),
+            \"close\": True,
+        };
+    }
+}
+
+AbstractHttpRequestHandler sub get_whole_read_handler() {
+    return new TenantWholeReadHandler();
+}
 ";
 
 #! Returns "ok" or the error of the call
@@ -303,6 +321,8 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
         addTestCase("the socket ends with its request", \staleTest());
         addTestCase("the socket's own maximum size of a chunked body", \chunkedLimitTest());
         addTestCase("restricted code sets only the server's limits of a chunked body", \tenantLimitTest());
+        addTestCase("a limit that restricted code set does not lift the bound of a read of the whole body",
+            \tenantWholeReadTest());
         set_return_value(main());
         delete server;
     }
@@ -440,16 +460,16 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
             hash<auto> r = parse(readResponse(c));
             assertEq(string(MaxBodySize), r.before, "the connection's limit until the socket's own is set");
             assertEq("3", r.own, "the socket's own limit");
-            assertNeq("ok", r.read, "a chunked body larger than the socket's own limit is not read");
+            assertEq("HTTP-BODY-TOO-LARGE", r.read, "a chunked body larger than the socket's own limit is not read");
         }
         Socket c = connect();
         on_exit c.close();
         c.send("POST /limit-ok HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
             "4\r\nbody\r\n0\r\n\r\n"
             "GET /conn-limit HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        assertEq("body", parse(readResponse(c)).body);
-        assertEq(string(MaxBodySize), parse(readResponse(c)).limit,
-            "the connection's limit did not change for the next request");
+        assertEq("body", parse(readResponse(c)).body, "a chunked body within the socket's own limit is read");
+        assertEq(string(MaxBodySize), parse(readResponse(c)).limit, "the socket of the next request has the "
+            "connection's limit");
     }
 
     tenantLimitTest() {
@@ -462,6 +482,40 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
         assertEq(string(MaxBodySize), r.max_own, "the limit did not change");
         assertEq("ok", r.listener, "restricted code can set the listener's limit");
         assertEq(string(MaxBodySize), r.max);
+    }
+
+    tenantWholeReadTest() {
+        # a server without a limit of the request body: the listener's limit of a body read as a stream is 0 (none),
+        # and the server reads at most DefaultMaxRequestBodySize into memory
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setDefaultHandler("tenant", tenant.callFunction("get_whole_read_handler"));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("POST /whole HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n");
+        # chunks of 1 MiB: one more than the server reads into memory, then the end of the body
+        binary chunk = binary("100000\r\n" + strmul("x", 1024 * 1024) + "\r\n");
+        int chunks = DefaultMaxRequestBodySize / (1024 * 1024) + 1;
+        bool sent_all = True;
+        for (int i = 0; i < chunks; ++i) {
+            try {
+                c.send(chunk, HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                # the server stopped reading the body and closed the connection
+                sent_all = False;
+                break;
+            }
+        }
+        if (sent_all) {
+            c.send("0\r\n\r\n", HangGuard);
+        }
+        hash<auto> r = parse(readResponse(c));
+        assertEq("ok", r.set, "restricted code can set the listener's limit");
+        assertEq("HTTP-BODY-TOO-LARGE", r.read, "the whole body is read with at most the connection's limit");
     }
 
     #! Returns a Program whose code a sandbox restricts
