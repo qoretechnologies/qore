@@ -800,8 +800,9 @@ AOT executables and `qcc` modules loaded by another process, with any TLS model,
 the thread's word stays its own for the invocation: `thread_list.entry` is never freed, the TID of a thread does not
 change while it runs Qore code (it is released after the thread has left it; a child created with `fork()` keeps the
 TID of the thread that forked; deregistering a foreign thread with Qore code on its stack and registering it again
-is not supported), and a native invocation does not move to another thread.  Without thread data (objects in the static namespace destroyed after it) or with an invalid TID,
-`qore_rt_check_cancel_poll()` returns libqore's own word that is never 0, so every poll makes the full check, as before.
+is not supported), and a native invocation does not move to another thread.  Without thread data (objects in the
+static namespace destroyed after it) or with an invalid TID, `qore_rt_check_cancel_poll()` returns libqore's own word
+that is never 0, so every poll makes the full check, as before.
 
 **Memory ordering.**  Relaxed loads give the same points of cancellation as the seq_cst loads of `qore_check_cancel()`:
 - the decision is made by the full check, whose loads are unchanged; the poll only selects when it is made;

@@ -202,6 +202,76 @@ sub cleared(Progress p) {
     }
 }
 
+#! a class whose destructor makes the cancellation pending and runs a loop, which completes: the cancellation of a
+#! trusted destructor is deferred until it returns
+class Releaser {
+    private {
+        Progress p;
+    }
+
+    constructor(Progress p) {
+        self.p = p;
+    }
+
+    destructor() {
+        cancel_me();
+        for (int n = 0; n < 20; ++n) {
+            ++p.j;
+        }
+    }
+}
+
+#! a destructor that makes the cancellation pending in iteration 2: the loop of the destructor completes, and the
+#! next check of the caller's loop raises it
+sub dtor(Progress p) {
+    while (p.i < 5) {
+        if (++p.i == 2) {
+            Releaser r(p);
+            delete r;
+        }
+    }
+}
+
+#! the sandboxed Program whose request is out of scope for a thread that never entered it
+our Program Sandboxed;
+{
+    SandboxManager sm();
+    Sandboxed = new Program(PO_NEW_STYLE);
+    Sandboxed.setSandboxManager(sm);
+    Sandboxed.parse("%modern\nbool sub do_cancel(int tid) { return cancel_thread(tid, \"out of scope\"); }\n",
+        "poll-points-sandboxed");
+}
+
+#! makes a request of the sandboxed Program pending for the current thread, which never entered it: the next check
+#! drops it
+sub cancel_me_out_of_scope() {
+    Counter go(1);
+    Counter cancelled(1);
+    int tid = gettid();
+    background sub () {
+        go.waitForZero();
+        Sandboxed.callFunction("do_cancel", tid);
+        cancelled.dec();
+    }();
+    defer_thread_cancel(sub () {
+        go.dec();
+        cancelled.waitForZero();
+    });
+}
+
+#! an out-of-scope request made pending in iteration 3 is dropped by the next check, and the loop continues with
+#! inline polls; a request in scope in iteration 7 is seen by the next check
+sub dropped(Progress p) {
+    while (p.i < 10) {
+        ++p.i;
+        if (p.i == 3) {
+            cancel_me_out_of_scope();
+        } else if (p.i == 7) {
+            cancel_me();
+        }
+    }
+}
+
 #! the cases: name -> code
 const Cases = {
     "while-0": sub (Progress p) { while_at(p, 0); },
@@ -224,12 +294,14 @@ const Cases = {
     "on-exit": \on_exit_loop(),
     "deferred": \deferred(),
     "cleared": \cleared(),
+    "dtor": \dtor(),
+    "dropped": \dropped(),
 };
 
 #! the order of the cases
 const Order = ("while-0", "while-1", "while-5", "do-while-0", "do-while-1", "do-while-5", "for-0", "for-1", "for-5",
     "foreach-0", "foreach-1", "foreach-5", "nested", "nested-outer", "try", "call", "callee", "on-exit", "deferred",
-    "cleared");
+    "cleared", "dtor", "dropped");
 
 #! runs a case in a thread of its own and returns its result
 string sub run(string name) {
