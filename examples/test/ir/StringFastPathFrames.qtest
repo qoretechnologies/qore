@@ -72,7 +72,7 @@ class StringFastPathFramesTest inherits QUnit::Test {
         assertFrame(out, "pipe", "INVALID-ENCODING", "<string>::lwr", 37);
         assertFrame(out, "lwr-lt", "INVALID-ENCODING", "<string>::lwr", 41);
         # negative: the concatenation is an operator, whose exception has no frame of its own
-        assertFrame(out, "cat-substr", "ENCODING-CONVERSION-ERROR", "f_cat_substr", 80, "user");
+        assertFrame(out, "cat-substr", "ENCODING-CONVERSION-ERROR", "f_cat_substr", 82, "user");
         # a builtin that does not raise for this text
         assertRegex("(?m)^strlen: 5$", out);
     }

@@ -42,7 +42,9 @@ bool sub f_lwr_lt(string s, string p) { return s.lwr() < p; }
 
 sub show(string name, code c) {
     try {
-        printf("%s: %y\n", name, c());
+        auto value = c();
+        # a string result is printed as its bytes: it can be text that is not valid in its encoding
+        printf("%s: %y\n", name, value.typeCode() == NT_STRING ? binary(value) : value);
     } catch (hash<ExceptionInfo> ex) {
         # the exception without its call stack, then every frame of the call stack; an AOT executable records its
         # sources by their absolute paths and no columns, and the statement IDs are those of the AST interpreter's
