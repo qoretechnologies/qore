@@ -154,11 +154,10 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
         return false;
     }
     switch (intrinsic) {
-        case QoreIRIntrinsic::StringLength: {
-            QoreStringValueHelper str(base);
-            res = QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
+        case QoreIRIntrinsic::StringLength:
+            // an exception has the frame of <string>::length() (qore#7711)
+            res = fromBits(qore_rt_pseudo_string_length_xsink_noguard(toBits(base), xsink));
             return true;
-        }
         case QoreIRIntrinsic::StringLower:
             res = fromBits(qore_rt_pseudo_string_lwr_noguard(toBits(base), xsink));
             return true;

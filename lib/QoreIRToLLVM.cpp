@@ -384,7 +384,8 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntri
     }
     switch (intrinsic) {
         case QoreIRIntrinsic::StringLength:
-            return {"qore_fast_length", false, true};
+            // the pseudo-method, whose exception has the frame of <string>::length() (qore#7711)
+            return {"qore_rt_pseudo_string_length_xsink_noguard", false, true};
         case QoreIRIntrinsic::StringLower:
             return {"qore_rt_pseudo_string_lwr_noguard", true, true};
         case QoreIRIntrinsic::StringUpper:
@@ -1565,11 +1566,12 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
             && facts->assigned_state == QoreIRAssignedState::Assigned
             && facts->representation == QoreIRValueRepresentation::Boxed
             && facts->never_nothing;
+        // the functions, whose exceptions have the frames of tolower() and toupper() (qore#7711)
         if (exact_assigned_string && !strcmp(name, "tolower")) {
-            return "qore_rt_pseudo_string_lwr_noguard";
+            return "qore_fast_tolower_string";
         }
         if (exact_assigned_string && !strcmp(name, "toupper")) {
-            return "qore_rt_pseudo_string_upr_noguard";
+            return "qore_fast_toupper_string";
         }
     }
     return nullptr;
