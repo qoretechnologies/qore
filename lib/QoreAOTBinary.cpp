@@ -17208,9 +17208,6 @@ bool QoreAOTBinaryDeserializer::resolveTypes(std::string& error) {
     if (!resolveClassBases(error)) {
         return false;
     }
-    if (!checkClassInjectionCycles(error)) {
-        return false;
-    }
     // Resolve typedefs first (multi-pass for forward refs), then enum base types and hashdecl members
     // Order matters: enum base types and hashdecl members may reference typedefs
     if (!resolveTypedefs(error)) {
@@ -17275,8 +17272,11 @@ bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhas
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
+    // the class injections are checked once the base classes are attached (a batch of blobs checks them once those
+    // of all of its blobs are; see QoreAOTBinaryMultiDeserializer)
     if (!registerConstantShellsPhase(error)
             || !resolveTypes(error)
+            || !checkClassInjectionCycles(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
@@ -18492,11 +18492,11 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::checkClassInjectionCycles(std::string& error) {
+    // every class that leads back to itself releases its reference before the image is refused, so that none of
+    // them keeps its classes alive for ever (qore#7664); only the injected classes are walked, so there is no
+    // cancellation point: a cancelled check would leave the references of the classes not checked yet
+    bool ok = true;
     for (uint32_t i = 0; i < class_list.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class injection check")) {
-            error = "AOT class injection check cancelled";
-            return false;
-        }
         if (!class_list[i] || preexisting_classes.count(i)) {
             continue;
         }
@@ -18505,15 +18505,15 @@ bool QoreAOTBinaryDeserializer::checkClassInjectionCycles(std::string& error) {
         if (!ipriv || !qoreAOTClassReaches(ipriv, cpriv)) {
             continue;
         }
-        error = "AOT class '" + std::string(class_list[i]->getName()) + "' cannot be injected in place of '"
-            + ipriv->path + "': the injection leads back to the class itself";
-        // the reference is released here, as it would keep the class and the class that it is injected in place of
-        // alive for ever (qore#7664)
+        if (ok) {
+            error = "AOT class '" + std::string(class_list[i]->getName()) + "' cannot be injected in place of '"
+                + ipriv->path + "': the injection leads back to the class itself";
+            ok = false;
+        }
         cpriv->injectedClass = nullptr;
         const_cast<qore_class_private*>(ipriv)->deref(false, false, false);
-        return false;
     }
-    return true;
+    return ok;
 }
 
 bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {

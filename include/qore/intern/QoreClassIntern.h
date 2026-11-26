@@ -3649,9 +3649,13 @@ public:
     //! The class that this class is injected in place of (Program::importClass() with injection), referenced by this
     //! class (qore#7664)
     /** The Program that owns that class can be deleted before this class, whose type checks still compare it with
-        that class; the reference is released when this class is destroyed (~qore_class_private()).  Set when the class
-        is made (the import constructor, or the AOT loader); never this class, nor a class that reaches this class
-        through the classes that it references (its injected class, base classes or import source)
+        that class; the reference is released when this class is destroyed (~qore_class_private()).  While it is held,
+        the deletion of that Program keeps that class as a survivor, with the declarations that it names, as for any
+        declaration referenced from outside the Program (QoreTypeOwnerBatch).  Set when the class is made: by the
+        import constructor, whose class is new, so that no class reaches it; or by the AOT loader, which refuses a
+        class that a class reaches through the classes that it references (the classes that they are injected in place
+        of, their base classes and import sources) once the base classes of all the blobs loaded together are attached
+        (QoreAOTBinaryDeserializer::checkClassInjectionCycles())
     */
     const qore_class_private* injectedClass = nullptr;
 
@@ -7011,7 +7015,8 @@ protected:
         if (import_source) {
             refs.push_back(&import_source->type_owner);
         }
-        // the class that this class is injected in place of (qore#7664)
+        // the class that this class is injected in place of, so that the scan of the survivors that only each other
+        // keep counts the reference (qore#7664)
         if (injectedClass) {
             refs.push_back(&const_cast<qore_class_private*>(injectedClass)->type_owner);
         }

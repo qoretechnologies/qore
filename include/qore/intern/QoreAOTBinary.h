@@ -4289,8 +4289,6 @@ private:
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
-    //! refuses a class injected in place of a class that reaches it through its base classes (qore#7664)
-    bool checkClassInjectionCycles(std::string& error);
     bool resolveInstanceMembers(std::string& error);
     bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
@@ -4417,6 +4415,15 @@ public:
 
     //! Resolve bases, types, and hashdecl defaults after constant-shell registration.
     bool resolveTypes(std::string& error);
+
+    //! Refuses a class injected in place of a class that reaches it through the classes that it references (the
+    //! classes that they are injected in place of, their base classes and import sources; qore#7664)
+    /** Run after the base classes of every class that can be reached are attached: after resolveTypes() for a single
+        blob, and after the type resolution of all the sessions of a batch, as a class of one blob can reach the
+        class that it is injected in place of through the classes of another one.  Every class that leads back to
+        itself releases its reference before the image is refused, so that none of them keeps its classes alive.
+    */
+    bool checkClassInjectionCycles(std::string& error);
 
     //! Register constant names before resolving types and hashdecl defaults.
     /** Run across all sessions before resolveTypes(): defaults can refer to
@@ -4823,6 +4830,23 @@ public:
     }
 
 private:
+    //! Checks the class injections of every session once the base classes of all of them are attached (qore#7664)
+    /** A class of one blob can reach the class that it is injected in place of through the classes of another one,
+        whose base classes are attached by its own session's type resolution.  Every session is checked, also after
+        one has failed, so that each releases the references of its refused classes.
+    */
+    bool checkClassInjectionCycles(std::string& error) {
+        bool ok = true;
+        for (auto& sess : sessions) {
+            std::string sess_error;
+            if (!sess->checkClassInjectionCycles(sess_error) && ok) {
+                error = std::move(sess_error);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
     bool addBlobIntern(QoreAOTBinaryReader&& reader, std::string& error, uint64_t t0) {
         // Apply this blob's %prepend-module-path / %append-module-path lists to
         // the target Program BEFORE shell deserialization runs — so any module
@@ -4941,6 +4965,7 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveTypes(error);
                     })) return false;
+            if (!checkClassInjectionCycles(error)) return false;
             if (!runSessionPhase("AOT namespace constant resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveNamespaceConstantsPhase(error);
@@ -5115,6 +5140,9 @@ public:
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.resolveTypes(error);
                 })) {
+            return false;
+        }
+        if (!checkClassInjectionCycles(error)) {
             return false;
         }
         if (!runSessionPhase("AOT namespace constant resolution",
