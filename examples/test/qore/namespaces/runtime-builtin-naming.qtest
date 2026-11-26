@@ -1,0 +1,359 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeBuiltinNamingTest
+
+#! Another Program that names a declaration that a binary module added to a Program at run time keeps it
+/** A builtin declaration that a binary module adds to a namespace that a Program owns at run time is owned by that
+    Program and freed with it (qore#7540, qore#7649).  Another Program can come to name it: through the import copy of
+    the class, the copy of an enum in a child Program, a builtin variant of a namespace that no Program owns, a global
+    variable imported from the Program, and builtin classes and hashdecls of its own whose member, static variable and
+    signature types name it; the naming declaration or copy keeps it, so that the other Program checks values against
+    valid types after the Program is deleted (qore#7680).  A declaration added to a namespace that no Program owns does
+    not keep it (it would keep it until library cleanup), and two Programs whose declarations name each other keep
+    each other's until library cleanup.  The declarations are added with debug functions (dbg_add_runtime_namespace(),
+    dbg_add_runtime_naming()), so the test needs a library with debugging; each case runs in each execution mode, which
+    the Programs that it creates set (a Program created at run time does not take the mode of the process).
+*/
+public class RuntimeBuiltinNamingTest inherits QUnit::Test {
+    public {
+        const AddSource = "sub naming(Program src, int kind) { dbg_add_runtime_naming(src, kind); }
+auto sub naming_rv(Program src, int kind) { return dbg_add_runtime_naming(src, kind); }
+sub impc(Program q, string c) { q.importClass(c); }
+sub impv(Program q, string v) { q.importGlobalVariable(v); }
+object sub child(int po, string src, ExecMode mode) { Program c(PO_MODERN | po); c.setExecMode(mode);
+    c.parse(src, 'child'); return c; }
+auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
+";
+
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+    }
+
+    private {
+        #! the execution mode of the Programs that the case creates
+        ExecMode mode = EM_AST;
+        #! the number of calls of callCode(), which names the functions that it adds
+        int calls;
+    }
+
+    constructor() : QUnit::Test("runtime builtin naming", "1.0") {
+        addTestCase("the import copy of a class keeps its source", \importClassTest());
+        addTestCase("the import copy of a class takes its references at once", \importRefsTest());
+        addTestCase("a child's copy of an enum keeps its original", \enumCopyTest());
+        addTestCase("builtin declarations of another Program keep what they name", \memberSignatureTest());
+        addTestCase("builtin declarations added one at a time keep what they name", \oneAtATimeTest());
+        addTestCase("an imported global variable keeps the declaration of its type", \globalVarImportTest());
+        addTestCase("typedefs, constants and global variables of a child without the classes", \childEntriesTest());
+        addTestCase("an instance of a generic hashdecl takes its references at once", \genericInstanceTest());
+        addTestCase("a marking event whose references cannot be taken", \markingFailureTest());
+        addTestCase("repeated Programs naming each other's declarations", \flatTest());
+        addTestCase("a declaration of the static system namespace keeps nothing", \staticNamespaceTest());
+        addTestCase("two Programs whose declarations name each other", \cycleTest());
+        # last: the variant of the static system namespace keeps the declaration until library cleanup
+        addTestCase("a variant of a namespace that no Program owns keeps what it names", \sharedVariantTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_naming")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns a Program in the current execution mode, not parsed yet: a Program in another mode than AST is parsed
+    #! once, so the declarations that a case adds to it are added before
+    private Program newp() {
+        Program p(PO_MODERN);
+        p.setExecMode(mode);
+        return p;
+    }
+
+    #! returns a Program to which the namespace DbgRtNs was added with the variant given, parsed with \a extra
+    private Program getSource(int variant = 1, string extra = "") {
+        Program p = newp();
+        dbg_add_runtime_namespace("DbgRtNs", variant, p);
+        p.parse(AddSource + extra, "src");
+        return p;
+    }
+
+    #! returns the number of declarations of Programs that are not freed, after freeing the retired ones
+    private static int liveDecls() {
+        call_function("dbg_type_retirement_free");
+        return call_function("dbg_live_type_declarations");
+    }
+
+    #! runs a case in each execution mode and checks that the declarations that it made are freed when it is done
+    private checkFreed(code scenario, string label, int kept = 0) {
+        foreach hash<auto> i in (ExecModes.pairIterator()) {
+            mode = i.value;
+            int before = liveDecls();
+            int cycles = call_function("dbg_cross_program_cycles");
+            scenario();
+            assertEq(before + kept, liveDecls(), sprintf("%s (%s): the declarations are freed", label, i.key));
+            assertEq(cycles, call_function("dbg_cross_program_cycles"), sprintf("%s (%s): no cycle", label, i.key));
+            # only one variant is added to the static system namespace's function
+            if (kept) {
+                break;
+            }
+        }
+    }
+
+    #! returns the code of two functions that call \a expr with a wrong argument and with NOTHING, and their number
+    private hash<auto> callCode(string expr) {
+        int n = ++calls;
+        return {
+            "n": n,
+            "expr": expr,
+            "code": sprintf("int sub call_wrong_%d() { auto v = \"x\"; return %s(v); }
+int sub call_nothing_%d() { auto v; return %s(v); }
+", n, expr, n, expr),
+        };
+    }
+
+    #! checks that the call with a wrong argument raises an error naming the type and that the one with NOTHING succeeds
+    private checkCall(Program q, hash<auto> c, string type_name) {
+        assertThrows("RUNTIME-OVERLOAD-ERROR", type_name, \q.callFunction(), "call_wrong_" + c.n,
+            c.expr + ": a wrong argument");
+        assertEq(1, q.callFunction("call_nothing_" + c.n), c.expr + ": NOTHING");
+    }
+
+    importClassTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource();
+            p.callFunction("impc", q, "DbgRtNs::DbgRtClass");
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            # the static method of the copy checks its argument against the type of its source
+            hash<auto> c = callCode("DbgRtNs::DbgRtClass::take");
+            q.parse(c.code, "q");
+            checkCall(q, c, "DbgRtNs::DbgRtClass");
+        }, "import class");
+    }
+
+    importRefsTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource();
+            p.callFunction("impc", q, "DbgRtNs::DbgRtClass");
+            assertTrue(dbg_runtime_refs_taken("DbgRtNs::DbgRtClass", q), "the copy took its references");
+            assertEq(0, dbg_runtime_refs_pending(q), "nothing pending");
+
+            # the take fails: the copy takes them at the next marking event of its Program
+            Program q2 = newp();
+            dbg_fail_next_runtime_refs(1);
+            p.callFunction("impc", q2, "DbgRtNs::DbgRtClass");
+            assertFalse(dbg_runtime_refs_taken("DbgRtNs::DbgRtClass", q2), "the failed take took nothing");
+            assertEq(1, dbg_runtime_refs_pending(q2), "the copy is pending");
+            dbg_add_runtime_namespace("DbgRtNsE", 0, q2);
+            assertTrue(dbg_runtime_refs_taken("DbgRtNs::DbgRtClass", q2), "the next event took them");
+            assertEq(0, dbg_runtime_refs_pending(q2), "nothing pending after the event");
+        }, "import refs");
+    }
+
+    enumCopyTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource();
+            object c = p.callFunction("child", 0, "auto sub e() { return DbgRtNs::DbgRtEnum::B; }
+int sub chk(auto v) { DbgRtNs::DbgRtEnum e = v; return e == DbgRtNs::DbgRtEnum::B ? 2 : 0; }", mode);
+            auto v = c.callFunction("e");
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            assertEq(2, c.callFunction("chk", v), "an enum value of the copy");
+            assertThrows("RUNTIME-TYPE-ERROR", \c.callFunction(), ("chk", "x"), "a wrong value");
+            delete c;
+            assertRegex("DbgRtEnum", v.fullType(), "the value outlives the child");
+        }, "enum copy");
+    }
+
+    memberSignatureTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource();
+            dbg_add_runtime_naming(p, 1, q);
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            hash<auto> c = callCode("DbgRtQ::DbgRtQClass::take");
+            q.parse(c.code + "int sub hc(auto v) { hash<DbgRtQ::DbgRtQHash> h(); h.c = v; return 1; }
+int sub he(auto v) { hash<DbgRtQ::DbgRtQHash> h(); h.e = v; return 1; }
+int sub hh(auto v) { hash<DbgRtQ::DbgRtQHash> h(); h.h = v; return 1; }
+int sub sv(auto v) { DbgRtQ::DbgRtQClass::sv = v; return 1; }
+int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
+            checkCall(q, c, "DbgRtNs::DbgRtClass");
+            foreach string f in ("hc", "he", "hh", "sv", "mem") {
+                assertThrows("RUNTIME-TYPE-ERROR", \q.callFunction(), (f, "x"), f + ": a wrong value");
+                assertEq(1, q.callFunction(f, NOTHING), f + ": NOTHING");
+            }
+        }, "member and signature types");
+    }
+
+    oneAtATimeTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource();
+            dbg_add_runtime_naming(p, 1, q);
+            dbg_add_runtime_naming(p, 2, q);
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            hash<auto> c = callCode("DbgRtQ::DbgRtQOne::take");
+            q.parse(c.code + "int sub hc(auto v) { hash<DbgRtQ::DbgRtQOneHash> h(); h.c = v; return 1; }",
+                "q");
+            checkCall(q, c, "DbgRtNs::DbgRtClass");
+            assertThrows("RUNTIME-TYPE-ERROR", \q.callFunction(), ("hc", "x"), "a wrong value");
+            assertEq(1, q.callFunction("hc", NOTHING), "NOTHING");
+        }, "one at a time");
+    }
+
+    globalVarImportTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource(1, "public our *DbgRtNs::DbgRtClass gv;");
+            p.callFunction("impv", q, "gv");
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            # the code of q is parsed with the type of the variable after p is deleted; the variable of p is destroyed
+            # with p, so that a write is refused before its type is checked
+            q.parse("int sub setg(auto v) { gv = v; return 1; } auto sub getg() { return gv; }", "q");
+            assertThrows("DESTRUCTOR-ERROR", \q.callFunction(), ("setg", "x"), "a write after p is deleted");
+            assertNothing(q.callFunction("getg"), "a read after p is deleted");
+        }, "imported global variable");
+    }
+
+    childEntriesTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(1, "public typedef DbgT = *DbgRtNs::DbgRtClass; public our *DbgRtNs::DbgRtClass gv2;");
+            object c = p.callFunction("child", PO_NO_INHERIT_SYSTEM_CLASSES,
+                "int sub sett(auto v) { DbgT t = v; return 1; } int sub setg(auto v) { gv2 = v; return 1; }", mode);
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            assertThrows("RUNTIME-TYPE-ERROR", \c.callFunction(), ("sett", "x"), "typedef: a wrong value");
+            assertEq(1, c.callFunction("sett", NOTHING), "typedef: NOTHING");
+            # the variable of p is destroyed with p (see globalVarImportTest())
+            assertThrows("DESTRUCTOR-ERROR", \c.callFunction(), ("setg", "x"), "a write after p is deleted");
+        }, "child entries");
+    }
+
+    genericInstanceTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource();
+            # an instance made after its generic hashdecl was marked takes its references when it is made
+            assertTrue(p.callFunction("gen", "string", False), "the instance took its references");
+            # the take fails: the instance is not made
+            assertNothing(p.callFunction("gen", "float", True), "the instance is not made");
+            assertTrue(p.callFunction("gen", "float", False), "the instance is made with its references");
+        }, "generic instance");
+    }
+
+    markingFailureTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(0);
+            hash<auto> h = p.callFunction("naming_rv", p, 6);
+            assertEq(1, h.pending1, "the class is pending after the failure");
+            assertFalse(h.taken1, "the failure took nothing");
+            assertEq(0, h.pending2, "nothing pending after the next event");
+            assertTrue(h.taken2, "the next event took the references");
+        }, "marking failure");
+    }
+
+    flatTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            int before = liveDecls();
+            for (int i = 0; i < 10; ++i) {
+                Program q = newp();
+                Program p = getSource();
+                p.callFunction("impc", q, "DbgRtNs::DbgRtClass");
+                dbg_add_runtime_naming(p, 1, q);
+                delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+                delete q;
+                assertEq(before, liveDecls(), sprintf("iteration %d: the declarations are freed", i));
+            }
+        }, "flat");
+    }
+
+    staticNamespaceTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            int names = dbg_unowned_program_local_names();
+            for (int i = 0; i < 3; ++i) {
+                Program p = getSource();
+                dbg_add_runtime_naming(p, 4);
+            }
+            # the classes added to the static system namespace keep no declaration of the Programs
+            assertEq(names + 3, dbg_unowned_program_local_names(), "the declarations are counted");
+        }, "static namespace");
+    }
+
+    cycleTest() {
+        skipIfNoDebugging();
+        foreach hash<auto> i in (ExecModes.pairIterator()) {
+            mode = i.value;
+            int before = liveDecls();
+            int cycles = dbg_cross_program_cycles();
+            {
+                Program p = newp();
+                Program q = newp();
+                dbg_add_runtime_naming(p, 5, q);
+                delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+                q.parse("int sub seta(auto v) { DbgRtMQ::DbgRtMQ o(); o.a = v; return 1; }", "q");
+                assertThrows("RUNTIME-TYPE-ERROR", "DbgRtMP", \q.callFunction(), ("seta", "x"), "a wrong value");
+                assertEq(1, q.callFunction("seta", NOTHING), "NOTHING");
+            }
+            # the two classes keep each other until library cleanup
+            assertEq(before + 2, liveDecls(), i.key + ": the classes are kept");
+            assertEq(cycles + 2, dbg_cross_program_cycles(), i.key + ": a cycle of two");
+        }
+    }
+
+    sharedVariantTest() {
+        skipIfNoDebugging();
+        # the variant is added to the function of the static system namespace that every Program shares: it keeps the
+        # class until library cleanup
+        checkFreed(sub () {
+            Program q = newp();
+            Program p = getSource();
+            dbg_add_runtime_naming(p, 3, q);
+            delete p;
+            # the declarations retired with p are freed
+            liveDecls();
+            hash<auto> c = callCode("dbg_rt_shared");
+            q.parse(c.code, "q");
+            checkCall(q, c, "DbgRtNs::DbgRtClass");
+            Program r = newp();
+            hash<auto> cr = callCode("dbg_rt_shared");
+            r.parse(cr.code, "r");
+            checkCall(r, cr, "DbgRtNs::DbgRtClass");
+        }, "shared variant", 1);
+    }
+}
