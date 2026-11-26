@@ -36,7 +36,9 @@ class ReflectiveFrameReloadTest inherits QUnit::Test {
         prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
             + " QORE_LIBDIR=" + quote(libdir) + " ";
         foreach string worker in (Workers) {
-            addTestCase(worker, sub () { checkWorker(worker); });
+            # each closure captures a variable of its own: the loop variable is the same in every iteration
+            string name = worker;
+            addTestCase(name, sub () { checkWorker(name); });
         }
         set_return_value(main());
     }
