@@ -463,6 +463,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full and is about to wait
     //! for it to drain (the sending thread; qore#7465)
     SendDrainWait,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() was called to acquire a connection for a request, before
+    //! it checks whether the manager is shut down or retired (qore#7741)
+    AcquireStart,
     //! the number of hold points
     Count,
 };
