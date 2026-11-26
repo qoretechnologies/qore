@@ -41,8 +41,8 @@ bool ByteFallbackDecoder::parseByteToken(const std::string& token, uint8_t& byte
     return true;
 }
 
-std::string ByteFallbackDecoder::decode(const std::vector<std::string>& tokens) const {
-    std::string result;
+std::vector<std::string> ByteFallbackDecoder::decodeChain(std::vector<std::string> tokens) const {
+    std::vector<std::string> result;
     std::string byte_buffer;
 
     // as in Hugging Face tokenizers, the bytes of consecutive byte tokens are kept if they are valid UTF-8, else
@@ -50,17 +50,17 @@ std::string ByteFallbackDecoder::decode(const std::vector<std::string>& tokens) 
     auto flush_bytes = [&]() {
         if (!byte_buffer.empty()) {
             if (q_get_invalid_text_offset(QCS_UTF8, byte_buffer.data(), byte_buffer.size()) < 0) {
-                result += byte_buffer;
+                result.push_back(std::move(byte_buffer));
             } else {
                 for (size_t i = 0; i < byte_buffer.size(); ++i) {
-                    result += "\xef\xbf\xbd";
+                    result.emplace_back("\xef\xbf\xbd");
                 }
             }
             byte_buffer.clear();
         }
     };
 
-    for (const auto& tok : tokens) {
+    for (auto& tok : tokens) {
         uint8_t byte_val;
         if (parseByteToken(tok, byte_val)) {
             // Accumulate byte tokens
@@ -69,7 +69,7 @@ std::string ByteFallbackDecoder::decode(const std::vector<std::string>& tokens) 
             // Flush any accumulated bytes as UTF-8
             flush_bytes();
             // Pass through non-byte tokens
-            result += tok;
+            result.push_back(std::move(tok));
         }
     }
 

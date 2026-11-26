@@ -38,11 +38,15 @@ public const AbsentExternalChildWarning = "^MODULE-CHILD-FAILED: module 'Salesfo
 
     @throw UNEXPECTED-WORKER-OUTPUT the output has a line that is neither a \c name=value line nor the warning that
     the optional child SalesforcePubSubDataProvider was skipped because an external module is absent
-    (AbsentExternalChildWarning) together with the line before it that gives its location in the worker
+    (AbsentExternalChildWarning), as a parse warning of the worker: in the default one-line format of parse
+    diagnostics (<tt>worker:line:column: warning: ...</tt>), or in the legacy format, with the line before it that
+    gives its location in the worker
 */
 public hash<string, string> sub parse_worker_output(string out, string worker) {
     list<string> lines = out.split("\n");
     string location = "^warning encountered at .*/" + quote_regex(worker) + ":[0-9]+ \\(Qore builtin code\\)$";
+    # the one-line format: the location of the warning in the worker, then the warning
+    string one_line = "^(.*/)?" + quote_regex(worker) + ":[0-9]+(:[0-9]+)?: warning: ";
     hash<string, string> results = {};
     for (int i = 0; i < lines.size(); ++i) {
         string line = lines[i];
@@ -56,6 +60,10 @@ public hash<string, string> sub parse_worker_output(string out, string worker) {
         }
         if (regex(line, location) && i + 1 < lines.size() && regex(lines[i + 1], AbsentExternalChildWarning)) {
             ++i;
+            continue;
+        }
+        *list<*string> loc = (line =~ x/^(.*?: warning: )/);
+        if (loc && regex(loc[0], one_line) && regex(line.substr(loc[0].size()), AbsentExternalChildWarning)) {
             continue;
         }
         throw "UNEXPECTED-WORKER-OUTPUT", sprintf("unexpected line %y in worker output: %y", line, out);

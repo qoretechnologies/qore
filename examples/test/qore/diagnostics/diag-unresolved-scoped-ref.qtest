@@ -197,7 +197,7 @@ public class DiagUnresolvedScopedRefTest inherits QUnit::Test {
             assertEq(2, rc, c.name + ": exit code");
             assertFalse(out =~ /RUNTIME-TYPE-ERROR/, c.name + ": no runtime error during parsing");
             assertRegex("PARSE-EXCEPTION: " + Message, out, c.name);
-            assertEq(1, (out =~ x/(unhandled QORE)/g).size(), c.name + ": one exception: " + out);
+            assertEq(1, split("\n", trim(out)).size(), c.name + ": one exception: " + out);
         }
     }
 

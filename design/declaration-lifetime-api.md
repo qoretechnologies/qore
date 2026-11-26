@@ -53,8 +53,10 @@ Program's namespace data.
   of the Program (qore#7608); a variant of one Program that names a declaration
   that a module attaches to another Program is not refreshed by that attach. A builtin declaration that a module adds one at a time to a
   namespace already attached to a Program (`addSystemClass()`, `addSystemHashDecl()`,
-  `addSystemEnum()`) is not marked: it keeps the lifetime handling of a system
-  declaration (module-jni shares such classes between Programs; qore#7649, qore#7650). One that something keeps to the end of the process (a value
+  `addSystemEnum()`, qore#7649) is marked as well. A declaration marked at run time references the binary
+  module declarations that it names when it is marked, not at its Program's first
+  `QoreTypeOwnerBatch`, as a module can be deleted before the Program at the end of the
+  process (`qore_type_owner_take_module_refs()`). One that something keeps to the end of the process (a value
   kept in static storage, a Program with static storage duration) is freed after
   the modules' `del` functions have run, as the static namespace's module classes
   are: binary modules are never unloaded, and a module's `del` function must leave

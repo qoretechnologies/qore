@@ -29,6 +29,9 @@ std::string bytesToUnicode(const std::string& input);
 //! Decodes GPT-2 unicode representation back to raw bytes
 std::string unicodeToBytes(const std::string& input);
 
+//! Converts byte-level output to valid UTF-8, replacing incomplete characters
+std::string decodedUtf8(const std::string& bytes);
+
 } // namespace QoreTokenizer
 
 #endif // _QORE_TOKENIZER_BYTE_LEVEL_MAPPING_H

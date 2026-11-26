@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the process-wide standard I/O descriptors, closed and redirected in child processes
+# test-exec-mode: children - the checks run in child processes that set their own --exec-mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class StdioSandboxChangeTest
+
+#! The process-wide standard I/O objects cannot be changed by sandboxed code that may use terminal I/O (qore#7670)
+/** The objects \c stdin, \c stdout and \c stderr are shared by every Program of the process, and the methods that
+    change their state (reopening, closing, redirecting, changing the encoding, the position, the locks, the terminal
+    attributes, the owner or the event queue) were gated only by the terminal I/O permission: a sandbox that allows
+    terminal I/O let its code change them for every other Program of the process, trusted ones too.  Code that a sandbox
+    governs, and code that acts for it, is now refused these methods with \c SHARED-OBJECT-ERROR, as it is refused to
+    change an object that trusted code marked with SandboxManager::shareObject(); it can still read and write through
+    the objects as its terminal I/O permission allows, and code that no sandbox governs can still change them.  The calls
+    can close or redirect the standard streams of the process that makes them, so the test makes them in a child
+    process, in each execution mode.
+*/
+class StdioSandboxChangeTest inherits QUnit::Test {
+    public {
+        #! the methods that change the state of the objects
+        const Changing = ("setCharset", "setEncoding", "setEncodingErrors", "setPos", "open", "open2", "lock",
+            "lockBlocking", "chown", "setEventQueue", "close", "redirect");
+
+        #! the methods that read or write through the objects
+        const Through = ("write", "print", "sync", "isOpen", "getCharset");
+
+        #! the objects
+        const Objects = ("stdin", "stdout", "stderr");
+
+        #! the execution modes of the child processes
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+    }
+
+    constructor() : QUnit::Test("StdioSandboxChangeTest", "1.0") {
+        addTestCase("sandboxed code cannot change the standard I/O objects", \sandboxedTest());
+        addTestCase("code that no sandbox governs can still change them", \trustedTest());
+        set_return_value(main());
+    }
+
+    #! runs the child with the given mode and returns its results by "<object> <method>"
+    private hash<string, string> runChild(string mode, string kind) {
+        TmpDir dir();
+        string out = dir.path + "/result.txt";
+        # the child's own output and errors are of no interest; it ends by itself
+        string cmd = sprintf("'%s' -b --exec-mode=%s '%s/stdio-sandbox-change-child.q' '%s' %s >/dev/null 2>&1",
+            TestInterpreter::qore_interpreter(), mode, get_script_dir(), out, kind);
+        assertEq(0, system(cmd), sprintf("the %s child in mode %s ended", kind, mode));
+        hash<string, string> rv;
+        if (is_file(out)) {
+            foreach string line in (ReadOnlyFile::readTextFile(out).split("\n")) {
+                if (line) {
+                    list<string> w = line.split(" ");
+                    rv{w[0] + " " + w[1]} = w[2];
+                }
+            }
+        }
+        return rv;
+    }
+
+    sandboxedTest() {
+        foreach string mode in (Modes) {
+            hash<string, string> r = runChild(mode, "sandboxed");
+            assertGt(0, r.size(), sprintf("%s: the child reported", mode));
+            foreach string o in (Objects) {
+                foreach string m in (Changing) {
+                    assertEq("SHARED-OBJECT-ERROR", r{o + " " + m},
+                        sprintf("%s: sandboxed code cannot call %s.%s()", mode, o, m));
+                }
+                foreach string m in (Through) {
+                    string key = o + " " + m;
+                    if (r.hasKey(key)) {
+                        assertEq("done", r{key}, sprintf("%s: sandboxed code can call %s.%s()", mode, o, m));
+                    }
+                }
+            }
+        }
+    }
+
+    trustedTest() {
+        foreach string mode in (Modes) {
+            hash<string, string> r = runChild(mode, "trusted");
+            assertGt(0, r.size(), sprintf("%s: the child reported", mode));
+            foreach string o in (Objects) {
+                foreach string m in ("setCharset", "setEncoding", "setEncodingErrors", "setPos") {
+                    assertNeq("SHARED-OBJECT-ERROR", r{o + " " + m},
+                        sprintf("%s: code that no sandbox governs can call %s.%s()", mode, o, m));
+                }
+            }
+        }
+    }
+}

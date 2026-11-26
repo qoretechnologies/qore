@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../LoaderWarnings.qm
 %requires FsUtil
 
 %exec-class AOTModuleMissingDependencyFallbackTest
@@ -284,8 +285,16 @@ printf(\"%s\\n\", FbTop::values());
         string err_text = ReadOnlyFile::readTextFile(err.path);
         assertEq(0, rc, mode + ": " + out + err_text);
         assertEq(Values, trim(out), mode);
-        # the warnings of the script's %requires directive: the summary once, and RestrictedBg's own warning
-        list<string> warnings = select err_text.split("\n"), $1 =~ /^BINARY-MODULE-SOURCE-FALLBACK: /;
+        # the warnings of the script's %requires directive: the summary once, and RestrictedBg's own warning; qore
+        # writes each parse warning as one line (<location>: warning: CODE: ...) in the default format of parse
+        # diagnostics
+        list<string> warnings = ();
+        foreach string line in (err_text.split("\n")) {
+            *string text = LoaderWarnings::one_line_warning_text(line);
+            if (text && text =~ /^BINARY-MODULE-SOURCE-FALLBACK: /) {
+                push warnings, text;
+            }
+        }
         assertEq(2, warnings.size(), mode + ": " + err_text);
         assertEq(1, (select warnings, $1 == "BINARY-MODULE-SOURCE-FALLBACK: " + Summary).size(),
             mode + ": the summary: " + err_text);

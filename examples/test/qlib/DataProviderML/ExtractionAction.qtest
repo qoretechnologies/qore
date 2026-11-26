@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the extraction action calls a loopback HTTP model
+# Copyright 2026 Qore Technologies, s.r.o. MIT License
+
+%modern
+%requires QUnit
+%requires FsUtil
+%requires HttpServer
+%requires json
+%requires DataProviderML
+%requires ProviderIndex
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ExtractionActionTest
+
+class ShipmentModel inherits AbstractHttpRequestHandler {
+    public {
+        Queue requests();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> request = parse_json(body.typeCode() == NT_BINARY ? body.toString() : body);
+        requests.push(request.tools[0].function);
+        string text = request.messages[-1].content;
+        hash<auto> shipment = {"reference": "ABC-5", "delivery_date": "2026-05-16", "quantity": 4};
+        if (text =~ /MISSING/) {
+            remove shipment.reference;
+        } else if (text =~ /WRONG/) {
+            shipment.quantity = "four";
+        }
+        return makeResponse(200, make_json({
+            "id": "shipment-test", "model": request.model,
+            "choices": ({"index": 0, "message": {"role": "assistant", "content": make_json(shipment)},
+                "finish_reason": "stop"},),
+            "usage": {"prompt_tokens": 5, "completion_tokens": 4, "total_tokens": 9},
+        }), {"Content-Type": "application/json"});
+    }
+}
+
+class ExtractionActionTest inherits QUnit::Test {
+    private {
+        const App = "ML-Analytics";
+        const Action = "extract-structured";
+        const Schema = {
+            "name": "shipment", "description": "Extract a shipment",
+            "fields": (
+                {"name": "reference", "description": "Shipment reference", "type": "string"},
+                {"name": "delivery_date", "description": "ISO date", "type": "string", "required": False},
+                {"name": "quantity", "description": "Units shipped", "type": "integer"},
+                {"name": "boxes", "description": "Box quantities", "type": "array", "required": False,
+                    "items": {"type": "integer"}},
+                {"name": "status", "description": "Status", "type": "string", "required": False,
+                    "enum_values": ("sent", "received")},
+            ),
+        };
+    }
+
+    constructor() : Test("Extraction action", "1.0", \ARGV) {
+        addTestCase("published custom schema option", \indexTest());
+        addTestCase("shipment extraction through the action", \shipmentTest());
+        set_return_value(main());
+    }
+
+    indexTest() {
+%ifdef NoMsgPack
+        testSkip("provider index serialization requires msgpack");
+%endif
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        *string old = ENV{ProviderIndexEnvVar};
+        on_exit {
+            if (exists old) {
+                ProviderIndexUtil::setEnvironmentVariable(old);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        }
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
+            "apps": (App,), "workers": 0, "load_environment": False,
+            "load_known_factories": False, "load_typescript_actions": False,
+        });
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        hash<auto> indexed = ProviderIndexUtil::tryGetActionMetadata(App, Action);
+        assertEq("constructor", indexed.options.custom_schema.loc);
+        assertFalse(indexed.options.custom_schema.required);
+        assertRegex("integer", indexed.options.custom_schema.desc);
+        assertTrue(exists indexed.options.custom_schema.type_info);
+        assertTrue(inlist("invoice", map $1.value, indexed.options.schema_template.allowed_values));
+    }
+
+    shipmentTest() {
+        ShipmentModel handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("shipment-model", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(App, Action);
+        hash<auto> opts = {"llm_mode": "http", "llm_url": sprintf("http://127.0.0.1:%d", port),
+            "llm_model": "shipment", "text_field": "body", "max_retries": 0, "custom_schema": Schema};
+        hash<auto> args = opts;
+        AbstractDataProcessor proc = DataProviderActionCatalog::getDataProviderForAction(action, \args);
+        assertFalse(args.hasKey("custom_schema"));
+        hash<auto> result = proc.processRecord({"body": "SHIP"});
+        assertEq(True, result._extraction_valid);
+        assertEq({"reference": "ABC-5", "delivery_date": "2026-05-16", "quantity": 4}, result._extracted);
+        assertNothing(result._extraction_errors);
+        assertEq(9, result._extraction_usage.total_tokens);
+        hash<auto> tool = handler.requests.get(1000);
+        assertEq("shipment", tool.name);
+        assertEq(("reference", "quantity"), tool.parameters.required);
+        assertEq("integer", tool.parameters.properties.quantity.type);
+        assertEq("integer", tool.parameters.properties.boxes.items.type);
+        assertEq(("sent", "received"), tool.parameters.properties.status."enum");
+        foreach string value in (("MISSING", "WRONG")) {
+            result = proc.processRecord({"body": value});
+            assertFalse(result._extraction_valid);
+            assertRegex(value == "MISSING" ? "reference" : "quantity", result._extraction_errors.join(" "));
+            assertEq(9, result._extraction_usage.total_tokens);
+        }
+        args = opts;
+        args.custom_schema.fields[0].type = "unknown";
+        assertThrows("CONSTRUCTOR-ERROR", sub () { DataProviderActionCatalog::getDataProviderForAction(action, \args); });
+        args = opts;
+        args.custom_schema.fields[1].name = "reference";
+        assertThrows("CONSTRUCTOR-ERROR", "duplicate extraction field",
+            sub () { DataProviderActionCatalog::getDataProviderForAction(action, \args); });
+        args = opts - "custom_schema" + {"schema_template": "invoice"};
+        AbstractDataProcessor preset = DataProviderActionCatalog::getDataProviderForAction(action, \args);
+        assertEq(Action, preset.getName());
+    }
+}

@@ -128,8 +128,10 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
             file.write(text);
         }
         run((modpath, qcc_bin, "-O3", "-m", "-o", images.path + "/RangePalette.qmod", provider));
+        # the module load error is a parse error of the script: one line in the default format of parse diagnostics,
+        # with its embedded line breaks written as \n
         run((modpath, qore_bin, "-b", script),
-            "cannot resolve DOT_EVAL_TARGET declaration @qore-module:RangePalette\nRangePalette::Palette::warning");
+            "cannot resolve DOT_EVAL_TARGET declaration @qore-module:RangePalette\\nRangePalette::Palette::warning");
     }
 
     records() {
