@@ -472,7 +472,7 @@
           "message": "引用來源"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.display_name": {
-          "source": "Content Index",
+          "source": "Content index",
           "message": "內容索引"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.short_desc": {
@@ -512,7 +512,7 @@
           "message": "文件的唯一識別碼"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0VG9vbFNvdXJjZSNlY2M5ZjAyZGMyNzczOTUzZjNhNGNhNzJkNGM1ODIwY2ZkZWQxYTFlMTFlZDdlNDY3MDU3M2MwY2IwZWI3ODg1.field.dG9vbF9vdXRwdXQ.display_name": {
-          "source": "Tool Output",
+          "source": "Tool output",
           "message": "工具輸出"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0RG9jdW1lbnRTb3VyY2UjMjA3M2MwZDYyZjk5ZGY0Yzk0ZmZlNzZhODAyNzY3ZDNjY2I3NjVkYjc3MTViZWMxYWI1ODFmNGQ5NjU4ZWUwNQ.field.ZG9jdW1lbnQ.display_name": {
@@ -604,7 +604,7 @@
           "message": "助理"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9jYWxscw.display_name": {
-          "source": "Tool Calls",
+          "source": "Tool calls",
           "message": "工具呼叫"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpUb29sQ2FsbFYyI2M3MjkxMWRkZTU4YzRkNThhMWI5ZGVlNzI3YzZjMTQyYTQ5ZDc0MWRhODA3YzI0ODZmYmY0ZTdiNmNhNDEwY2Q.field.ZnVuY3Rpb24.display_name": {
@@ -636,7 +636,7 @@
           "message": "函數"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.display_name": {
-          "source": "Tool Plan",
+          "source": "Tool plan",
           "message": "工具計畫"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.short_desc": {
@@ -724,7 +724,7 @@
           "message": "工具"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "工具呼叫 ID"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -800,7 +800,7 @@
           "message": "函數"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.display_name": {
-          "source": "Strict Tools",
+          "source": "Strict tools",
           "message": "嚴格的工具"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "此文件的唯一識別碼，將在引用中使用。若未提供，將自動產生 ID。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.display_name": {
-          "source": "Citation Options",
+          "source": "Citation options",
           "message": "引文選項"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.short_desc": {
@@ -924,7 +924,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "JSON Schema"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.short_desc": {
@@ -956,7 +956,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.display_name": {
-          "source": "Safety Mode",
+          "source": "Safety mode",
           "message": "安全模式"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "如果指定，後端將盡最大努力對令牌進行採樣\n確定性地，這樣重複的請求具有相同的\n種子和參數應該會傳回相同的結果。然而，\n決定論不能完全保證。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
-          "source": "Frequency Penalty",
+          "source": "Frequency penalty",
           "message": "頻率懲罰"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "預設為 `0.0`，最小值為 `0.0`，最大值為 `1.0`。\n用於減少生成令牌的重複性。數值越高，對先前存在的代幣施加的懲罰就越強，與它們在提示或上一代中已經出現的次數成正比。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
-          "source": "Presence Penalty",
+          "source": "Presence penalty",
           "message": "存在懲罰"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "預設為 `false`。當設定為 `true` 時，產生的令牌的對數機率將包含在回應中。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "工具選取"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "[推理功能](https://docs.cohere.com/docs/reasoning) 的配置。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.display_name": {
-          "source": "Token Budget",
+          "source": "Token budget",
           "message": "詞元預算"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "控制請求的處理時間。數字越小表示優先權越高（預設值：0，最高）。當系統處於負載狀態時，優先順序較高的請求會先被處理，最不可能被丟棄。"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "建立嵌入"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "可用[嵌入模型]之一的 ID (https://docs.cohere.com/docs/cohere-embed)。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "輸入類型"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "最大權杖數"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "每個輸入嵌入的最大標記數。如果輸入文字長度超過此值，則會根據 `truncate` 參數進行截斷。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
-          "source": "Output Dimension",
+          "source": "Output dimension",
           "message": "輸出尺寸"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "輸出嵌入的維數。這僅適用於 `embed-v4` 和更新的型號。\n可能的值為 `256`、`512`、`1024` 和 `1536`。預設值為 `1536`。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "嵌入類型"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "控制請求的處理時間。數字越小表示優先權越高（預設值：0，最高）。當系統處於負載狀態時，優先順序較高的請求會先被處理，最不可能被丟棄。"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "重新排序文件"
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "要傳回的排名最高的文件數量。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.display_name": {
-          "source": "Max Tokens per Doc",
+          "source": "Max tokens per doc",
           "message": "每個文檔的最大令牌數"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "控制請求的處理時間。數字越小表示優先權越高（預設值：0，最高）。當系統處於負載狀態時，優先順序較高的請求會先被處理，最不可能被丟棄。"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Text",
+          "source": "Classify text",
           "message": "分類文字"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "結束"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "列出模型"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "列出該帳戶可用的型號。按 `endpoint` 過濾以選擇相容型號。依照 `next_page_token` 和 `page_token` 檢索後續頁面。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "每頁筆數"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "頁面中包含的最大模型數\n預設為 `20`，最小值為 `1`，最大值為 `1000`。"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "頁面 Token"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "產生"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.display_name": {
-          "source": "Default Only",
+          "source": "Default only",
           "message": "僅預設"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "模型"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.display_name": {
-          "source": "Tokenize Text",
+          "source": "Tokenize text",
           "message": "標記化文字"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "輸入將由該模型使用的分詞器進行分詞。"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.display_name": {
-          "source": "Detokenize Tokens",
+          "source": "Detokenize tokens",
           "message": "代幣去標記化"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "用於提供模型名稱的可選參數。這將確保去標記化是由該模型使用的標記產生器完成的。"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.cGFyc2U.display_name": {
-          "source": "Parse Document Image",
+          "source": "Parse document image",
           "message": "解析文件影像"
         },
         "app.Q29oZXJl.action.cGFyc2U.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
-          "source": "Output Format",
+          "source": "Output format",
           "message": "輸出格式"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
@@ -1924,7 +1924,7 @@
           "message": "Markdown"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "轉錄音訊"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "檔案名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "建立資料集"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "檔案名"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.display_name": {
-          "source": "Eval Data",
+          "source": "Eval data",
           "message": "評估數據"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "批次聊天V2輸入"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.display_name": {
-          "source": "Keep Original File",
+          "source": "Keep original file",
           "message": "保留原始文件"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.short_desc": {
@@ -2532,7 +2532,7 @@
           "message": "指示是否應儲存原始文件。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.display_name": {
-          "source": "Skip Malformed Input",
+          "source": "Skip malformed input",
           "message": "跳過格式錯誤的輸入"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "指示是否應刪除輸入格式錯誤的行（而不是使驗證檢查失敗）。刪除的行將返回警告欄位中。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.display_name": {
-          "source": "Keep Fields",
+          "source": "Keep fields",
           "message": "保留字段"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "將保留在資料集中的欄位名稱清單。預設情況下，資料集將僅保留[對應資料集類型的架構](https://docs.cohere.com/docs/datasets#dataset-types) 中指示的必填欄位。例如，類型為 `embed-input` 的資料集將刪除除必需的 `text` 欄位之外的所有欄位。如果上傳的檔案中缺少 `keep_fields` 中的任何字段，則資料集驗證將會失敗。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.display_name": {
-          "source": "Optional Fields",
+          "source": "Optional fields",
           "message": "選用字段"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "將保留在資料集中的欄位名稱清單。預設情況下，資料集將僅保留[對應資料集類型的架構](https://docs.cohere.com/docs/datasets#dataset-types) 中指示的必填欄位。例如，類型為 `embed-input` 的資料集將刪除除必需的 `text` 欄位之外的所有欄位。如果上傳的檔案中缺少 `optional_fields` 中的任何字段，則資料集驗證將通過。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.display_name": {
-          "source": "Text Separator",
+          "source": "Text separator",
           "message": "文字分隔符"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "原始 .txt 上傳將使用 text_separator 值拆分為多個條目。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.display_name": {
-          "source": "CSV Delimiter",
+          "source": "CSV delimiter",
           "message": "CSV 分隔符"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "用於 .csv 上傳的分隔符號。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2604,7 +2604,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "列出資料集"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "尋找要處理或審查的資料集。按類型和驗證狀態過濾，並使用 `limit` 和 `offset` 進行分頁。"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.display_name": {
-          "source": "Dataset Type",
+          "source": "Dataset type",
           "message": "資料集類型"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "結果開始的可選偏移量"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.display_name": {
-          "source": "Validation Status",
+          "source": "Validation status",
           "message": "驗證狀態"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "已略過"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.display_name": {
-          "source": "Get Dataset Usage",
+          "source": "Get dataset usage",
           "message": "取得資料集使用情況"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "在上傳其他資料之前檢查資料集儲存使用量。"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2852,7 +2852,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.display_name": {
-          "source": "Create Embedding Job",
+          "source": "Create embedding job",
           "message": "建立嵌入作業"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "[資料集](https://docs.cohere.com/docs/datasets)的ID。資料集的型別必須為 `embed-input` 且必須具有驗證狀態 `Validated`"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "輸入類型"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "嵌入作業的名稱。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "嵌入類型"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "結束"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.display_name": {
-          "source": "List Embedding Jobs",
+          "source": "List embedding jobs",
           "message": "列出嵌入作業"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "列出嵌入作業並檢查其目前狀態。"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "要檢索的嵌入作業的 ID。"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "要取消的嵌入作業的 ID。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "建立批次"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "批次名稱（例如 `foobar`）。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.display_name": {
-          "source": "Input Dataset ID",
+          "source": "Input dataset ID",
           "message": "輸入資料集 ID"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "批次使用的模型的名稱。"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "列出批次"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "列出批次推理作業。使用 `page_token` 依照 `next_page_token` 檢索後續頁面。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "每頁筆數"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.short_desc": {
@@ -3156,7 +3156,7 @@
           "message": "傳回的最大批次數。該服務返回的可能少於\n這個值。\n如果不指定，最多返回50批次。\n最大值為1000；高於 1000 的值將被強制為 1000。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "頁面 Token"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "從先前的 `ListBatches` 呼叫接收的頁面令牌。\n提供此資訊以檢索後續頁面。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.display_name": {
-          "source": "Order By",
+          "source": "Order by",
           "message": "排序依據"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "批次可以按建立時間或上次更新時間排序。\n使用 `created_at` 作為建立時間，或使用 `updated_at` 作為上次更新時間。"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "批次 ID。"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "批次 ID。"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "發出請求的項目的名稱。"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.display_name": {
-          "source": "Check API Key",
+          "source": "Check API key",
           "message": "檢查 API 金鑰"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "檢查連接的 API 金鑰而不產生內容。檢查布林值 `valid` 結果；僅 HTTP 成功並不表示金鑰有效。這不會檢查剩餘試用配額。"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X 客戶名稱"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
+          "source": "List parcels",
           "message": "Список посилок"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Максимальна кількість агрегованих записів для повернення на всіх сторінках"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Отримати посилку"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Кількість етикеток для створення для цієї посилки (відправлення з кількох місць)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
+          "source": "Update parcel",
           "message": "Оновити посилку"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "Ім’я відображення методу доставки (наприклад, 'Лист без марки')"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
+          "source": "Cancel parcel",
           "message": "Скасувати посилку"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "Числовий ID посилки для скасування"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
+          "source": "Get parcel label",
           "message": "Отримати етикетку посилки"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Числовий ID посилки, для якої отримуються URL-адреси етикеток"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
+          "source": "Get parcel document",
           "message": "Отримати документ посилки"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Зображення PNG (доступно лише для певних типів документів, як-от QR-коди)"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Отримати список способів доставки"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Якщо `True`, включити деталізовану розбивку ціни для кожного способу"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
+          "source": "List sender addresses",
           "message": "Список адрес відправника"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Отримати список адрес відправника, налаштованих у вашому обліковому записі SendCloud; адреса відправника за замовчуванням використовується, якщо для посилки не вказано іншу."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Список користувачів"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Отримати користувача/обліковий запис SendCloud, якому належать поточні облікові дані API. Список містить щонайбільше один запис, оскільки API повертає лише автентифікованого користувача."
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "Отримати користувача"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Отримати інформацію про поточного автентифікованого користувача SendCloud (власника облікового запису)."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
+          "source": "List service points",
           "message": "Список пунктів обслуговування"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Поштовий індекс для пошуку пунктів обслуговування поблизу (із поверненням відстані)"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
+          "source": "Search service points",
           "message": "Пошук пунктів обслуговування"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Номер будинку, що використовується разом із початковою точкою пошуку"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
+          "source": "List returns",
           "message": "Список повернень"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Максимальна кількість агрегованих записів для повернення на всіх сторінках"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Отримати повернення"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Номер телефону одержувача (обов’язковий для деяких перевізників)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
+          "source": "Update return",
           "message": "Оновити повернення"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Оновлена причина повернення"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
+          "source": "Cancel return",
           "message": "Скасувати повернення"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "Числовий ID повернення для скасування"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
+          "source": "List brands",
           "message": "Список брендів"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Отримати список брендів, налаштованих у вашому обліковому записі SendCloud. Бренди використовуються для персоналізації сторінок відстеження та документації з доставки."
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
+          "source": "Parcel status changed",
           "message": "Статус посилки змінено"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Спрацьовує щоразу, коли змінюється статус посилки SendCloud. Інтервал опитування налаштовується; мінімальний інтервал застосовується відповідно до лімітів API SendCloud."
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
+          "source": "Return updated",
           "message": "Повернення оновлено"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {

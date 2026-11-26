@@ -16,7 +16,7 @@
           "message": "AI 도구, 리소스 및 프롬프트 통합을 위해 MCP 서버에 연결"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
+          "source": "Call tool",
           "message": "도구 호출"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
@@ -28,7 +28,7 @@
           "message": "제공된 인수로 MCP 도구를 실행하고 결과를 반환합니다"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
+          "source": "List tools",
           "message": "도구 목록 조회"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "MCP 서버에서 사용 가능한 모든 도구 나열"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "리소스 읽기"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "URI로 MCP 리소스에서 콘텐츠 읽기"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
+          "source": "List resources",
           "message": "리소스 목록 조회"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
@@ -64,7 +64,7 @@
           "message": "MCP 서버에서 사용 가능한 모든 리소스 나열"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "프롬프트 가져오기"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "인수와 함께 MCP 서버에서 프롬프트 템플릿 가져오기"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
+          "source": "List prompts",
           "message": "프롬프트 목록 조회"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
@@ -88,7 +88,7 @@
           "message": "MCP 서버에서 사용 가능한 모든 프롬프트 나열"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
+          "source": "Get completion",
           "message": "완성 제안 가져오기"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
@@ -100,7 +100,7 @@
           "message": "프롬프트 또는 리소스에 대한 자동 완성 제안 가져오기"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
+          "source": "Ping server",
           "message": "서버 핑"
         },
         "app.TUNQ.action.cGluZw.short_desc": {

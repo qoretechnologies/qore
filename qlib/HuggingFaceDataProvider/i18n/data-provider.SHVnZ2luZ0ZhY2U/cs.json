@@ -524,7 +524,7 @@
           "message": "ID repozitáře modelu ve formátu `namespace/name` (např. `meta-llama/Llama-3.1-8B`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "Vytvořit model"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -572,7 +572,7 @@
           "message": "Zda má být repozitář soukromý. Výchozí hodnota: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "Aktualizovat model"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Zda zakázat funkci diskusí v tomto repozitáři"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Smazat model"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -824,7 +824,7 @@
           "message": "ID repozitáře datové sady ve formátu `namespace/name` (např. `stanfordnlp/imdb`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Vytvořit dataset"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Zda má být repozitář soukromý. Výchozí hodnota: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Aktualizovat dataset"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Zda zakázat funkci diskusí v tomto repozitáři"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Smazat datovou sadu"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "ID repozitáře Space ve formátu `namespace/name` (např. `gradio/chatbot`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create Space",
+          "source": "Create space",
           "message": "Vytvořit Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Zda má být repozitář soukromý. Výchozí hodnota: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update Space",
+          "source": "Update space",
           "message": "Aktualizovat Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Zda zakázat funkci diskusí v tomto Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete Space",
+          "source": "Delete space",
           "message": "Smazat Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {

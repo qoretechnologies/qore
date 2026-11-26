@@ -85,7 +85,7 @@ module ShippoDataProvider {
             "path": "/create-shipment",
             "action": "create-shipment",
             "groups": "Shipments",
-            "display_name": "Create Shipment",
+            "display_name": "Create shipment",
             "short_desc": "Create a new shipment to get rates",
             "desc": "Create a new shipment in Shippo with origin, destination, and parcel details to receive "
                 "shipping rates from multiple carriers.",
@@ -101,7 +101,7 @@ module ShippoDataProvider {
             "path": "/get-shipment",
             "action": "get-shipment",
             "groups": "Shipments",
-            "display_name": "Get Shipment",
+            "display_name": "Get shipment",
             "short_desc": "Get a shipment by ID",
             "desc": "Retrieve detailed information about a specific shipment including addresses, "
                 "parcels, and available rates.",
@@ -118,7 +118,7 @@ module ShippoDataProvider {
             "path": "/shipments",
             "action": "search-shipments",
             "groups": "Shipments",
-            "display_name": "Search Shipments",
+            "display_name": "Search shipments",
             "short_desc": "List and search shipments",
             "desc": "Retrieve a list of shipments from Shippo with optional filtering by creation date.",
             "action_code": DPAT_FIND,
@@ -136,7 +136,7 @@ module ShippoDataProvider {
             "path": "/create-label-by-rate",
             "action": "create-label-by-rate",
             "groups": "Labels",
-            "display_name": "Create Label by Rate",
+            "display_name": "Create label by rate",
             "short_desc": "Create a shipping label from a rate",
             "desc": "Create a shipping label (transaction) using a rate object ID obtained from a shipment. "
                 "This generates a printable label and tracking number.",
@@ -170,7 +170,7 @@ module ShippoDataProvider {
             "path": "/transactions",
             "action": "search-shipping-labels",
             "groups": "Labels",
-            "display_name": "Search Shipping Labels",
+            "display_name": "Search shipping labels",
             "short_desc": "List and search shipping labels",
             "desc": "Retrieve a list of shipping labels (transactions) from Shippo with optional filtering "
                 "by creation date, status, or tracking status.",
@@ -219,7 +219,7 @@ module ShippoDataProvider {
             "path": "/create-order",
             "action": "create-order",
             "groups": "Orders",
-            "display_name": "Create Order",
+            "display_name": "Create order",
             "short_desc": "Create a new order",
             "desc": "Create a new order in Shippo with shipping and billing addresses, and line items. "
                 "Orders can be used to manage fulfillment workflows.",
@@ -235,7 +235,7 @@ module ShippoDataProvider {
             "path": "/get-order",
             "action": "get-order",
             "groups": "Orders",
-            "display_name": "Get Order",
+            "display_name": "Get order",
             "short_desc": "Get an order by ID",
             "desc": "Retrieve detailed information about a specific order including addresses, line items, "
                 "and fulfillment status.",
@@ -252,7 +252,7 @@ module ShippoDataProvider {
             "path": "/orders",
             "action": "list-orders",
             "groups": "Orders",
-            "display_name": "List Orders",
+            "display_name": "List orders",
             "short_desc": "List and search orders",
             "desc": "Retrieve a list of orders from Shippo with optional filtering by creation date, "
                 "shop app, or order status.",
@@ -289,7 +289,7 @@ module ShippoDataProvider {
             "path": "/validate-address",
             "action": "validate-address",
             "groups": "Addresses",
-            "display_name": "Validate Address",
+            "display_name": "Validate address",
             "short_desc": "Validate a shipping address",
             "desc": "Validates a shipping address using Shippo's address validation service. Returns the "
                 "validated address with any corrections and validation status.",
@@ -307,7 +307,7 @@ module ShippoDataProvider {
             "path": "/events/new-parcel",
             "action": EVENT_NEW_PARCEL,
             "groups": "Triggers",
-            "display_name": "New Parcel",
+            "display_name": "New parcel",
             "short_desc": "Trigger when a new parcel is created",
             "desc": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details "
                 "including dimensions and weight.",
@@ -323,7 +323,7 @@ module ShippoDataProvider {
             "path": "/events/new-shipment",
             "action": EVENT_NEW_SHIPMENT,
             "groups": "Triggers",
-            "display_name": "New Shipment",
+            "display_name": "New shipment",
             "short_desc": "Trigger when a new shipment is created",
             "desc": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details "
                 "including addresses, parcels, and available rates.",
@@ -339,7 +339,7 @@ module ShippoDataProvider {
             "path": "/events/new-label",
             "action": EVENT_NEW_LABEL,
             "groups": "Triggers",
-            "display_name": "New Shipping Label",
+            "display_name": "New shipping label",
             "short_desc": "Trigger when a new shipping label is created",
             "desc": "Fires when a new shipping label (transaction) is detected in Shippo via polling. "
                 "Provides label details including tracking number and label URL.",
@@ -355,7 +355,7 @@ module ShippoDataProvider {
             "path": "/events/new-order",
             "action": EVENT_NEW_ORDER,
             "groups": "Triggers",
-            "display_name": "New Order",
+            "display_name": "New order",
             "short_desc": "Trigger when a new order is created",
             "desc": "Fires when a new order is detected in Shippo via polling. Provides order details "
                 "including shipping address, line items, and order status.",

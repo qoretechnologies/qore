@@ -257,7 +257,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/pages",
                 "operation_id": "getPages",
-                "display_name": "List Pages",
+                "display_name": "List pages",
                 "short_desc": "List the pages on the site",
                 "desc": "Lists pages across the whole site.\n\n"
                     "`space-id` restricts the listing to particular spaces, `status` selects drafts or "
@@ -281,7 +281,7 @@ public class ConfluenceManifest {
                 "method": "POST",
                 "path": "/pages",
                 "operation_id": "createPage",
-                "display_name": "Create Page",
+                "display_name": "Create page",
                 "short_desc": "Create a page in a space",
                 "desc": "Creates a page.\n\n"
                     "`spaceId` is required. Without `parentId` the page is created at the top level of "
@@ -419,7 +419,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/blogposts",
                 "operation_id": "getBlogPosts",
-                "display_name": "List Blog Posts",
+                "display_name": "List blog posts",
                 "short_desc": "List the blog posts on the site",
                 "desc": "Lists blog posts across the whole site, with the same filters as **List Pages**.",
                 "groups": (GroupBlogPosts,),
@@ -439,7 +439,7 @@ public class ConfluenceManifest {
                 "method": "POST",
                 "path": "/blogposts",
                 "operation_id": "createBlogPost",
-                "display_name": "Create Blog Post",
+                "display_name": "Create blog post",
                 "short_desc": "Create a blog post in a space",
                 "desc": "Creates a blog post. `spaceId` is required; a blog post has no parent.",
                 "groups": (GroupBlogPosts,),
@@ -539,7 +539,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/spaces",
                 "operation_id": "getSpaces",
-                "display_name": "List Spaces",
+                "display_name": "List spaces",
                 "short_desc": "List the spaces on the site",
                 "desc": "Lists spaces.\n\n"
                     "`type` separates a personal space from a global one, and `status` selects archived "
@@ -569,7 +569,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/tasks",
                 "operation_id": "getTasks",
-                "display_name": "List Tasks",
+                "display_name": "List tasks",
                 "short_desc": "List the tasks on the site",
                 "desc": "Lists tasks - the checkboxes inside pages and blog posts.\n\n"
                     "`status` selects complete or incomplete ones, and the various `*-id` filters restrict "
@@ -630,7 +630,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/labels",
                 "operation_id": "getLabels",
-                "display_name": "List Labels",
+                "display_name": "List labels",
                 "short_desc": "List the labels on the site",
                 "desc": "Lists labels.\n\n"
                     "This is what backs the label dropdowns on the label listings; the application this "
@@ -645,7 +645,7 @@ public class ConfluenceManifest {
                 "method": "GET",
                 "path": "/attachments",
                 "operation_id": "getAttachments",
-                "display_name": "List Attachments",
+                "display_name": "List attachments",
                 "short_desc": "List the attachments on the site",
                 "desc": "Lists attachments, with the content each is attached to and its media type.\n\n"
                     "This is exported so that the **New Attachment** event has something to read: the "

@@ -213,8 +213,8 @@ public class TabularSheetProfileDataType inherits HashDataType {
             "hidden": {"display_name": "Hidden", "type": BoolType, "desc": "`True` if the sheet is hidden"},
             "row_count": {"display_name": "Row Count", "type": IntType, "desc": "The number of rows in the sheet"},
             "header_row": {"display_name": "Header Row", "type": IntOrNothingType,
-                "desc": "The 1-based header row, if one was found: the row of the column names, after which the "
-                    "data starts; a header of two rows ends with it"},
+                "desc": "The 1-based header row: the one the caller gave, else the one found, if any; the row of "
+                    "the column names, after which the data starts; a header of two rows ends with it"},
             "header_rows": {"display_name": "Header Rows", "type": AutoHashOrNothingType,
                 "desc": "The 1-based `first` and `last` rows of a header of two rows, a row of group names over the "
                     "row of the column names; set only when the header has two rows"},

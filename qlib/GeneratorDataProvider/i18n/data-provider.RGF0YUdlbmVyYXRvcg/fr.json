@@ -16,7 +16,7 @@
           "message": "Générer des flux d'enregistrements configurables pour tester des pipelines de données sans aucune connexion à des services externes"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
-          "source": "Generate Records",
+          "source": "Generate records",
           "message": "Générer des enregistrements"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
@@ -164,7 +164,7 @@
           "message": "Une valeur date/heure fixe utilisée comme point de référence pour générer des champs de date ; lorsqu'elle est fournie avec un seed, cela garantit une reproductibilité complète des champs de date d'une exécution à l'autre ; si elle n'est pas fournie, la date/heure actuelle au début de la génération est utilisée"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
-          "source": "Generate From Template",
+          "source": "Generate from template",
           "message": "Générer à partir d'un modèle"
         },
         "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {

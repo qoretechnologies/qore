@@ -16,7 +16,7 @@
           "message": "Almacén de estructuras de datos en memoria Redis, utilizado como base de datos, caché, intermediario de mensajes y cola"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
-          "source": "Set String",
+          "source": "Set string",
           "message": "Establecer cadena"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Establece el valor de cadena de una clave en Redis"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
-          "source": "Get String",
+          "source": "Get string",
           "message": "Obtener cadena"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Obtener el valor de cadena de una clave de Redis"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
-          "source": "Set Hash Field",
+          "source": "Set hash field",
           "message": "Establecer campo hash"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Establece el valor de un campo hash en Redis"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
-          "source": "Get Hash Fields",
+          "source": "Get hash fields",
           "message": "Obtener campos de hash"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Obtener los valores de los campos de un hash de Redis"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
-          "source": "Push to List",
+          "source": "Push to list",
           "message": "Insertar en lista"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Inserta elementos en una lista en Redis"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
-          "source": "Pop from List",
+          "source": "Pop from list",
           "message": "Extraer de lista"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Extrae elementos de una lista en Redis"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
-          "source": "Publish Message",
+          "source": "Publish message",
           "message": "Publicar mensaje"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {

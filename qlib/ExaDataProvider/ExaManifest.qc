@@ -337,7 +337,7 @@ public class ExaManifest {
                 "method": "POST",
                 "mutates_state": False,
                 "path": "/answer",
-                "display_name": "Answer a Question",
+                "display_name": "Answer a question",
                 "short_desc": "Answer a question from the web, with citations",
                 "desc": "Searches the web and writes an answer to the question, citing the pages it "
                     "used.\n\n"
@@ -393,7 +393,7 @@ public class ExaManifest {
                 "method": "POST",
                 "mutates_state": False,
                 "path": "/contents",
-                "display_name": "Get Contents",
+                "display_name": "Get contents",
                 "short_desc": "Fetch the text, highlights or a summary of pages",
                 "desc": "Fetches the contents of pages Exa already knows about: their text, the "
                     "passages that match a query, or a written summary.\n\n"
@@ -475,7 +475,7 @@ public class ExaManifest {
                 "method": "POST",
                 "mutates_state": False,
                 "path": "/findSimilar",
-                "display_name": "Find Similar Links",
+                "display_name": "Find similar links",
                 "short_desc": "Find pages similar to a URL",
                 "desc": "Finds pages similar to the one given, optionally with their contents.\n\n"
                     "**Exa marks this endpoint deprecated** and recommends **Search** with a query "
@@ -545,7 +545,7 @@ public class ExaManifest {
                 "action": "create-agent-run",
                 "method": "POST",
                 "path": "/agent/runs",
-                "display_name": "Start a Research Run",
+                "display_name": "Start a research run",
                 "short_desc": "Ask the research agent a question and get the run it started",
                 "desc": "Starts a research run: the agent searches, reads and reasons over the web "
                     "until it can answer, rather than returning a single search's results.\n\n"
@@ -600,7 +600,7 @@ public class ExaManifest {
                 "action": "list-agent-runs",
                 "method": "GET",
                 "path": "/agent/runs",
-                "display_name": "List Research Runs",
+                "display_name": "List research runs",
                 "short_desc": "List the research runs for this team",
                 "desc": "Lists research runs, newest first.\n\nResults are paged: read `hasMore` and "
                     "pass `nextCursor` as `cursor` to get the following page.",
@@ -704,7 +704,7 @@ public class ExaManifest {
                 "action": "create-batch",
                 "method": "POST",
                 "path": "/batches",
-                "display_name": "Create a Batch",
+                "display_name": "Create a batch",
                 "short_desc": "Run many requests asynchronously in one job",
                 "desc": "Enqueues many requests to run asynchronously, each dispatched to its own "
                     "route, with the results made available for download when the batch finishes.\n\n"
@@ -728,7 +728,7 @@ public class ExaManifest {
                 "action": "list-batches",
                 "method": "GET",
                 "path": "/batches",
-                "display_name": "List Batches",
+                "display_name": "List batches",
                 "short_desc": "List the batches for this team",
                 "desc": "Lists batches, newest first, optionally narrowed to one status.",
                 "groups": (GroupBatches,),
@@ -801,7 +801,7 @@ public class ExaManifest {
                 "action": "create-monitor",
                 "method": "POST",
                 "path": "/monitors",
-                "display_name": "Create a Search Monitor",
+                "display_name": "Create a search monitor",
                 "short_desc": "Run a search on a schedule and deliver new results to a webhook",
                 "desc": "Creates a monitor: a search Exa re-runs on a schedule, delivering what is new "
                     "to your webhook.\n\n"
@@ -860,7 +860,7 @@ public class ExaManifest {
                 "action": "list-monitors",
                 "method": "GET",
                 "path": "/monitors",
-                "display_name": "List Search Monitors",
+                "display_name": "List search monitors",
                 "short_desc": "List the search monitors for this team",
                 "desc": "Lists search monitors, optionally narrowed by status, name or metadata.",
                 "groups": (GroupMonitors,),
@@ -970,7 +970,7 @@ public class ExaManifest {
                 "action": "batch-monitors",
                 "method": "POST",
                 "path": "/monitors/batch",
-                "display_name": "Act on Several Monitors",
+                "display_name": "Act on several monitors",
                 "short_desc": "Pause, resume or delete every monitor matching a filter",
                 "desc": "Applies one action - pause, unpause or delete - to every monitor matching a "
                     "filter.\n\n"

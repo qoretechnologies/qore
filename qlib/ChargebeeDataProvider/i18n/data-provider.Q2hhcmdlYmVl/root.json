@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
-          "source": "Find Customers",
-          "message": "Find Customers"
+          "source": "Find customers",
+          "message": "Find customers"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
           "source": "Find and search customers",
@@ -404,8 +404,8 @@
           "message": "Filter customers by their last name"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a single customer by ID",
@@ -424,8 +424,8 @@
           "message": "The customer ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -460,8 +460,8 @@
           "message": "Customer last name"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -496,8 +496,8 @@
           "message": "Customer first name"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
-          "message": "Delete Customer"
+          "source": "Delete customer",
+          "message": "Delete customer"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete a customer",
@@ -516,8 +516,8 @@
           "message": "The customer to delete"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "Find Subscriptions",
-          "message": "Find Subscriptions"
+          "source": "Find subscriptions",
+          "message": "Find subscriptions"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
           "source": "Find and search subscriptions",
@@ -580,8 +580,8 @@
           "message": "Filter subscriptions by the customer they belong to"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Get Subscription",
-          "message": "Get Subscription"
+          "source": "Get subscription",
+          "message": "Get subscription"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Get a single subscription by ID",
@@ -600,8 +600,8 @@
           "message": "The subscription ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Create Subscription",
-          "message": "Create Subscription"
+          "source": "Create subscription",
+          "message": "Create subscription"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Create a new subscription",
@@ -620,8 +620,8 @@
           "message": "The customer for the subscription"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Update Subscription",
-          "message": "Update Subscription"
+          "source": "Update subscription",
+          "message": "Update subscription"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Update an existing subscription",
@@ -640,8 +640,8 @@
           "message": "The subscription to update"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Delete Subscription",
-          "message": "Delete Subscription"
+          "source": "Delete subscription",
+          "message": "Delete subscription"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Delete a subscription",
@@ -660,8 +660,8 @@
           "message": "The subscription to delete"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
-          "source": "Find Invoices",
-          "message": "Find Invoices"
+          "source": "Find invoices",
+          "message": "Find invoices"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
           "source": "Find and search invoices",
@@ -708,8 +708,8 @@
           "message": "Pending"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
-          "message": "Get Invoice"
+          "source": "Get invoice",
+          "message": "Get invoice"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get a single invoice by ID",
@@ -728,8 +728,8 @@
           "message": "The invoice ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
-          "message": "Create Invoice"
+          "source": "Create invoice",
+          "message": "Create invoice"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a new invoice",
@@ -748,8 +748,8 @@
           "message": "The customer for the invoice"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
-          "message": "Update Invoice"
+          "source": "Update invoice",
+          "message": "Update invoice"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an existing invoice",
@@ -768,8 +768,8 @@
           "message": "The invoice to update"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
-          "message": "Delete Invoice"
+          "source": "Delete invoice",
+          "message": "Delete invoice"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
           "source": "Delete an invoice",
@@ -788,8 +788,8 @@
           "message": "The invoice to delete"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
-          "source": "Collect Invoice Payment",
-          "message": "Collect Invoice Payment"
+          "source": "Collect invoice payment",
+          "message": "Collect invoice payment"
         },
         "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
           "source": "Collect payment for an invoice",
@@ -816,8 +816,8 @@
           "message": "Payment amount in cents"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
-          "source": "Record Invoice Payment",
-          "message": "Record Invoice Payment"
+          "source": "Record invoice payment",
+          "message": "Record invoice payment"
         },
         "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
           "source": "Record a payment for an invoice",
@@ -844,8 +844,8 @@
           "message": "Payment amount in cents"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
-          "source": "Refund Invoice",
-          "message": "Refund Invoice"
+          "source": "Refund invoice",
+          "message": "Refund invoice"
         },
         "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
           "source": "Refund an invoice",
@@ -872,8 +872,8 @@
           "message": "Refund amount in cents"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
-          "source": "Get Invoice Link",
-          "message": "Get Invoice Link"
+          "source": "Get invoice link",
+          "message": "Get invoice link"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
           "source": "Get a download link for an invoice",
@@ -892,8 +892,8 @@
           "message": "The invoice to get the PDF link for"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
-          "source": "Find Coupons",
-          "message": "Find Coupons"
+          "source": "Find coupons",
+          "message": "Find coupons"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
           "source": "Find and search coupons",
@@ -960,8 +960,8 @@
           "message": "Offer Quantity"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
-          "source": "Get Coupon",
-          "message": "Get Coupon"
+          "source": "Get coupon",
+          "message": "Get coupon"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
           "source": "Get a single coupon by ID",
@@ -980,8 +980,8 @@
           "message": "The coupon ID"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
-          "source": "Create Coupon",
-          "message": "Create Coupon"
+          "source": "Create coupon",
+          "message": "Create coupon"
         },
         "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
           "source": "Create a new coupon",
@@ -1048,8 +1048,8 @@
           "message": "Limited Period"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
-          "source": "Update Coupon",
-          "message": "Update Coupon"
+          "source": "Update coupon",
+          "message": "Update coupon"
         },
         "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
           "source": "Update an existing coupon",
@@ -1076,8 +1076,8 @@
           "message": "Coupon display name"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
-          "source": "Delete Coupon",
-          "message": "Delete Coupon"
+          "source": "Delete coupon",
+          "message": "Delete coupon"
         },
         "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
           "source": "Delete a coupon",
@@ -1096,8 +1096,8 @@
           "message": "The coupon to delete"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
-          "source": "Find Promotional Credits",
-          "message": "Find Promotional Credits"
+          "source": "Find promotional credits",
+          "message": "Find promotional credits"
         },
         "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
           "source": "Find and search promotional credits",
@@ -1136,8 +1136,8 @@
           "message": "Set"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Get Promotional Credit",
-          "message": "Get Promotional Credit"
+          "source": "Get promotional credit",
+          "message": "Get promotional credit"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
           "source": "Get a single promotional credit by ID",
@@ -1156,8 +1156,8 @@
           "message": "The promotional credit ID"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Add Promotional Credit",
-          "message": "Add Promotional Credit"
+          "source": "Add promotional credit",
+          "message": "Add promotional credit"
         },
         "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
           "source": "Add promotional credits to a customer",
@@ -1192,8 +1192,8 @@
           "message": "Currency for the credits"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Deduct Promotional Credit",
-          "message": "Deduct Promotional Credit"
+          "source": "Deduct promotional credit",
+          "message": "Deduct promotional credit"
         },
         "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
           "source": "Deduct promotional credits from a customer",
@@ -1228,8 +1228,8 @@
           "message": "Currency for the credits"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
-          "source": "Set Promotional Credit",
-          "message": "Set Promotional Credit"
+          "source": "Set promotional credit",
+          "message": "Set promotional credit"
         },
         "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
           "source": "Set promotional credit balance for a customer",
@@ -1264,8 +1264,8 @@
           "message": "Currency for the credits"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
-          "source": "Get Transaction",
-          "message": "Get Transaction"
+          "source": "Get transaction",
+          "message": "Get transaction"
         },
         "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
           "source": "Get a transaction by ID",
@@ -1284,8 +1284,8 @@
           "message": "The transaction to retrieve"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
-          "source": "Customer Created",
-          "message": "Customer Created"
+          "source": "Customer created",
+          "message": "Customer created"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
           "source": "Trigger when a customer is created",
@@ -1296,8 +1296,8 @@
           "message": "Fires when a new customer is created in Chargebee. Provides customer event details."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
-          "source": "Any Event (Instant)",
-          "message": "Any Event (Instant)"
+          "source": "Any event (instant)",
+          "message": "Any event (instant)"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
           "source": "Trigger on any Chargebee event",
@@ -1308,8 +1308,8 @@
           "message": "Fires on any event in Chargebee. Provides full event details for all event types."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
-          "source": "Invoice Generated",
-          "message": "Invoice Generated"
+          "source": "Invoice generated",
+          "message": "Invoice generated"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
           "source": "Trigger when an invoice is generated",
@@ -1320,8 +1320,8 @@
           "message": "Fires when a new invoice is generated in Chargebee. Provides invoice event details."
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
-          "source": "Subscription Created",
-          "message": "Subscription Created"
+          "source": "Subscription created",
+          "message": "Subscription created"
         },
         "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {
           "source": "Trigger when a subscription is created",

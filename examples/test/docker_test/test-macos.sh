@@ -199,8 +199,9 @@ cmake .. \
     ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"} \
     ${CCACHE_CMAKE_ARGS}
 
-# Build
-make -j${MAKE_JOBS}
+# Build; the compiler output is kept in build.log for check-build-warnings (see ci-build-log.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"
+qore_ci_build_logged "${BUILD_DIR}/build.log" make -j${MAKE_JOBS}
 qore_ccache_finish
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${BUILD_DIR}"
 

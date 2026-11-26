@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Створити контакт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -832,7 +832,7 @@
           "message": "Значення цього користувацького поля"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Оновити контакт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1316,7 +1316,7 @@
           "message": "Значення цього користувацького поля"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Видалити контакт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Контакт для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Отримати контакт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "ID контакту"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Create a Contact List",
+          "source": "Create a contact list",
           "message": "Створити список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Чи позначати цей список як обраний"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Update a Contact List",
+          "source": "Update a contact list",
           "message": "Оновити список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Чи позначати цей список як обраний"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Delete a Contact List",
+          "source": "Delete a contact list",
           "message": "Видалити список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Список контактів для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
-          "source": "List Contact Lists",
+          "source": "List contact lists",
           "message": "Список списків контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Get a Contact List",
+          "source": "Get a contact list",
           "message": "Отримати список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "ID списку контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Створити тег"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "Тег, створений контактом"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "Оновити тег"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "Нова назва тегу"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Видалити тег"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Тег для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Отримати тег"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "ID тегу"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "Створити настроюване поле"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Поле дати"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "Оновити настроюване поле"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Нова мітка для настроюваного поля"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "Видалити настроюване поле"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "Настроюване поле для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "Отримати список користувацьких полів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Get a Custom Field",
+          "source": "Get a custom field",
           "message": "Отримати настроюване поле"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
@@ -1980,7 +1980,7 @@
           "message": "ID настроюваного поля"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Create a Segment",
+          "source": "Create a segment",
           "message": "Створити сегмент"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Вираз критеріїв для сегмента"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Update a Segment",
+          "source": "Update a segment",
           "message": "Оновити сегмент"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "Новий вираз критеріїв для сегмента"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
-          "source": "Delete a Segment",
+          "source": "Delete a segment",
           "message": "Видалити сегмент"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Сегмент для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "Отримати список сегментів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get a Segment",
+          "source": "Get a segment",
           "message": "Отримати сегмент"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "ID сегмента"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Create an Email Campaign",
+          "source": "Create an email campaign",
           "message": "Створити email-кампанію"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Тема електронного листа"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Update an Email Campaign",
+          "source": "Update an email campaign",
           "message": "Оновити кампанію електронної пошти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Нова назва кампанії електронної пошти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Delete an Email Campaign",
+          "source": "Delete an email campaign",
           "message": "Видалити email-кампанію"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2524,7 +2524,7 @@
           "message": "Email-кампанія для видалення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
-          "source": "Schedule an Email Campaign",
+          "source": "Schedule an email campaign",
           "message": "Запланувати кампанію електронної пошти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Запланована дата надсилання у форматі ISO-8601"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
-          "source": "List Email Campaigns",
+          "source": "List email campaigns",
           "message": "Список email-кампаній"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Максимальна кількість результатів для повернення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Get an Email Campaign",
+          "source": "Get an email campaign",
           "message": "Отримати email-кампанію"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "ID email-кампанії"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Import Contacts",
+          "source": "Import contacts",
           "message": "Імпорт контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Список ID списків контактів, до яких слід додати імпортовані контакти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Export Contacts",
+          "source": "Export contacts",
           "message": "Експорт контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "Список назв полів для включення в експорт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Add List Members",
+          "source": "Add list members",
           "message": "Додати учасників списку"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "Список ID списків контактів, до яких слід додати контакти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Remove List Members",
+          "source": "Remove list members",
           "message": "Видалити учасників списку"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Список ID списків контактів, з яких потрібно видалити контакти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
-          "source": "Get Email Summary",
+          "source": "Get email summary",
           "message": "Отримати зведення щодо email"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "Список ID email-кампаній, для яких потрібно отримати зведення"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Отримати обліковий запис"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Отримати інформацію про обліковий запис Constant Contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "Оновити обліковий запис"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "ID часового поясу (наприклад, `US/Eastern`)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
+          "source": "New contact",
           "message": "Новий контакт"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "New Email Campaign",
+          "source": "New email campaign",
           "message": "Нова кампанія електронної пошти"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "New Contact List",
+          "source": "New contact list",
           "message": "Новий список контактів"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {

@@ -712,7 +712,7 @@
           "message": "要更新其中繼資料的內容世代；省略時會使用目前有效版本"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "上傳物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "僅在物件目前的世代與此值相符時執行寫入；傳入 `0` 以僅在物件尚不存在時寫入，這會使上傳成為安全的建立操作而非覆寫"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "下載物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "要下載的內容世代；省略時將使用目前版本"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "刪除物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "要刪除的內容世代；省略時將刪除目前版本。在已啟用版本控制的儲存桶中，刪除目前版本會保留較早的世代，且必須指定特定世代才能將其永久移除"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "複製物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "以鍵/值組表示的副本使用者定義中繼資料；若省略則保留來源物件的中繼資料"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "組合物件"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "以鍵/值組表示的組合後物件使用者定義中繼資料"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "建立簽署網址"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

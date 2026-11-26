@@ -1960,7 +1960,7 @@
           "message": "Položka seznamu, se kterou se má pracovat"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument přidán"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Spustí se při přidání dokumentu do knihovny dokumentů. Používá rozdílové (delta) dotazy, které pokračují přesně tam, kde skončily, místo opětovného čtení celé knihovny"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument změněn"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Spustí se při změně dokumentu, který již je v knihovně. Používá rozdílové (delta) dotazy, které pokračují přesně tam, kde skončily, místo opětovného čtení celé knihovny"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Složka přidána"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Spustí se při přidání složky do knihovny dokumentů"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Položka seznamu přidána"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

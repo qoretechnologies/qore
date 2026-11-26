@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "列出專案"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "列出組織中的所有項目。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "建立專案"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -400,7 +400,7 @@
           "message": "是否使用客戶管理的加密金鑰 (CMEK) 強制加密。預設值為 `false`。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "列出組織"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -820,7 +820,7 @@
           "message": "資料平面檢視器"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "列出使用者"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "使用者 ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
+          "source": "List invites",
           "message": "列出邀請"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
@@ -952,7 +952,7 @@
           "message": "遊標來自先前回應的`pagination.next`。必須與相同的查詢上下文（路徑參數、過濾器和`limit`）一起重複使用。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
+          "source": "Create invite",
           "message": "創建邀請"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "邀請ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
+          "source": "List service accounts",
           "message": "列出服務帳戶"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "遊標來自先前回應的`pagination.next`。必須與相同的查詢上下文（路徑參數、過濾器和`limit`）一起重複使用。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
+          "source": "Create service account",
           "message": "建立服務帳戶"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "服務帳戶的唯一識別碼。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
+          "source": "List role bindings",
           "message": "列出角色綁定"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "遊標來自先前回應的`pagination.next`。必須與相同的查詢上下文（路徑參數、過濾器和`limit`）一起重複使用。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
+          "source": "Create role binding",
           "message": "建立角色綁定"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {

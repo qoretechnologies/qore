@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
-          "source": "Get Current User",
-          "message": "Get Current User"
+          "source": "Get current user",
+          "message": "Get current user"
         },
         "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
           "source": "Get the signed-in member's profile",
@@ -352,8 +352,8 @@
           "message": "Retrieves the signed-in member's profile: name, email address, profile picture and locale.\n\nThe `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn APIs take wherever a member has to be named."
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
-          "source": "Create Text Post",
-          "message": "Create Text Post"
+          "source": "Create text post",
+          "message": "Create text post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
           "source": "Publish a text post",
@@ -460,8 +460,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
-          "source": "Create Article Post",
-          "message": "Create Article Post"
+          "source": "Create article post",
+          "message": "Create article post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
           "source": "Publish a post linking to an article",
@@ -616,8 +616,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Image Post",
-          "message": "Create Image Post"
+          "source": "Create image post",
+          "message": "Create image post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
           "source": "Publish a post with an image",
@@ -880,8 +880,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
-          "source": "Create Video Post",
-          "message": "Create Video Post"
+          "source": "Create video post",
+          "message": "Create video post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
           "source": "Publish a post with a video",
@@ -1132,8 +1132,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
-          "source": "Create Multi-Image Post",
-          "message": "Create Multi-Image Post"
+          "source": "Create multi-image post",
+          "message": "Create multi-image post"
         },
         "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
           "source": "Publish a post with several images",
@@ -1384,8 +1384,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
-          "source": "Reshare Post",
-          "message": "Reshare Post"
+          "source": "Reshare post",
+          "message": "Reshare post"
         },
         "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
           "source": "Reshare an existing post",
@@ -1504,8 +1504,8 @@
           "message": "Prevent others from resharing the post"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update Post",
-          "message": "Update Post"
+          "source": "Update post",
+          "message": "Update post"
         },
         "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
           "source": "Change the text of a published post",
@@ -1540,8 +1540,8 @@
           "message": "The post's new text, replacing the existing text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag."
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete Post",
-          "message": "Delete Post"
+          "source": "Delete post",
+          "message": "Delete post"
         },
         "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
           "source": "Delete a post",
@@ -1564,8 +1564,8 @@
           "message": "The URN of the post to delete"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get Post",
-          "message": "Get Post"
+          "source": "Get post",
+          "message": "Get post"
         },
         "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
           "source": "Retrieve a post by its URN",
@@ -1624,8 +1624,8 @@
           "message": "The latest version, which may be `DRAFT` or `PROCESSING` rather than published"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
-          "source": "Upload Image",
-          "message": "Upload Image"
+          "source": "Upload image",
+          "message": "Upload image"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
           "source": "Upload an image and get its URN",
@@ -1780,8 +1780,8 @@
           "message": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
-          "source": "Upload Video",
-          "message": "Upload Video"
+          "source": "Upload video",
+          "message": "Upload video"
         },
         "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {
           "source": "Upload a video and get its URN",

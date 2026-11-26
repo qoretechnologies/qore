@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
-          "source": "Get Capability Statement",
+          "source": "Get capability statement",
           "message": "取得 Capability Statement"
         },
         "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
@@ -352,7 +352,7 @@
           "message": "從 FHIR `metadata` 端點讀取伺服器 `CapabilityStatement`。"
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
-          "source": "Get SMART Configuration",
+          "source": "Get SMART configuration",
           "message": "取得 SMART 設定"
         },
         "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
@@ -364,7 +364,7 @@
           "message": "從 `.well-known/smart-configuration` 讀取 SMART on FHIR 探索文件。"
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "讀取資源"
         },
         "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -400,7 +400,7 @@
           "message": "資源執行個體的 FHIR 邏輯 ID"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
-          "source": "Search Resources",
+          "source": "Search resources",
           "message": "搜尋資源"
         },
         "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "對應至 FHIR `_revinclude` 搜尋參數的便利欄位；重複的反向包含值請使用清單"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
-          "source": "Search All Resources",
+          "source": "Search all resources",
           "message": "搜尋所有資源"
         },
         "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
@@ -748,7 +748,7 @@
           "message": "透過追蹤 `next` 分頁連結所要擷取的 Bundle 頁面最大數量"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
-          "source": "Create Resource",
+          "source": "Create resource",
           "message": "建立資源"
         },
         "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
@@ -796,7 +796,7 @@
           "message": "於 `If-None-Exist` 標頭中傳送的 FHIR 條件式建立搜尋運算式"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
-          "source": "Submit Bundle",
+          "source": "Submit bundle",
           "message": "提交 Bundle"
         },
         "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
@@ -820,7 +820,7 @@
           "message": "`type` 設定為 `transaction` 或 `batch` 的 FHIR `Bundle` 資源。此 Bundle 會以 POST 傳送至 FHIR 服務基底以進行不可分割的交易寫入或批次執行。\n\n**範例**：`{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Update Resource",
+          "source": "Update resource",
           "message": "更新資源"
         },
         "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
@@ -880,7 +880,7 @@
           "message": "在 `If-Match` 標頭中傳送的 ETag 值，用於樂觀並行控制"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
-          "source": "Conditional Update Resource",
+          "source": "Conditional update resource",
           "message": "條件式更新資源"
         },
         "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
@@ -928,7 +928,7 @@
           "message": "JSON 相容雜湊形式的 FHIR 資源主體。雜湊必須包含與 `resource_type` 相符的 `resourceType`。"
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
-          "source": "Patch Resource",
+          "source": "Patch resource",
           "message": "修補資源"
         },
         "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "在 `If-Match` 標頭中傳送的 ETag 值，用於樂觀並行控制"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
-          "source": "Delete Resource",
+          "source": "Delete resource",
           "message": "刪除資源"
         },
         "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "在 `If-Match` 標頭中傳送的 ETag 值，用於樂觀並行控制"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
-          "source": "Validate Resource",
+          "source": "Validate resource",
           "message": "驗證資源"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "用於執行個體層級驗證的可選 FHIR 邏輯 ID"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
-          "source": "Validate Code",
+          "source": "Validate code",
           "message": "驗證代碼"
         },
         "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "作為查詢參數的 FHIR `$validate-code` 作業參數。鍵名為伺服器所接受的作業參數名稱。\n\n**範例**：`{\"code\": \"abc\"}`"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
-          "source": "Lookup Code",
+          "source": "Lookup code",
           "message": "尋找代碼"
         },
         "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "做為查詢參數的 FHIR `$lookup` 作業參數。鍵為伺服器接受的作業參數名稱。\n\n**範例**：`{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
-          "source": "Translate Code",
+          "source": "Translate code",
           "message": "轉換代碼"
         },
         "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {

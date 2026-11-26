@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Nach Nachrichten suchen"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Page-Token zum Abrufen einer bestimmten Ergebnisseite in der Liste"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Nachricht abrufen"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Die ID der abzurufenden Nachricht"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Anhang abrufen"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Die ID des abzurufenden Anhangs"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Neue E-Mail"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Die maximale Anzahl von Nachrichten, die in einem Abrufzyklus übermittelt werden; nicht festgelegt oder `0` bedeutet keine Begrenzung.\n\nDas Limit wird ab dem **ältesten** Ende des Backlogs angewendet, sodass der Watch-Cursor weiterhin fortlaufend voranschreitet und die verbleibenden Nachrichten in den folgenden Zyklen übermittelt und nicht übersprungen werden. Verwenden Sie dies, um den Arbeitsaufwand eines einzelnen Zyklus zu begrenzen, wenn sich ein großer Rückstau ansammeln könnte"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Neue E-Mail-Anhänge"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Die maximale Anzahl von Nachrichten, die in einem Abrufzyklus übermittelt werden; nicht festgelegt oder `0` bedeutet keine Begrenzung.\n\nDas Limit wird ab dem **ältesten** Ende des Backlogs angewendet, sodass der Watch-Cursor weiterhin fortlaufend voranschreitet und die verbleibenden Nachrichten in den folgenden Zyklen übermittelt und nicht übersprungen werden. Verwenden Sie dies, um den Arbeitsaufwand eines einzelnen Zyklus zu begrenzen, wenn sich ein großer Rückstau ansammeln könnte"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Nachricht in den Papierkorb verschieben"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "Die ID der Nachricht, die in den Papierkorb verschoben werden soll; Überwachungsereignisse übertragen diesen Wert als `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Nachricht löschen"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Der Wert des `References`-Headers: die `Message-ID`-Werte der Nachrichten in der Konversation, die beantwortet wird, älteste zuerst, durch Leerzeichen getrennt und einschließlich der spitzen Klammern. Wenn nicht gesetzt, wird `in_reply_to` verwendet. Überwachungsereignisse übertragen den `References`-Header der ursprünglichen Nachricht"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Nach Nachrichten mit Metadaten suchen"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Die Nachrichten-Header, die für jede passende Nachricht abgerufen werden sollen; wird ignoriert, sofern `format` nicht `metadata` ist"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Nachricht aus dem Papierkorb wiederherstellen"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Die ID der Nachricht, die aus dem Papierkorb wiederhergestellt werden soll; Überwachungsereignisse übertragen diesen Wert als `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Etiketten einer Nachricht ändern"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Die IDs der Etiketten, die von der Nachricht entfernt werden sollen; ein Etikett wird durch seine ID (z. B. `INBOX`, `UNREAD`, `Label_12`) identifiziert, nicht durch seinen Namen"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Etiketten auflisten"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Listet alle Etiketten im Konto auf, sowohl die Systemetiketten von Gmail (`INBOX`, `UNREAD`, `STARRED` usw.) als auch benutzerdefinierte Etiketten, jeweils mit der ID, die `modify-message-labels` und die Suchoption `labelIds` erwarten"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Etikett erstellen"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Nachrichten mit dem Etikett nicht in der Nachrichtenliste anzeigen"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Entwurf erstellen"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Der Wert des `References`-Headers: die `Message-ID`-Werte der Nachrichten in der Konversation, die beantwortet wird, älteste zuerst, durch Leerzeichen getrennt und einschließlich der spitzen Klammern. Wenn nicht gesetzt, wird `in_reply_to` verwendet. Überwachungsereignisse übertragen den `References`-Header der ursprünglichen Nachricht"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Nach Entwürfen suchen"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Page-Token zum Abrufen einer bestimmten Ergebnisseite in der Liste"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Entwurf abrufen"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Die vollständige Nachricht als base64url-codierte MIME-Daten in `raw`; der Text wird nicht geparst"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Entwurf senden"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Die ID des zu sendenden Entwurfs; `list-drafts` und `create-draft` geben diesen Wert als `id` zurück"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Entwurf löschen"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

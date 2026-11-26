@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
-          "source": "List Parcels",
+          "source": "List parcels",
           "message": "Lister les colis"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Nombre maximal d'enregistrements cumulés à renvoyer sur l'ensemble des pages"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
-          "source": "Get Parcel",
+          "source": "Get parcel",
           "message": "Obtenir le colis"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Nombre d'étiquettes à générer pour ce colis (envois multi-colis)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
-          "source": "Update Parcel",
+          "source": "Update parcel",
           "message": "Mettre à jour le colis"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
@@ -1356,7 +1356,7 @@
           "message": "Nom d'affichage de la méthode d'expédition (par exemple, « lettre non timbrée »)"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
-          "source": "Cancel Parcel",
+          "source": "Cancel parcel",
           "message": "Annuler le colis"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "ID numérique du colis à annuler"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
-          "source": "Get Parcel Label",
+          "source": "Get parcel label",
           "message": "Obtenir l'étiquette du colis"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Identifiant numérique du colis dont les URL d'étiquette sont récupérées"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
-          "source": "Get Parcel Document",
+          "source": "Get parcel document",
           "message": "Obtenir le document du colis"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Image PNG (disponible uniquement pour certains types de documents comme les codes QR)"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
-          "source": "List Shipping Methods",
+          "source": "List shipping methods",
           "message": "Lister les modes d'expédition"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Si `True`, inclure une ventilation détaillée des prix pour chaque mode"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
-          "source": "List Sender Addresses",
+          "source": "List sender addresses",
           "message": "Lister les adresses d'expéditeur"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Récupérer la liste des adresses d'expéditeur configurées sur votre compte SendCloud ; l'adresse par défaut est utilisée si aucune autre n'est spécifiée pour un colis."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Lister les utilisateurs"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Récupérer l'utilisateur/le compte SendCloud propriétaire des identifiants API actuels. La liste contient au maximum une entrée car l'API renvoie uniquement l'utilisateur authentifié."
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "Obtenir l'utilisateur"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
@@ -1672,7 +1672,7 @@
           "message": "Récupérer les informations relatives à l'utilisateur SendCloud actuellement authentifié (propriétaire du compte)."
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
-          "source": "List Service Points",
+          "source": "List service points",
           "message": "Lister les points de service"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "Code postal à proximité duquel rechercher des points de service (avec distance renvoyée)"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
-          "source": "Search Service Points",
+          "source": "Search service points",
           "message": "Rechercher des points de service"
         },
         "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Numéro de rue utilisé avec l'origine de recherche"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
-          "source": "List Returns",
+          "source": "List returns",
           "message": "Lister les retours"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "Nombre maximal d'enregistrements cumulés à renvoyer sur l'ensemble des pages"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
-          "source": "Get Return",
+          "source": "Get return",
           "message": "Obtenir le retour"
         },
         "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "Numéro de téléphone du destinataire (requis par certains transporteurs)"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
-          "source": "Update Return",
+          "source": "Update return",
           "message": "Mettre à jour le retour"
         },
         "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Motif de retour mis à jour"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
-          "source": "Cancel Return",
+          "source": "Cancel return",
           "message": "Annuler le retour"
         },
         "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
@@ -2572,7 +2572,7 @@
           "message": "ID numérique du retour à annuler"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
-          "source": "List Brands",
+          "source": "List brands",
           "message": "Lister les marques"
         },
         "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
@@ -2584,7 +2584,7 @@
           "message": "Récupérer la liste des marques configurées sur votre compte SendCloud. Les marques permettent de personnaliser les pages de suivi et les documents d'expédition."
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
-          "source": "Parcel Status Changed",
+          "source": "Parcel status changed",
           "message": "Statut du colis modifié"
         },
         "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
@@ -2596,7 +2596,7 @@
           "message": "Se déclenche chaque fois que le statut d'un colis SendCloud change. L'intervalle d'interrogation est configurable ; un intervalle minimal est imposé pour respecter les limites de l'API SendCloud."
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
-          "source": "Return Updated",
+          "source": "Return updated",
           "message": "Retour mis à jour"
         },
         "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {

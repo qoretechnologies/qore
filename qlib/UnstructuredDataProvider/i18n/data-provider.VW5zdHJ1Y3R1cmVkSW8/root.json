@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLWZpbGU.display_name": {
-          "source": "Partition Document",
-          "message": "Partition Document"
+          "source": "Partition document",
+          "message": "Partition document"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLWZpbGU.short_desc": {
           "source": "Partition a document file into a typed element tree",
@@ -768,8 +768,8 @@
           "message": "When `True`, `Table` elements are returned whole instead of being chunked."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.display_name": {
-          "source": "Partition Text",
-          "message": "Partition Text"
+          "source": "Partition text",
+          "message": "Partition text"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.short_desc": {
           "source": "Partition raw text into a typed element tree",
@@ -1172,8 +1172,8 @@
           "message": "When `True`, `Table` elements are returned whole instead of being chunked."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC13b3JrZmxvd3M.display_name": {
-          "source": "List Workflows",
-          "message": "List Workflows"
+          "source": "List workflows",
+          "message": "List workflows"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC13b3JrZmxvd3M.short_desc": {
           "source": "List the workflows in this Unstructured account",
@@ -1336,8 +1336,8 @@
           "message": "The workflow to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXdvcmtmbG93.display_name": {
-          "source": "Create Workflow",
-          "message": "Create Workflow"
+          "source": "Create workflow",
+          "message": "Create workflow"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXdvcmtmbG93.short_desc": {
           "source": "Create a workflow",
@@ -1560,8 +1560,8 @@
           "message": "Custom"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.option.d29ya2Zsb3dfbm9kZXM.display_name": {
-          "source": "Workflow Nodes",
-          "message": "Workflow Nodes"
+          "source": "Workflow nodes",
+          "message": "Workflow nodes"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.option.d29ya2Zsb3dfbm9kZXM.field.aWQ.display_name": {
           "source": "ID",
@@ -1640,8 +1640,8 @@
           "message": "monthly"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.option.cmVwcm9jZXNzX2FsbA.display_name": {
-          "source": "Reprocess All",
-          "message": "Reprocess All"
+          "source": "Reprocess all",
+          "message": "Reprocess all"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXdvcmtmbG93.option.c3RhdGU.display_name": {
           "source": "State",
@@ -1712,8 +1712,8 @@
           "message": "Restrict the run to these file IDs.  Leave unset to process everything the source connector offers."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1qb2Jz.display_name": {
-          "source": "List Jobs",
-          "message": "List Jobs"
+          "source": "List jobs",
+          "message": "List jobs"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1qb2Jz.short_desc": {
           "source": "List workflow runs",
@@ -1888,8 +1888,8 @@
           "message": "The job to cancel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1zb3VyY2Vz.display_name": {
-          "source": "List Source Connectors",
-          "message": "List Source Connectors"
+          "source": "List source connectors",
+          "message": "List source connectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1zb3VyY2Vz.short_desc": {
           "source": "List the source connectors in this account",
@@ -2044,8 +2044,8 @@
           "message": "The connector to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
-          "source": "Create Source Connector",
-          "message": "Create Source Connector"
+          "source": "Create source connector",
+          "message": "Create source connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
           "source": "Create a source connector",
@@ -2200,24 +2200,24 @@
           "message": "Connector settings, whose fields depend on `type`.  **Get Connector Configuration Fields** lists them for any type."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YXBpX2VuZHBvaW50.display_name": {
-          "source": "API Endpoint",
-          "message": "API Endpoint"
+          "source": "API endpoint",
+          "message": "API endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmluYXJ5X2VuY29kZV92ZWN0b3Jz.display_name": {
-          "source": "Binary Encode Vectors",
-          "message": "Binary Encode Vectors"
+          "source": "Binary encode vectors",
+          "message": "Binary encode vectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.a2V5c3BhY2U.display_name": {
           "source": "Keyspace",
@@ -2228,28 +2228,28 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.YWNjZXNzX3Rva2Vu.display_name": {
-          "source": "Access Token",
-          "message": "Access Token"
+          "source": "Access token",
+          "message": "Access token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.Ym94X2FwcF9jb25maWc.display_name": {
-          "source": "Box App Config",
-          "message": "Box App Config"
+          "source": "Box app config",
+          "message": "Box app config"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.YXBpX3Rva2Vu.display_name": {
-          "source": "API Token",
-          "message": "API Token"
+          "source": "API token",
+          "message": "API token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.Y2xvdWQ.display_name": {
           "source": "Cloud",
@@ -2260,32 +2260,32 @@
           "message": "Cloud ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.ZXh0cmFjdF9maWxlcw.display_name": {
-          "source": "Extract Files",
-          "message": "Extract Files"
+          "source": "Extract files",
+          "message": "Extract files"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.ZXh0cmFjdF9pbWFnZXM.display_name": {
-          "source": "Extract Images",
-          "message": "Extract Images"
+          "source": "Extract images",
+          "message": "Extract images"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.bWF4X251bV9vZl9kb2NzX2Zyb21fZWFjaF9zcGFjZQ.display_name": {
-          "source": "Max Num of Docs from Each Space",
-          "message": "Max Num of Docs from Each Space"
+          "source": "Max num of docs from each space",
+          "message": "Max num of docs from each space"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.bWF4X251bV9vZl9zcGFjZXM.display_name": {
-          "source": "Max Num of Spaces",
-          "message": "Max Num of Spaces"
+          "source": "Max num of spaces",
+          "message": "Max num of spaces"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.c3BhY2Vz.display_name": {
           "source": "Spaces",
@@ -2304,8 +2304,8 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.YnVja2V0.display_name": {
           "source": "Bucket",
@@ -2320,8 +2320,8 @@
           "message": "Collection ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -2344,8 +2344,8 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.aG9zdA.display_name": {
           "source": "Host",
@@ -2360,16 +2360,16 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
@@ -2380,44 +2380,44 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.ZXNfYXBpX2tleQ.display_name": {
-          "source": "Es API Key",
-          "message": "Es API Key"
+          "source": "Es API key",
+          "message": "Es API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aG9zdHM.display_name": {
           "source": "Hosts",
           "message": "Hosts"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfY2xpZW50X2lk.display_name": {
-          "source": "OAuth Client ID",
-          "message": "OAuth Client ID"
+          "source": "OAuth client ID",
+          "message": "OAuth client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfY2xpZW50X3NlY3JldA.display_name": {
-          "source": "OAuth Client Secret",
-          "message": "OAuth Client Secret"
+          "source": "OAuth client secret",
+          "message": "OAuth client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOlkzSmxZWFJsTFhOdmRYSmpaUToqU2VjcmV0UmVmZXJlbmNlI2I0OGFkMzhiYzE5MTY1OGE4MWYxYWI3Y2I5N2QzNWFkYTE5MDJjOGQ0ZDVkZDc1NGJmOTFkYmExMmI3NzAzNDA.field.aWQ.display_name": {
           "source": "ID",
@@ -2448,36 +2448,36 @@
           "message": "Extensions"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.Ym9vdHN0cmFwX3NlcnZlcnM.display_name": {
-          "source": "Bootstrap Servers",
-          "message": "Bootstrap Servers"
+          "source": "Bootstrap servers",
+          "message": "Bootstrap servers"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.Z3JvdXBfaWQ.display_name": {
           "source": "Group ID",
           "message": "Group ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.a2Fma2FfYXBpX2tleQ.display_name": {
-          "source": "Kafka API Key",
-          "message": "Kafka API Key"
+          "source": "Kafka API key",
+          "message": "Kafka API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.bnVtX21lc3NhZ2VzX3RvX2NvbnN1bWU.display_name": {
-          "source": "Num Messages to Consume",
-          "message": "Num Messages to Consume"
+          "source": "Num messages to consume",
+          "message": "Num messages to consume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.cG9ydA.display_name": {
           "source": "Port",
@@ -2508,16 +2508,16 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.cGF0aA.display_name": {
           "source": "Path",
@@ -2528,56 +2528,56 @@
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.dGVuYW50.display_name": {
           "source": "Tenant",
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.YXV0aG9yaXR5X3VybA.display_name": {
           "source": "Authority URL",
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.b3V0bG9va19mb2xkZXJz.display_name": {
-          "source": "Outlook Folders",
-          "message": "Outlook Folders"
+          "source": "Outlook folders",
+          "message": "Outlook folders"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.dGVuYW50.display_name": {
           "source": "Tenant",
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.dXNlcl9lbWFpbA.display_name": {
-          "source": "User Email",
-          "message": "User Email"
+          "source": "User email",
+          "message": "User email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -2592,8 +2592,8 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -2604,8 +2604,8 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
@@ -2616,12 +2616,12 @@
           "message": "Categories"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.Y29uc3VtZXJfa2V5.display_name": {
-          "source": "Consumer Key",
-          "message": "Consumer Key"
+          "source": "Consumer key",
+          "message": "Consumer key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.cHJpdmF0ZV9rZXk.display_name": {
-          "source": "Private Key",
-          "message": "Private Key"
+          "source": "Private key",
+          "message": "Private key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
@@ -2632,16 +2632,16 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.cGF0aA.display_name": {
           "source": "Path",
@@ -2652,8 +2652,8 @@
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.c2l0ZQ.display_name": {
           "source": "Site",
@@ -2664,24 +2664,24 @@
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.Y2hhbm5lbHM.display_name": {
           "source": "Channels",
           "message": "Channels"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.ZW5kX2RhdGU.display_name": {
-          "source": "End Date",
-          "message": "End Date"
+          "source": "End date",
+          "message": "End date"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.c3RhcnRfZGF0ZQ.display_name": {
-          "source": "Start Date",
-          "message": "Start Date"
+          "source": "Start date",
+          "message": "Start date"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -2692,8 +2692,8 @@
           "message": "Account"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -2708,8 +2708,8 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -2728,24 +2728,24 @@
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZGJzX3BvcnQ.display_name": {
-          "source": "Dbs Port",
-          "message": "Dbs Port"
+          "source": "Dbs port",
+          "message": "Dbs port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZmllbGRz.display_name": {
           "source": "Fields",
@@ -2756,16 +2756,16 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.dXNlcg.display_name": {
           "source": "User",
@@ -2784,16 +2784,16 @@
           "message": "Cloud ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.ZG93bmxvYWRfYXR0YWNobWVudHM.display_name": {
-          "source": "Download Attachments",
-          "message": "Download Attachments"
+          "source": "Download attachments",
+          "message": "Download attachments"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.aXNzdWVz.display_name": {
           "source": "Issues",
           "message": "Issues"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -2804,12 +2804,12 @@
           "message": "Projects"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.c3RhdHVzX2ZpbHRlcnM.display_name": {
-          "source": "Status Filters",
-          "message": "Status Filters"
+          "source": "Status filters",
+          "message": "Status filters"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -2824,28 +2824,28 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.YXBpX3Rva2Vu.display_name": {
-          "source": "API Token",
-          "message": "API Token"
+          "source": "API token",
+          "message": "API token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "Email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.aXRlbV90eXBl.display_name": {
-          "source": "Item Type",
-          "message": "Item Type"
+          "source": "Item type",
+          "message": "Item type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.c3ViZG9tYWlu.display_name": {
           "source": "Subdomain",
           "message": "Subdomain"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.YW1iaWVudF9jcmVkZW50aWFscw.display_name": {
-          "source": "Ambient Credentials",
-          "message": "Ambient Credentials"
+          "source": "Ambient credentials",
+          "message": "Ambient credentials"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.YW5vbnltb3Vz.display_name": {
           "source": "Anonymous",
@@ -2872,8 +2872,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.cm9sZV9hcm4.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.c2VjcmV0.display_name": {
           "source": "Secret",
@@ -2884,16 +2884,16 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.YWNjb3VudF9rZXk.display_name": {
-          "source": "Account Key",
-          "message": "Account Key"
+          "source": "Account key",
+          "message": "Account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.YWNjb3VudF9uYW1l.display_name": {
-          "source": "Account Name",
-          "message": "Account Name"
+          "source": "Account name",
+          "message": "Account name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
@@ -2904,8 +2904,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.c2FzX3Rva2Vu.display_name": {
-          "source": "Sas Token",
-          "message": "Sas Token"
+          "source": "Sas token",
+          "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLXNvdXJjZQ.option.a2V5.display_name": {
           "source": "Stable Key",
@@ -2948,24 +2948,24 @@
           "message": "Connector settings for the connector's type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YXBpX2VuZHBvaW50.display_name": {
-          "source": "API Endpoint",
-          "message": "API Endpoint"
+          "source": "API endpoint",
+          "message": "API endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmluYXJ5X2VuY29kZV92ZWN0b3Jz.display_name": {
-          "source": "Binary Encode Vectors",
-          "message": "Binary Encode Vectors"
+          "source": "Binary encode vectors",
+          "message": "Binary encode vectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.a2V5c3BhY2U.display_name": {
           "source": "Keyspace",
@@ -2976,28 +2976,28 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.YWNjZXNzX3Rva2Vu.display_name": {
-          "source": "Access Token",
-          "message": "Access Token"
+          "source": "Access token",
+          "message": "Access token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.Ym94X2FwcF9jb25maWc.display_name": {
-          "source": "Box App Config",
-          "message": "Box App Config"
+          "source": "Box app config",
+          "message": "Box app config"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Qm94U291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjMzI1MGNiNGUxMjA0ODkwNTIxNDNjNjVmNTZiNzkwY2FiYmZkYjIyMTcxZDc3MGQxODE3Y2JlMTg4YWY1YjUyMQ.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.YXBpX3Rva2Vu.display_name": {
-          "source": "API Token",
-          "message": "API Token"
+          "source": "API token",
+          "message": "API token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.Y2xvdWQ.display_name": {
           "source": "Cloud",
@@ -3008,32 +3008,32 @@
           "message": "Cloud ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.ZXh0cmFjdF9maWxlcw.display_name": {
-          "source": "Extract Files",
-          "message": "Extract Files"
+          "source": "Extract files",
+          "message": "Extract files"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.ZXh0cmFjdF9pbWFnZXM.display_name": {
-          "source": "Extract Images",
-          "message": "Extract Images"
+          "source": "Extract images",
+          "message": "Extract images"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.bWF4X251bV9vZl9kb2NzX2Zyb21fZWFjaF9zcGFjZQ.display_name": {
-          "source": "Max Num of Docs from Each Space",
-          "message": "Max Num of Docs from Each Space"
+          "source": "Max num of docs from each space",
+          "message": "Max num of docs from each space"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.bWF4X251bV9vZl9zcGFjZXM.display_name": {
-          "source": "Max Num of Spaces",
-          "message": "Max Num of Spaces"
+          "source": "Max num of spaces",
+          "message": "Max num of spaces"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q29uZmx1ZW5jZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2IwMzRlMTAyZGUxMDAwMjZhNTU0NzVlYTkxNGI1YTI1OWM0NTliMGU1YmE3ZjBiYWUxMDAzNTQyNzE2MjhkZTI.field.c3BhY2Vz.display_name": {
           "source": "Spaces",
@@ -3052,8 +3052,8 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.YnVja2V0.display_name": {
           "source": "Bucket",
@@ -3068,8 +3068,8 @@
           "message": "Collection ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.Q291Y2hiYXNlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjNWRjZGI1MzFkYTcxMWM2ZTNmYTNmMzVjZTJhODc2NDc4YTRiN2Y3ZWJmMWI0MGU5MTY3ODQwMTNiNWY1NzQ4OA.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -3092,8 +3092,8 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.aG9zdA.display_name": {
           "source": "Host",
@@ -3108,16 +3108,16 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RHJvcGJveFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U5MWM3Yzg4MDk5N2VkNTU2MzJjODFkYzlhYzUzN2ZiYzRjOTkwNWRkM2UzMDZmYzhjYWFjZTY5ZTRkZTE0MzQ.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
@@ -3128,44 +3128,44 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.ZXNfYXBpX2tleQ.display_name": {
-          "source": "Es API Key",
-          "message": "Es API Key"
+          "source": "Es API key",
+          "message": "Es API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aG9zdHM.display_name": {
           "source": "Hosts",
           "message": "Hosts"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfY2xpZW50X2lk.display_name": {
-          "source": "OAuth Client ID",
-          "message": "OAuth Client ID"
+          "source": "OAuth client ID",
+          "message": "OAuth client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfY2xpZW50X3NlY3JldA.display_name": {
-          "source": "OAuth Client Secret",
-          "message": "OAuth Client Secret"
+          "source": "OAuth client secret",
+          "message": "OAuth client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R0NTU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjZWRlMjgxMDE0NWY0NDJhNDlmMWU4NWE3OTg2MmI3ZTYyYTFkOTdmNTUxMzVjNmM4ZmRkMzE0NzUyMzhiMGI4Mw.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOmRYQmtZWFJsTFhOdmRYSmpaUToqU2VjcmV0UmVmZXJlbmNlI2I0OGFkMzhiYzE5MTY1OGE4MWYxYWI3Y2I5N2QzNWFkYTE5MDJjOGQ0ZDVkZDc1NGJmOTFkYmExMmI3NzAzNDA.field.aWQ.display_name": {
           "source": "ID",
@@ -3196,36 +3196,36 @@
           "message": "Extensions"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.R29vZ2xlRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMyZWQ1YmJlODRmZTM4ZDRiZDIwYzhiYzU4MGMzNjUzNTkzM2Q4NTU0NWNjZTgxOWIxMjcwZDA5MTcwYjBmNjdk.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.Ym9vdHN0cmFwX3NlcnZlcnM.display_name": {
-          "source": "Bootstrap Servers",
-          "message": "Bootstrap Servers"
+          "source": "Bootstrap servers",
+          "message": "Bootstrap servers"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.Z3JvdXBfaWQ.display_name": {
           "source": "Group ID",
           "message": "Group ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.a2Fma2FfYXBpX2tleQ.display_name": {
-          "source": "Kafka API Key",
-          "message": "Kafka API Key"
+          "source": "Kafka API key",
+          "message": "Kafka API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.bnVtX21lc3NhZ2VzX3RvX2NvbnN1bWU.display_name": {
-          "source": "Num Messages to Consume",
-          "message": "Num Messages to Consume"
+          "source": "Num messages to consume",
+          "message": "Num messages to consume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.S2Fma2FDbG91ZFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2U1MDE2MjhhYzY5NWRjZTIwODkyYjkyYWZlOGEwN2RmYmU4ZDVkN2E0ZGYwMDMxMTNjN2IxNTBkOTVlMjdkY2Y.field.cG9ydA.display_name": {
           "source": "Port",
@@ -3256,16 +3256,16 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.cGF0aA.display_name": {
           "source": "Path",
@@ -3276,56 +3276,56 @@
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.dGVuYW50.display_name": {
           "source": "Tenant",
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T25lRHJpdmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzOWQ2OGI0NDVhMmI0ZDI5MzdhZDkyZDFiOGFiYjQ1MTRiMWJkNTFiMTg3ODcxOWMzNzdiMGNhMGYxNDQ1ZTcw.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.YXV0aG9yaXR5X3VybA.display_name": {
           "source": "Authority URL",
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.b3V0bG9va19mb2xkZXJz.display_name": {
-          "source": "Outlook Folders",
-          "message": "Outlook Folders"
+          "source": "Outlook folders",
+          "message": "Outlook folders"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.dGVuYW50.display_name": {
           "source": "Tenant",
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.T3V0bG9va1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0I2VlYTEzZjg3MmZiYmJiN2E5NWMwODBiMmIxOTE0ZjBjMTE2ZTlhZTlkNWM0NjEyMTBjOGQzMDVkZDRkZDJlNjE.field.dXNlcl9lbWFpbA.display_name": {
-          "source": "User Email",
-          "message": "User Email"
+          "source": "User email",
+          "message": "User email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -3340,8 +3340,8 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -3352,8 +3352,8 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UG9zdGdyZXNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4NWYwYmE1ODMxZmNhY2VjNDdlNGM1MGYwMzYwOWVjNTU4MTljMTdlZGE2MzZkZDMxYjFiYWUxMmI4NmI4Y2Vi.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
@@ -3364,12 +3364,12 @@
           "message": "Categories"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.Y29uc3VtZXJfa2V5.display_name": {
-          "source": "Consumer Key",
-          "message": "Consumer Key"
+          "source": "Consumer key",
+          "message": "Consumer key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.cHJpdmF0ZV9rZXk.display_name": {
-          "source": "Private Key",
-          "message": "Private Key"
+          "source": "Private key",
+          "message": "Private key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2FsZXNmb3JjZVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0Izk1MDk2NGJkNWNhZTQ0YWRhMmU0NzMxODgyMzc3OTY3YmNhZTYxYWY1MGUwMDZkNGViZGZhNDY4NThjZGUwNmM.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
@@ -3380,16 +3380,16 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.cGF0aA.display_name": {
           "source": "Path",
@@ -3400,8 +3400,8 @@
           "message": "Recursive"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.c2l0ZQ.display_name": {
           "source": "Site",
@@ -3412,24 +3412,24 @@
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2hhcmVQb2ludFNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzBiMzkxZWIxMDJmZTY3MzBlOTM2ZjM2NTgwNzgwYWU3ZmU5ZjYwNDU2MWE0ZTQyOTUyZTI4OGZhNjk5YzIyYTI.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.Y2hhbm5lbHM.display_name": {
           "source": "Channels",
           "message": "Channels"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.ZW5kX2RhdGU.display_name": {
-          "source": "End Date",
-          "message": "End Date"
+          "source": "End date",
+          "message": "End date"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.c3RhcnRfZGF0ZQ.display_name": {
-          "source": "Start Date",
-          "message": "Start Date"
+          "source": "Start date",
+          "message": "Start date"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U2xhY2tTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM4Yjk3NzIxYmEzMjdkMTA1YTYxY2MyZGJiOTc0ZjEwOTE0ZTdjM2Q0YzhiMjFiNjJmZmVkNGZlMTBlZWI5YzJj.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -3440,8 +3440,8 @@
           "message": "Account"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -3456,8 +3456,8 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -3476,24 +3476,24 @@
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.U25vd2ZsYWtlU291cmNlQ29ubmVjdG9yQ29uZmlnSW5wdXQjYjg1ZmE3ZmY5ZGYzMzFjNzYyMzE4YjkwZjAyNWVlYmEzNjI3YTQ2N2RjZGE5MjgzOTUwNjcwNzQ5ZDhiZjk5ZA.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZGJzX3BvcnQ.display_name": {
-          "source": "Dbs Port",
-          "message": "Dbs Port"
+          "source": "Dbs port",
+          "message": "Dbs port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.ZmllbGRz.display_name": {
           "source": "Fields",
@@ -3504,16 +3504,16 @@
           "message": "Host"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.aWRfY29sdW1u.display_name": {
-          "source": "ID Column",
-          "message": "ID Column"
+          "source": "ID column",
+          "message": "ID column"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.VGVyYWRhdGFTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCNhOTAzYWE1YTMxZjFlMjUyZGQxOWExODE3NzliMzNmY2QzNzYwZDE4MGU4NTZkZTIwYjMyOTIxNjg4NWUyNWRj.field.dXNlcg.display_name": {
           "source": "User",
@@ -3532,16 +3532,16 @@
           "message": "Cloud ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.ZG93bmxvYWRfYXR0YWNobWVudHM.display_name": {
-          "source": "Download Attachments",
-          "message": "Download Attachments"
+          "source": "Download attachments",
+          "message": "Download attachments"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.aXNzdWVz.display_name": {
           "source": "Issues",
           "message": "Issues"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -3552,12 +3552,12 @@
           "message": "Projects"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.c3RhdHVzX2ZpbHRlcnM.display_name": {
-          "source": "Status Filters",
-          "message": "Status Filters"
+          "source": "Status filters",
+          "message": "Status filters"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.SmlyYVNvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzliOWNkZDhmZmZiYjBkNGE4ZjBjZTdlNzM0NjVlODZlYWI5M2U2NTY5MDNiMmE1ZGZkZjg1MzM1YzNlZWNlNmY.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -3572,28 +3572,28 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.YXBpX3Rva2Vu.display_name": {
-          "source": "API Token",
-          "message": "API Token"
+          "source": "API token",
+          "message": "API token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "Email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.aXRlbV90eXBl.display_name": {
-          "source": "Item Type",
-          "message": "Item Type"
+          "source": "Item type",
+          "message": "Item type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.WmVuZGVza1NvdXJjZUNvbm5lY3RvckNvbmZpZ0lucHV0IzNhN2RiOTViMzU4YWM5NWZhNTFmNjU1ZTUzOGRiNzViZTE0MDE2ZmJiNWRlOWJiYzcxZjQ0ZTBhMzNjNmJjNTQ.field.c3ViZG9tYWlu.display_name": {
           "source": "Subdomain",
           "message": "Subdomain"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.YW1iaWVudF9jcmVkZW50aWFscw.display_name": {
-          "source": "Ambient Credentials",
-          "message": "Ambient Credentials"
+          "source": "Ambient credentials",
+          "message": "Ambient credentials"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.YW5vbnltb3Vz.display_name": {
           "source": "Anonymous",
@@ -3620,8 +3620,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.cm9sZV9hcm4.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.UzNTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCM3MTRiN2YwNjUxZjAxZGJjOWYyZDAxY2JkM2JkZjVlZDNlMjlmMWNjMTY1ZDJlYTI1ODkzY2E1OGM0YzRjZTQ2.field.c2VjcmV0.display_name": {
           "source": "Secret",
@@ -3632,16 +3632,16 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.YWNjb3VudF9rZXk.display_name": {
-          "source": "Account Key",
-          "message": "Account Key"
+          "source": "Account key",
+          "message": "Account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.YWNjb3VudF9uYW1l.display_name": {
-          "source": "Account Name",
-          "message": "Account Name"
+          "source": "Account name",
+          "message": "Account name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.cmVjdXJzaXZl.display_name": {
           "source": "Recursive",
@@ -3652,8 +3652,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLXNvdXJjZQ.option.Y29uZmln.union.QXp1cmVTb3VyY2VDb25uZWN0b3JDb25maWdJbnB1dCMzNjJmY2VjNGE5YjliMTU0NTczMjcyYjE1NmU1YjEzZGU2ZWZiNzdjMWJjZjMzOGRmMmRhMDU5ODIyYjA5NTBl.field.c2FzX3Rva2Vu.display_name": {
-          "source": "Sas Token",
-          "message": "Sas Token"
+          "source": "Sas token",
+          "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
           "source": "Delete Source Connector",
@@ -3716,8 +3716,8 @@
           "message": "The connector whose check to read"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
-          "source": "List Destination Connectors",
-          "message": "List Destination Connectors"
+          "source": "List destination connectors",
+          "message": "List destination connectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
           "source": "List the destination connectors in this account",
@@ -3880,8 +3880,8 @@
           "message": "The connector to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
-          "source": "Create Destination Connector",
-          "message": "Create Destination Connector"
+          "source": "Create destination connector",
+          "message": "Create destination connector"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
           "source": "Create a destination connector",
@@ -4044,24 +4044,24 @@
           "message": "Connector settings, whose fields depend on `type`.  **Get Connector Configuration Fields** lists them for any type."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YXBpX2VuZHBvaW50.display_name": {
-          "source": "API Endpoint",
-          "message": "API Endpoint"
+          "source": "API endpoint",
+          "message": "API endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmluYXJ5X2VuY29kZV92ZWN0b3Jz.display_name": {
-          "source": "Binary Encode Vectors",
-          "message": "Binary Encode Vectors"
+          "source": "Binary encode vectors",
+          "message": "Binary encode vectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.a2V5c3BhY2U.display_name": {
           "source": "Keyspace",
@@ -4072,8 +4072,8 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.YnVja2V0.display_name": {
           "source": "Bucket",
@@ -4084,8 +4084,8 @@
           "message": "Collection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -4108,8 +4108,8 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.aG9zdA.display_name": {
           "source": "Host",
@@ -4124,8 +4124,8 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.Y2F0YWxvZw.display_name": {
           "source": "Catalog",
@@ -4136,28 +4136,28 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.aHR0cF9wYXRo.display_name": {
-          "source": "HTTP Path",
-          "message": "HTTP Path"
+          "source": "HTTP path",
+          "message": "HTTP path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.c2VydmVyX2hvc3RuYW1l.display_name": {
-          "source": "Server Hostname",
-          "message": "Server Hostname"
+          "source": "Server hostname",
+          "message": "Server hostname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -4168,60 +4168,60 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX2FjY2Vzc19rZXlfaWQ.display_name": {
-          "source": "AWS Access Key ID",
-          "message": "AWS Access Key ID"
+          "source": "AWS access key ID",
+          "message": "AWS access key ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX3JlZ2lvbg.display_name": {
-          "source": "AWS Region",
-          "message": "AWS Region"
+          "source": "AWS region",
+          "message": "AWS region"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX3NlY3JldF9hY2Nlc3Nfa2V5.display_name": {
-          "source": "AWS Secret Access Key",
-          "message": "AWS Secret Access Key"
+          "source": "AWS secret access key",
+          "message": "AWS secret access key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.dGFibGVfdXJp.display_name": {
           "source": "Table URI",
           "message": "Table URI"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.ZXNfYXBpX2tleQ.display_name": {
-          "source": "Es API Key",
-          "message": "Es API Key"
+          "source": "Es API key",
+          "message": "Es API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aG9zdHM.display_name": {
           "source": "Hosts",
           "message": "Hosts"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.R0NTRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNlNGNlZmFhM2EzMGI2Yzc5YmU5ZWEyYjA0ZWVlNWUyYjI1Y2U1NGNiMGNiMzRkNGEyNmRhZWUzYmJlNmMyODlm.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.R0NTRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNlNGNlZmFhM2EzMGI2Yzc5YmU5ZWEyYjA0ZWVlNWUyYjI1Y2U1NGNiMGNiMzRkNGEyNmRhZWUzYmJlNmMyODlm.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.Ym9vdHN0cmFwX3NlcnZlcnM.display_name": {
-          "source": "Bootstrap Servers",
-          "message": "Bootstrap Servers"
+          "source": "Bootstrap servers",
+          "message": "Bootstrap servers"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.Z3JvdXBfaWQ.display_name": {
           "source": "Group ID",
           "message": "Group ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.a2Fma2FfYXBpX2tleQ.display_name": {
-          "source": "Kafka API Key",
-          "message": "Kafka API Key"
+          "source": "Kafka API key",
+          "message": "Kafka API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.cG9ydA.display_name": {
           "source": "Port",
@@ -4236,28 +4236,28 @@
           "message": "Topic"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZGJfbmFtZQ.display_name": {
-          "source": "DB Name",
-          "message": "DB Name"
+          "source": "DB name",
+          "message": "DB name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZmllbGRzX3RvX2luY2x1ZGU.display_name": {
-          "source": "Fields to Include",
-          "message": "Fields to Include"
+          "source": "Fields to include",
+          "message": "Fields to include"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -4284,8 +4284,8 @@
           "message": "URI"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TmVvNGpEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzdhZjhhYWUyNmYyYjYyMTRhNmU1NjA2OWI4ZGZlNDBlZTdlZTMzODA4ZGQ3ZDBjZGMyMzgxNGY1NWI2MTg5YzM.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TmVvNGpEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzdhZjhhYWUyNmYyYjYyMTRhNmU1NjA2OWI4ZGZlNDBlZTdlZTMzODA4ZGQ3ZDBjZGMyMzgxNGY1NWI2MTg5YzM.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -4308,20 +4308,20 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
@@ -4332,28 +4332,28 @@
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.bmFtZXNwYWNl.display_name": {
           "source": "Namespace",
           "message": "Namespace"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -4372,16 +4372,16 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UmVkaXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzlkYzY3YWI1NjZjN2U4MzkxOTgxNjk0NzVhNTY1NzlhNTlhNTc1YTA4NTI5YzFlNDI5ZGJmODdjY2U1MGY4MzM.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UmVkaXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzlkYzY3YWI1NjZjN2U4MzkxOTgxNjk0NzVhNTY1NzlhNTlhNTc1YTA4NTI5YzFlNDI5ZGJmODdjY2U1MGY4MzM.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -4412,16 +4412,16 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.dXJs.display_name": {
           "source": "URL",
@@ -4432,8 +4432,8 @@
           "message": "Account"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -4452,8 +4452,8 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -4464,24 +4464,24 @@
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.ZGJzX3BvcnQ.display_name": {
-          "source": "Dbs Port",
-          "message": "Dbs Port"
+          "source": "Dbs port",
+          "message": "Dbs port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.aG9zdA.display_name": {
           "source": "Host",
@@ -4492,20 +4492,20 @@
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.V2VhdmlhdGVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzA0MzY0OWI5MGRmZWQ0MWRjY2FhMTEwYjRkOTVhMjkwMzk0MDlhZjc2ZGU0ZjhiMjkwMDYxNGUyNTRmMDRjYTE.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.V2VhdmlhdGVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzA0MzY0OWI5MGRmZWQ0MWRjY2FhMTEwYjRkOTVhMjkwMzk0MDlhZjc2ZGU0ZjhiMjkwMDYxNGUyNTRmMDRjYTE.field.Y2x1c3Rlcl91cmw.display_name": {
           "source": "Cluster URL",
@@ -4516,8 +4516,8 @@
           "message": "Collection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.YWNjZXNzX2tleV9pZA.display_name": {
-          "source": "Access Key ID",
-          "message": "Access Key ID"
+          "source": "Access key ID",
+          "message": "Access key ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.YWNjb3VudF9pZA.display_name": {
           "source": "Account ID",
@@ -4536,16 +4536,16 @@
           "message": "Catalog"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.aWFtX2FwaV9rZXk.display_name": {
-          "source": "IAM API Key",
-          "message": "IAM API Key"
+          "source": "IAM API key",
+          "message": "IAM API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.aWNlYmVyZ19lbmRwb2ludA.display_name": {
-          "source": "Iceberg Endpoint",
-          "message": "Iceberg Endpoint"
+          "source": "Iceberg endpoint",
+          "message": "Iceberg endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXM.display_name": {
-          "source": "Max Retries",
-          "message": "Max Retries"
+          "source": "Max retries",
+          "message": "Max retries"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXM.short_desc": {
           "source": "Maximum number of retries to upload data",
@@ -4556,8 +4556,8 @@
           "message": "Maximum number of retries to upload data"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXNfY29ubmVjdGlvbg.display_name": {
-          "source": "Max Retries Connection",
-          "message": "Max Retries Connection"
+          "source": "Max retries connection",
+          "message": "Max retries connection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXNfY29ubmVjdGlvbg.short_desc": {
           "source": "Maximum number of retries in case of a connection error",
@@ -4572,16 +4572,16 @@
           "message": "Namespace"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.b2JqZWN0X3N0b3JhZ2VfZW5kcG9pbnQ.display_name": {
-          "source": "Object Storage Endpoint",
-          "message": "Object Storage Endpoint"
+          "source": "Object storage endpoint",
+          "message": "Object storage endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.b2JqZWN0X3N0b3JhZ2VfcmVnaW9u.display_name": {
-          "source": "Object Storage Region",
-          "message": "Object Storage Region"
+          "source": "Object storage region",
+          "message": "Object storage region"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.cmVjb3JkX2lkX2tleQ.short_desc": {
           "source": "Searchable key to find entries for the same record on previous runs",
@@ -4592,16 +4592,16 @@
           "message": "Searchable key to find entries for the same record on previous runs"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.c2VjcmV0X2FjY2Vzc19rZXk.display_name": {
-          "source": "Secret Access Key",
-          "message": "Secret Access Key"
+          "source": "Secret access key",
+          "message": "Secret access key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.dGFibGU.display_name": {
           "source": "Table",
           "message": "Table"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.YW1iaWVudF9jcmVkZW50aWFscw.display_name": {
-          "source": "Ambient Credentials",
-          "message": "Ambient Credentials"
+          "source": "Ambient credentials",
+          "message": "Ambient credentials"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.YW5vbnltb3Vz.display_name": {
           "source": "Anonymous",
@@ -4624,8 +4624,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.cm9sZV9hcm4.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.c2VjcmV0.display_name": {
           "source": "Secret",
@@ -4636,24 +4636,24 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.YWNjb3VudF9rZXk.display_name": {
-          "source": "Account Key",
-          "message": "Account Key"
+          "source": "Account key",
+          "message": "Account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.YWNjb3VudF9uYW1l.display_name": {
-          "source": "Account Name",
-          "message": "Account Name"
+          "source": "Account name",
+          "message": "Account name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.c2FzX3Rva2Vu.display_name": {
-          "source": "Sas Token",
-          "message": "Sas Token"
+          "source": "Sas token",
+          "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.a2V5.display_name": {
           "source": "Stable Key",
@@ -4696,24 +4696,24 @@
           "message": "Connector settings for the connector's type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YXBpX2VuZHBvaW50.display_name": {
-          "source": "API Endpoint",
-          "message": "API Endpoint"
+          "source": "API endpoint",
+          "message": "API endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.YmluYXJ5X2VuY29kZV92ZWN0b3Jz.display_name": {
-          "source": "Binary Encode Vectors",
-          "message": "Binary Encode Vectors"
+          "source": "Binary encode vectors",
+          "message": "Binary encode vectors"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXN0cmFEQkNvbm5lY3RvckNvbmZpZ0lucHV0IzJlY2Y5MzRjODc1NjE5NWQ5NTNlZTE2MTA3NTZlMWNhNjg0YjQ4ZWMwMzQ3OWQ5YzQ1Y2EzNDQ2OTA1YmYxZjQ.field.a2V5c3BhY2U.display_name": {
           "source": "Keyspace",
@@ -4724,8 +4724,8 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.YnVja2V0.display_name": {
           "source": "Bucket",
@@ -4736,8 +4736,8 @@
           "message": "Collection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.Q291Y2hiYXNlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNiYTFiOGFmZjFiZTVjNjhiZDUzYzRjZjVhOWU4NTAyMDU2ZGRmMzAwZDI3OTQ5YzJlM2Y0N2FmYjAzZWUxZGM5.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
@@ -4760,8 +4760,8 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.aG9zdA.display_name": {
           "source": "Host",
@@ -4776,8 +4776,8 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZvbHVtZXNDb25uZWN0b3JDb25maWdJbnB1dCNiNmYyNjJmMGExNTVlNjMxZjQxNmUyNWY5ZmU1YjRkNmIxZDE4ZDg2ODk0NjU1YTExMTcwYTUxYzc5MTE0YjVj.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.Y2F0YWxvZw.display_name": {
           "source": "Catalog",
@@ -4788,28 +4788,28 @@
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.Y2xpZW50X3NlY3JldA.display_name": {
-          "source": "Client Secret",
-          "message": "Client Secret"
+          "source": "Client secret",
+          "message": "Client secret"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.aHR0cF9wYXRo.display_name": {
-          "source": "HTTP Path",
-          "message": "HTTP Path"
+          "source": "HTTP path",
+          "message": "HTTP path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.c2VydmVyX2hvc3RuYW1l.display_name": {
-          "source": "Server Hostname",
-          "message": "Server Hostname"
+          "source": "Server hostname",
+          "message": "Server hostname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -4820,60 +4820,60 @@
           "message": "Volume"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGF0YWJyaWNrc1ZEVERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjNDhjNDgyZmQ5MjBiYjUxNzY5MTQ0YzE2MjgwMzBlNjc1YTY4ODNmZjkyMmYwMGZmZTgyMWEzOTQ0MDA1MWE5MQ.field.dm9sdW1lX3BhdGg.display_name": {
-          "source": "Volume Path",
-          "message": "Volume Path"
+          "source": "Volume path",
+          "message": "Volume path"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX2FjY2Vzc19rZXlfaWQ.display_name": {
-          "source": "AWS Access Key ID",
-          "message": "AWS Access Key ID"
+          "source": "AWS access key ID",
+          "message": "AWS access key ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX3JlZ2lvbg.display_name": {
-          "source": "AWS Region",
-          "message": "AWS Region"
+          "source": "AWS region",
+          "message": "AWS region"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.YXdzX3NlY3JldF9hY2Nlc3Nfa2V5.display_name": {
-          "source": "AWS Secret Access Key",
-          "message": "AWS Secret Access Key"
+          "source": "AWS secret access key",
+          "message": "AWS secret access key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RGVsdGFUYWJsZUNvbm5lY3RvckNvbmZpZ0lucHV0IzJkMGUwZmY5NjQwMjM4ZmNmZDRjOGMzMzgyMzdiZWI5YzdiY2Y2NTQzMjEyMWI5Nzc4MmMzNTcxZjM2OTg5ZDg.field.dGFibGVfdXJp.display_name": {
           "source": "Table URI",
           "message": "Table URI"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.ZXNfYXBpX2tleQ.display_name": {
-          "source": "Es API Key",
-          "message": "Es API Key"
+          "source": "Es API key",
+          "message": "Es API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aG9zdHM.display_name": {
           "source": "Hosts",
           "message": "Hosts"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.RWxhc3RpY3NlYXJjaENvbm5lY3RvckNvbmZpZ0lucHV0Izk5YWYyOWY2OGYwY2FjYjI1YzBkNDA1ZjA2NDlhMGY5OTA3YzQwMmExYjFiZmViMWI3ZTk3MTMwNWU2NDlhOTE.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.R0NTRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNlNGNlZmFhM2EzMGI2Yzc5YmU5ZWEyYjA0ZWVlNWUyYjI1Y2U1NGNiMGNiMzRkNGEyNmRhZWUzYmJlNmMyODlm.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.R0NTRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNlNGNlZmFhM2EzMGI2Yzc5YmU5ZWEyYjA0ZWVlNWUyYjI1Y2U1NGNiMGNiMzRkNGEyNmRhZWUzYmJlNmMyODlm.field.c2VydmljZV9hY2NvdW50X2tleQ.display_name": {
-          "source": "Service Account Key",
-          "message": "Service Account Key"
+          "source": "Service account key",
+          "message": "Service account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.Ym9vdHN0cmFwX3NlcnZlcnM.display_name": {
-          "source": "Bootstrap Servers",
-          "message": "Bootstrap Servers"
+          "source": "Bootstrap servers",
+          "message": "Bootstrap servers"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.Z3JvdXBfaWQ.display_name": {
           "source": "Group ID",
           "message": "Group ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.a2Fma2FfYXBpX2tleQ.display_name": {
-          "source": "Kafka API Key",
-          "message": "Kafka API Key"
+          "source": "Kafka API key",
+          "message": "Kafka API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.S2Fma2FDbG91ZERlc3RpbmF0aW9uQ29ubmVjdG9yQ29uZmlnSW5wdXQjM2M2MzAxZDRjZTIzOTMxZGViNjM3OGI0MTM5YzYyNGY2YTg5NmY2OTc1MDgxOWIxM2UyNDc0MTEyMWE5OGZmZQ.field.cG9ydA.display_name": {
           "source": "Port",
@@ -4888,28 +4888,28 @@
           "message": "Topic"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZGJfbmFtZQ.display_name": {
-          "source": "DB Name",
-          "message": "DB Name"
+          "source": "DB name",
+          "message": "DB name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZmllbGRzX3RvX2luY2x1ZGU.display_name": {
-          "source": "Fields to Include",
-          "message": "Fields to Include"
+          "source": "Fields to include",
+          "message": "Fields to include"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.ZmxhdHRlbl9tZXRhZGF0YQ.display_name": {
-          "source": "Flatten Metadata",
-          "message": "Flatten Metadata"
+          "source": "Flatten metadata",
+          "message": "Flatten metadata"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TWlsdnVzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCM3MzkzNjM4ZjgxMTM5YzYwZTdhYjBiMmRiN2ViMWE0Y2UzZDZkZTViNDEyZjBmOTVkYjc4NjVhODI1NDYzOGRk.field.dG9rZW4.display_name": {
           "source": "Token",
@@ -4936,8 +4936,8 @@
           "message": "URI"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TmVvNGpEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzdhZjhhYWUyNmYyYjYyMTRhNmU1NjA2OWI4ZGZlNDBlZTdlZTMzODA4ZGQ3ZDBjZGMyMzgxNGY1NWI2MTg5YzM.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.TmVvNGpEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzdhZjhhYWUyNmYyYjYyMTRhNmU1NjA2OWI4ZGZlNDBlZTdlZTMzODA4ZGQ3ZDBjZGMyMzgxNGY1NWI2MTg5YzM.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -4960,20 +4960,20 @@
           "message": "Authority URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.Y2xpZW50X2NyZWQ.display_name": {
-          "source": "Client Cred",
-          "message": "Client Cred"
+          "source": "Client cred",
+          "message": "Client cred"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.Y2xpZW50X2lk.display_name": {
           "source": "Client ID",
           "message": "Client ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.b2F1dGhfdG9rZW4.display_name": {
-          "source": "OAuth Token",
-          "message": "OAuth Token"
+          "source": "OAuth token",
+          "message": "OAuth token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.cmVmcmVzaF90b2tlbg.display_name": {
-          "source": "Refresh Token",
-          "message": "Refresh Token"
+          "source": "Refresh token",
+          "message": "Refresh token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
@@ -4984,28 +4984,28 @@
           "message": "Tenant"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.T25lRHJpdmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzEzNTBkMDliZWFjMGQyZWYwOGEyMTJlZDI2NDk3ZDY4YmFiMzMxZjcwZGEyNDUyOTgzNzI0NThmNzNlYjQ2OTA.field.dXNlcl9wbmFtZQ.display_name": {
-          "source": "User Pname",
-          "message": "User Pname"
+          "source": "User pname",
+          "message": "User pname"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.aW5kZXhfbmFtZQ.display_name": {
-          "source": "Index Name",
-          "message": "Index Name"
+          "source": "Index name",
+          "message": "Index name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UGluZWNvbmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzExYTYwYjExZDI0MjJkMDVkZjVjNDI3MjQzZTU3MjhkZjgwNzAwMjgzYjUzMGNmNTE3ZDkxMzk5M2Q1YjYwZjY.field.bmFtZXNwYWNl.display_name": {
           "source": "Namespace",
           "message": "Namespace"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -5024,16 +5024,16 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UG9zdGdyZXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2YxMTJlOGFmNGRhY2ZkN2FjMmU1ZTA3YzViYWU0NmJlNjdhNDllYTRjMzhiNWZmZTBiODNjYTA2OTgwZDFjNDE.field.dXNlcm5hbWU.display_name": {
           "source": "Username",
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UmVkaXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzlkYzY3YWI1NjZjN2U4MzkxOTgxNjk0NzVhNTY1NzlhNTlhNTc1YTA4NTI5YzFlNDI5ZGJmODdjY2U1MGY4MzM.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UmVkaXNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzlkYzY3YWI1NjZjN2U4MzkxOTgxNjk0NzVhNTY1NzlhNTlhNTc1YTA4NTI5YzFlNDI5ZGJmODdjY2U1MGY4MzM.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -5064,16 +5064,16 @@
           "message": "Username"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.Y29sbGVjdGlvbl9uYW1l.display_name": {
-          "source": "Collection Name",
-          "message": "Collection Name"
+          "source": "Collection name",
+          "message": "Collection name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UWRyYW50Q2xvdWREZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FiNzBlOWVlNDg1MWJmN2VmNWVmYWE0YjFjNmVmN2Q1OTZhZWZmZTMwNDBiYzUzYzA5MmMxMjA2MDM0YTJjZWE.field.dXJs.display_name": {
           "source": "URL",
@@ -5084,8 +5084,8 @@
           "message": "Account"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
@@ -5104,8 +5104,8 @@
           "message": "Port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -5116,24 +5116,24 @@
           "message": "Schema"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.U25vd2ZsYWtlRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCMyZWNjNzhkZDg5NWZjYTBlN2U5MDU2NjE5ZjdiOTUzYTYwNmI3N2VmYmQ2MjNmZDQ4NjhkODRjOWMzODIwNGUz.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.YmF0Y2hfc2l6ZQ.display_name": {
-          "source": "Batch Size",
-          "message": "Batch Size"
+          "source": "Batch size",
+          "message": "Batch size"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.ZGF0YWJhc2U.display_name": {
           "source": "Database",
           "message": "Database"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.ZGJzX3BvcnQ.display_name": {
-          "source": "Dbs Port",
-          "message": "Dbs Port"
+          "source": "Dbs port",
+          "message": "Dbs port"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.aG9zdA.display_name": {
           "source": "Host",
@@ -5144,20 +5144,20 @@
           "message": "Password"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.dGFibGVfbmFtZQ.display_name": {
-          "source": "Table Name",
-          "message": "Table Name"
+          "source": "Table name",
+          "message": "Table name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.VGVyYWRhdGFEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2FkMmM3YjdlYmFhNDVhNmQwY2E1ZWNhZGRiNjM5YmNiNzJjYjA5ZmFlZTFjMjY0ZWE1ZDU1MWI4ODQyNTkzNTE.field.dXNlcg.display_name": {
           "source": "User",
           "message": "User"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.V2VhdmlhdGVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzA0MzY0OWI5MGRmZWQ0MWRjY2FhMTEwYjRkOTVhMjkwMzk0MDlhZjc2ZGU0ZjhiMjkwMDYxNGUyNTRmMDRjYTE.field.YXBpX2tleQ.display_name": {
-          "source": "API Key",
-          "message": "API Key"
+          "source": "API key",
+          "message": "API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.V2VhdmlhdGVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzA0MzY0OWI5MGRmZWQ0MWRjY2FhMTEwYjRkOTVhMjkwMzk0MDlhZjc2ZGU0ZjhiMjkwMDYxNGUyNTRmMDRjYTE.field.Y2x1c3Rlcl91cmw.display_name": {
           "source": "Cluster URL",
@@ -5168,8 +5168,8 @@
           "message": "Collection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.YWNjZXNzX2tleV9pZA.display_name": {
-          "source": "Access Key ID",
-          "message": "Access Key ID"
+          "source": "Access key ID",
+          "message": "Access key ID"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.YWNjb3VudF9pZA.display_name": {
           "source": "Account ID",
@@ -5188,16 +5188,16 @@
           "message": "Catalog"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.aWFtX2FwaV9rZXk.display_name": {
-          "source": "IAM API Key",
-          "message": "IAM API Key"
+          "source": "IAM API key",
+          "message": "IAM API key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.aWNlYmVyZ19lbmRwb2ludA.display_name": {
-          "source": "Iceberg Endpoint",
-          "message": "Iceberg Endpoint"
+          "source": "Iceberg endpoint",
+          "message": "Iceberg endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXM.display_name": {
-          "source": "Max Retries",
-          "message": "Max Retries"
+          "source": "Max retries",
+          "message": "Max retries"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXM.short_desc": {
           "source": "Maximum number of retries to upload data",
@@ -5208,8 +5208,8 @@
           "message": "Maximum number of retries to upload data"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXNfY29ubmVjdGlvbg.display_name": {
-          "source": "Max Retries Connection",
-          "message": "Max Retries Connection"
+          "source": "Max retries connection",
+          "message": "Max retries connection"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.bWF4X3JldHJpZXNfY29ubmVjdGlvbg.short_desc": {
           "source": "Maximum number of retries in case of a connection error",
@@ -5224,16 +5224,16 @@
           "message": "Namespace"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.b2JqZWN0X3N0b3JhZ2VfZW5kcG9pbnQ.display_name": {
-          "source": "Object Storage Endpoint",
-          "message": "Object Storage Endpoint"
+          "source": "Object storage endpoint",
+          "message": "Object storage endpoint"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.b2JqZWN0X3N0b3JhZ2VfcmVnaW9u.display_name": {
-          "source": "Object Storage Region",
-          "message": "Object Storage Region"
+          "source": "Object storage region",
+          "message": "Object storage region"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.cmVjb3JkX2lkX2tleQ.display_name": {
-          "source": "Record ID Key",
-          "message": "Record ID Key"
+          "source": "Record ID key",
+          "message": "Record ID key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.cmVjb3JkX2lkX2tleQ.short_desc": {
           "source": "Searchable key to find entries for the same record on previous runs",
@@ -5244,16 +5244,16 @@
           "message": "Searchable key to find entries for the same record on previous runs"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.c2VjcmV0X2FjY2Vzc19rZXk.display_name": {
-          "source": "Secret Access Key",
-          "message": "Secret Access Key"
+          "source": "Secret access key",
+          "message": "Secret access key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.SUJNV2F0c29ueFMzRGVzdGluYXRpb25Db25uZWN0b3JDb25maWdJbnB1dCNjODdlNTZlZTA0ZjE5OTFkY2JkZDE4N2NkMGMzMjAzYWUyNWQ3YWRhYzdhYzRmOTU1YzJmMTExZDg5ZTg5OWJi.field.dGFibGU.display_name": {
           "source": "Table",
           "message": "Table"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.YW1iaWVudF9jcmVkZW50aWFscw.display_name": {
-          "source": "Ambient Credentials",
-          "message": "Ambient Credentials"
+          "source": "Ambient credentials",
+          "message": "Ambient credentials"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.YW5vbnltb3Vz.display_name": {
           "source": "Anonymous",
@@ -5276,8 +5276,8 @@
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.cm9sZV9hcm4.display_name": {
-          "source": "Role Arn",
-          "message": "Role Arn"
+          "source": "Role arn",
+          "message": "Role arn"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.UzNEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0IzFhZDE3MDU3YWYyOTRjY2M4NDZiMjBlNTdiMjcyZDA3MThmMTFjMDk3NTU2MWY3YmY2Nzc4YTE0MjQ3Y2UyMWQ.field.c2VjcmV0.display_name": {
           "source": "Secret",
@@ -5288,24 +5288,24 @@
           "message": "Token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.YWNjb3VudF9rZXk.display_name": {
-          "source": "Account Key",
-          "message": "Account Key"
+          "source": "Account key",
+          "message": "Account key"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.YWNjb3VudF9uYW1l.display_name": {
-          "source": "Account Name",
-          "message": "Account Name"
+          "source": "Account name",
+          "message": "Account name"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.Y29ubmVjdGlvbl9zdHJpbmc.display_name": {
-          "source": "Connection String",
-          "message": "Connection String"
+          "source": "Connection string",
+          "message": "Connection string"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.cmVtb3RlX3VybA.display_name": {
           "source": "Remote URL",
           "message": "Remote URL"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.Y29uZmln.union.QXp1cmVEZXN0aW5hdGlvbkNvbm5lY3RvckNvbmZpZ0lucHV0I2E1N2E1ODllOTllZjhjYTU0MDJhYmNiYTdjNTAxMDQ5OGE4MWU4YTZjZDkwMDE0NGE2Njg4OTY4MThlYTAyOWU.field.c2FzX3Rva2Vu.display_name": {
-          "source": "Sas Token",
-          "message": "Sas Token"
+          "source": "Sas token",
+          "message": "Sas token"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
           "source": "Delete Destination Connector",
@@ -5368,8 +5368,8 @@
           "message": "The connector whose check to read"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1ub3RpZmljYXRpb24tY2hhbm5lbHM.display_name": {
-          "source": "List Notification Channels",
-          "message": "List Notification Channels"
+          "source": "List notification channels",
+          "message": "List notification channels"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC1ub3RpZmljYXRpb24tY2hhbm5lbHM.short_desc": {
           "source": "List the notification channels in this account",
@@ -5424,8 +5424,8 @@
           "message": "The channel to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.display_name": {
-          "source": "Create Notification Channel",
-          "message": "Create Notification Channel"
+          "source": "Create notification channel",
+          "message": "Create notification channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.short_desc": {
           "source": "Create a notification channel",
@@ -5448,8 +5448,8 @@
           "message": "The channel to create.\n\nFor a webhook channel: `channel_type` `webhook`, a `url` to post to, an optional signing `secret`, and the `event_types` to subscribe to.  For an email channel: `channel_type` `email`, an `email_config` naming the recipients, and the same `event_types`.\n\nSupplied whole because Unstructured describes the two kinds as different request bodies rather than one with optional fields."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlV2ViaG9va0NoYW5uZWxSZXF1ZXN0IzAxMmRjN2ExNWNjNTk2MTBmYTE1M2YzOGZiMjIwOWY4MzFiYmE5NTA0YWY4NWFmNWE4MTlkYTllNWM4MjE0OTM.field.Y2hhbm5lbF90eXBl.display_name": {
-          "source": "Channel Type",
-          "message": "Channel Type"
+          "source": "Channel type",
+          "message": "Channel type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlV2ViaG9va0NoYW5uZWxSZXF1ZXN0IzAxMmRjN2ExNWNjNTk2MTBmYTE1M2YzOGZiMjIwOWY4MzFiYmE5NTA0YWY4NWFmNWE4MTlkYTllNWM4MjE0OTM.field.Y2hhbm5lbF90eXBl.allowed-value.c3RyaW5nOndlYmhvb2s.display_name": {
           "source": "webhook",
@@ -5480,8 +5480,8 @@
           "message": "Enable/disable channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlV2ViaG9va0NoYW5uZWxSZXF1ZXN0IzAxMmRjN2ExNWNjNTk2MTBmYTE1M2YzOGZiMjIwOWY4MzFiYmE5NTA0YWY4NWFmNWE4MTlkYTllNWM4MjE0OTM.field.ZXZlbnRfdHlwZXM.display_name": {
-          "source": "Event Types",
-          "message": "Event Types"
+          "source": "Event types",
+          "message": "Event types"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlV2ViaG9va0NoYW5uZWxSZXF1ZXN0IzAxMmRjN2ExNWNjNTk2MTBmYTE1M2YzOGZiMjIwOWY4MzFiYmE5NTA0YWY4NWFmNWE4MTlkYTllNWM4MjE0OTM.field.ZXZlbnRfdHlwZXM.short_desc": {
           "source": "Event types to subscribe to",
@@ -5516,8 +5516,8 @@
           "message": "Webhook endpoint URL (HTTPS required)"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.Y2hhbm5lbF90eXBl.display_name": {
-          "source": "Channel Type",
-          "message": "Channel Type"
+          "source": "Channel type",
+          "message": "Channel type"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.Y2hhbm5lbF90eXBl.allowed-value.c3RyaW5nOmVtYWls.display_name": {
           "source": "email",
@@ -5536,8 +5536,8 @@
           "message": "Channel description"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.ZW1haWxfY29uZmln.display_name": {
-          "source": "Email Config",
-          "message": "Email Config"
+          "source": "Email config",
+          "message": "Email config"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.ZW1haWxfY29uZmln.short_desc": {
           "source": "User-configurable email settings",
@@ -5560,8 +5560,8 @@
           "message": "CC email addresses (if provider supports)"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOlkzSmxZWFJsTFc1dmRHbG1hV05oZEdsdmJpMWphR0Z1Ym1WczpFbWFpbENoYW5uZWxDb25maWcjMGRlZjNhMjk2ZjFkMWQ3ZTQ2MmRkZmE4NmM2YmEzYjJmNjFiZTU5NjVkMTgwMTIyYjZiYjFlNTkyNDYyZjdiYg.field.cmVjaXBpZW50X2VtYWls.display_name": {
-          "source": "Recipient Email",
-          "message": "Recipient Email"
+          "source": "Recipient email",
+          "message": "Recipient email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOlkzSmxZWFJsTFc1dmRHbG1hV05oZEdsdmJpMWphR0Z1Ym1WczpFbWFpbENoYW5uZWxDb25maWcjMGRlZjNhMjk2ZjFkMWQ3ZTQ2MmRkZmE4NmM2YmEzYjJmNjFiZTU5NjVkMTgwMTIyYjZiYjFlNTkyNDYyZjdiYg.field.cmVjaXBpZW50X2VtYWls.short_desc": {
           "source": "Primary recipient email address",
@@ -5572,8 +5572,8 @@
           "message": "Primary recipient email address"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOlkzSmxZWFJsTFc1dmRHbG1hV05oZEdsdmJpMWphR0Z1Ym1WczpFbWFpbENoYW5uZWxDb25maWcjMGRlZjNhMjk2ZjFkMWQ3ZTQ2MmRkZmE4NmM2YmEzYjJmNjFiZTU5NjVkMTgwMTIyYjZiYjFlNTkyNDYyZjdiYg.field.cmVwbHlfdG8.display_name": {
-          "source": "Reply To",
-          "message": "Reply To"
+          "source": "Reply to",
+          "message": "Reply to"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.type.YWN0aW9uOlkzSmxZWFJsTFc1dmRHbG1hV05oZEdsdmJpMWphR0Z1Ym1WczpFbWFpbENoYW5uZWxDb25maWcjMGRlZjNhMjk2ZjFkMWQ3ZTQ2MmRkZmE4NmM2YmEzYjJmNjFiZTU5NjVkMTgwMTIyYjZiYjFlNTkyNDYyZjdiYg.field.cmVwbHlfdG8.short_desc": {
           "source": "Reply-to email address",
@@ -5596,8 +5596,8 @@
           "message": "Enable/disable channel"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.ZXZlbnRfdHlwZXM.display_name": {
-          "source": "Event Types",
-          "message": "Event Types"
+          "source": "Event types",
+          "message": "Event types"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Y3JlYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.Ym9keQ.union.Q3JlYXRlRW1haWxDaGFubmVsUmVxdWVzdCNlNDA3NGZiYjQ1YmU2NWM1YjA4YjVhYmI0ODA1ZDg0Nzg4NmExNmU2ZGZkYThiZTYwZDYwMDI3YzcyYzYxMjNl.field.ZXZlbnRfdHlwZXM.short_desc": {
           "source": "Event types to subscribe to",
@@ -5756,8 +5756,8 @@
           "message": "CC email addresses (if provider supports)"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.ZW1haWxfY29uZmln.field.cmVjaXBpZW50X2VtYWls.display_name": {
-          "source": "Recipient Email",
-          "message": "Recipient Email"
+          "source": "Recipient email",
+          "message": "Recipient email"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.ZW1haWxfY29uZmln.field.cmVjaXBpZW50X2VtYWls.short_desc": {
           "source": "Primary recipient email address",
@@ -5768,8 +5768,8 @@
           "message": "Primary recipient email address"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.ZW1haWxfY29uZmln.field.cmVwbHlfdG8.display_name": {
-          "source": "Reply To",
-          "message": "Reply To"
+          "source": "Reply to",
+          "message": "Reply to"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.dXBkYXRlLW5vdGlmaWNhdGlvbi1jaGFubmVs.option.ZW1haWxfY29uZmln.field.cmVwbHlfdG8.short_desc": {
           "source": "Reply-to email address",
@@ -5832,8 +5832,8 @@
           "message": "The six-digit code Unstructured sent to the channel's address."
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC10ZW1wbGF0ZXM.display_name": {
-          "source": "List Workflow Templates",
-          "message": "List Workflow Templates"
+          "source": "List workflow templates",
+          "message": "List workflow templates"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.bGlzdC10ZW1wbGF0ZXM.short_desc": {
           "source": "List the workflow templates available to this account",
@@ -5864,8 +5864,8 @@
           "message": "The template to return"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWNvbm5lY3Rvci1maWVsZHM.display_name": {
-          "source": "Get Connector Configuration Fields",
-          "message": "Get Connector Configuration Fields"
+          "source": "Get connector configuration fields",
+          "message": "Get connector configuration fields"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.Z2V0LWNvbm5lY3Rvci1maWVsZHM.short_desc": {
           "source": "List the settings a connector type needs",
@@ -6080,8 +6080,8 @@
           "message": "Destination"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.am9iLWZpbmlzaGVk.display_name": {
-          "source": "Job Finished",
-          "message": "Job Finished"
+          "source": "Job finished",
+          "message": "Job finished"
         },
         "app.VW5zdHJ1Y3R1cmVkSW8.action.am9iLWZpbmlzaGVk.short_desc": {
           "source": "Fires when a workflow run reaches a terminal status",

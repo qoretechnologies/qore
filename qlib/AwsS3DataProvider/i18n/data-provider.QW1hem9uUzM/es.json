@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Listar buckets"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Enumera cada bucket propiedad de la cuenta autenticada, con la fecha en que se creó cada uno."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "Crear bucket"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Habilitar el bloqueo de objetos en el nuevo bucket; el bloqueo de objetos no se puede habilitar después de la creación y requiere control de versiones, que se habilita automáticamente cuando se establece esto"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Listar objetos"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "El valor `next_continuation_token` devuelto por un listado truncado anterior; utilizado para recuperar la página siguiente"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "Obtener objeto"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Una versión específica del objeto a la que dirigirse; solo tiene sentido en buckets con versiones habilitadas. Si no se define, se utiliza la versión actual"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Descargar archivo"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Una versión específica del objeto a la que dirigirse; solo tiene sentido en buckets con versiones habilitadas. Si no se define, se utiliza la versión actual"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Cargar archivo"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "La clave de AWS KMS con la que cifrar el objeto, como un ID de clave, alias o ARN.\n\nSolo se usa cuando `server_side_encryption` selecciona un esquema de KMS; si no se establece, se usa la clave de KMS predeterminada del bucket"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "Crear objeto de texto"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "La clave de AWS KMS con la que cifrar el objeto, como un ID de clave, alias o ARN.\n\nSolo se usa cuando `server_side_encryption` selecciona un esquema de KMS; si no se establece, se usa la clave de KMS predeterminada del bucket"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Eliminar objeto"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Una versión específica del objeto a la que dirigirse; solo tiene sentido en buckets con versiones habilitadas. Si no se define, se utiliza la versión actual"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Copiar objeto"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "El `Content-Disposition` con el que Amazon S3 debe servir la descarga; utilícelo para que el navegador guarde el objeto con un nombre elegido en lugar de mostrarlo"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "Eliminar objetos"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Elimina objetos que están bajo una retención de bloqueo de objetos en modo de gobernanza.\n\nLas credenciales deben tener permitido `s3:BypassGovernanceRetention`; los objetos bajo un bloqueo en modo **compliance** no pueden ser eliminados por nadie hasta que expire el bloqueo"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "Mover objeto"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Datos de archivo a largo plazo recuperados en horas; la clase de almacenamiento de menor coste"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "Obtener etiquetas de objeto"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Una versión específica del objeto a la que dirigirse; solo tiene sentido en buckets con versiones habilitadas. Si no se define, se utiliza la versión actual"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "Establecer etiquetas de objeto"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Una versión específica del objeto a la que dirigirse; solo tiene sentido en buckets con versiones habilitadas. Si no se define, se utiliza la versión actual"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "Listar versiones de objetos"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "El valor `next_version_id_marker` devuelto por un listado truncado anterior; se utiliza junto con `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "Eliminar bucket"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "El nombre del bucket a eliminar; ya debe estar vacío"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "Buscar objetos"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Cuántas claves obtener por solicitud; Amazon S3 limita esto a `1000`.\n\nEsto afecta a cómo se divide el recorrido en solicitudes, no a cuántos registros se devuelven: el iterador obtiene páginas adicionales a medida que se necesitan"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "Nuevo bucket"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "No reportar nada anterior a esta fecha.\n\nSi no se establece, la supervisión reporta solo lo que aparece después de que se inicia, de modo que un bucket existente no genera una avalancha de eventos la primera vez que se ejecuta"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "Archivo nuevo o actualizado"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

@@ -1864,7 +1864,7 @@
           "message": "Pokud je `True`, změny provedené během načítání (cookies, místní úložiště atd.) jsou uloženy zpět do pojmenovaného profilu. Výchozí hodnota je `False`"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
-          "source": "Cancel a Batch Scrape",
+          "source": "Cancel a batch scrape",
           "message": "Zrušit hromadné scrapování"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Jedinečný identifikátor úlohy procházení ke kontrole"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
-          "source": "Cancel a Crawl",
+          "source": "Cancel a crawl",
           "message": "Zrušit procházení"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
@@ -3936,7 +3936,7 @@
           "message": "Spark 1 Pro"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
-          "source": "Cancel an Agent Job",
+          "source": "Cancel an agent job",
           "message": "Zrušit úlohu agenta"
         },
         "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {

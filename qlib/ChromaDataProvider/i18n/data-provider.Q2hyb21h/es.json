@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "Búsqueda vectorial"
         },
         "app.Q2hyb21h.action.dmVjdG9yLXNlYXJjaA.short_desc": {

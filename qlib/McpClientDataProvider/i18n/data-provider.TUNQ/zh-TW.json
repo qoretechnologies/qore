@@ -16,7 +16,7 @@
           "message": "連線至 MCP 伺服器以整合 AI 工具、資源與提示詞"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
+          "source": "Call tool",
           "message": "呼叫工具"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
@@ -28,7 +28,7 @@
           "message": "使用提供的引數執行 MCP 工具並傳回結果"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
+          "source": "List tools",
           "message": "列出工具"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "列出 MCP 伺服器上可用的所有工具"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "讀取資源"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "透過 URI 讀取 MCP 資源的內容"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
+          "source": "List resources",
           "message": "列出資源"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
@@ -64,7 +64,7 @@
           "message": "列出 MCP 伺服器上可用的所有資源"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "取得提示詞"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "帶有引數從 MCP 伺服器取得提示詞範本"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
+          "source": "List prompts",
           "message": "列出提示詞"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
@@ -88,7 +88,7 @@
           "message": "列出 MCP 伺服器上可用的所有提示詞"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
+          "source": "Get completion",
           "message": "取得補全"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
@@ -100,7 +100,7 @@
           "message": "取得提示詞或資源的自動補全建議"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
+          "source": "Ping server",
           "message": "Ping 伺服器"
         },
         "app.TUNQ.action.cGluZw.short_desc": {

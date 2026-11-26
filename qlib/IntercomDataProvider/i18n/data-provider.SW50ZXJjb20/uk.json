@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Пошук контактів"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
@@ -624,7 +624,7 @@
           "message": "спадаючий"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Включити історію об'єднань"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Передайте `true`, щоб включити масив `merge_history` для кожного контакту у відповіді. Повертається лише для контактів із роллю `user`."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Список контактів"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Курсор пагінації: візьміть `pages.next.starting_after` з попередньої відповіді та передайте його сюди.\n\nВін є непрозорим і не повинен формуватися вручну. `pages` відсутній, коли колекція вичерпана, що вказує на відсутність наступної сторінки."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Включити історію об'єднань"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Унікальний ідентифікатор вказаного адміністратора."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
@@ -840,7 +840,7 @@
           "message": "Унікальний ідентифікатор тегу, наданий Intercom"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
-          "source": "Create or Update Company",
+          "source": "Create or update company",
           "message": "Створити або оновити компанію"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Назва тарифного плану, пов'язаного з компанією."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Щомісячні витрати"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Обсяг доходу, який компанія приносить вашому бізнесу. Зверніть увагу, що дійсні числа будуть усічені: дозволено лише цілі числа (наприклад, 155.98 буде усічено до 155). Верхня межа становить 2**31-1 або 2147483647."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Користувацькі атрибути"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Час створення компанії вами.\n\nЦе значення надсилається як ціле число секунд з 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
-          "source": "Update Last Request At",
+          "source": "Update last request at",
           "message": "Оновити час останнього запиту"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Установіть значення true, щоб оновити час останньої активності компанії на поточний."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Список компаній"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "`asc` або `desc`. Повертати компанії за зростанням або спаданням. Типово desc"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
-          "source": "Create Conversation",
+          "source": "Create conversation",
           "message": "Створити розмову"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "Тема електронного листа. Застосовується, лише якщо типом повідомлення є електронний лист."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
-          "source": "Attachment Urls",
+          "source": "Attachment urls",
           "message": "URL-адреси вкладень"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "Список URL-адрес зображень, які буде додано як вкладення. Можна вказати до 10 URL-адрес."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Час створення"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Унікальний ідентифікатор бренду для зв'язування з цією розмовою."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
-          "source": "Search Conversations",
+          "source": "Search conversations",
           "message": "Пошук розмов"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
@@ -1376,7 +1376,7 @@
           "message": "Курсор пагінації: візьміть `pages.next.starting_after` з попередньої відповіді та передайте його сюди.\n\nВін є непрозорим і не повинен формуватися вручну. `pages` відсутній, коли колекція вичерпана, що вказує на відсутність наступної сторінки."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
-          "source": "Include Monitors",
+          "source": "Include monitors",
           "message": "Включити монітори"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Якщо встановлено значення true, відповідь міститиме масив `monitor_evaluations` для кожної розмови з усіма результатами моніторингу QA, які позначили її."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
-          "source": "Include Scorecards",
+          "source": "Include scorecards",
           "message": "Включити картки оцінювання"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Якщо встановлено значення true, відповідь міститиме масив `scorecards` для кожної розмови з усіма результатами карток оцінювання QA."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
-          "source": "Create Message",
+          "source": "Create message",
           "message": "Створити повідомлення"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Надсилає повідомлення контакту **від колеги**, розпочинаючи нову розмову.\n\n`message_type` вибирає спосіб доставки: для `email` потрібен `subject`, `in_app` показує його в месенджері, а для `whatsapp` потрібен схвалений `template`.\n\nВикористовуйте **Відповісти на розмову**, щоб додати повідомлення до вже наявної розмови."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
-          "source": "Message Type",
+          "source": "Message type",
           "message": "Тип повідомлення"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Стиль вихідного повідомлення. Можливі значення: `plain` або `personal`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Час створення"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "лід"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
-          "source": "Create Conversation Without Contact Reply",
+          "source": "Create conversation without contact reply",
           "message": "Створити розмову без відповіді контакту"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Чи слід відкривати розмову у вхідних для повідомлення без відповіді контакту. За замовчуванням false, якщо не вказано."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
-          "source": "Submit Data Event",
+          "source": "Submit data event",
           "message": "Надіслати подію даних"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Необов'язкові метадані про подію."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List Data Events",
+          "source": "List data events",
           "message": "Список подій даних"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "ID користувача"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjM2UxZDZmZGM2Y2I1MjI3ZTEwNGRkOGZkYmI2MjJhODAwNDM2NTVmN2YyMzAwNWQ3OGY1MjZlYWIzY2ViYTg0Yg.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
-          "source": "Intercom User ID",
+          "source": "Intercom user ID",
           "message": "ID користувача Intercom"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjNzVlNDdjMWNlM2FhMGZjOTc1YTM0ZGViZmM5MmE2NjI3YWNlMTE3MmEzZDNkN2JlYjdlMzQ3NjZmMjdhMWZlNg.field.ZW1haWw.display_name": {
@@ -1892,7 +1892,7 @@
           "message": "прапорець summary"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
-          "source": "List Articles",
+          "source": "List articles",
           "message": "Список статей"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "Курсор пагінації: візьміть `pages.next.starting_after` з попередньої відповіді та передайте його сюди.\n\nВін є непрозорим і не повинен формуватися вручну. `pages` відсутній, коли колекція вичерпана, що вказує на відсутність наступної сторінки."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Список колекцій"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Курсор пагінації: візьміть `pages.next.starting_after` з попередньої відповіді та передайте його сюди.\n\nВін є непрозорим і не повинен формуватися вручну. `pages` відсутній, коли колекція вичерпана, що вказує на відсутність наступної сторінки."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Create Article",
+          "source": "Create article",
           "message": "Створити статтю"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "Ідентифікатор батьківської колекції або розділу статті. Стаття без цього поля існує окремо."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Перекладений вміст"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Зміст статті."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Доступність AI Chatbot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Чи стаття доступна для AI-чатбота."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Доступність AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Чи стаття доступна для AI-копілота."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Доступність AI Sales Agent"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Чи стаття доступна для AI-агенту з продажів."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID аудиторій"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Тіло статті у форматі HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Тіло у форматі Markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Тіло статті у форматі markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Час створення"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Опис статті."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Оновлено у"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Час, у секундах, коли останній раз редагувався чернетка для цього локалі, або `null`, якщо чернетки немає."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Має неопубліковані зміни"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "зміст статті"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Час оновлення"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Опис статті. Для багатомовних статей це буде опис вмісту мовою за замовчуванням."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Тіло у форматі Markdown"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Вміст статті у форматі Markdown. Для багатомовних статей це буде тіло вмісту мовою за замовчуванням. Альтернатива `body` — ви можете надати вміст у форматі Markdown замість HTML. Взаємовиключне з `body`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID аудиторій"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Список ID аудиторій для призначення цій статті для таргетування Fin AI Agent. Надсилання `audience_ids` верхнього рівня транслює той самий набір для всіх локалей. Для таргетування за окремими локалями використовуйте `translated_content.<locale>.audience_ids`. Якщо надіслати і верхній рівень, і окремі локалі в одному запиті, перевагу матиме верхній рівень. Невідомі ID аудиторій повертають помилку 404. Часткова фіксація змін не виконується."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Доступність AI Chatbot"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Чи має стаття бути доступною для AI Chatbot (Fin). Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Доступність AI Copilot"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "Чи має стаття бути доступною для AI Copilot. Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Доступність AI Sales Agent"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Чи має стаття бути доступною для AI Sales Agent. Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Запланований час публікації"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "Мітка часу ISO 8601 для планування майбутньої публікації статті. Якщо вказано разом із `state: \"published\"`, публікація статті планується, а не виконується негайно. Встановлення `null` скасовує заплановану публікацію. Мітки часу в минулому або рівні поточному часу відхиляються з помилкою 400 `parameter_invalid` — значення має бути суворо в майбутньому. Поєднання з `state: \"draft\"` повертає 400 `parameter_invalid`. Надсилання в одному запиті з `scheduled_unpublish_at` повертає 400 — дозволено лише один активний розклад для статті. Порожній рядок повертає 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Запланований час скасування публікації"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Мітка часу ISO 8601 для планування майбутнього скасування публікації статті. Встановлення `null` скасовує заплановане зняття з публікації. Мітки часу в минулому або рівні поточному часу відхиляються з помилкою 400 `parameter_invalid` — значення має бути суворо в майбутньому. Відхиляється з помилкою 400 `parameter_invalid`, якщо стаття ніколи не публікувалася. Надсилання в одному запиті з `scheduled_publish_at` повертає 400 — дозволено лише один активний розклад для статті. Порожній рядок повертає 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
-          "source": "List Teammates",
+          "source": "List teammates",
           "message": "Список учасників команди"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Повертає список учасників команди, які мають доступ до робочої області.\n\nЦю дію експортовано для того, щоб випадаючі списки учасників команди мали дію для виклику — автор статті, автор примітки чи відповіді, відправник повідомлення.\n\nЦей список не розбивається на сторінки: Intercom повертає їх усіх в одній відповіді у масиві `admins`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
-          "source": "Display Avatar",
+          "source": "Display avatar",
           "message": "Показувати аватар"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Включити історію об'єднань"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -2952,7 +2952,7 @@
           "message": "Електронна пошта контакту"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
-          "source": "Email Verified",
+          "source": "Email verified",
           "message": "Електронну пошту підтверджено"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "URL-адреса зображення з аватаром контакту"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
-          "source": "Signed Up At",
+          "source": "Signed up at",
           "message": "Зареєстровано о"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "(Позначка часу Unix у секундах) Час реєстрації контакту.\n\nЦе значення надсилається як ціле число секунд з 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
-          "source": "Last Seen At",
+          "source": "Last seen at",
           "message": "Востаннє бачили о"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "ID адміністратора, призначеного відповідальним за контакт"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
-          "source": "Unsubscribed from Emails",
+          "source": "Unsubscribed from emails",
           "message": "Відписано від електронних листів"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "Чи відписаний контакт від розсилок електронної пошти"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Користувацькі атрибути"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "Користувацькі атрибути, встановлені для контакту"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Включити історію об'єднань"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Ідентифікатор цільової розмови"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
-          "source": "Display As",
+          "source": "Display as",
           "message": "Відображати як"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Встановіть значення plaintext, щоб отримати повідомлення розмови у вигляді простого тексту. Це впливає як на поле body, так і на subject. Вбудовані посилання відображаються як `label (url)`, зберігаючи URL-адресу посилання поруч із видимим текстом."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
-          "source": "Include Translations",
+          "source": "Include translations",
           "message": "Включати переклади"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "Галузь діяльності цієї компанії."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Користувацькі атрибути"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Хеш пар ключ/значення з будь-якими іншими даними про компанію, які Intercom має зберегти."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Щомісячні витрати"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Вміст статті у форматі HTML. Для багатомовних статей це буде тіло вмісту мовою за замовчуванням. Взаємовиключне з `body_markdown`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Тіло у форматі Markdown"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "Ідентифікатор батьківської колекції або розділу статті. Стаття без цього поля існує окремо."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
-          "source": "Parent Type",
+          "source": "Parent type",
           "message": "Тип батьківського елемента"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Тип батьківського елемента: `collection` або `section`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Перекладений вміст"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Зміст статті."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Доступність AI Chatbot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3488,7 +3488,7 @@
           "message": "Чи стаття доступна для AI-чатбота."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Доступність AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Чи стаття доступна для AI-копілота."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Доступність AI Sales Agent"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Чи стаття доступна для AI-агенту з продажів."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID аудиторій"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "Тіло статті у форматі HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Тіло у форматі Markdown"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Тіло статті у форматі markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Час створення"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Опис статті."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Оновлено у"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -3596,7 +3596,7 @@
           "message": "Час, у секундах, коли останній раз редагувався чернетка для цього локалі, або `null`, якщо чернетки немає."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Має неопубліковані зміни"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "зміст статті"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Час оновлення"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -4128,7 +4128,7 @@
           "message": "Зміст статті."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID аудиторій"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -4140,7 +4140,7 @@
           "message": "Список ідентифікаторів аудиторій для призначення цій статті для таргетування Fin AI Agent. Надсилання `audience_ids` верхнього рівня транслює той самий набір на всі локалі. Надсилання `audience_ids: []` видаляє членство в усіх аудиторіях для всіх локалей. Для налаштування на рівні окремих локалей використовуйте `translated_content.<locale>.audience_ids`. Якщо в одному запиті передано параметри верхнього рівня і окремих локалей, пріоритет має верхній рівень. Невідомі ідентифікатори аудиторій повертають помилку 404. Часткова фіксація змін не відбувається."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Доступність AI Chatbot"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4152,7 +4152,7 @@
           "message": "Чи має стаття бути доступною для AI Chatbot (Fin). Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Доступність AI Copilot"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4164,7 +4164,7 @@
           "message": "Чи має стаття бути доступною для AI Copilot. Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Доступність AI Sales Agent"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -4176,7 +4176,7 @@
           "message": "Чи має стаття бути доступною для AI Sales Agent. Для багатомовних статей це встановлює доступність для мови за замовчуванням."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Запланований час публікації"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -4188,7 +4188,7 @@
           "message": "Мітка часу ISO 8601 для планування майбутньої публікації статті. Якщо вказано разом із `state: \"published\"`, публікація статті планується, а не виконується негайно. Встановлення `null` скасовує заплановану публікацію. Мітки часу в минулому або рівні поточному часу відхиляються з помилкою 400 `parameter_invalid` — значення має бути суворо в майбутньому. Поєднання з `state: \"draft\"` повертає 400 `parameter_invalid`. Надсилання в одному запиті з `scheduled_unpublish_at` повертає 400 — дозволено лише один активний розклад для статті. Порожній рядок повертає 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Запланований час скасування публікації"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -4296,7 +4296,7 @@
           "message": "Унікальний ідентифікатор заданого теґу"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Пошук записів"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
@@ -4320,7 +4320,7 @@
           "message": "Таблиця для роботи: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` або `teammates`"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Знайти один запис"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4344,7 +4344,7 @@
           "message": "Таблиця для роботи: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` або `teammates`"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Створити записи"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "Таблиця для роботи: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` або `teammates`"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "Таблиця для роботи: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` або `teammates`"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {

@@ -78,7 +78,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/messages/create",
             "action": "create-message",
-            "display_name": "Create Message",
+            "display_name": "Create message",
             "short_desc": "Send a message to a Claude model and receive a response",
             "desc": "Send a structured message to an Anthropic Claude model and receive a complete response. "
                 "Supports text, images, structured output, and extended thinking.",
@@ -105,7 +105,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/messages/stream",
             "action": "stream-message",
-            "display_name": "Stream Message",
+            "display_name": "Stream message",
             "short_desc": "Stream a response from a Claude model via Server-Sent Events",
             "desc": "Stream a response from an Anthropic Claude model using Server-Sent Events (SSE). "
                 "Events are emitted incrementally as the model generates content.",
@@ -209,7 +209,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/batches/create",
             "action": "create-batch",
-            "display_name": "Create Message Batch",
+            "display_name": "Create message batch",
             "short_desc": "Submit a batch of message requests for async processing",
             "desc": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. "
                 "Batches are processed within 24 hours.",
@@ -274,7 +274,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/batches/cancel",
             "action": "cancel-batch",
-            "display_name": "Cancel Message Batch",
+            "display_name": "Cancel message batch",
             "short_desc": "Cancel a message batch before it finishes processing",
             "desc": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests "
                 "are not undone.",
@@ -295,7 +295,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/files/upload",
             "action": "upload-file",
-            "display_name": "Upload File",
+            "display_name": "Upload file",
             "short_desc": "Upload a file for reuse across API calls (Beta)",
             "desc": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and "
                 "image files up to 500 MB. Requires the Files API beta.",
@@ -382,7 +382,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/files/delete",
             "action": "delete-file",
-            "display_name": "Delete File",
+            "display_name": "Delete file",
             "short_desc": "Delete a file from the workspace (Beta)",
             "desc": "Delete a file that was previously uploaded. Requires the Files API beta.",
             "action_code": DPAT_API,
@@ -402,7 +402,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/skills/create",
             "action": "create-skill",
-            "display_name": "Create Skill",
+            "display_name": "Create skill",
             "short_desc": "Create a custom skill (Beta)",
             "desc": "Create a new custom skill that packages domain expertise and workflows. "
                 "A SKILL.md file is auto-generated from the provided name, description, and "
@@ -476,7 +476,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/skills/delete",
             "action": "delete-skill",
-            "display_name": "Delete Skill",
+            "display_name": "Delete skill",
             "short_desc": "Delete a custom skill (Beta)",
             "desc": "Delete a custom skill by ID. Requires the Skills API beta.",
             "action_code": DPAT_API,
@@ -496,7 +496,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/skills/update",
             "action": "update-skill",
-            "display_name": "Update Skill",
+            "display_name": "Update skill",
             "short_desc": "Update an existing skill (Beta)",
             "desc": "Update an existing custom skill. Requires the Skills API beta.",
             "action_code": DPAT_API,

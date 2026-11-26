@@ -101,7 +101,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/get-current-user",
             "action": "get-current-user",
-            "display_name": "Get Current User",
+            "display_name": "Get current user",
             "short_desc": "Get the signed-in member's profile",
             "desc": "Retrieves the signed-in member's profile: name, email address, profile "
                 "picture and locale.\n\n"
@@ -120,7 +120,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/create-text-post",
             "action": "create-text-post",
-            "display_name": "Create Text Post",
+            "display_name": "Create text post",
             "short_desc": "Publish a text post",
             "desc": "Publishes a text-only post as the signed-in member.\n\n"
                 "Returns the post's URN and the URL a browser can open it at.",
@@ -147,7 +147,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/create-article-post",
             "action": "create-article-post",
-            "display_name": "Create Article Post",
+            "display_name": "Create article post",
             "short_desc": "Publish a post linking to an article",
             "desc": "Publishes a post that links to an article, shown as a card under the post's "
                 "text.\n\n"
@@ -178,7 +178,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/create-image-post",
             "action": "create-image-post",
-            "display_name": "Create Image Post",
+            "display_name": "Create image post",
             "short_desc": "Publish a post with an image",
             "desc": "Uploads an image and publishes it as a post by the signed-in member.\n\n"
                 "LinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is "
@@ -207,7 +207,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/create-video-post",
             "action": "create-video-post",
-            "display_name": "Create Video Post",
+            "display_name": "Create video post",
             "short_desc": "Publish a post with a video",
             "desc": "Uploads a video and publishes it as a post by the signed-in member.\n\n"
                 "LinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 "
@@ -238,7 +238,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/create-multi-image-post",
             "action": "create-multi-image-post",
-            "display_name": "Create Multi-Image Post",
+            "display_name": "Create multi-image post",
             "short_desc": "Publish a post with several images",
             "desc": "Uploads several images and publishes them as one post that readers swipe "
                 "through.\n\n"
@@ -268,7 +268,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/reshare-post",
             "action": "reshare-post",
-            "display_name": "Reshare Post",
+            "display_name": "Reshare post",
             "short_desc": "Reshare an existing post",
             "desc": "Reshares an existing post as the signed-in member, optionally with commentary "
                 "of your own above it.\n\n"
@@ -297,7 +297,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/update-post",
             "action": "update-post",
-            "display_name": "Update Post",
+            "display_name": "Update post",
             "short_desc": "Change the text of a published post",
             "desc": "Replaces the text of a post that has already been published.\n\n"
                 "LinkedIn marks an edited post as edited; the attached content of a post cannot be "
@@ -318,7 +318,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/delete-post",
             "action": "delete-post",
-            "display_name": "Delete Post",
+            "display_name": "Delete post",
             "short_desc": "Delete a post",
             "desc": "Deletes a post.\n\n"
                 "Deletion is idempotent: deleting a post that is already gone succeeds rather than "
@@ -339,7 +339,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/get-post",
             "action": "get-post",
-            "display_name": "Get Post",
+            "display_name": "Get post",
             "short_desc": "Retrieve a post by its URN",
             "desc": "Retrieves a post by its URN, with its text, visibility, attached content and "
                 "timestamps.\n\n"
@@ -369,7 +369,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/upload-image",
             "action": "upload-image",
-            "display_name": "Upload Image",
+            "display_name": "Upload image",
             "short_desc": "Upload an image and get its URN",
             "desc": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\n"
                 "Use this when the same image is needed in more than one post, or as an article "
@@ -393,7 +393,7 @@ module LinkedInDataProvider {
             "app": LinkedInDataProvider::AppName,
             "path": "/upload-video",
             "action": "upload-video",
-            "display_name": "Upload Video",
+            "display_name": "Upload video",
             "short_desc": "Upload a video and get its URN",
             "desc": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\n"
                 "The upload is sent in parts, so a large video does not have to start again from "

@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
-          "source": "List Addresses",
+          "source": "List addresses",
           "message": "Zoznam adries"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Získať stránkovaný zoznam adries alebo načítať jednu adresu podľa ID."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
-          "source": "Create Address",
+          "source": "Create address",
           "message": "Vytvoriť adresu"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Adresa na získanie"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
-          "source": "Verify Address",
+          "source": "Verify address",
           "message": "Overiť adresu"
         },
         "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
@@ -640,7 +640,7 @@
           "message": "ID existujúcej adresy EasyPost na overenie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
-          "source": "Create and Verify Address",
+          "source": "Create and verify address",
           "message": "Vytvoriť a overiť adresu"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Existujúce ID balíka EasyPost na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
-          "source": "Create Parcel",
+          "source": "Create parcel",
           "message": "Vytvoriť balík"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Small Package"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
-          "source": "List Shipments",
+          "source": "List shipments",
           "message": "Zoznam zásielok"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "Získať stránkovaný zoznam zásielok. Voliteľne načítať podľa ID alebo filtrovať podľa stavu zakúpenia."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "Vytvoriť zásielku"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -3724,7 +3724,7 @@
           "message": "Zásielka na získanie"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
-          "source": "Buy Shipment",
+          "source": "Buy shipment",
           "message": "Kúpiť zásielku"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
@@ -3808,7 +3808,7 @@
           "message": "ID koncového odosielateľa pre nákup"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
-          "source": "Refund Shipment",
+          "source": "Refund shipment",
           "message": "Refundovať zásielku"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
@@ -3884,7 +3884,7 @@
           "message": "Obrázok PNG"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
-          "source": "Get Shipment SmartRates",
+          "source": "Get shipment SmartRates",
           "message": "Získať sadzby SmartRates pre zásielku"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "Zásielka, pre ktorú sa majú získať sadzby SmartRates"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
-          "source": "Rerate Shipment",
+          "source": "Rerate shipment",
           "message": "Prepočítať sadzbu zásielky"
         },
         "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
@@ -3932,7 +3932,7 @@
           "message": "Zásielka na prepočítanie sadzby"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
-          "source": "Insure Shipment",
+          "source": "Insure shipment",
           "message": "Poistiť zásielku"
         },
         "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Suma poistenia zásielky ako reťazec (napr. `\"100.00\"`)"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
-          "source": "List Trackers",
+          "source": "List trackers",
           "message": "Zoznam sledovačov"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "Získať stránkovaný zoznam sledovačov. Voliteľne filtrovať podľa kódu sledovania alebo dopravcu."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
-          "source": "Create Tracker",
+          "source": "Create tracker",
           "message": "Vytvoriť sledovač"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "Sledovač na získanie"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
-          "source": "Delete Tracker",
+          "source": "Delete tracker",
           "message": "Odstrániť sledovač"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "Sledovač na odstránenie"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
-          "source": "Bulk Create Trackers",
+          "source": "Bulk create trackers",
           "message": "Hromadne vytvoriť sledovania"
         },
         "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
@@ -4112,7 +4112,7 @@
           "message": "Sledované číslo"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
-          "source": "List Insurance Records",
+          "source": "List insurance records",
           "message": "Zoznam záznamov poistenia"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "Získať stránkovaný zoznam záznamov poistenia."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
-          "source": "Create Insurance",
+          "source": "Create insurance",
           "message": "Vytvoriť poistenie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
@@ -4568,7 +4568,7 @@
           "message": "Referencia poskytnutá volajúcim"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
-          "source": "Get Insurance",
+          "source": "Get insurance",
           "message": "Získať poistenie"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
@@ -4592,7 +4592,7 @@
           "message": "Záznam poistenia na získanie"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
-          "source": "Refund Insurance",
+          "source": "Refund insurance",
           "message": "Refundovať poistenie"
         },
         "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
@@ -4616,7 +4616,7 @@
           "message": "ID poistenia na refundáciu"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
-          "source": "List Pickups",
+          "source": "List pickups",
           "message": "Zoznam vyzdvihnutí"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
@@ -4628,7 +4628,7 @@
           "message": "Získať stránkovaný zoznam vyzdvihnutí."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
-          "source": "Create Pickup",
+          "source": "Create pickup",
           "message": "Vytvoriť vyzdvihnutie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
@@ -4952,7 +4952,7 @@
           "message": "ID účtov dopravcu na ocenenie vyzdvihnutia"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
-          "source": "Get Pickup",
+          "source": "Get pickup",
           "message": "Získať vyzdvihnutie"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "Vyzdvihnutie na získanie"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
-          "source": "Buy Pickup",
+          "source": "Buy pickup",
           "message": "Kúpiť vyzdvihnutie"
         },
         "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
@@ -5024,7 +5024,7 @@
           "message": "Kód služby vyzdvihnutia vrátený v `pickup_rates`"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
-          "source": "Cancel Pickup",
+          "source": "Cancel pickup",
           "message": "Zrušiť vyzdvihnutie"
         },
         "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
@@ -5048,7 +5048,7 @@
           "message": "Vyzdvihnutie na zrušenie"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "Získať objednávku"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
@@ -5072,7 +5072,7 @@
           "message": "Objednávka na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "Vytvoriť objednávku"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -7568,7 +7568,7 @@
           "message": "Názov prepravcu"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
-          "source": "Buy Order",
+          "source": "Buy order",
           "message": "Kúpiť objednávku"
         },
         "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Kód služby prepravcu"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Get Customs Info",
+          "source": "Get customs info",
           "message": "Získať colné informácie"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7640,7 +7640,7 @@
           "message": "ID colných informácií na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
-          "source": "Create Customs Info",
+          "source": "Create customs info",
           "message": "Vytvoriť colné informácie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
@@ -7972,7 +7972,7 @@
           "message": "Voľný text colného vyhlásenia"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Get Customs Item",
+          "source": "Get customs item",
           "message": "Získať colnú položku"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -7996,7 +7996,7 @@
           "message": "Colná položka na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
-          "source": "Create Customs Item",
+          "source": "Create customs item",
           "message": "Vytvoriť colnú položku"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
@@ -8140,7 +8140,7 @@
           "message": "Voliteľný identifikátor vytlačený na colných formulároch"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Zoznam refundácií"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -8152,7 +8152,7 @@
           "message": "Získať stránkovaný zoznam refundácií."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
-          "source": "Create Refund",
+          "source": "Create refund",
           "message": "Vytvoriť refundáciu"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
@@ -8188,7 +8188,7 @@
           "message": "Zoznam sledovacích kódov na refundáciu"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get Refund",
+          "source": "Get refund",
           "message": "Získať refundáciu"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -8212,7 +8212,7 @@
           "message": "Refundácia na získanie"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Zoznam dávok"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -8224,7 +8224,7 @@
           "message": "Získať stránkovaný zoznam dávok."
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Vytvoriť dávku"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -8272,7 +8272,7 @@
           "message": "Referencia poskytnutá volajúcim"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
-          "source": "Get Batch",
+          "source": "Get batch",
           "message": "Získať dávku"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
@@ -8296,7 +8296,7 @@
           "message": "Dávka na získanie"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
-          "source": "Add Shipments to Batch",
+          "source": "Add shipments to batch",
           "message": "Pridať zásielky do dávky"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
@@ -8344,7 +8344,7 @@
           "message": "ID odkazovaného objektu"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
-          "source": "Remove Shipments from Batch",
+          "source": "Remove shipments from batch",
           "message": "Odstrániť zásielky z dávky"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "ID odkazovaného objektu"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
-          "source": "Buy Batch",
+          "source": "Buy batch",
           "message": "Kúpiť dávku"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
@@ -8416,7 +8416,7 @@
           "message": "Dávka na zakúpenie (kúpiť štítky pre všetky zásielky)"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
-          "source": "Get Batch Label",
+          "source": "Get batch label",
           "message": "Získať štítok dávky"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
@@ -8464,7 +8464,7 @@
           "message": "Eltron EPL2"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
-          "source": "Generate Batch Scan Form",
+          "source": "Generate batch scan form",
           "message": "Vygenerovať skenovací formulár dávky"
         },
         "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "Dávka, pre ktorú sa má vygenerovať skenovací formulár"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
-          "source": "List Webhooks",
+          "source": "List webhooks",
           "message": "Zoznam webhookov"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
@@ -8500,7 +8500,7 @@
           "message": "Získať všetky nakonfigurované webhooky."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
-          "source": "Get Webhook",
+          "source": "Get webhook",
           "message": "Získať webhook"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
@@ -8524,7 +8524,7 @@
           "message": "Webhook na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
-          "source": "Create Webhook",
+          "source": "Create webhook",
           "message": "Vytvoriť webhook"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
@@ -8596,7 +8596,7 @@
           "message": "Hodnota hlavičky"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
-          "source": "Update Webhook",
+          "source": "Update webhook",
           "message": "Aktualizovať webhook"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
@@ -8668,7 +8668,7 @@
           "message": "Hodnota hlavičky"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
-          "source": "Delete Webhook",
+          "source": "Delete webhook",
           "message": "Odstrániť webhook"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
@@ -8704,7 +8704,7 @@
           "message": "Získať stránkovaný zoznam udalostí doručenia webhookov."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Získať udalosť"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
@@ -8728,7 +8728,7 @@
           "message": "Udalosť na získanie"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
-          "source": "List Event Payloads",
+          "source": "List event payloads",
           "message": "Zoznam dátových obsahov udalostí"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
@@ -8752,7 +8752,7 @@
           "message": "Udalosť, pre ktorú sa majú zobraziť dátové obsahy"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
-          "source": "Get Event Payload",
+          "source": "Get event payload",
           "message": "Získať payload udalosti"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
@@ -8788,7 +8788,7 @@
           "message": "Payload na získanie"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
-          "source": "List Carrier Accounts",
+          "source": "List carrier accounts",
           "message": "Zoznam účtov dopravcov"
         },
         "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
@@ -8800,7 +8800,7 @@
           "message": "Získať všetky účty dopravcov nakonfigurované v účte EasyPost."
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Get Carrier Account",
+          "source": "Get carrier account",
           "message": "Získať účet prepravcu"
         },
         "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8824,7 +8824,7 @@
           "message": "Účet prepravcu na získanie"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Create Carrier Account",
+          "source": "Create carrier account",
           "message": "Vytvoriť účet prepravcu"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8896,7 +8896,7 @@
           "message": "Hash prihlasovacích údajov špecifických pre dopravcu v testovacom prostredí. Má rovnakú štruktúru ako `credentials` – výberom `type` vyplníte toto pole schémou špecifickou pre dopravcu."
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Update Carrier Account",
+          "source": "Update carrier account",
           "message": "Aktualizovať účet prepravcu"
         },
         "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8968,7 +8968,7 @@
           "message": "Nové testovacie prihlasovacie údaje. Rovnaká schéma ako `credentials`."
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
-          "source": "Delete Carrier Account",
+          "source": "Delete carrier account",
           "message": "Odstrániť účet dopravcu"
         },
         "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
@@ -8992,7 +8992,7 @@
           "message": "Účet dopravcu na odstránenie"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
-          "source": "On Tracker Created",
+          "source": "On tracker created",
           "message": "Pri vytvorení sledovača"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
@@ -9004,7 +9004,7 @@
           "message": "Spustí sa pri vytvorení nového sledovača (udalosť webhooku `tracker.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
-          "source": "On Tracker Updated",
+          "source": "On tracker updated",
           "message": "Pri aktualizácii sledovača"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
@@ -9016,7 +9016,7 @@
           "message": "Spustí sa pri zmene stavu sledovača (udalosť webhooku `tracker.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
-          "source": "On Batch Created",
+          "source": "On batch created",
           "message": "Pri vytvorení dávky"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
@@ -9028,7 +9028,7 @@
           "message": "Spustí sa pri vytvorení novej dávky (udalosť webhooku `batch.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
-          "source": "On Batch Updated",
+          "source": "On batch updated",
           "message": "Pri aktualizácii dávky"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
@@ -9040,7 +9040,7 @@
           "message": "Spustí sa pri aktualizácii dávky (udalosť webhooku `batch.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
-          "source": "On Insurance Purchased",
+          "source": "On insurance purchased",
           "message": "Pri zakúpení poistenia"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "Spustí sa pri zakúpení poistenia (udalosť webhooku `insurance.purchased`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
-          "source": "On Refund Successful",
+          "source": "On refund successful",
           "message": "Pri úspešnom vrátení platby"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
@@ -9064,7 +9064,7 @@
           "message": "Spustí sa pri úspešnom vrátení peňazí (udalosť webhooku `refund.successful`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
-          "source": "On Shipment Invoice Created",
+          "source": "On shipment invoice created",
           "message": "Pri vytvorení faktúry zásielky"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
@@ -9076,7 +9076,7 @@
           "message": "Spustí sa pri vytvorení faktúry zásielky (udalosť webhooku `shipment.invoice.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
-          "source": "On Payment Completed",
+          "source": "On payment completed",
           "message": "Pri dokončení platby"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
@@ -9088,7 +9088,7 @@
           "message": "Spustí sa po dokončení platby (udalosť webhooku `payment.completed`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
-          "source": "On Payment Failed",
+          "source": "On payment failed",
           "message": "Pri zlyhaní platby"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
@@ -9100,7 +9100,7 @@
           "message": "Spustí sa pri zlyhaní platby (udalosť webhooku `payment.failed`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
-          "source": "On Payment Created",
+          "source": "On payment created",
           "message": "Pri vytvorení platby"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
@@ -9112,7 +9112,7 @@
           "message": "Spustí sa po úspešnom naúčtovaní z bankového účtu alebo kreditnej karty (udalosť webhooku `payment.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
-          "source": "On Insurance Cancelled",
+          "source": "On insurance cancelled",
           "message": "Pri zrušení poistenia"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
@@ -9124,7 +9124,7 @@
           "message": "Spustí sa pri zrušení samostatného poistenia alebo zlyhaní jeho nákupu (udalosť webhooku `insurance.cancelled`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
-          "source": "On Shipment Invoice Updated",
+          "source": "On shipment invoice updated",
           "message": "Pri aktualizácii faktúry zásielky"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
@@ -9136,7 +9136,7 @@
           "message": "Spustí sa pri úprave a aktualizácii faktúry zásielky (udalosť webhooku `shipment.invoice.updated`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
-          "source": "On Scan Form Created",
+          "source": "On scan form created",
           "message": "Pri vytvorení skenovacieho formulára"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
@@ -9148,7 +9148,7 @@
           "message": "Spustí sa po dokončení počiatočného vytvorenia objektu ScanForm (udalosť webhooku `scan_form.created`)."
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
-          "source": "On Scan Form Updated",
+          "source": "On scan form updated",
           "message": "Pri aktualizácii skenovacieho formulára"
         },
         "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {

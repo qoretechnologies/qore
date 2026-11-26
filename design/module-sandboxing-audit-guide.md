@@ -433,6 +433,32 @@ as do the registries, lookups, resolvers, serializers, codecs, schemas and type 
 which use `DataProvider::checkSharedRegistration()` / `mayRegisterShared()` or a check of their own (qore#6747; see
 `examples/test/runner/test_shared_registry_checks.py`).
 
+#### Process-wide state built on first use
+
+A module that builds process-wide state lazily, the first time a caller needs it (`static *T v; ... v ?? (v =
+build())`, a registry or cache filled on demand, a schema loaded on first use), builds it on whichever caller's thread
+needs it first: for a sandboxed caller, `SandboxManager::createsSharedObjects()` is `False` there and the objects
+are not marked as shared, and for a restricted caller what the build creates records its restrictions, for every
+later caller (issues #7684, #7002).  Use `Qore::Thread::LazySharedValue` (one value) or `Qore::Thread::LazySharedMap`
+(values by key) instead, created in a `private:internal static` member during module initialization: the builder runs
+once, as trusted code (a trusted build when the caller is sandboxed, acts for sandboxed code or is restricted), and
+its value is published to every caller.  Rules:
+
+- an object that the module creates later than its initialization, for whichever caller needs it first, is private
+  (`isProcessShared()` is `False`) if that caller is sandboxed or acts for sandboxed code, and builds its value as that
+  caller's code; to have a process-shared object, create it in the module's initialization (a static member
+  initializer), or check `isProcessShared()`, or give the constructor `require_shared: True`, which refuses to create
+  a private object;
+- the builder builds only from the module's own, trusted data; a map's builder raises an exception for a key that it
+  does not know (a failed key leaves no entry), and never uses the key as code, a module name or an unchecked path;
+- the value is returned as it is: mark (`SandboxManager::shareObject()`) or freeze what it shares; the check before
+  publishing refuses only objects and callables that sandboxed or restricted code created, in lists and hashes, not
+  in object members;
+- lock order: a caller that waits for a value built by another thread keeps its locks, so the builder must not take a
+  lock that a caller of `get()` can hold while it calls `get()`; the two threads would wait for each other (a wait
+  that would close a cycle of builders' waits raises `SHARED-INIT-ERROR` instead, but locks of the module's own are
+  not seen).
+
 ### Destructors of Builtin Classes in the Uncontrolled-API Domain
 
 A sandbox that refuses uncontrolled APIs refuses, at run time, every builtin variant in the `QDOM_UNCONTROLLED_API`

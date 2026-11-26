@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Vytvořit kontakt"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -432,7 +432,7 @@
           "message": "ID uživatele, který vlastní tento kontakt"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Aktualizovat kontakt"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Současná lokalita kontaktu"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Vyhledat kontakty"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Získat kontakt"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -588,7 +588,7 @@
           "message": "ID kontaktu"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
+          "source": "Create an account",
           "message": "Vytvořit účet"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Uživatelské ID vlastníka"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
+          "source": "Update an account",
           "message": "Aktualizovat účet"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Uživatelské ID vlastníka"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Vyhledat účty"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "Získat účet"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "ID účtu"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
+          "source": "Create a deal",
           "message": "Vytvořit obchod"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -848,7 +848,7 @@
           "message": "ID přidruženého účtu"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
+          "source": "Update a deal",
           "message": "Aktualizovat obchod"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Uživatelské ID vlastníka"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Seznam obchodních příležitostí"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Maximální počet výsledků"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
+          "source": "Get a deal",
           "message": "Získat obchod"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "Výsledků na stránku (max. 100)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
+          "source": "Search organizations",
           "message": "Vyhledat organizace"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Výsledků na stránku (max. 100)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Kontakt vytvořen"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Spustí se při vytvoření nového kontaktu v Apollo"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Kontakt aktualizován"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Spustí se při aktualizaci kontaktu v Apollo"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
+          "source": "Account created",
           "message": "Účet vytvořen"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Spustí se při vytvoření nového účtu v Apollo"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
+          "source": "Deal created",
           "message": "Obchod vytvořen"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {

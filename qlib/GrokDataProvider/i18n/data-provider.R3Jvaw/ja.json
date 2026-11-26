@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
+          "source": "Multi chat",
           "message": "マルチチャット"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
+          "source": "Process request with a model",
           "message": "モデルでリクエストを処理"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
@@ -2680,7 +2680,7 @@
           "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
+          "source": "Stream response",
           "message": "レスポンスのストリーミング"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
-          "source": "Create Response",
+          "source": "Create response",
           "message": "レスポンスを作成"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
@@ -4564,7 +4564,7 @@
           "message": "取得するレスポンスの一意の識別子"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
+          "source": "Delete response",
           "message": "応答の削除"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
@@ -4600,7 +4600,7 @@
           "message": "削除する応答の一意の識別子"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
-          "source": "Get Deferred Completion",
+          "source": "Get deferred completion",
           "message": "遅延補完を取得"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {

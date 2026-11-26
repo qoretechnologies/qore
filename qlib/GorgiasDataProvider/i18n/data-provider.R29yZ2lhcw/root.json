@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
-          "source": "Create a Ticket",
-          "message": "Create a Ticket"
+          "source": "Create a ticket",
+          "message": "Create a ticket"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
           "source": "Create a new support ticket",
@@ -964,8 +964,8 @@
           "message": "Whether to mark the ticket as spam. Default: `False`"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
-          "source": "Update a Ticket",
-          "message": "Update a Ticket"
+          "source": "Update a ticket",
+          "message": "Update a ticket"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
           "source": "Update an existing ticket",
@@ -1228,8 +1228,8 @@
           "message": "ISO 8601 timestamp until which to snooze the ticket"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
-          "source": "Delete a Ticket",
-          "message": "Delete a Ticket"
+          "source": "Delete a ticket",
+          "message": "Delete a ticket"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
           "source": "Delete an existing ticket",
@@ -1252,8 +1252,8 @@
           "message": "The ID of the ticket to delete"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
-          "source": "List Tickets",
-          "message": "List Tickets"
+          "source": "List tickets",
+          "message": "List tickets"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
           "source": "List support tickets",
@@ -1368,8 +1368,8 @@
           "message": "Maximum results"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
-          "source": "Get a Ticket",
-          "message": "Get a Ticket"
+          "source": "Get a ticket",
+          "message": "Get a ticket"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
           "source": "Get a single ticket by ID",
@@ -1388,8 +1388,8 @@
           "message": "The ticket ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
-          "message": "Create a Customer"
+          "source": "Create a customer",
+          "message": "Create a customer"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -1584,8 +1584,8 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
-          "message": "Update a Customer"
+          "source": "Update a customer",
+          "message": "Update a customer"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -1792,8 +1792,8 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
-          "message": "Delete a Customer"
+          "source": "Delete a customer",
+          "message": "Delete a customer"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
           "source": "Delete an existing customer",
@@ -1816,8 +1816,8 @@
           "message": "The ID of the customer to delete"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
-          "message": "List Customers"
+          "source": "List customers",
+          "message": "List customers"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List customers",
@@ -1852,8 +1852,8 @@
           "message": "Maximum results"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
-          "message": "Get a Customer"
+          "source": "Get a customer",
+          "message": "Get a customer"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a single customer by ID",
@@ -1872,8 +1872,8 @@
           "message": "The customer ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
-          "message": "Create a Tag"
+          "source": "Create a tag",
+          "message": "Create a tag"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a new tag",
@@ -1932,8 +1932,8 @@
           "message": "The hex color code for the tag (e.g., `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
-          "message": "Update a Tag"
+          "source": "Update a tag",
+          "message": "Update a tag"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
           "source": "Update an existing tag",
@@ -2004,8 +2004,8 @@
           "message": "The hex color code for the tag (e.g., `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
-          "message": "Delete a Tag"
+          "source": "Delete a tag",
+          "message": "Delete a tag"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
           "source": "Delete an existing tag",
@@ -2028,8 +2028,8 @@
           "message": "The ID of the tag to delete"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
           "source": "List tags",
@@ -2056,8 +2056,8 @@
           "message": "Maximum results"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
-          "message": "Get a Tag"
+          "source": "Get a tag",
+          "message": "Get a tag"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
           "source": "Get a single tag by ID",
@@ -2076,8 +2076,8 @@
           "message": "The tag ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create a Message",
-          "message": "Create a Message"
+          "source": "Create a message",
+          "message": "Create a message"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
           "source": "Add a message to a ticket",
@@ -2412,8 +2412,8 @@
           "message": "The URL of the attachment file"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
-          "source": "List Messages",
-          "message": "List Messages"
+          "source": "List messages",
+          "message": "List messages"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
           "source": "List messages for a ticket",
@@ -2448,8 +2448,8 @@
           "message": "Maximum results"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get a Message",
-          "message": "Get a Message"
+          "source": "Get a message",
+          "message": "Get a message"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
           "source": "Get a single message by ID",
@@ -2476,8 +2476,8 @@
           "message": "The message ID"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Update a Message",
-          "message": "Update a Message"
+          "source": "Update a message",
+          "message": "Update a message"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
           "source": "Update an existing message",
@@ -2836,8 +2836,8 @@
           "message": "The URL of the attachment file"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
-          "message": "Delete a Message"
+          "source": "Delete a message",
+          "message": "Delete a message"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
           "source": "Delete an existing message",
@@ -2872,8 +2872,8 @@
           "message": "The ID of the message to delete"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
-          "message": "List Users"
+          "source": "List users",
+          "message": "List users"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
           "source": "List helpdesk agents",
@@ -2900,8 +2900,8 @@
           "message": "Maximum results"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
-          "message": "Get a User"
+          "source": "Get a user",
+          "message": "Get a user"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
           "source": "Get a single user by ID",
@@ -2920,8 +2920,8 @@
           "message": "The user ID"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
-          "source": "New Ticket",
-          "message": "New Ticket"
+          "source": "New ticket",
+          "message": "New ticket"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
           "source": "Trigger when a new ticket is created",
@@ -2932,8 +2932,8 @@
           "message": "Fires when a new ticket is created in Gorgias"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
-          "source": "Ticket Updated",
-          "message": "Ticket Updated"
+          "source": "Ticket updated",
+          "message": "Ticket updated"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
           "source": "Trigger when a ticket is updated",

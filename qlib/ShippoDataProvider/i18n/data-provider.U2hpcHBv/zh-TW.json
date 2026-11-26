@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
-          "source": "Create Shipment",
+          "source": "Create shipment",
           "message": "建立出貨"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "若為 `True`，費率將非同步產生。預設為 `False`。"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
-          "source": "Get Shipment",
+          "source": "Get shipment",
           "message": "取得貨件"
         },
         "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "要擷取的運送唯一識別碼"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
-          "source": "Search Shipments",
+          "source": "Search shipments",
           "message": "搜尋出貨"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
@@ -1760,7 +1760,7 @@
           "message": "從 Shippo 擷取運送清單，可選擇依建立日期篩選。"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
-          "source": "Create Label by Rate",
+          "source": "Create label by rate",
           "message": "依費率建立標籤"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
@@ -1884,7 +1884,7 @@
           "message": "要擷取的交易 (貨運標籤) 唯一識別碼"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
-          "source": "Search Shipping Labels",
+          "source": "Search shipping labels",
           "message": "搜尋貨運標籤"
         },
         "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "運送失敗"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create Order",
+          "source": "Create order",
           "message": "建立訂單"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "訂單的任何備註或特別說明"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get Order",
+          "source": "Get order",
           "message": "取得訂單"
         },
         "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "要擷取的訂單唯一識別碼"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "列出訂單"
         },
         "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -2712,7 +2712,7 @@
           "message": "已發貨"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
-          "source": "Validate Address",
+          "source": "Validate address",
           "message": "驗證地址"
         },
         "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "指出該地址是否為住宅地址"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
-          "source": "New Parcel",
+          "source": "New parcel",
           "message": "新增包裹"
         },
         "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "透過輪詢在 Shippo 中偵測到新包裹時觸發。提供包裹詳細資訊，包含尺寸與重量。"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
-          "source": "New Shipment",
+          "source": "New shipment",
           "message": "新增運送"
         },
         "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "透過輪詢在 Shippo 中偵測到新運送時觸發。提供運送詳細資訊，包含地址、包裹與可用費率。"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
-          "source": "New Shipping Label",
+          "source": "New shipping label",
           "message": "新增貨運標籤"
         },
         "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
@@ -2904,7 +2904,7 @@
           "message": "透過輪詢在 Shippo 中偵測到新貨運標籤 (交易) 時觸發。提供標籤詳細資訊，包含追蹤號碼與標籤 URL。"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
-          "source": "New Order",
+          "source": "New order",
           "message": "新訂單"
         },
         "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {

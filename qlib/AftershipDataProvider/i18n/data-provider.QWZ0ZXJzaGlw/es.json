@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
-          "source": "Create Tracking",
+          "source": "Create tracking",
           "message": "Crear seguimiento"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
@@ -772,7 +772,7 @@
           "message": "El ID de seguimiento de Aftership a recuperar"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
-          "source": "Search Trackings",
+          "source": "Search trackings",
           "message": "Buscar seguimientos"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Número de seguimientos por página (máx. 200)"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
-          "source": "Update Tracking",
+          "source": "Update tracking",
           "message": "Actualizar seguimiento"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Método de servicio de envío seleccionado en el proceso de pago"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
-          "source": "Delete Tracking",
+          "source": "Delete tracking",
           "message": "Eliminar seguimiento"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "El ID de seguimiento de Aftership para reanudar el seguimiento (reactiva seguimientos caducados)"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
-          "source": "Mark as Completed",
+          "source": "Mark as completed",
           "message": "Marcar como completado"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Obtener una lista de todos los transportistas admitidos por Aftership"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
-          "source": "Detect Courier",
+          "source": "Detect courier",
           "message": "Detectar transportista"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Código de grupo de transportista para detección de slug múltiple (p. ej., `fedex-group`)"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
-          "source": "Search Returns",
+          "source": "Search returns",
           "message": "Buscar devoluciones"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Número de devoluciones por página (1-50, valor predeterminado `10`)"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
+          "source": "Create return",
           "message": "Crear devolución"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "El ID de devolución o número RMA de Aftership a recuperar"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
-          "source": "Approve Return",
+          "source": "Approve return",
           "message": "Aprobar devolución"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "El ID de devolución de Aftership a aprobar"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
-          "source": "Reject Return",
+          "source": "Reject return",
           "message": "Rechazar devolución"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Motivo para rechazar la devolución"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
-          "source": "Resolve Return",
+          "source": "Resolve return",
           "message": "Resolver devolución"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "El ID de devolución de Aftership que se marcará como resuelto"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
-          "source": "Add Return Shipment",
+          "source": "Add return shipment",
           "message": "Agregar envío de devolución"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Código de transportista para el envío de devolución (p. ej., `fedex`, `ups`)"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Tracking Status Changed",
+          "source": "Tracking status changed",
           "message": "Estado de seguimiento cambiado"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {

@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Vyhledat kontakty"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
@@ -624,7 +624,7 @@
           "message": "sestupně"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Zahrnout historii sloučení"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -636,7 +636,7 @@
           "message": "Předejte `true` pro zahrnutí pole `merge_history` u každého kontaktu v odpovědi. Vrací se pouze pro kontakty s rolí `user`."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Seznam kontaktů"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
@@ -672,7 +672,7 @@
           "message": "Kurzor stránkování: vezměte `pages.next.starting_after` z předchozí odpovědi a předejte jej sem.\n\nJe neprůhledný a nesmí být sestavován ručně. Jakmile je kolekce vyčerpána, hodnota `pages` chybí, což indikuje, že žádná další stránka neexistuje."
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Zahrnout historii sloučení"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Jedinečný identifikátor daného administrátora."
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Seznam štítků"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
@@ -840,7 +840,7 @@
           "message": "Jedinečný identifikátor štítku přidělený službou Intercom"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
-          "source": "Create or Update Company",
+          "source": "Create or update company",
           "message": "Vytvořit nebo aktualizovat společnost"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
@@ -924,7 +924,7 @@
           "message": "Název tarifu přiřazeného k dané společnosti."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Měsíční útrata"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -936,7 +936,7 @@
           "message": "Výše tržeb, které společnost generuje pro vaše podnikání. Desetinná čísla budou zkrácena na celá čísla, např. 155.98 se zkrátí na 155. Maximální hodnota je 2**31-1 neboli 2147483647."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Vlastní atributy"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "Čas, kdy byla společnost vámi vytvořena.\n\nTato hodnota se odesílá jako celé číslo sekund od 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
-          "source": "Update Last Request At",
+          "source": "Update last request at",
           "message": "Aktualizovat čas posledního požadavku"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Nastavte na true pro aktualizaci času posledního zobrazení společnosti na aktuální čas."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Seznam společností"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "`asc` nebo `desc`. Vrátí společnosti ve vzestupném nebo sestupném pořadí. Výchozí hodnota je desc"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
-          "source": "Create Conversation",
+          "source": "Create conversation",
           "message": "Vytvořit konverzaci"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "Předmět e-mailu. Použije se pouze v případě, že typ zprávy je e-mail."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
-          "source": "Attachment Urls",
+          "source": "Attachment urls",
           "message": "Adresy URL příloh"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "Seznam adres URL obrázků, které budou přidány jako přílohy. Lze uvést až 10 adres URL."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvořeno"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Jedinečný identifikátor značky, která se má k této konverzaci přiřadit."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
-          "source": "Search Conversations",
+          "source": "Search conversations",
           "message": "Vyhledat konverzace"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
@@ -1376,7 +1376,7 @@
           "message": "Kurzor stránkování: vezměte `pages.next.starting_after` z předchozí odpovědi a předejte jej sem.\n\nJe neprůhledný a nesmí být sestavován ručně. Jakmile je kolekce vyčerpána, hodnota `pages` chybí, což indikuje, že žádná další stránka neexistuje."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
-          "source": "Include Monitors",
+          "source": "Include monitors",
           "message": "Zahrnout monitory"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "Pokud je nastaveno na true, odpověď bude u každé konverzace obsahovat pole `monitor_evaluations` s případnými výsledky monitorování kvality (QA), které ji označily."
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
-          "source": "Include Scorecards",
+          "source": "Include scorecards",
           "message": "Zahrnout hodnotící karty"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Pokud je nastaveno na true, odpověď bude u každé konverzace obsahovat pole `scorecards` s případnými výsledky hodnotících karet (scorecards) QA."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
-          "source": "Create Message",
+          "source": "Create message",
           "message": "Vytvořit zprávu"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "Odešle zprávu kontaktu **od člena týmu** a zahájí novou konverzaci.\n\n`message_type` určuje způsob doručení: `email` vyžaduje `subject`, `in_app` ji zobrazí v messengeru a `whatsapp` vyžaduje schválený `template`.\n\nChcete-li přispět do již existující konverzace, použijte **Reply to Conversation**."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
-          "source": "Message Type",
+          "source": "Message type",
           "message": "Typ zprávy"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "Styl odchozí zprávy. Možné hodnoty jsou `plain` nebo `personal`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvořeno"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "potenciální zákazník"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
-          "source": "Create Conversation Without Contact Reply",
+          "source": "Create conversation without contact reply",
           "message": "Vytvořit konverzaci bez odpovědi kontaktu"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Určuje, zda se má pro zprávu otevřít konverzace ve složce doručené pošty bez odpovědi kontaktu. Pokud není zadáno, výchozí hodnota je false."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
-          "source": "Submit Data Event",
+          "source": "Submit data event",
           "message": "Odeslat datovou událost"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Volitelná metadata o události."
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List Data Events",
+          "source": "List data events",
           "message": "Zobrazit přehled datových událostí"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "ID uživatele"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjM2UxZDZmZGM2Y2I1MjI3ZTEwNGRkOGZkYmI2MjJhODAwNDM2NTVmN2YyMzAwNWQ3OGY1MjZlYWIzY2ViYTg0Yg.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
-          "source": "Intercom User ID",
+          "source": "Intercom user ID",
           "message": "Intercom ID uživatele"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjNzVlNDdjMWNlM2FhMGZjOTc1YTM0ZGViZmM5MmE2NjI3YWNlMTE3MmEzZDNkN2JlYjdlMzQ3NjZmMjdhMWZlNg.field.ZW1haWw.display_name": {
@@ -1892,7 +1892,7 @@
           "message": "příznak souhrnu"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
-          "source": "List Articles",
+          "source": "List articles",
           "message": "Vypsat články"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "Kurzor stránkování: vezměte `pages.next.starting_after` z předchozí odpovědi a předejte jej sem.\n\nJe neprůhledný a nesmí být sestavován ručně. Jakmile je kolekce vyčerpána, hodnota `pages` chybí, což indikuje, že žádná další stránka neexistuje."
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Seznam kolekcí"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Kurzor stránkování: vezměte `pages.next.starting_after` z předchozí odpovědi a předejte jej sem.\n\nJe neprůhledný a nesmí být sestavován ručně. Jakmile je kolekce vyčerpána, hodnota `pages` chybí, což indikuje, že žádná další stránka neexistuje."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Create Article",
+          "source": "Create article",
           "message": "Vytvořit článek"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "ID nadřazené kolekce nebo sekce článku. Článek bez tohoto pole stojí samostatně."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Přeložený obsah"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Obsah článku."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostupnost pro AI Chatbota"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Zda je článek dostupný pro AI chatbot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostupnost pro AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Zda je článek dostupný pro AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "Zda je článek dostupný pro AI prodejního agenta."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID publik"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Tělo článku ve formátu HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown těla"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Tělo článku ve formátu markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvořeno"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Popis článku."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Datum aktualizace návrhu"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo `null`, pokud neexistuje připravená verze."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Má nepublikované změny"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "obsah článku"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Aktualizováno"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Popis článku. U vícejazyčných článků to bude popis obsahu ve výchozím jazyce."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown těla"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Obsah článku v markdownu. U vícejazyčných článků to bude tělo obsahu ve výchozím jazyce. Alternativa k `body` – obsah můžete zadat jako markdown místo HTML. Vzájemně se vylučuje s `body`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID publik"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Seznam ID publik pro přiřazení k tomuto článku pro cílení Fin AI Agenta. Odeslání hodnoty `audience_ids` na nejvyšší úrovni rozšíří stejnou sadu do všech jazykových verzí. Pro cílení podle jazykové verze použijte místo toho `translated_content.<locale>.audience_ids`. Odeslání nejvyšší i specifické úrovně v jednom požadavku upřednostní nejvyšší úroveň. Neznámá ID publik vrátí chybu 404. Nedochází k žádnému částečnému uložení."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostupnost pro AI Chatbota"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "Určuje, zda má být článek dostupný pro AI Chatbot (Fin). U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostupnost pro AI Copilot"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "Určuje, zda má být článek dostupný pro AI Copilot. U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "Zda má být článek dostupný pro AI Sales Agenta. U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Naplánované publikování na"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "Časové razítko ISO 8601, na kdy naplánovat budoucí publikování článku. Při nastavení společně s `state: \"published\"` je článek naplánován místo okamžitého publikování. Nastavení `null` zruší čekající plán publikování. Časová razítka v minulosti nebo rovna aktuálnímu času jsou odmítnuta s chybou 400 `parameter_invalid` – hodnota musí být striktně v budoucnosti. Kombinace s `state: \"draft\"` vrací 400 `parameter_invalid`. Odeslání ve stejném požadavku jako `scheduled_unpublish_at` vrací 400 – na článek lze mít pouze jeden čekající plán. Prázdný řetězec vrací 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Naplánované zrušení publikování na"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "Časové razítko ISO 8601, na kdy naplánovat budoucí zrušení publikování článku. Nastavení `null` zruší čekající plán zrušení publikování. Časová razítka v minulosti nebo rovna aktuálnímu času jsou odmítnuta s chybou 400 `parameter_invalid` – hodnota musí být striktně v budoucnosti. Odmítnuto s chybou 400 `parameter_invalid`, pokud článek nebyl nikdy publikován. Odeslání ve stejném požadavku jako `scheduled_publish_at` vrací 400 – na článek lze mít pouze jeden čekající plán. Prázdný řetězec vrací 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
-          "source": "List Teammates",
+          "source": "List teammates",
           "message": "Zobrazit seznam členů týmu"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Vypíše členy týmu, kteří mají přístup k pracovnímu prostoru.\n\nToto je exportováno proto, aby rozbalovací nabídky členů týmu měly k dispozici akci pro volání – autor článku, člen týmu u poznámky či odpovědi, odesílatel zprávy.\n\nTento výpis není stránkovaný: Intercom je vrátí všechny v jedné odpovědi v poli `admins`."
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
-          "source": "Display Avatar",
+          "source": "Display avatar",
           "message": "Zobrazit avatara"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Zahrnout historii sloučení"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -2952,7 +2952,7 @@
           "message": "E-mail kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
-          "source": "Email Verified",
+          "source": "Email verified",
           "message": "E-mail ověřen"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "URL obrázku s avatarem kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
-          "source": "Signed Up At",
+          "source": "Signed up at",
           "message": "Zaregistrován v"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "(Časové razítko Unix v sekundách) Zadaný čas registrace kontaktu.\n\nTato hodnota se odesílá jako celé číslo představující sekundy od 1970-01-01Z."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
-          "source": "Last Seen At",
+          "source": "Last seen at",
           "message": "Naposledy spatřen v"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "ID správce, kterému bylo přiřazeno vlastnictví kontaktu"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
-          "source": "Unsubscribed from Emails",
+          "source": "Unsubscribed from emails",
           "message": "Odhlášeno z e-mailů"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "Zda je kontakt odhlášen z odběru e-mailů"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Vlastní atributy"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "Vlastní atributy nastavené pro daný kontakt"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "Zahrnout historii sloučení"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "ID cílové konverzace"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
-          "source": "Display As",
+          "source": "Display as",
           "message": "Zobrazit jako"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Nastavte na plaintext pro získání zpráv konverzace v prostém textu. To ovlivní pole body i subject. Vložené odkazy se zobrazí jako `label (url)`, čímž se zachová URL odkazu společně s viditelným textem."
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
-          "source": "Include Translations",
+          "source": "Include translations",
           "message": "Zahrnout překlady"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "Odvětví, ve kterém tato společnost působí."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "Vlastní atributy"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Objekt párů klíč/hodnota obsahující jakákoli další data o společnosti, která má Intercom uložit."
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "Měsíční útrata"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "Obsah článku v HTML. U vícejazyčných článků to bude tělo obsahu ve výchozím jazyce. Vzájemně se vylučuje s `body_markdown`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown těla"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "ID nadřazené kolekce nebo sekce článku. Článek bez tohoto pole stojí samostatně."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
-          "source": "Parent Type",
+          "source": "Parent type",
           "message": "Typ nadřazené položky"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "Typ nadřazeného prvku, kterým může být buď `collection`, nebo `section`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "Přeložený obsah"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "Obsah článku."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostupnost pro AI Chatbota"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3488,7 +3488,7 @@
           "message": "Zda je článek dostupný pro AI chatbot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostupnost pro AI Copilot"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "Zda je článek dostupný pro AI Copilot."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Zda je článek dostupný pro AI prodejního agenta."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID publik"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "Tělo článku ve formátu HTML."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown těla"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "Tělo článku ve formátu markdown."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "Vytvořeno"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "Popis článku."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "Datum aktualizace návrhu"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -3596,7 +3596,7 @@
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo `null`, pokud neexistuje připravená verze."
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "Má nepublikované změny"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "obsah článku"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "Aktualizováno"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -4128,7 +4128,7 @@
           "message": "Obsah článku."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "ID publik"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -4140,7 +4140,7 @@
           "message": "Seznam ID publik, která mají být přiřazena k tomuto článku pro cílení agenta Fin AI. Odeslání pole `audience_ids` na nejvyšší úrovni rozešle stejnou sadu do všech lokalizací. Odeslání `audience_ids: []` vymaže všechna členství v publiku ze všech lokalizací. Pro cílení podle lokalizace použijte místo toho `translated_content.<locale>.audience_ids`. Odeslání parametrů nejvyšší úrovně i specifických pro lokalizaci ve stejném požadavku způsobí, že přednost má nejvyšší úroveň. Neznámá ID publik vrátí chybu 404. Nedochází k žádnému částečnému uložení."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "Dostupnost pro AI Chatbota"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4152,7 +4152,7 @@
           "message": "Určuje, zda má být článek dostupný pro AI Chatbot (Fin). U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "Dostupnost pro AI Copilot"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4164,7 +4164,7 @@
           "message": "Určuje, zda má být článek dostupný pro AI Copilot. U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -4176,7 +4176,7 @@
           "message": "Zda má být článek dostupný pro AI Sales Agenta. U vícejazyčných článků toto nastavuje dostupnost pro výchozí jazyk."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "Naplánované publikování na"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -4188,7 +4188,7 @@
           "message": "Časové razítko ISO 8601, na kdy naplánovat budoucí publikování článku. Při nastavení společně s `state: \"published\"` je článek naplánován místo okamžitého publikování. Nastavení `null` zruší čekající plán publikování. Časová razítka v minulosti nebo rovna aktuálnímu času jsou odmítnuta s chybou 400 `parameter_invalid` – hodnota musí být striktně v budoucnosti. Kombinace s `state: \"draft\"` vrací 400 `parameter_invalid`. Odeslání ve stejném požadavku jako `scheduled_unpublish_at` vrací 400 – na článek lze mít pouze jeden čekající plán. Prázdný řetězec vrací 400 `parameter_invalid`."
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "Naplánované zrušení publikování na"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -4296,7 +4296,7 @@
           "message": "Jedinečný identifikátor daného tagu"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Vyhledat záznamy"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
@@ -4320,7 +4320,7 @@
           "message": "Tabulka, se kterou se má pracovat: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` nebo `teammates`"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Najít jeden záznam"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4344,7 +4344,7 @@
           "message": "Tabulka, se kterou se má pracovat: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` nebo `teammates`"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Vytvořit záznamy"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "Tabulka, se kterou se má pracovat: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` nebo `teammates`"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovat záznamy"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "Tabulka, se kterou se má pracovat: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` nebo `teammates`"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Smazat záznamy"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {

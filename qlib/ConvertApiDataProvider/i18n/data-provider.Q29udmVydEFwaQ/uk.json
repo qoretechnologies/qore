@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.display_name": {
-          "source": "Convert a File",
+          "source": "Convert a file",
           "message": "Конвертувати файл"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1maWxl.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Тайм-аут конвертації в секундах, від `10` до `1200`; якщо не задано, застосовується типове значення конвертера, наприклад `900` для документів Office і `120` для вебсторінок."
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.display_name": {
-          "source": "Get Converter Information",
+          "source": "Get converter information",
           "message": "Отримати інформацію про конвертер"
         },
         "app.Q29udmVydEFwaQ.action.Z2V0LWNvbnZlcnRlci1pbmZv.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "Інші параметри конвертера у вигляді хешу назв параметрів ConvertAPI та їхніх значень.\n\nПараметри кожного конвертера наведено в [документації ConvertAPI](https://docs.convertapi.com), їх також повертає дія `get-converter-info`.\n\n- Скалярні значення надсилаються як є\n- Хеш файлу (`name` і `content`) надсилається як файл\n- Список хешів файлів надсилається як список файлів\n\n**Приклад**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.display_name": {
-          "source": "Convert PDF to Images",
+          "source": "Convert PDF to images",
           "message": "Конвертувати PDF в зображення"
         },
         "app.Q29udmVydEFwaQ.action.Y29udmVydC1wZGYtdG8taW1hZ2U.short_desc": {
@@ -3240,7 +3240,7 @@
           "message": "Інші параметри конвертера у вигляді хешу назв параметрів ConvertAPI та їхніх значень.\n\nПараметри кожного конвертера наведено в [документації ConvertAPI](https://docs.convertapi.com), їх також повертає дія `get-converter-info`.\n\n- Скалярні значення надсилаються як є\n- Хеш файлу (`name` і `content`) надсилається як файл\n- Список хешів файлів надсилається як список файлів\n\n**Приклад**: `{\"PageRange\": \"1-3\", \"Pdfa\": true}`"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.display_name": {
-          "source": "Merge PDF Files",
+          "source": "Merge PDF files",
           "message": "Об'єднати файли PDF"
         },
         "app.Q29udmVydEFwaQ.action.bWVyZ2UtcGRm.short_desc": {

@@ -472,7 +472,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -496,7 +496,7 @@
           "message": "추가로 전달할 매개변수입니다."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "코드 블록"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "각 결과에 대해 반환할 코드 블록 수."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -532,7 +532,7 @@
           "message": "각 웹페이지에서 반환할 URL 수."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "풍부한 이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -544,7 +544,7 @@
           "message": "각 결과에 대해 반환할 고급 이미지 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "풍부한 링크"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.short_desc": {
@@ -592,7 +592,7 @@
           "message": "향후 릴리스에서 제거될 예정입니다. 현재 무시됩니다. 기본 하이라이트를 사용하려면 highlights: true를 전달하거나, 사용자 쿼리로 선택을 안내하려면 { query }를 전달하세요."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -604,7 +604,7 @@
           "message": "강조 표시에 반환할 수 있는 최대 문자 수. 각 URL에 대해 반환되는 강조 표시 텍스트의 총 길이를 제어합니다. 지원되는 최대 값은 10000입니다. highlights.dynamic와 호환되지 않습니다."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "문장 수"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -680,7 +680,7 @@
           "message": "선호"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl 타임아웃"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -692,7 +692,7 @@
           "message": "라이브 크롤의 제한 시간(밀리초)입니다."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "최대 연령(시간)"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -704,7 +704,7 @@
           "message": "캐시된 콘텐츠의 최대 경과 시간(시간 단위)입니다. 양수 값은 캐시된 콘텐츠가 그 시간보다 새로울 때 사용합니다. 0은 새 콘텐츠를 가져오며, 새로 가져온 페이지에 텍스트 렌더링 옵션을 적용하는 지원되는 방법입니다. -1은 항상 캐시를 사용합니다. 생략하면 캐시된 콘텐츠가 없을 때 대체 가져오기를 사용합니다. 지원되는 최대값은 720시간입니다."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "하위 페이지 대상"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -776,7 +776,7 @@
           "message": "각 결과의 텍스트 추출 옵션입니다."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "제외할 섹션"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -788,7 +788,7 @@
           "message": "이러한 의미적 페이지 섹션에 분류된 콘텐츠 제외. 섹션 분류는 최선의 노력 기반입니다. 최신으로 가져온 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML 태그 포함"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -800,7 +800,7 @@
           "message": "true인 경우, 반환된 텍스트에 가벼운 HTML 태그를 포함하고 순수 마크다운 스타일 텍스트 대신 사용. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "섹션 포함"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -812,7 +812,7 @@
           "message": "최선의 노력. 이 세미틱 페이지 섹션에 분류된 콘텐츠만 포함합니다. 일부 페이지에 대해 섹션 분류가 사용 불가능하거나 불완전할 수 있으므로, 엄격한 필터링이 필요한 경우 출력을 검증하세요. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -932,7 +932,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "텍스트"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "추가 속성"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.cHJvcGVydGllcw.display_name": {
@@ -1068,7 +1068,7 @@
           "message": "응답을 서버 전송 이벤트 스트림으로 반환합니다.  호출자가 SSE를 처리하지 않는 한 꺼 두세요. 액션은 응답 전체를 반환합니다."
         },
         "app.RXhh.action.YW5zd2Vy.display_name": {
-          "source": "Answer a Question",
+          "source": "Answer a question",
           "message": "질문에 답변"
         },
         "app.RXhh.action.YW5zd2Vy.short_desc": {
@@ -1144,7 +1144,7 @@
           "message": "원하는 답변을 기술한 [JSON Schema Draft 7](https://json-schema.org/draft-07) 정의로, 결과를 서술형 문장이 아닌 구조화된 데이터로 만듭니다."
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "추가 속성"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "사용자의 두 글자 ISO 국가 코드입니다(예: US)."
         },
         "app.RXhh.action.Y29udGVudHM.display_name": {
-          "source": "Get Contents",
+          "source": "Get contents",
           "message": "콘텐츠 가져오기"
         },
         "app.RXhh.action.Y29udGVudHM.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "각 결과의 텍스트 추출 옵션입니다."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "제외할 섹션"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "이러한 의미적 페이지 섹션에 분류된 콘텐츠 제외. 섹션 분류는 최선의 노력 기반입니다. 최신으로 가져온 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML 태그 포함"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -1312,7 +1312,7 @@
           "message": "true인 경우, 반환된 텍스트에 가벼운 HTML 태그를 포함하고 순수 마크다운 스타일 텍스트 대신 사용. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "섹션 포함"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "최선의 노력. 이 세미틱 페이지 섹션에 분류된 콘텐츠만 포함합니다. 일부 페이지에 대해 섹션 분류가 사용 불가능하거나 불완전할 수 있으므로, 엄격한 필터링이 필요한 경우 출력을 검증하세요. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "향후 릴리스에서 제거될 예정입니다. 현재 무시됩니다. 기본 하이라이트를 사용하려면 highlights: true를 전달하거나, 사용자 쿼리로 선택을 안내하려면 { query }를 전달하세요."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "강조 표시에 반환할 수 있는 최대 문자 수. 각 URL에 대해 반환되는 강조 표시 텍스트의 총 길이를 제어합니다. 지원되는 최대 값은 10000입니다. highlights.dynamic와 호환되지 않습니다."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "문장 수"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "추가로 전달할 매개변수입니다."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "코드 블록"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "각 결과에 대해 반환할 코드 블록 수."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "이미지 링크"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "각 웹페이지에서 반환할 URL 수."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "풍부한 이미지 링크"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "각 결과에 대해 반환할 고급 이미지 링크 수."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "풍부한 링크"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "검색 결과의 특정 하위 페이지를 찾기 위한 용어입니다. 단일 문자열이거나 문자열 배열일 수 있습니다."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
-          "source": "Find Similar Links",
+          "source": "Find similar links",
           "message": "유사한 링크 찾기"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
@@ -1788,7 +1788,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1812,7 +1812,7 @@
           "message": "추가로 전달할 매개변수입니다."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "코드 블록"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "각 결과에 대해 반환할 코드 블록 수."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "각 웹페이지에서 반환할 URL 수."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "풍부한 이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "각 결과에 대해 반환할 고급 이미지 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "풍부한 링크"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "향후 릴리스에서 제거될 예정입니다. 현재 무시됩니다. 기본 하이라이트를 사용하려면 highlights: true를 전달하거나, 사용자 쿼리로 선택을 안내하려면 { query }를 전달하세요."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -1920,7 +1920,7 @@
           "message": "강조 표시에 반환할 수 있는 최대 문자 수. 각 URL에 대해 반환되는 강조 표시 텍스트의 총 길이를 제어합니다. 지원되는 최대 값은 10000입니다. highlights.dynamic와 호환되지 않습니다."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "문장 수"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "선호"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl 타임아웃"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "라이브 크롤의 제한 시간(밀리초)입니다."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "최대 연령(시간)"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "캐시된 콘텐츠의 최대 경과 시간(시간 단위)입니다. 양수 값은 캐시된 콘텐츠가 그 시간보다 새로울 때 사용합니다. 0은 새 콘텐츠를 가져오며, 새로 가져온 페이지에 텍스트 렌더링 옵션을 적용하는 지원되는 방법입니다. -1은 항상 캐시를 사용합니다. 생략하면 캐시된 콘텐츠가 없을 때 대체 가져오기를 사용합니다. 지원되는 최대값은 720시간입니다."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "하위 페이지 대상"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "각 결과의 텍스트 추출 옵션입니다."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "제외할 섹션"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "이러한 의미적 페이지 섹션에 분류된 콘텐츠 제외. 섹션 분류는 최선의 노력 기반입니다. 최신으로 가져온 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML 태그 포함"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -2116,7 +2116,7 @@
           "message": "true인 경우, 반환된 텍스트에 가벼운 HTML 태그를 포함하고 순수 마크다운 스타일 텍스트 대신 사용. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "섹션 포함"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -2128,7 +2128,7 @@
           "message": "최선의 노력. 이 세미틱 페이지 섹션에 분류된 콘텐츠만 포함합니다. 일부 페이지에 대해 섹션 분류가 사용 불가능하거나 불완전할 수 있으므로, 엄격한 필터링이 필요한 경우 출력을 검증하세요. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -2236,7 +2236,7 @@
           "message": "이 시점보다 게시일이 이른 링크만 반환됩니다. ISO 8601 형식으로 지정해야 합니다."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Start a Research Run",
+          "source": "Start a research run",
           "message": "리서치 실행 시작"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.short_desc": {
@@ -2452,7 +2452,7 @@
           "message": "종량 과금되는 작업량 `auto`와 `max`에 적용되는 실행별 선택적 지출 한도입니다. 일찍 끝난 실행은 한도보다 적은 비용이 들 수 있습니다."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.display_name": {
-          "source": "Max Cost Dollars",
+          "source": "Max cost dollars",
           "message": "최대 비용(달러)"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.short_desc": {
@@ -2484,7 +2484,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "실험적 기능을 켜기 위한 쉼표로 구분된 베타 기능 토큰입니다."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.display_name": {
-          "source": "List Research Runs",
+          "source": "List research runs",
           "message": "리서치 실행 목록"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.display_name": {
-          "source": "Last Event ID",
+          "source": "Last event ID",
           "message": "마지막 이벤트 ID"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "에이전트 실행 ID입니다. 새 실행 ID는 `agent_run_` 접두사와 함께 반환됩니다."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "에이전트 실행 ID입니다. 새 실행 ID는 `agent_run_` 접두사와 함께 반환됩니다."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create a Batch",
+          "source": "Create a batch",
           "message": "배치 만들기"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "호출자가 제공해 배치와 함께 저장되는 메타데이터입니다."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "배치 목록"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "완료"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "배치 ID입니다."
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "배치 ID입니다."
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3004,7 +3004,7 @@
           "message": "배치 ID입니다."
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
+          "source": "Exa beta",
           "message": "Exa Beta"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.display_name": {
-          "source": "Create a Search Monitor",
+          "source": "Create a search monitor",
           "message": "검색 모니터 만들기"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.short_desc": {
@@ -3080,7 +3080,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "추가로 전달할 매개변수입니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "코드 블록"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "각 결과에 대해 반환할 코드 블록 수."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "각 웹페이지에서 반환할 URL 수."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "풍부한 이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3152,7 +3152,7 @@
           "message": "각 결과에 대해 반환할 고급 이미지 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "풍부한 링크"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3164,7 +3164,7 @@
           "message": "각 결과에 대해 반환할 고급 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "결과가 비어 있는 항목 필터링"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3212,7 +3212,7 @@
           "message": "향후 릴리스에서 제거될 예정입니다. 현재 무시됩니다. 기본 하이라이트를 사용하려면 highlights: true를 전달하거나, 사용자 쿼리로 선택을 안내하려면 { query }를 전달하세요."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3224,7 +3224,7 @@
           "message": "강조 표시에 반환할 수 있는 최대 문자 수. 각 URL에 대해 반환되는 강조 표시 텍스트의 총 길이를 제어합니다. 지원되는 최대 값은 10000입니다. highlights.dynamic와 호환되지 않습니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "문장 수"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "페이지 콘텐츠를 가져오기 위한 크롤링 전략"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl 타임아웃"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -3296,7 +3296,7 @@
           "message": "라이브 크롤의 제한 시간(밀리초)입니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "최대 연령(시간)"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -3308,7 +3308,7 @@
           "message": "캐시된 콘텐츠의 최대 경과 시간(시간 단위)입니다. 양수 값은 캐시된 콘텐츠가 그 시간보다 새로울 때 사용합니다. 0은 새 콘텐츠를 가져오며, 새로 가져온 페이지에 텍스트 렌더링 옵션을 적용하는 지원되는 방법입니다. -1은 항상 캐시를 사용합니다. 생략하면 캐시된 콘텐츠가 없을 때 대체 가져오기를 사용합니다. 지원되는 최대값은 720시간입니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "하위 페이지 대상"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -3344,7 +3344,7 @@
           "message": "LLM 생성 요약 반환. 기본값은 `true`를 전달하거나, `query` 및 `maxTokens`를 포함한 객체를 전달합니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "최대 토큰 수"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -3380,7 +3380,7 @@
           "message": "각 결과의 텍스트 추출 옵션입니다."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "제외할 섹션"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -3392,7 +3392,7 @@
           "message": "이러한 의미적 페이지 섹션에 분류된 콘텐츠 제외. 섹션 분류는 최선의 노력 기반입니다. 최신으로 가져온 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML 태그 포함"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -3404,7 +3404,7 @@
           "message": "true인 경우, 반환된 텍스트에 가벼운 HTML 태그를 포함하고 순수 마크다운 스타일 텍스트 대신 사용. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "섹션 포함"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -3416,7 +3416,7 @@
           "message": "최선의 노력. 이 세미틱 페이지 섹션에 분류된 콘텐츠만 포함합니다. 일부 페이지에 대해 섹션 분류가 사용 불가능하거나 불완전할 수 있으므로, 엄격한 필터링이 필요한 경우 출력을 검증하세요. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "전체"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "제외할 도메인"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -3464,7 +3464,7 @@
           "message": "검색 결과에서 제외할 도메인."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "도메인 포함"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "이 도메인들로 검색 결과 제한."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "결과 수"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -3608,7 +3608,7 @@
           "message": "텍스트"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "추가 속성"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -3636,7 +3636,7 @@
           "message": "웹훅을 전달할 때마다 그대로 되돌려 주는 키-값 쌍입니다. 수신 측이 모니터를 조회하지 않고도 업데이트를 라우팅할 수 있습니다."
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.display_name": {
-          "source": "List Search Monitors",
+          "source": "List search monitors",
           "message": "검색 모니터 목록"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.short_desc": {
@@ -3836,7 +3836,7 @@
           "message": "더 이상 사용되지 않음: 대신 하이라이트나 텍스트를 사용하세요. 페이지 내용을 하나로 합친 컨텍스트 문자열로 반환합니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3860,7 +3860,7 @@
           "message": "추가로 전달할 매개변수입니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
+          "source": "Code blocks",
           "message": "코드 블록"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "각 결과에 대해 반환할 코드 블록 수."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
+          "source": "Image links",
           "message": "이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "각 웹페이지에서 반환할 URL 수."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
+          "source": "Rich image links",
           "message": "풍부한 이미지 링크"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
@@ -3908,7 +3908,7 @@
           "message": "각 결과에 대해 반환할 고급 이미지 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
+          "source": "Rich links",
           "message": "풍부한 링크"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
@@ -3920,7 +3920,7 @@
           "message": "각 결과에 대해 반환할 고급 링크 수."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
+          "source": "Filter empty results",
           "message": "결과가 비어 있는 항목 필터링"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "향후 릴리스에서 제거될 예정입니다. 현재 무시됩니다. 기본 하이라이트를 사용하려면 highlights: true를 전달하거나, 사용자 쿼리로 선택을 안내하려면 { query }를 전달하세요."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -3980,7 +3980,7 @@
           "message": "강조 표시에 반환할 수 있는 최대 문자 수. 각 URL에 대해 반환되는 강조 표시 텍스트의 총 길이를 제어합니다. 지원되는 최대 값은 10000입니다. highlights.dynamic와 호환되지 않습니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
+          "source": "Num sentences",
           "message": "문장 수"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
@@ -4040,7 +4040,7 @@
           "message": "페이지 콘텐츠를 가져오기 위한 크롤링 전략"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
+          "source": "Livecrawl timeout",
           "message": "Livecrawl 타임아웃"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
@@ -4052,7 +4052,7 @@
           "message": "라이브 크롤의 제한 시간(밀리초)입니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
+          "source": "Max age hours",
           "message": "최대 연령(시간)"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
@@ -4064,7 +4064,7 @@
           "message": "캐시된 콘텐츠의 최대 경과 시간(시간 단위)입니다. 양수 값은 캐시된 콘텐츠가 그 시간보다 새로울 때 사용합니다. 0은 새 콘텐츠를 가져오며, 새로 가져온 페이지에 텍스트 렌더링 옵션을 적용하는 지원되는 방법입니다. -1은 항상 캐시를 사용합니다. 생략하면 캐시된 콘텐츠가 없을 때 대체 가져오기를 사용합니다. 지원되는 최대값은 720시간입니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
+          "source": "Subpage target",
           "message": "하위 페이지 대상"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
@@ -4100,7 +4100,7 @@
           "message": "LLM 생성 요약 반환. 기본값은 `true`를 전달하거나, `query` 및 `maxTokens`를 포함한 객체를 전달합니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "최대 토큰 수"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "각 결과의 텍스트 추출 옵션입니다."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
+          "source": "Exclude sections",
           "message": "제외할 섹션"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "이러한 의미적 페이지 섹션에 분류된 콘텐츠 제외. 섹션 분류는 최선의 노력 기반입니다. 최신으로 가져온 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
+          "source": "Include HTML tags",
           "message": "HTML 태그 포함"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
@@ -4160,7 +4160,7 @@
           "message": "true인 경우, 반환된 텍스트에 가벼운 HTML 태그를 포함하고 순수 마크다운 스타일 텍스트 대신 사용. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
+          "source": "Include sections",
           "message": "섹션 포함"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "최선의 노력. 이 세미틱 페이지 섹션에 분류된 콘텐츠만 포함합니다. 일부 페이지에 대해 섹션 분류가 사용 불가능하거나 불완전할 수 있으므로, 엄격한 필터링이 필요한 경우 출력을 검증하세요. 최신 콘텐츠에 적용하려면 maxAgeHours: 0을 사용하세요."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
+          "source": "Max characters",
           "message": "최대 문자 수"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
@@ -4208,7 +4208,7 @@
           "message": "전체"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
+          "source": "Exclude domains",
           "message": "제외할 도메인"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "검색 결과에서 제외할 도메인."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
+          "source": "Include domains",
           "message": "도메인 포함"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
@@ -4232,7 +4232,7 @@
           "message": "이 도메인들로 검색 결과 제한."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
+          "source": "Num results",
           "message": "결과 수"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
@@ -4328,7 +4328,7 @@
           "message": "텍스트"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
+          "source": "Additional properties",
           "message": "추가 속성"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.cHJvcGVydGllcw.display_name": {
@@ -4416,7 +4416,7 @@
           "message": "모니터 ID"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.display_name": {
-          "source": "Act on Several Monitors",
+          "source": "Act on several monitors",
           "message": "여러 모니터 일괄 처리"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.short_desc": {

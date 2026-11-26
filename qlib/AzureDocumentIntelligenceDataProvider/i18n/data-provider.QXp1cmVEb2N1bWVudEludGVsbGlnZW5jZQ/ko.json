@@ -368,7 +368,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -420,7 +420,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -472,7 +472,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -632,7 +632,7 @@
           "message": "고유 문서 분류기 이름."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
-          "source": "Target Resource ID",
+          "source": "Target resource ID",
           "message": "대상 자원 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
@@ -644,7 +644,7 @@
           "message": "문서 분류기를 복사해야 할 대상 Azure 리소스의 ID."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
-          "source": "Target Resource Region",
+          "source": "Target resource region",
           "message": "목표 자원 지역"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
@@ -656,7 +656,7 @@
           "message": "문서 분류기가 복사되어야 하는 대상 Azure 리소스의 위치\n투."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
-          "source": "Target Classifier ID",
+          "source": "Target classifier ID",
           "message": "대상 분류기 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
@@ -668,7 +668,7 @@
           "message": "대상 문서 분류기의 식별자."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
-          "source": "Target Classifier Location",
+          "source": "Target classifier location",
           "message": "목표 분류기 위치"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
@@ -680,7 +680,7 @@
           "message": "대상 계정에 복사된 문서 분류기의 URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
-          "source": "Access Token",
+          "source": "Access token",
           "message": "액세스 토큰"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
@@ -692,7 +692,7 @@
           "message": "요청을 승인하는 데 사용된 토큰."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
-          "source": "Expiration Date Time",
+          "source": "Expiration date time",
           "message": "만료일 시간"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
@@ -872,7 +872,7 @@
           "message": "문서 분류기 설명."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
-          "source": "Base Classifier ID",
+          "source": "Base classifier ID",
           "message": "기본 분류기 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "분류기를 훈련할 `classifierId` 기본 ."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
-          "source": "Doc Types",
+          "source": "Doc types",
           "message": "문서 종류"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
@@ -896,7 +896,7 @@
           "message": "분류할 문서 유형 목록."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
-          "source": "Allow Overwrite",
+          "source": "Allow overwrite",
           "message": "덮어쓰기 허용"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
@@ -952,7 +952,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -1116,7 +1116,7 @@
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
+          "source": "Query fields",
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "고유한 문서 모델 이름."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
-          "source": "Azure Blob Source",
+          "source": "Azure blob source",
           "message": "Azure Blob 소스"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "블롭 이름 접두사."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
-          "source": "Azure Blob File List Source",
+          "source": "Azure blob file list source",
           "message": "Azure Blob Storage 파일 목록 원본"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Azure Blob Storage 컨테이너 URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
-          "source": "File List",
+          "source": "File list",
           "message": "파일 목록"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "컨테이너 내 문서의 하위 집합을 지정한 JSONL 파일로 가는 경로."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
-          "source": "Result Container URL",
+          "source": "Result container URL",
           "message": "결과 컨테이너 URL"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "분석 결과 파일이 저장되는 Azure Blob Storage 컨테이너 URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
-          "source": "Result Prefix",
+          "source": "Result prefix",
           "message": "결과 접두사"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "결과 파일의 블롭 이름 접두사."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
-          "source": "Overwrite Existing",
+          "source": "Overwrite existing",
           "message": "기존 장치 덮어쓰기"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
+          "source": "Query fields",
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "고유한 문서 모델 이름."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
-          "source": "Target Resource ID",
+          "source": "Target resource ID",
           "message": "대상 자원 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "문서 모델을 복사해야 할 대상 Azure 리소스의 ID입니다."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
-          "source": "Target Resource Region",
+          "source": "Target resource region",
           "message": "목표 자원 지역"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
@@ -1608,7 +1608,7 @@
           "message": "문서 모델을 복사해야 하는 대상 Azure 리소스의 위치\n투."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
-          "source": "Target Model ID",
+          "source": "Target model ID",
           "message": "대상 모델 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "대상 문서 모델의 식별자."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
-          "source": "Target Model Location",
+          "source": "Target model location",
           "message": "목표 모델 위치"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
@@ -1632,7 +1632,7 @@
           "message": "대상 계정에 복사된 문서 모델의 URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
-          "source": "Access Token",
+          "source": "Access token",
           "message": "액세스 토큰"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
@@ -1644,7 +1644,7 @@
           "message": "요청을 승인하는 데 사용된 토큰."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
-          "source": "Expiration Date Time",
+          "source": "Expiration date time",
           "message": "만료일 시간"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "신경"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
-          "source": "Azure Blob Source",
+          "source": "Azure blob source",
           "message": "Azure Blob 소스"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "블롭 이름 접두사."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
-          "source": "Azure Blob File List Source",
+          "source": "Azure blob file list source",
           "message": "Azure Blob Storage 파일 목록 원본"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Azure Blob Storage 컨테이너 URL."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
-          "source": "File List",
+          "source": "File list",
           "message": "파일 목록"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
@@ -2240,7 +2240,7 @@
           "message": "문서 모델과 연관된 키-값 태그 속성 목록."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
-          "source": "Max Training Hours",
+          "source": "Max training hours",
           "message": "최대 훈련 시간"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "모델 학습에 사용할 최대 V100 동등 GPU 시간. 기본값=0.5."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
-          "source": "Allow Overwrite",
+          "source": "Allow overwrite",
           "message": "덮어쓰기 허용"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
@@ -2352,7 +2352,7 @@
           "message": "페이지당 항목 수"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
-          "source": "Doc Types",
+          "source": "Doc types",
           "message": "문서 종류"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -2500,7 +2500,7 @@
           "message": "2024-11-30"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
-          "source": "X Ms Client Request ID",
+          "source": "X ms client request ID",
           "message": "X Ms 클라이언트 요청 ID"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
@@ -2652,7 +2652,7 @@
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
+          "source": "Query fields",
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
@@ -3044,7 +3044,7 @@
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
-          "source": "Query Fields",
+          "source": "Query fields",
           "message": "쿼리 필드"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {

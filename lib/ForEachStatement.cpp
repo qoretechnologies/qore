@@ -46,11 +46,11 @@ namespace {
 */
 class ForEachElementHelper {
 public:
-    DLLLOCAL ForEachElementHelper(bool set, int n_element) : set(set),
+    ForEachElementHelper(bool set, int n_element) : set(set),
             element(set ? save_implicit_element(n_element) : 0) {
     }
 
-    DLLLOCAL ~ForEachElementHelper() {
+    ~ForEachElementHelper() {
         if (set) {
             save_implicit_element(element);
         }

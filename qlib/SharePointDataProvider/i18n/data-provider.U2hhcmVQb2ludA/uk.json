@@ -1960,7 +1960,7 @@
           "message": "Елемент списку для звернення"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Документ додано"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Спрацьовує, коли документ додається до бібліотеки документів. Використовує дельта-запити, які продовжують роботу саме з того місця, де зупинилися, замість повторного зчитування бібліотеки"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Документ змінено"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Спрацьовує, коли змінюється документ, що вже міститься в бібліотеці. Використовує дельта-запити, які продовжують роботу саме з того місця, де зупинилися, замість повторного зчитування бібліотеки"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Папку додано"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Спрацьовує, коли папка додається до бібліотеки документів"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Елемент списку додано"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

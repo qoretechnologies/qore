@@ -126,6 +126,19 @@ public hashdecl TabularProfileOptions {
 
     #! The number of leading rows searched for the header row
     int header_search_rows = 20;
+
+    #! The 1-based row holding the column names, or 0 if the sheets have none
+    /** When not set, the header row of each sheet is found from its content: the first of the leading
+        @c header_search_rows rows that holds labels and has data under it (when every leading row holds labels, the
+        first label row as wide as the widest row); when set, it is used for every sheet,
+        as the user who knows the file says it: the rows with content above it are title rows, the data starts on
+        the next row, and the columns are named from it; a row below the last row with content gives no data region
+        and no column (the rows with content above it are still title rows); with 0, every row from the first row
+        with content is data, and no @c no_header_row finding is reported
+
+        @since %DataProvider 3.13
+    */
+    *int header_row;
 }
 
 #! A finding about a sheet: a structural feature or a problem that affects how the data is read
@@ -264,14 +277,15 @@ public hashdecl TabularSheetProfile {
     #! The number of rows in the sheet
     int row_count = 0;
 
-    #! The 1-based header row, if one was found: the row of the column names, after which the data starts
+    #! The 1-based header row: the one given in the @c header_row profile option, else the one found; the row of the
+    #! column names, after which the data starts
     /** A header of two rows (see @ref header_rows) ends with this row
     */
     *int header_row;
 
     #! The 1-based rows of a header of two rows: a row of group names over the row of the column names
-    /** Set only when the header has two rows; @ref header_row is then its \c last row.  See
-        @ref tabular_profiler_header_rows "Headers of Two Rows".
+    /** Set only when the header has two rows; @ref header_row is then its \c last row.  A header row given in the
+        @c header_row profile option is one row.  See @ref tabular_profiler_header_rows "Headers of Two Rows".
 
         @since %DataProvider 3.13
     */
@@ -617,9 +631,15 @@ public class TabularProfiler {
         @param opts profile options
 
         @return the profile
+
+        @throw TABULAR-PROFILE-ERROR the @c header_row option is negative
     */
     static hash<TabularWorkbookProfile> profile(hash<TabularWorkbookGrid> grid, *hash<TabularProfileOptions> opts) {
         hash<TabularProfileOptions> options = opts ?? <TabularProfileOptions>{};
+        if (options.header_row < 0) {
+            throw "TABULAR-PROFILE-ERROR", sprintf("header_row must be a 1-based row number or 0 for none; got %d",
+                options.header_row);
+        }
         hash<TabularWorkbookProfile> rv({
             "format": grid.format,
             "named_ranges": grid.named_ranges,
@@ -1019,14 +1039,26 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             return rv;
         }
 
-        *int header = findHeaderRow(types, last_row, options.header_search_rows, sheet.merged);
-        # the 0-based row of group names over the row of the column names, if the header has two rows
+        # the header row the caller gave (0: none), else the one found
+        *int header;
+        if (exists options.header_row) {
+            if (options.header_row > 0) {
+                header = options.header_row - 1;
+            }
+        } else {
+            header = findHeaderRow(types, last_row, options.header_search_rows, sheet.merged);
+        }
+        # the 0-based row of group names over the row of the column names, if the header has two rows; a header row
+        # that the caller gave is one row
         *int group;
         int first_data;
         if (exists header) {
             rv.header_row = header + 1;
             first_data = header + 1;
-            group = findGroupRow(rows, types, header, sheet.merged);
+            # a header of two rows, for a header row that was found
+            if (!exists options.header_row) {
+                group = findGroupRow(rows, types, header, sheet.merged);
+            }
             int first_header = group ?? header;
             if (exists group) {
                 rv.header_rows = <TabularRowRange>{"first": group + 1, "last": header + 1};
@@ -1046,7 +1078,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     };
                 }
             }
-            for (int r = 0; r < first_header; ++r) {
+            # the rows with content above the header; a header row the caller gave below every row with content
+            # has every row with content above it
+            int title_end = min(first_header, last_row + 1);
+            for (int r = 0; r < title_end; ++r) {
                 if (nonEmptyCount(types[r])) {
                     rv.title_rows += r + 1;
                 }
@@ -1057,8 +1092,15 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     "detail": rv.title_rows,
                 };
             }
+            # below every row with content: no data and no column
+            if (header > last_row) {
+                return rv;
+            }
         } else {
-            rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            # the caller said the sheet has none
+            if (!exists options.header_row) {
+                rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            }
             first_data = 0;
             while (!nonEmptyCount(types[first_data])) {
                 ++first_data;

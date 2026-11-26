@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "Dopĺňanie chatu"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "Netransparentný identifikátor reprezentujúci koncového používateľa. Zaznamenáva sa na strane servera na sledovanie zneužitia a priradenie využitia; neovplyvňuje generovanie."
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Vytvoriť embeddingy"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Nepriehľadný identifikátor reprezentujúci koncového používateľa. Zaznamenáva sa na strane servera na sledovanie zneužitia a priradenie využitia; neovplyvňuje výstup."
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "Obmedzené generovanie"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Keď je nastavené `True`, každý záznam logaritmickej pravdepodobnosti obsahuje okrem ID tokenu aj dekódovaný text tokenu. Jednoduchšie na kontrolu, ale väčší dátový objem."
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "Získať informácie o serveri"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Vráti konfiguráciu servera SGLang (názov modelu, cesta k tokenizéru, max_total_tokens, chat_template atď.) a stav behu (verzia, zariadenie CUDA, počet GPU). Užitočné na kontrolu stavu a overenie konfigurácie."
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "Vyprázdniť KV Cache"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

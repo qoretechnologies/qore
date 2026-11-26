@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "메시지 검색"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "메시지 가져오기"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "가져올 메시지의 ID"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "첨부 파일 가져오기"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "가져올 첨부 파일의 ID"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "새 이메일"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "한 폴링 주기에서 전달되는 최대 메시지 수입니다. 설정하지 않거나 `0`이면 제한이 없음을 의미합니다.\n\n이 제한은 백로그의 **가장 오래된** 항목부터 적용되므로 감시 커서가 연속적으로 전진하며 나머지 메시지는 건너뛰지 않고 다음 주기에서 전달됩니다. 백로그가 많이 쌓일 수 있는 경우 단일 주기가 수행할 수 있는 작업량을 제한하는 데 사용합니다."
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "새 이메일 첨부 파일"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "한 폴링 주기에서 전달되는 최대 메시지 수입니다. 설정하지 않거나 `0`이면 제한이 없음을 의미합니다.\n\n이 제한은 백로그의 **가장 오래된** 항목부터 적용되므로 감시 커서가 연속적으로 전진하며 나머지 메시지는 건너뛰지 않고 다음 주기에서 전달됩니다. 백로그가 많이 쌓일 수 있는 경우 단일 주기가 수행할 수 있는 작업량을 제한하는 데 사용합니다."
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "메시지를 휴지통으로 이동"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "휴지통으로 이동할 메시지의 ID입니다. 감시 이벤트는 이 값을 `message_id`(으)로 전달합니다."
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "메시지 삭제"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "`References` 헤더 값입니다. 답장하는 대화에 포함된 메시지들의 `Message-ID` 값을 가장 오래된 것부터 공백으로 구분하고 꺾쇠괄호를 포함하여 지정합니다. 설정하지 않으면 `in_reply_to`이(가) 사용됩니다. 감시 이벤트는 원본 메시지의 `References` 헤더를 전달합니다."
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "메타데이터와 함께 메시지 검색"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "일치하는 각 메시지에 대해 가져올 메시지 헤더입니다. `format`이(가) `metadata`이(가) 아니면 무시됩니다."
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "휴지통에서 메시지 복원"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "휴지통에서 복원할 메시지의 ID입니다. 감시 이벤트는 이 값을 `message_id`(으)로 전달합니다."
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "메시지 라벨 변경"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "메시지에서 제거할 라벨의 ID입니다. 라벨은 이름이 아니라 ID(예: `INBOX`, `UNREAD`, `Label_12`)로 식별됩니다."
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "라벨 목록"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "계정의 모든 라벨을 나열합니다. Gmail 시스템 라벨(`INBOX`, `UNREAD`, `STARRED` 등)과 사용자가 만든 라벨을 모두 포함하며, 각 라벨은 `modify-message-labels` 및 검색 옵션 `labelIds`이(가) 사용하는 ID와 함께 반환됩니다."
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "라벨 만들기"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "이 라벨이 있는 메시지를 메시지 목록에 표시하지 않습니다"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "임시보관 메일 만들기"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "`References` 헤더 값입니다. 답장하는 대화에 포함된 메시지들의 `Message-ID` 값을 가장 오래된 것부터 공백으로 구분하고 꺾쇠괄호를 포함하여 지정합니다. 설정하지 않으면 `in_reply_to`이(가) 사용됩니다. 감시 이벤트는 원본 메시지의 `References` 헤더를 전달합니다."
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "임시보관 메일 검색"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "임시보관 메일 가져오기"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "`raw`에 base64url로 인코딩된 MIME 데이터 형태로 담긴 전체 메시지입니다. 본문은 파싱되지 않습니다."
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "임시보관 메일 보내기"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "보낼 임시보관 메일의 ID입니다. `list-drafts`와 `create-draft`은(는) 이 값을 `id`(으)로 반환합니다."
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "임시보관 메일 삭제"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

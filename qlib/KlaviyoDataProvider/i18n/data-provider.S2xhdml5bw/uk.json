@@ -340,7 +340,7 @@
           "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
         },
         "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.display_name": {
-          "source": "List Profiles",
+          "source": "List profiles",
           "message": "Список профілів"
         },
         "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.display_name": {
-          "source": "Create Profile",
+          "source": "Create profile",
           "message": "Створити профіль"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.short_desc": {
@@ -808,7 +808,7 @@
           "message": "IP-адреса"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.display_name": {
-          "source": "Create Or Update Profile",
+          "source": "Create or update profile",
           "message": "Створити або оновити профіль"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Додавання або скидання настроюваних властивостей замість їх заміни.\n\n`patch_properties.append` додає значення до спискової властивості, `unappend` видаляє його, а `unset` видаляє властивість повністю."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.field.cGF0Y2hfaWRlbnRpZmllcnM.display_name": {
-          "source": "Patch Identifiers",
+          "source": "Patch identifiers",
           "message": "Ідентифікатори змін"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDI5eVgzVndaR0YwWlY5d2NtOW1hV3hsOipQYXRjaElkZW50aWZpZXJzIzllYTU5MmQ5Y2I2YzU4OGI4NTFjYWNmY2ZiNWQ0ZmVkNTlhNmVmYTVlYmU2MjdkMzUyZjVjMjE4ODMwYjk3MDU.field.YXBwZW5k.display_name": {
@@ -1012,7 +1012,7 @@
           "message": "Від’єднати"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.field.cGF0Y2hfcHJvcGVydGllcw.display_name": {
-          "source": "Patch Properties",
+          "source": "Patch properties",
           "message": "Властивості змін"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDI5eVgzVndaR0YwWlY5d2NtOW1hV3hsOipQcm9maWxlTWV0YVBhdGNoUHJvcGVydGllcyNkOTE1YmE5NGQzZTcxNDM5OGRjNzIzNGU4ZGNkNWU5YTNkOWQyZmQwYWNhY2U3Y2ZkZDZjN2M1MWVmZjgxMzgz.field.YXBwZW5k.display_name": {
@@ -1328,7 +1328,7 @@
           "message": "Додавання або скидання настроюваних властивостей замість їх заміни.\n\n`patch_properties.append` додає значення до спискової властивості, `unappend` видаляє його, а `unset` видаляє властивість повністю."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.field.cGF0Y2hfaWRlbnRpZmllcnM.display_name": {
-          "source": "Patch Identifiers",
+          "source": "Patch identifiers",
           "message": "Ідентифікатори змін"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNCeWIyWnBiR1U6KlBhdGNoSWRlbnRpZmllcnMjOWVhNTkyZDljYjZjNTg4Yjg1MWNhY2ZjZmI1ZDRmZWQ1OWE2ZWZhNWViZTYyN2QzNTJmNWMyMTg4MzBiOTcwNQ.field.YXBwZW5k.display_name": {
@@ -1340,7 +1340,7 @@
           "message": "Від’єднати"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.field.cGF0Y2hfcHJvcGVydGllcw.display_name": {
-          "source": "Patch Properties",
+          "source": "Patch properties",
           "message": "Властивості змін"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNCeWIyWnBiR1U6KlByb2ZpbGVNZXRhUGF0Y2hQcm9wZXJ0aWVzI2Q5MTViYTk0ZDNlNzE0Mzk4ZGM3MjM0ZThkY2Q1ZTlhM2Q5ZDJmZDBhY2FjZTdjZmRkNmM3YzUxZWZmODEzODM.field.YXBwZW5k.display_name": {
@@ -1464,7 +1464,7 @@
           "message": "IP-адреса"
         },
         "app.S2xhdml5bw.action.bGlzdF9saXN0cw.display_name": {
-          "source": "List Lists",
+          "source": "List lists",
           "message": "Отримати список списків"
         },
         "app.S2xhdml5bw.action.bGlzdF9saXN0cw.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.display_name": {
-          "source": "Create List",
+          "source": "Create list",
           "message": "Створити список"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.short_desc": {
@@ -1764,7 +1764,7 @@
           "message": "Первинний ключ, що однозначно ідентифікує цей список. Згенеровано Klaviyo."
         },
         "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "Отримати список сегментів"
         },
         "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
-          "source": "Create Segment",
+          "source": "Create segment",
           "message": "Створити сегмент"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Правило, що визначає склад сегмента"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.field.Y29uZGl0aW9uX2dyb3Vwcw.display_name": {
-          "source": "Condition Groups",
+          "source": "Condition groups",
           "message": "Групи умов"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Q29uZGl0aW9uR3JvdXAjNzIxNGZhMzVhYmVhYzNkNmQxZDUxOTVkOTM5MDEyZTJiMGViNzNiOTkzZTRiZDNjYTVlMDg2NTRmZTMyMjg3Zg.field.Y29uZGl0aW9ucw.display_name": {
@@ -1972,11 +1972,11 @@
           "message": "Умови"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.Z3JvdXBfaWRz.display_name": {
-          "source": "Group Ids",
+          "source": "Group ids",
           "message": "ID груп"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.aXNfbWVtYmVy.display_name": {
-          "source": "Is Member",
+          "source": "Is member",
           "message": "Учасник"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.aXNfbWVtYmVy.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -1984,7 +1984,7 @@
           "message": "1"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6KlN0YXRpY0RhdGVGaWx0ZXIjMzI3MGZiNzA5NjY4M2IyZWY1NGExOTZjN2JmODMyYTc2NTY1MDkwZTFiYjUzMDUxYzM3NzI1YzYwNGEwOWFhYQ.field.ZGF0ZQ.display_name": {
@@ -2176,11 +2176,11 @@
           "message": "profile-group-membership"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.Z3JvdXBfaWRz.display_name": {
-          "source": "Group Ids",
+          "source": "Group ids",
           "message": "ID груп"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.aXNfbWVtYmVy.display_name": {
-          "source": "Is Member",
+          "source": "Is member",
           "message": "Учасник"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.aXNfbWVtYmVy.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -2216,7 +2216,7 @@
           "message": "sum"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.bWVhc3VyZW1lbnRfZmlsdGVy.display_name": {
-          "source": "Measurement Filter",
+          "source": "Measurement filter",
           "message": "Фільтр вимірювань"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6TnVtZXJpY09wZXJhdG9yTnVtZXJpY0ZpbHRlciNiNDFlZTJiODIzNDU0NjNhYzM0OTE0YjY3ZTA5M2RmNTM5M2I1NWExMjY2ZDFkNWNjNmVjNjlmZWYxNDJmODY4.field.b3BlcmF0b3I.display_name": {
@@ -2268,7 +2268,7 @@
           "message": "Значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.bWV0cmljX2ZpbHRlcnM.display_name": {
-          "source": "Metric Filters",
+          "source": "Metric filters",
           "message": "Фільтри метрик"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY1Byb3BlcnR5RmlsdGVyIzgzN2E4ODk3ZDE5NGEyYTQ1NTdlMzIyZTMwODU4OTkxZmIzNDVjMWNjZTc1ZGZmZDFlZDdlNWZkNGUyOWEzNjM.field.ZmlsdGVy.display_name": {
@@ -2552,7 +2552,7 @@
           "message": "ID метрики"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U3RhdGljRGF0ZUZpbHRlciMzZDAxNGMzNTZkNjAxNmZiZDkxMzM4NWVmNTUwNDg5YmE2ZTVjZTNiZTAyOTg2YWY2MDk5YWQ1OTgwNzZkZWIy.field.ZGF0ZQ.display_name": {
@@ -2828,7 +2828,7 @@
           "message": "Згоду"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -2844,7 +2844,7 @@
           "message": "email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmcjY2EzNzg1ODllMGE0MzczZDJjM2RkMTViMjk1Y2ZiMGRhM2U1ZjUzNDhhNThiOTVjYzI4MTlkYzMyYmIzMTk5ZA.field.ZmlsdGVycw.display_name": {
@@ -3224,7 +3224,7 @@
           "message": "ніколи_не_підписувався"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -3240,7 +3240,7 @@
           "message": "email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZyNlNjk3YTNmYTAzYWExMGY5YzQxYWJiNjY4YTdhNzZkODdjNmRmYzQwYjU1YWM1Yzk5MTlhY2YzNDllM2YwNWMz.field.ZmlsdGVycw.display_name": {
@@ -3512,7 +3512,7 @@
           "message": "subscribed"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -3528,7 +3528,7 @@
           "message": "sms"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nU3Vic2NyaWJlZCMxODM4ZTc4OGQ3YWE0OTgwMWE5NWY2N2E3ZTYyMzVjOWRjNTM1NmM3ZGYxN2YwMDQzMDZlNzY5N2NlMmM3OWRm.field.ZmlsdGVycw.display_name": {
@@ -3572,7 +3572,7 @@
           "message": "subscribed"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -3588,7 +3588,7 @@
           "message": "sms"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmcjODYyZjUxZWIzOWVkZDNiNjNiOGYwODg1YzA1NTE1MTM2OGViZjA3OWYyYTRhYmQwMzA4MmI5NjViMDRiMzkzYQ.field.c3Vic2NyaXB0aW9u.display_name": {
@@ -3716,7 +3716,7 @@
           "message": "ніколи_не_підписувався"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -3732,7 +3732,7 @@
           "message": "push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZyNmYzE3ZTE1ZjVhOThiOGNkZWI4Nzc1OThjZTM4MTkyYzQ1MjQwYWM5ODM2ZDM5YzI4MWYyNDk0OTVhNjk0ODlm.field.ZmlsdGVycw.display_name": {
@@ -3748,7 +3748,7 @@
           "message": "any"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -3764,7 +3764,7 @@
           "message": "push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nIzI1MjhmYjA2OTZjZjJlMGY0NDg0OTZlMGY4MGQyNjFiZmU5MDE3NzJiODlmNTE0YTU1ZGJhNTM5MTA0NjhmMDM.field.c3Vic2NyaXB0aW9u.display_name": {
@@ -3784,7 +3784,7 @@
           "message": "profile-marketing-consent"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.Y291bnRyeV9jb2Rl.display_name": {
-          "source": "Country Code",
+          "source": "Country code",
           "message": "Код країни"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.ZmlsdGVy.display_name": {
@@ -3832,7 +3832,7 @@
           "message": "Значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.cG9zdGFsX2NvZGU.display_name": {
-          "source": "Postal Code",
+          "source": "Postal code",
           "message": "Поштовий індекс"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.dHlwZQ.display_name": {
@@ -3952,7 +3952,7 @@
           "message": "profile-property"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVJlZ2lvbkNvbmRpdGlvbiM4Y2ViMzBiODJkMDRkMGFhYWExZTY0MzFhNTFkZWUwNjRmYTM4MDk5YzdhZjJhNTRhMGUzNTI0YTEzOTM2MGMy.field.aW5fcmVnaW9u.display_name": {
-          "source": "In Region",
+          "source": "In region",
           "message": "У регіоні"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVJlZ2lvbkNvbmRpdGlvbiM4Y2ViMzBiODJkMDRkMGFhYWExZTY0MzFhNTFkZWUwNjRmYTM4MDk5YzdhZjJhNTRhMGUzNTI0YTEzOTM2MGMy.field.cmVnaW9u.display_name": {
@@ -4180,7 +4180,7 @@
           "message": "priority"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlQcmlvcml0eUNvbmRpdGlvbiM5NGQwZWQ1NGU5YzQ5MmQ5Zjc3OTVkNjMxM2I1MjNjNGJmMjZkODQxZmFlMDk4ZDAyNTRlMWI3ZjY4NTMyMDJl.field.cHJlZGljdGVkX2NoYW5uZWw.display_name": {
-          "source": "Predicted Channel",
+          "source": "Predicted channel",
           "message": "Прогнозований канал"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlQcmlvcml0eUNvbmRpdGlvbiM5NGQwZWQ1NGU5YzQ5MmQ5Zjc3OTVkNjMxM2I1MjNjNGJmMjZkODQxZmFlMDk4ZDAyNTRlMWI3ZjY4NTMyMDJl.field.cHJlZGljdGVkX2NoYW5uZWw.short_desc": {
@@ -4280,7 +4280,7 @@
           "message": "rank"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlSYW5rQ29uZGl0aW9uIzJiNzNkNWE1NzFiOTQwODMxZGIyOWNhNDg5MmM2ZjBiMWU1MjQ5YjQ0MDZhYzhiOTgzMGY1N2YwMTNlOGIyNzQ.field.cHJlZGljdGVkX2NoYW5uZWw.display_name": {
-          "source": "Predicted Channel",
+          "source": "Predicted channel",
           "message": "Прогнозований канал"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlSYW5rQ29uZGl0aW9uIzJiNzNkNWE1NzFiOTQwODMxZGIyOWNhNDg5MmM2ZjBiMWU1MjQ5YjQ0MDZhYzhiOTgzMGY1N2YwMTNlOGIyNzQ.field.cHJlZGljdGVkX2NoYW5uZWw.short_desc": {
@@ -4412,11 +4412,11 @@
           "message": "Ідентифікатор власності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.b2JqZWN0X3R5cGVfaWQ.display_name": {
-          "source": "Object Type ID",
+          "source": "Object type ID",
           "message": "ID типу об'єкта"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.b2JqZWN0X3R5cGVfcmVsYXRpb25zaGlwX2lk.display_name": {
-          "source": "Object Type Relationship ID",
+          "source": "Object type relationship ID",
           "message": "ID відношення типу об'єкта"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.dHlwZQ.display_name": {
@@ -4644,7 +4644,7 @@
           "message": "форма"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVJlYWNoYWJsZSM3NWJkNmMzYTk4YzhlOWU3OGM3MzY1OTVkNzYyOTdlODBiNWIxZTM1M2JhOTEzYjg0N2JiYzBlYTA4Y2E4OGJh.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVJlYWNoYWJsZSM3NWJkNmMzYTk4YzhlOWU3OGM3MzY1OTVkNzYyOTdlODBiNWIxZTM1M2JhOTEzYjg0N2JiYzBlYTA4Y2E4OGJh.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmV4cGxpY2l0bHlfcmVhY2hhYmxl.display_name": {
@@ -4652,7 +4652,7 @@
           "message": "явно_доступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVJlYWNoYWJsZSNiNzVmNDRhN2UxNjgzZDViNmVjZTIzMzQwNzVlYjQ5NGZlMzczZmNhNWRkY2RiNmMxMDA1NThmZDM5MTQ1NTE0.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVJlYWNoYWJsZSNiNzVmNDRhN2UxNjgzZDViNmVjZTIzMzQwNzVlYjQ5NGZlMzczZmNhNWRkY2RiNmMxMDA1NThmZDM5MTQ1NTE0.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfcmVhY2hhYmxl.display_name": {
@@ -4660,7 +4660,7 @@
           "message": "неявно_доступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVJlYWNoYWJsZSMwZTgwZmIzODMxZWI3NDY3M2I0MjRiZTYzOTBkNjE0NWRjZTc1MDc3MWI3OTlhNmFlYmU3N2M3MzY4Mjc3NmI0.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVJlYWNoYWJsZSMwZTgwZmIzODMxZWI3NDY3M2I0MjRiZTYzOTBkNjE0NWRjZTc1MDc3MWI3OTlhNmFlYmU3N2M3MzY4Mjc3NmI0.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfb3JfZXhwbGljaXRseV9yZWFjaGFibGU.display_name": {
@@ -4672,7 +4672,7 @@
           "message": "Фільтри"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVVucmVhY2hhYmxlI2YxNmMwMjE0OWIwN2Q5ZDJiYWU0NmJkZTFiZmY2Y2VhNWE4YmMyMmM1MjhiMmZjMmQ5OGQxZjRkZmQ2NTFmNTE.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVVucmVhY2hhYmxlI2YxNmMwMjE0OWIwN2Q5ZDJiYWU0NmJkZTFiZmY2Y2VhNWE4YmMyMmM1MjhiMmZjMmQ5OGQxZjRkZmQ2NTFmNTE.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmV4cGxpY2l0bHlfdW5yZWFjaGFibGU.display_name": {
@@ -4680,7 +4680,7 @@
           "message": "явно_недоступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVVucmVhY2hhYmxlIzgxZTA2NTNiMGQ1ZmEyZmM0NmRkNGIzOWI1ZWFlYzBhNDljY2ZmZGE2NGEyYzIxMmNjOTEwMzhiOGYzNDRmN2U.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVVucmVhY2hhYmxlIzgxZTA2NTNiMGQ1ZmEyZmM0NmRkNGIzOWI1ZWFlYzBhNDljY2ZmZGE2NGEyYzIxMmNjOTEwMzhiOGYzNDRmN2U.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfdW5yZWFjaGFibGU.display_name": {
@@ -4688,7 +4688,7 @@
           "message": "неявно_недоступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVVucmVhY2hhYmxlIzM2MTlmMGMxZmUwZGViMjMzNTEwNjI2ZjBhZDUyNTUyZTYyMWI5NmUxNDQ3MWFkYmUwMWFkM2NhMGQ5NDE3MGI.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVVucmVhY2hhYmxlIzM2MTlmMGMxZmUwZGViMjMzNTEwNjI2ZjBhZDUyNTUyZTYyMWI5NmUxNDQ3MWFkYmUwMWFkM2NhMGQ5NDE3MGI.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfb3JfZXhwbGljaXRseV91bnJlYWNoYWJsZQ.display_name": {
@@ -4704,7 +4704,7 @@
           "message": "profile-permissions"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.Y29tcGxldGlvbl93aW5kb3dfc2Vjb25kcw.display_name": {
-          "source": "Completion Window Seconds",
+          "source": "Completion window seconds",
           "message": "Час завершення вікна (секунди)"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.Y29tcGxldGlvbl93aW5kb3dfc2Vjb25kcw.short_desc": {
@@ -4756,11 +4756,11 @@
           "message": "Кроки"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2V4aXN0cw.display_name": {
-          "source": "Metric Exists",
+          "source": "Metric exists",
           "message": "Метрика існує"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2ZpbHRlcnM.display_name": {
-          "source": "Metric Filters",
+          "source": "Metric filters",
           "message": "Фільтри метрик"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2lk.display_name": {
@@ -4768,7 +4768,7 @@
           "message": "ID метрики"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.dHlwZQ.display_name": {
@@ -4824,7 +4824,7 @@
           "message": "Правило, що визначає склад сегмента"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.field.Y29uZGl0aW9uX2dyb3Vwcw.display_name": {
-          "source": "Condition Groups",
+          "source": "Condition groups",
           "message": "Групи умов"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Q29uZGl0aW9uR3JvdXAjNzIxNGZhMzVhYmVhYzNkNmQxZDUxOTVkOTM5MDEyZTJiMGViNzNiOTkzZTRiZDNjYTVlMDg2NTRmZTMyMjg3Zg.field.Y29uZGl0aW9ucw.display_name": {
@@ -4832,11 +4832,11 @@
           "message": "Умови"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.Z3JvdXBfaWRz.display_name": {
-          "source": "Group Ids",
+          "source": "Group ids",
           "message": "ID груп"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.aXNfbWVtYmVy.display_name": {
-          "source": "Is Member",
+          "source": "Is member",
           "message": "Учасник"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.aXNfbWVtYmVy.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -4844,7 +4844,7 @@
           "message": "1"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0dyb3VwTWVtYmVyc2hpcENvbmRpdGlvbiM5NGM1NzUxNjFlYWVhY2RjZDYzNjhhODA4NTYwNmRkY2Y1MzQwZjExNDM3MTcxYWQ3ZjE0OGJjYzU3YjliYWIw.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6KlN0YXRpY0RhdGVGaWx0ZXIjMzI3MGZiNzA5NjY4M2IyZWY1NGExOTZjN2JmODMyYTc2NTY1MDkwZTFiYjUzMDUxYzM3NzI1YzYwNGEwOWFhYQ.field.ZGF0ZQ.display_name": {
@@ -5036,11 +5036,11 @@
           "message": "profile-group-membership"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.Z3JvdXBfaWRz.display_name": {
-          "source": "Group Ids",
+          "source": "Group ids",
           "message": "ID груп"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.aXNfbWVtYmVy.display_name": {
-          "source": "Is Member",
+          "source": "Is member",
           "message": "Учасник"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU5vR3JvdXBNZW1iZXJzaGlwQ29uZGl0aW9uIzNmOGRkMTdlYjA3MjI0NmI0NTVlZTYyYzI0ZTU0MmUzNjI4MDBkMGQxMmNhOGU1MjM3OWEyMjhlYzliNmRkYjA.field.aXNfbWVtYmVy.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -5076,7 +5076,7 @@
           "message": "sum"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.bWVhc3VyZW1lbnRfZmlsdGVy.display_name": {
-          "source": "Measurement Filter",
+          "source": "Measurement filter",
           "message": "Фільтр вимірювань"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6TnVtZXJpY09wZXJhdG9yTnVtZXJpY0ZpbHRlciNiNDFlZTJiODIzNDU0NjNhYzM0OTE0YjY3ZTA5M2RmNTM5M2I1NWExMjY2ZDFkNWNjNmVjNjlmZWYxNDJmODY4.field.b3BlcmF0b3I.display_name": {
@@ -5128,7 +5128,7 @@
           "message": "Значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.bWV0cmljX2ZpbHRlcnM.display_name": {
-          "source": "Metric Filters",
+          "source": "Metric filters",
           "message": "Фільтри метрик"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY1Byb3BlcnR5RmlsdGVyIzgzN2E4ODk3ZDE5NGEyYTQ1NTdlMzIyZTMwODU4OTkxZmIzNDVjMWNjZTc1ZGZmZDFlZDdlNWZkNGUyOWEzNjM.field.ZmlsdGVy.display_name": {
@@ -5412,7 +5412,7 @@
           "message": "ID метрики"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljQ29uZGl0aW9uIzJkMGEyYjlmMTRkNjJhMjhhNmYxNDBlYmQ1ZDcxN2FlYzQ3OTg1YjZlMWY3ZmRmYjEyOGYzZjVhNzQyOWUzN2M.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U3RhdGljRGF0ZUZpbHRlciMzZDAxNGMzNTZkNjAxNmZiZDkxMzM4NWVmNTUwNDg5YmE2ZTVjZTNiZTAyOTg2YWY2MDk5YWQ1OTgwNzZkZWIy.field.ZGF0ZQ.display_name": {
@@ -5688,7 +5688,7 @@
           "message": "Згоду"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -5704,7 +5704,7 @@
           "message": "email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmdDb25zZW50I2MwOGI4MjgwZWY0Y2E0N2VmYTRmNzI1Zjc4OTNkYjYyN2VkZjNjMWU0YWZkZGJkZWIzMzcwMGY2NjE4OWI0NmY.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzRW1haWxNYXJrZXRpbmcjY2EzNzg1ODllMGE0MzczZDJjM2RkMTViMjk1Y2ZiMGRhM2U1ZjUzNDhhNThiOTVjYzI4MTlkYzMyYmIzMTk5ZA.field.ZmlsdGVycw.display_name": {
@@ -6084,7 +6084,7 @@
           "message": "ніколи_не_підписувався"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -6100,7 +6100,7 @@
           "message": "email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZ0NvbnNlbnQjMDAzYmNiM2U4MDAxMjE2MTY2Nzk1ZGUzNzlhNDE2MTBlNDQxYTFhMTBiYWZkN2NiNDJlOGY1ZjYyYzc1MjhlYw.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9FbWFpbE1hcmtldGluZyNlNjk3YTNmYTAzYWExMGY5YzQxYWJiNjY4YTdhNzZkODdjNmRmYzQwYjU1YWM1Yzk5MTlhY2YzNDllM2YwNWMz.field.ZmlsdGVycw.display_name": {
@@ -6372,7 +6372,7 @@
           "message": "subscribed"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -6388,7 +6388,7 @@
           "message": "sms"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nQ29uc2VudCM0YTE2NWI0YzcxOGE5ZjhmNmY5ZjNiZTYyYjMxZmY5NWY0NzQ2ZjAzY2NkMzIyMmExZTNlOWY4N2FmZGQzZTAx.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzU01TTWFya2V0aW5nU3Vic2NyaWJlZCMxODM4ZTc4OGQ3YWE0OTgwMWE5NWY2N2E3ZTYyMzVjOWRjNTM1NmM3ZGYxN2YwMDQzMDZlNzY5N2NlMmM3OWRm.field.ZmlsdGVycw.display_name": {
@@ -6432,7 +6432,7 @@
           "message": "subscribed"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -6448,7 +6448,7 @@
           "message": "sms"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmdDb25zZW50IzZjNDk5ZmZhZGJlYzRkNzFlM2Y5YzQ2ZTgwNGY2NTY4MGJiYzJhYTkzNjBmZmQxNDJkYzFiMGM3OWQyMzc1MzU.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9TTVNNYXJrZXRpbmcjODYyZjUxZWIzOWVkZDNiNjNiOGYwODg1YzA1NTE1MTM2OGViZjA3OWYyYTRhYmQwMzA4MmI5NjViMDRiMzkzYQ.field.c3Vic2NyaXB0aW9u.display_name": {
@@ -6576,7 +6576,7 @@
           "message": "ніколи_не_підписувався"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDp0cnVl.display_name": {
@@ -6592,7 +6592,7 @@
           "message": "push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZ0NvbnNlbnQjNTAzY2JmNTUzMDE3NmUyYWM2NjZmYWI3OWY0ODJhMjA3YjNkY2ZlNzM3YTRiOGVjM2UyNGQwMDNlZWNhY2JjYQ.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SGFzUHVzaE1hcmtldGluZyNmYzE3ZTE1ZjVhOThiOGNkZWI4Nzc1OThjZTM4MTkyYzQ1MjQwYWM5ODM2ZDM5YzI4MWYyNDk0OTVhNjk0ODlm.field.ZmlsdGVycw.display_name": {
@@ -6608,7 +6608,7 @@
           "message": "any"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.display_name": {
-          "source": "Can Receive Marketing",
+          "source": "Can receive marketing",
           "message": "Може отримувати маркетингові повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y2FuX3JlY2VpdmVfbWFya2V0aW5n.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
@@ -6624,7 +6624,7 @@
           "message": "push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nQ29uc2VudCMxZGQxNmI0MjVkMzNiNDIyMzQzZjlmZTJkNGRkMjRhMDAxOGY1ZjkxMmM0ZjlmMTAwOTFmYzU1NWQzYzM0ZTA3.field.Y29uc2VudF9zdGF0dXM.display_name": {
-          "source": "Consent Status",
+          "source": "Consent status",
           "message": "Статус згоди"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6Tm9QdXNoTWFya2V0aW5nIzI1MjhmYjA2OTZjZjJlMGY0NDg0OTZlMGY4MGQyNjFiZmU5MDE3NzJiODlmNTE0YTU1ZGJhNTM5MTA0NjhmMDM.field.c3Vic2NyaXB0aW9u.display_name": {
@@ -6644,7 +6644,7 @@
           "message": "profile-marketing-consent"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.Y291bnRyeV9jb2Rl.display_name": {
-          "source": "Country Code",
+          "source": "Country code",
           "message": "Код країни"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.ZmlsdGVy.display_name": {
@@ -6692,7 +6692,7 @@
           "message": "Значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.cG9zdGFsX2NvZGU.display_name": {
-          "source": "Postal Code",
+          "source": "Postal code",
           "message": "Поштовий індекс"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVBvc3RhbENvZGVEaXN0YW5jZUNvbmRpdGlvbiNhZmM3NTc4NmVmNWU1YTcyOGQzNGU1YTFmMDVjMzVmMTk5MzQzZDBlM2IyMjI1MTBhMzQxZTE4OTk3OGI0N2Ew.field.dHlwZQ.display_name": {
@@ -6812,7 +6812,7 @@
           "message": "profile-property"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVJlZ2lvbkNvbmRpdGlvbiM4Y2ViMzBiODJkMDRkMGFhYWExZTY0MzFhNTFkZWUwNjRmYTM4MDk5YzdhZjJhNTRhMGUzNTI0YTEzOTM2MGMy.field.aW5fcmVnaW9u.display_name": {
-          "source": "In Region",
+          "source": "In region",
           "message": "У регіоні"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVJlZ2lvbkNvbmRpdGlvbiM4Y2ViMzBiODJkMDRkMGFhYWExZTY0MzFhNTFkZWUwNjRmYTM4MDk5YzdhZjJhNTRhMGUzNTI0YTEzOTM2MGMy.field.cmVnaW9u.display_name": {
@@ -7040,7 +7040,7 @@
           "message": "priority"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlQcmlvcml0eUNvbmRpdGlvbiM5NGQwZWQ1NGU5YzQ5MmQ5Zjc3OTVkNjMxM2I1MjNjNGJmMjZkODQxZmFlMDk4ZDAyNTRlMWI3ZjY4NTMyMDJl.field.cHJlZGljdGVkX2NoYW5uZWw.display_name": {
-          "source": "Predicted Channel",
+          "source": "Predicted channel",
           "message": "Прогнозований канал"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlQcmlvcml0eUNvbmRpdGlvbiM5NGQwZWQ1NGU5YzQ5MmQ5Zjc3OTVkNjMxM2I1MjNjNGJmMjZkODQxZmFlMDk4ZDAyNTRlMWI3ZjY4NTMyMDJl.field.cHJlZGljdGVkX2NoYW5uZWw.short_desc": {
@@ -7140,7 +7140,7 @@
           "message": "rank"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlSYW5rQ29uZGl0aW9uIzJiNzNkNWE1NzFiOTQwODMxZGIyOWNhNDg5MmM2ZjBiMWU1MjQ5YjQ0MDZhYzhiOTgzMGY1N2YwMTNlOGIyNzQ.field.cHJlZGljdGVkX2NoYW5uZWw.display_name": {
-          "source": "Predicted Channel",
+          "source": "Predicted channel",
           "message": "Прогнозований канал"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZVByZWRpY3RpdmVBbmFseXRpY3NDaGFubmVsQWZmaW5pdHlSYW5rQ29uZGl0aW9uIzJiNzNkNWE1NzFiOTQwODMxZGIyOWNhNDg5MmM2ZjBiMWU1MjQ5YjQ0MDZhYzhiOTgzMGY1N2YwMTNlOGIyNzQ.field.cHJlZGljdGVkX2NoYW5uZWw.short_desc": {
@@ -7272,11 +7272,11 @@
           "message": "Ідентифікатор власності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.b2JqZWN0X3R5cGVfaWQ.display_name": {
-          "source": "Object Type ID",
+          "source": "Object type ID",
           "message": "ID типу об'єкта"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.b2JqZWN0X3R5cGVfcmVsYXRpb25zaGlwX2lk.display_name": {
-          "source": "Object Type Relationship ID",
+          "source": "Object type relationship ID",
           "message": "ID відношення типу об'єкта"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZUhhc0N1c3RvbU9iamVjdENvbmRpdGlvbiM5ZWNmMWM5NjEwNDk4Y2Q3NWY1ODQ4MTU4ZTQ1ZmZmMzc0ODE0Mjc4MzZlYjhmMWY5MWIwZWJiYjUyNTExNWVm.field.dHlwZQ.display_name": {
@@ -7504,7 +7504,7 @@
           "message": "форма"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVJlYWNoYWJsZSM3NWJkNmMzYTk4YzhlOWU3OGM3MzY1OTVkNzYyOTdlODBiNWIxZTM1M2JhOTEzYjg0N2JiYzBlYTA4Y2E4OGJh.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVJlYWNoYWJsZSM3NWJkNmMzYTk4YzhlOWU3OGM3MzY1OTVkNzYyOTdlODBiNWIxZTM1M2JhOTEzYjg0N2JiYzBlYTA4Y2E4OGJh.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmV4cGxpY2l0bHlfcmVhY2hhYmxl.display_name": {
@@ -7512,7 +7512,7 @@
           "message": "явно_доступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVJlYWNoYWJsZSNiNzVmNDRhN2UxNjgzZDViNmVjZTIzMzQwNzVlYjQ5NGZlMzczZmNhNWRkY2RiNmMxMDA1NThmZDM5MTQ1NTE0.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVJlYWNoYWJsZSNiNzVmNDRhN2UxNjgzZDViNmVjZTIzMzQwNzVlYjQ5NGZlMzczZmNhNWRkY2RiNmMxMDA1NThmZDM5MTQ1NTE0.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfcmVhY2hhYmxl.display_name": {
@@ -7520,7 +7520,7 @@
           "message": "неявно_доступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVJlYWNoYWJsZSMwZTgwZmIzODMxZWI3NDY3M2I0MjRiZTYzOTBkNjE0NWRjZTc1MDc3MWI3OTlhNmFlYmU3N2M3MzY4Mjc3NmI0.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVJlYWNoYWJsZSMwZTgwZmIzODMxZWI3NDY3M2I0MjRiZTYzOTBkNjE0NWRjZTc1MDc3MWI3OTlhNmFlYmU3N2M3MzY4Mjc3NmI0.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfb3JfZXhwbGljaXRseV9yZWFjaGFibGU.display_name": {
@@ -7532,7 +7532,7 @@
           "message": "Фільтри"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVVucmVhY2hhYmxlI2YxNmMwMjE0OWIwN2Q5ZDJiYWU0NmJkZTFiZmY2Y2VhNWE4YmMyMmM1MjhiMmZjMmQ5OGQxZjRkZmQ2NTFmNTE.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6RXhwbGljaXRseVVucmVhY2hhYmxlI2YxNmMwMjE0OWIwN2Q5ZDJiYWU0NmJkZTFiZmY2Y2VhNWE4YmMyMmM1MjhiMmZjMmQ5OGQxZjRkZmQ2NTFmNTE.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmV4cGxpY2l0bHlfdW5yZWFjaGFibGU.display_name": {
@@ -7540,7 +7540,7 @@
           "message": "явно_недоступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVVucmVhY2hhYmxlIzgxZTA2NTNiMGQ1ZmEyZmM0NmRkNGIzOWI1ZWFlYzBhNDljY2ZmZGE2NGEyYzIxMmNjOTEwMzhiOGYzNDRmN2U.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseVVucmVhY2hhYmxlIzgxZTA2NTNiMGQ1ZmEyZmM0NmRkNGIzOWI1ZWFlYzBhNDljY2ZmZGE2NGEyYzIxMmNjOTEwMzhiOGYzNDRmN2U.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfdW5yZWFjaGFibGU.display_name": {
@@ -7548,7 +7548,7 @@
           "message": "неявно_недоступний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVVucmVhY2hhYmxlIzM2MTlmMGMxZmUwZGViMjMzNTEwNjI2ZjBhZDUyNTUyZTYyMWI5NmUxNDQ3MWFkYmUwMWFkM2NhMGQ5NDE3MGI.field.cmVhY2hhYmxlX3N0YXR1cw.display_name": {
-          "source": "Reachable Status",
+          "source": "Reachable status",
           "message": "Статус доступності"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6SW1wbGljaXRseU9yRXhwbGljaXRseVVucmVhY2hhYmxlIzM2MTlmMGMxZmUwZGViMjMzNTEwNjI2ZjBhZDUyNTUyZTYyMWI5NmUxNDQ3MWFkYmUwMWFkM2NhMGQ5NDE3MGI.field.cmVhY2hhYmxlX3N0YXR1cw.allowed-value.c3RyaW5nOmltcGxpY2l0bHlfb3JfZXhwbGljaXRseV91bnJlYWNoYWJsZQ.display_name": {
@@ -7564,7 +7564,7 @@
           "message": "profile-permissions"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.Y29tcGxldGlvbl93aW5kb3dfc2Vjb25kcw.display_name": {
-          "source": "Completion Window Seconds",
+          "source": "Completion window seconds",
           "message": "Час завершення вікна (секунди)"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.Y29tcGxldGlvbl93aW5kb3dfc2Vjb25kcw.short_desc": {
@@ -7616,11 +7616,11 @@
           "message": "Кроки"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2V4aXN0cw.display_name": {
-          "source": "Metric Exists",
+          "source": "Metric exists",
           "message": "Метрика існує"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2ZpbHRlcnM.display_name": {
-          "source": "Metric Filters",
+          "source": "Metric filters",
           "message": "Фільтри метрик"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6UHJvZmlsZU1ldHJpY0Z1bm5lbFN0ZXBzIzgyZWU0YzhlMzExOTdhZjIzZGMxOWFlZjFmYmU2MzQyMGEzZTU1MjBjYTJjZjBmNmY0YmMwMGY4NGE1NzI5MmE.field.bWV0cmljX2lk.display_name": {
@@ -7628,7 +7628,7 @@
           "message": "ID метрики"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.dGltZWZyYW1lX2ZpbHRlcg.display_name": {
-          "source": "Timeframe Filter",
+          "source": "Timeframe filter",
           "message": "Фільтр за часовим періодом"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDNObFoyMWxiblE6U2VnbWVudHNQcm9maWxlTWV0cmljRnVubmVsQ29uZGl0aW9uIzRhYWE0NWE1ZjY0OGNiMzQ4NTQwMWY4NGMzOGYxYmVmOWM2NDU3YzM5MmM2ZDYyYTU4ODQwOWE0NWQxZGU0NTE.field.dHlwZQ.display_name": {
@@ -7680,7 +7680,7 @@
           "message": "Сегмент для обробки"
         },
         "app.S2xhdml5bw.action.bGlzdF90YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Список тегів"
         },
         "app.S2xhdml5bw.action.bGlzdF90YWdz.short_desc": {
@@ -7824,7 +7824,7 @@
           "message": "ID тегу"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.display_name": {
-          "source": "Create Tag",
+          "source": "Create tag",
           "message": "Створити тег"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.short_desc": {
@@ -7852,7 +7852,7 @@
           "message": "Зв'язки"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.cmVsYXRpb25zaGlwcw.field.dGFnLWdyb3Vw.display_name": {
-          "source": "Tag Group",
+          "source": "Tag group",
           "message": "Група тегів"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDNSaFp3Oip0YWctZ3JvdXAjMWJhNDRhOTViYmNiMDVhOTk5ZjdhMTAwZTA1Njg4ZmJlZTgyYzJiYjA5MzY3ZTg3NTIzNTlkM2U2ZmZhMzZjZg.field.ZGF0YQ.display_name": {
@@ -7940,7 +7940,7 @@
           "message": "ID тегу"
         },
         "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Список кампаній"
         },
         "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.short_desc": {
@@ -8112,7 +8112,7 @@
           "message": "ID кампанії для отримання"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "Створити кампанію"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.short_desc": {
@@ -8204,7 +8204,7 @@
           "message": "Вміст"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.YmNjX2VtYWls.display_name": {
-          "source": "Bcc Email",
+          "source": "Bcc email",
           "message": "Електронна пошта Bcc"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.YmNjX2VtYWls.short_desc": {
@@ -8216,7 +8216,7 @@
           "message": "Додатковий адреса електронної пошти BCC"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.Y2NfZW1haWw.display_name": {
-          "source": "Cc Email",
+          "source": "Cc email",
           "message": "Cc Email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.Y2NfZW1haWw.short_desc": {
@@ -8228,7 +8228,7 @@
           "message": "Додатковий адреса електронної пошти CC"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.ZnJvbV9lbWFpbA.display_name": {
-          "source": "From Email",
+          "source": "From email",
           "message": "Пошта відправника"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.ZnJvbV9lbWFpbA.short_desc": {
@@ -8240,7 +8240,7 @@
           "message": "Електронна адреса, з якої повинно бути надіслано повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.ZnJvbV9sYWJlbA.display_name": {
-          "source": "From Label",
+          "source": "From label",
           "message": "Мітка відправника"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.ZnJvbV9sYWJlbA.short_desc": {
@@ -8252,7 +8252,7 @@
           "message": "Мітка, пов’язана з from_email"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.cHJldmlld190ZXh0.display_name": {
-          "source": "Preview Text",
+          "source": "Preview text",
           "message": "Текст попереднього перегляду"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.cHJldmlld190ZXh0.short_desc": {
@@ -8264,7 +8264,7 @@
           "message": "Текст попереднього перегляду, пов’язаний із повідомленням"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.cmVwbHlfdG9fZW1haWw.display_name": {
-          "source": "Reply to Email",
+          "source": "Reply to email",
           "message": "Відповісти на лист"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipFbWFpbENvbnRlbnQjYzQ2YmY4ODJiMTc2NTczN2NjOWQ1ZGFhZmYwNjZiMDEyNzIyMzIzNWZkY2Q1OGJkZWQ0ZDY4N2U1NDEyZTEwNA.field.cmVwbHlfdG9fZW1haWw.short_desc": {
@@ -8324,23 +8324,23 @@
           "message": "Тіло повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlNNU01lc3NhZ2VEZWZpbml0aW9uQ3JlYXRlIzA2YzI2M2RiMTMwOWZkNDBkNGQ1OGU0MDNiMzZhMjkwM2UwMDQ3N2EzMDU1YTdhMmYwN2M4ZDE5NWNmZjE3ZDY.field.cmVuZGVyX29wdGlvbnM.display_name": {
-          "source": "Render Options",
+          "source": "Render options",
           "message": "Параметри відображення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipSZW5kZXJPcHRpb25zI2RkNTYwYWJkYjE2ZGUxMGI3YzA1ZTg5MDJiYjRlMjhlNDg1NmU5OWVjYTZjZjNkMjZmMDgzZmNlNzQ0ZjQzYjc.field.YWRkX2luZm9fbGluaw.display_name": {
-          "source": "Add Info Link",
+          "source": "Add info link",
           "message": "Додати посилання на інформацію"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipSZW5kZXJPcHRpb25zI2RkNTYwYWJkYjE2ZGUxMGI3YzA1ZTg5MDJiYjRlMjhlNDg1NmU5OWVjYTZjZjNkMjZmMDgzZmNlNzQ0ZjQzYjc.field.YWRkX29wdF9vdXRfbGFuZ3VhZ2U.display_name": {
-          "source": "Add Opt Out Language",
+          "source": "Add opt out language",
           "message": "Додати текст про відмову від підписки"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipSZW5kZXJPcHRpb25zI2RkNTYwYWJkYjE2ZGUxMGI3YzA1ZTg5MDJiYjRlMjhlNDg1NmU5OWVjYTZjZjNkMjZmMDgzZmNlNzQ0ZjQzYjc.field.YWRkX29yZ19wcmVmaXg.display_name": {
-          "source": "Add Org Prefix",
+          "source": "Add org prefix",
           "message": "Додати префікс організації"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipSZW5kZXJPcHRpb25zI2RkNTYwYWJkYjE2ZGUxMGI3YzA1ZTg5MDJiYjRlMjhlNDg1NmU5OWVjYTZjZjNkMjZmMDgzZmNlNzQ0ZjQzYjc.field.c2hvcnRlbl9saW5rcw.display_name": {
-          "source": "Shorten Links",
+          "source": "Shorten links",
           "message": "Скорочення посилань"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU3RhbmRhcmREZWZpbml0aW9uQ3JlYXRlIzMzZWUxMGQ5Mzc3Mzk4ODJkM2FiMWIwNTFhNDRhM2NjMTM2NzU4ZTU2ZGEwZDRhZDY2ZWNlZjk0ZTA0ZGE1OGI.field.Y2hhbm5lbA.display_name": {
@@ -8356,7 +8356,7 @@
           "message": "Вміст"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hDb250ZW50Q3JlYXRlI2QwYmQ4ZDU2MTllNTM4NzJlMGY2Y2JlYjhmMDRkNGQ2MmVlMzRmY2JkNTU1ZDRiOTRmOWVhM2MxMjdhOTJiMjA.field.YWN0aW9uX2J1dHRvbnM.display_name": {
-          "source": "Action Buttons",
+          "source": "Action buttons",
           "message": "Кнопки дій"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hDb250ZW50Q3JlYXRlI2QwYmQ4ZDU2MTllNTM4NzJlMGY2Y2JlYjhmMDRkNGQ2MmVlMzRmY2JkNTU1ZDRiOTRmOWVhM2MxMjdhOTJiMjA.field.YWN0aW9uX2J1dHRvbnM.short_desc": {
@@ -8368,7 +8368,7 @@
           "message": "Кнопки дій для сповіщення (макс. 3, індексація з 0, без прогалин)"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.YWN0aW9uX3R5cGU.display_name": {
-          "source": "Action Type",
+          "source": "Action type",
           "message": "Тип дії"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.YWN0aW9uX3R5cGU.short_desc": {
@@ -8380,7 +8380,7 @@
           "message": "Тип дії: open_app, deep_link, open_url або dismiss"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.YW5kcm9pZF9kZWVwX2xpbms.display_name": {
-          "source": "Android Deep Link",
+          "source": "Android deep link",
           "message": "Глибоке посилання для Android"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.YW5kcm9pZF9kZWVwX2xpbms.short_desc": {
@@ -8392,7 +8392,7 @@
           "message": "Android-специфічна URL-адреса для типів дій deep_link або open_url (макс. 2048 символів). Перевизначає url на Android."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.aW9zX2RlZXBfbGluaw.display_name": {
-          "source": "iOS Deep Link",
+          "source": "iOS deep link",
           "message": "iOS Deep Link"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OlB1c2hBY3Rpb25CdXR0b25EZWZpbml0aW9uI2UwYmY0ZjBlYzNiZTU1OTRmNmRmM2FjM2U3MmUyZDUyNDI4MDI4Yjk0YjVmMDc3YmIyMTI3YzJjZjYzMzI4MzY.field.aW9zX2RlZXBfbGluaw.short_desc": {
@@ -8452,7 +8452,7 @@
           "message": "Тіло повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hDb250ZW50Q3JlYXRlI2QwYmQ4ZDU2MTllNTM4NzJlMGY2Y2JlYjhmMDRkNGQ2MmVlMzRmY2JkNTU1ZDRiOTRmOWVhM2MxMjdhOTJiMjA.field.ZHluYW1pY19pbWFnZQ.display_name": {
-          "source": "Dynamic Image",
+          "source": "Dynamic image",
           "message": "Динамічне зображення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hDb250ZW50Q3JlYXRlI2QwYmQ4ZDU2MTllNTM4NzJlMGY2Y2JlYjhmMDRkNGQ2MmVlMzRmY2JkNTU1ZDRiOTRmOWVhM2MxMjdhOTJiMjA.field.ZHluYW1pY19pbWFnZQ.short_desc": {
@@ -8476,7 +8476,7 @@
           "message": "Назва повідомлення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU3RhbmRhcmREZWZpbml0aW9uQ3JlYXRlIzMzZWUxMGQ5Mzc3Mzk4ODJkM2FiMWIwNTFhNDRhM2NjMTM2NzU4ZTU2ZGEwZDRhZDY2ZWNlZjk0ZTA0ZGE1OGI.field.a3ZfcGFpcnM.display_name": {
-          "source": "Kv Pairs",
+          "source": "Kv pairs",
           "message": "Пари ключ-значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU3RhbmRhcmREZWZpbml0aW9uQ3JlYXRlIzMzZWUxMGQ5Mzc3Mzk4ODJkM2FiMWIwNTFhNDRhM2NjMTM2NzU4ZTU2ZGEwZDRhZDY2ZWNlZjk0ZTA0ZGE1OGI.field.a3ZfcGFpcnM.short_desc": {
@@ -8488,7 +8488,7 @@
           "message": "Пари ключ-значення, що надсилаються разом із сповіщенням"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU3RhbmRhcmREZWZpbml0aW9uQ3JlYXRlIzMzZWUxMGQ5Mzc3Mzk4ODJkM2FiMWIwNTFhNDRhM2NjMTM2NzU4ZTU2ZGEwZDRhZDY2ZWNlZjk0ZTA0ZGE1OGI.field.bm90aWZpY2F0aW9uX3R5cGU.display_name": {
-          "source": "Notification Type",
+          "source": "Notification type",
           "message": "Тип сповіщення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU3RhbmRhcmREZWZpbml0aW9uQ3JlYXRlIzMzZWUxMGQ5Mzc3Mzk4ODJkM2FiMWIwNTFhNDRhM2NjMTM2NzU4ZTU2ZGEwZDRhZDY2ZWNlZjk0ZTA0ZGE1OGI.field.bm90aWZpY2F0aW9uX3R5cGU.short_desc": {
@@ -8520,7 +8520,7 @@
           "message": "Підтримується лише на iOS."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoQmFkZ2UjYTgzNTQwNDU2M2UyMmQyYzA1MTNiNGY5ZjUyOTM3MDYyMTYwYmM3YTcyM2NjZmFmMzY4M2EwMDQyMzUxYTBlMA.field.YmFkZ2Vfb3B0aW9ucw.display_name": {
-          "source": "Badge Options",
+          "source": "Badge options",
           "message": "Параметри значка"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoQmFkZ2UjYTgzNTQwNDU2M2UyMmQyYzA1MTNiNGY5ZjUyOTM3MDYyMTYwYmM3YTcyM2NjZmFmMzY4M2EwMDQyMzUxYTBlMA.field.YmFkZ2Vfb3B0aW9ucw.short_desc": {
@@ -8532,7 +8532,7 @@
           "message": "Параметри значка"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VJbmNyZW1lbnQjMWNlNGI1MGY0NGZhZWQ1NDcxNzlkYmViODNlZjhlZjA4YzljZmE4MWUxMDAxMDFkMWQ4ZWFiYTA3MTAwYmJkMQ.field.YmFkZ2VfY29uZmln.display_name": {
-          "source": "Badge Config",
+          "source": "Badge config",
           "message": "Налаштування значка"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VJbmNyZW1lbnQjMWNlNGI1MGY0NGZhZWQ1NDcxNzlkYmViODNlZjhlZjA4YzljZmE4MWUxMDAxMDFkMWQ4ZWFiYTA3MTAwYmJkMQ.field.YmFkZ2VfY29uZmln.allowed-value.c3RyaW5nOmluY3JlbWVudF9vbmU.display_name": {
@@ -8540,7 +8540,7 @@
           "message": "збільшити_на_один"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VTdGF0aWNDb3VudCMyNWI2NGE0MzE2ZTRlYzEwN2RiYTBiNGVmZjU0ZTlmMjI1ZjQ2YjU2MjhkZGZhZTE5N2E5MmY5YTBlY2Y1Zjhm.field.YmFkZ2VfY29uZmln.display_name": {
-          "source": "Badge Config",
+          "source": "Badge config",
           "message": "Налаштування значка"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VTdGF0aWNDb3VudCMyNWI2NGE0MzE2ZTRlYzEwN2RiYTBiNGVmZjU0ZTlmMjI1ZjQ2YjU2MjhkZGZhZTE5N2E5MmY5YTBlY2Y1Zjhm.field.YmFkZ2VfY29uZmln.allowed-value.c3RyaW5nOnNldF9jb3VudA.display_name": {
@@ -8552,7 +8552,7 @@
           "message": "Значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VQcm9wZXJ0eSNjZTgzMjQ5ZWQ3NDhjMjVkNWYxMzFlZWY3ZjI2MDdkZjA1Y2Y5YmIyYWQ3NzFmOTU5MWRkZjMzZGI1MDgxZjdl.field.YmFkZ2VfY29uZmln.display_name": {
-          "source": "Badge Config",
+          "source": "Badge config",
           "message": "Налаштування значка"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VQcm9wZXJ0eSNjZTgzMjQ5ZWQ3NDhjMjVkNWYxMzFlZWY3ZjI2MDdkZjA1Y2Y5YmIyYWQ3NzFmOTU5MWRkZjMzZGI1MDgxZjdl.field.YmFkZ2VfY29uZmln.allowed-value.c3RyaW5nOnNldF9wcm9wZXJ0eQ.display_name": {
@@ -8560,7 +8560,7 @@
           "message": "set_property"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipDYW1wYWlnbk1lc3NhZ2VQcm9wZXJ0eSNjZTgzMjQ5ZWQ3NDhjMjVkNWYxMzFlZWY3ZjI2MDdkZjA1Y2Y5YmIyYWQ3NzFmOTU5MWRkZjMzZGI1MDgxZjdl.field.c2V0X2Zyb21fcHJvcGVydHk.display_name": {
-          "source": "Set from Property",
+          "source": "Set from property",
           "message": "Встановити з властивості"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoQmFkZ2UjYTgzNTQwNDU2M2UyMmQyYzA1MTNiNGY5ZjUyOTM3MDYyMTYwYmM3YTcyM2NjZmFmMzY4M2EwMDQyMzUxYTBlMA.field.ZGlzcGxheQ.display_name": {
@@ -8596,7 +8596,7 @@
           "message": "0"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoT3B0aW9ucyMwMjRlYWM2OTNlNGE5ZDNlM2YyYmNjM2Q4Yzc2MWZkNDIxYmZhZGRmNGEwNWYyZTkyZmViNjliY2MzYzM1Zjlk.field.b25fb3Blbg.display_name": {
-          "source": "On Open",
+          "source": "On open",
           "message": "На відкритті"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipQdXNoT25PcGVuQXBwIzBlOGQxODA5ZTJhZTFkNjNhZjg0ZTk0ZGVkZmU5ZDAyMDliZThlNmZjZjExYTU1YjllZGQxM2NlYzIyYzRkZWQ.field.dHlwZQ.display_name": {
@@ -8608,7 +8608,7 @@
           "message": "open_app"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipQdXNoT25PcGVuRGVlcExpbmsjM2Q5YzZlMzUwY2M4MDZmYWFkYzY1MDE2ZjIwNmI2ZGQyMjA1OTIxODBhMDQ1MWRkMGIwZGM3ODI5MmMwNGVkZg.field.YW5kcm9pZF9kZWVwX2xpbms.display_name": {
-          "source": "Android Deep Link",
+          "source": "Android deep link",
           "message": "Глибоке посилання для Android"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipQdXNoT25PcGVuRGVlcExpbmsjM2Q5YzZlMzUwY2M4MDZmYWFkYzY1MDE2ZjIwNmI2ZGQyMjA1OTIxODBhMDQ1MWRkMGIwZGM3ODI5MmMwNGVkZg.field.YW5kcm9pZF9kZWVwX2xpbms.short_desc": {
@@ -8620,7 +8620,7 @@
           "message": "required for all platforms enabled for push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipQdXNoT25PcGVuRGVlcExpbmsjM2Q5YzZlMzUwY2M4MDZmYWFkYzY1MDE2ZjIwNmI2ZGQyMjA1OTIxODBhMDQ1MWRkMGIwZGM3ODI5MmMwNGVkZg.field.aW9zX2RlZXBfbGluaw.display_name": {
-          "source": "iOS Deep Link",
+          "source": "iOS deep link",
           "message": "iOS Deep Link"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipQdXNoT25PcGVuRGVlcExpbmsjM2Q5YzZlMzUwY2M4MDZmYWFkYzY1MDE2ZjIwNmI2ZGQyMjA1OTIxODBhMDQ1MWRkMGIwZGM3ODI5MmMwNGVkZg.field.aW9zX2RlZXBfbGluaw.short_desc": {
@@ -8660,7 +8660,7 @@
           "message": "Зовнішній URL для відкриття при запуску сповіщення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoT3B0aW9ucyMwMjRlYWM2OTNlNGE5ZDNlM2YyYmNjM2Q4Yzc2MWZkNDIxYmZhZGRmNGEwNWYyZTkyZmViNjliY2MzYzM1Zjlk.field.cGxheV9zb3VuZA.display_name": {
-          "source": "Play Sound",
+          "source": "Play sound",
           "message": "Відтворити звук"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipNb2JpbGVQdXNoT3B0aW9ucyMwMjRlYWM2OTNlNGE5ZDNlM2YyYmNjM2Q4Yzc2MWZkNDIxYmZhZGRmNGEwNWYyZTkyZmViNjliY2MzYzM1Zjlk.field.cGxheV9zb3VuZA.short_desc": {
@@ -8680,7 +8680,7 @@
           "message": "mobile_push"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU2lsZW50RGVmaW5pdGlvbkNyZWF0ZSM4MWQ5MGE4MmQwZDY1ZTA0YzBkNDI1NDhhMThhZTE3MWFmMGIwNjYxMGVlYWFiMWQ1OTFmYTY1MzM2ZmIzZThk.field.a3ZfcGFpcnM.display_name": {
-          "source": "Kv Pairs",
+          "source": "Kv pairs",
           "message": "Пари ключ-значення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU2lsZW50RGVmaW5pdGlvbkNyZWF0ZSM4MWQ5MGE4MmQwZDY1ZTA0YzBkNDI1NDhhMThhZTE3MWFmMGIwNjYxMGVlYWFiMWQ1OTFmYTY1MzM2ZmIzZThk.field.a3ZfcGFpcnM.short_desc": {
@@ -8692,7 +8692,7 @@
           "message": "Пари ключ-значення, що надсилаються разом із сповіщенням"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU2lsZW50RGVmaW5pdGlvbkNyZWF0ZSM4MWQ5MGE4MmQwZDY1ZTA0YzBkNDI1NDhhMThhZTE3MWFmMGIwNjYxMGVlYWFiMWQ1OTFmYTY1MzM2ZmIzZThk.field.bm90aWZpY2F0aW9uX3R5cGU.display_name": {
-          "source": "Notification Type",
+          "source": "Notification type",
           "message": "Тип сповіщення"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1Ok1vYmlsZVB1c2hNZXNzYWdlU2lsZW50RGVmaW5pdGlvbkNyZWF0ZSM4MWQ5MGE4MmQwZDY1ZTA0YzBkNDI1NDhhMThhZTE3MWFmMGIwNjYxMGVlYWFiMWQ1OTFmYTY1MzM2ZmIzZThk.field.bm90aWZpY2F0aW9uX3R5cGU.short_desc": {
@@ -8792,7 +8792,7 @@
           "message": "Якщо кампанія має бути відправлена з використанням часової зони отримувача або відправлена статично в заданому часі."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.aXNfbG9jYWw.display_name": {
-          "source": "Is Local",
+          "source": "Is local",
           "message": "Локальний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.aXNfbG9jYWw.short_desc": {
@@ -8808,7 +8808,7 @@
           "message": "1"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.c2VuZF9wYXN0X3JlY2lwaWVudHNfaW1tZWRpYXRlbHk.display_name": {
-          "source": "Send Past Recipients Immediately",
+          "source": "Send past recipients immediately",
           "message": "Надіслати попередніх одержувачів одразу"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.c2VuZF9wYXN0X3JlY2lwaWVudHNfaW1tZWRpYXRlbHk.short_desc": {
@@ -8820,7 +8820,7 @@
           "message": "Визначає, чи слід надсилати у часову зону одержувача, якщо заданий час минув. Дійсно лише для локальних надсилань."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipOb25Mb2NhbFN0YXRpY1NlbmQjNGRiOTJlY2JjMDg0ODZhMzg1MTY5N2M3NGI3NTQ3YTI2OTdjM2MzYjk1NzNiNTYxZGRmNjRkZWRkMTQxYTU2MQ.field.aXNfbG9jYWw.display_name": {
-          "source": "Is Local",
+          "source": "Is local",
           "message": "Локальний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOlkzSmxZWFJsWDJOaGJYQmhhV2R1OipOb25Mb2NhbFN0YXRpY1NlbmQjNGRiOTJlY2JjMDg0ODZhMzg1MTY5N2M3NGI3NTQ3YTI2OTdjM2MzYjk1NzNiNTYxZGRmNjRkZWRkMTQxYTU2MQ.field.aXNfbG9jYWw.short_desc": {
@@ -8856,7 +8856,7 @@
           "message": "обмежений"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.union.KlRocm90dGxlZFNlbmRTdHJhdGVneSNjNjJiOTZhZTA4NjI5OWQxY2I0ODYwNjZjMjY1ZDRlYjUxY2VmYWFhMzY3YzY4NTBmZjFmYWQ5OTM1NTgyNTVl.field.dGhyb3R0bGVfcGVyY2VudGFnZQ.display_name": {
-          "source": "Throttle Percentage",
+          "source": "Throttle percentage",
           "message": "Відсоток обмеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.union.KlRocm90dGxlZFNlbmRTdHJhdGVneSNjNjJiOTZhZTA4NjI5OWQxY2I0ODYwNjZjMjY1ZDRlYjUxY2VmYWFhMzY3YzY4NTBmZjFmYWQ5OTM1NTgyNTVl.field.dGhyb3R0bGVfcGVyY2VudGFnZQ.short_desc": {
@@ -8956,7 +8956,7 @@
           "message": "Параметри, що використовуються під час надсилання кампанії"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KkVtYWlsU2VuZE9wdGlvbnMjMGYwZDM4ODc2MGQ4M2U0Mzc3NTRhNmFhNjI0MGJmNWE3NmE1YjYzYjMyNzgxYzdmZjA0MmZiMDdmZjRlY2IzMw.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KkVtYWlsU2VuZE9wdGlvbnMjMGYwZDM4ODc2MGQ4M2U0Mzc3NTRhNmFhNjI0MGJmNWE3NmE1YjYzYjMyNzgxYzdmZjA0MmZiMDdmZjRlY2IzMw.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -8968,7 +8968,7 @@
           "message": "Використовувати розумну відправку."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlNNU1NlbmRPcHRpb25zIzIxMTkzOTlmNDgyZWM3ZDJmNGI5MzIwOWNjNjk1NjQzZTM4ZmEzMjdkNjU2YTU2MjJmNjFmNzI1MDBkYzlkMDI.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlNNU1NlbmRPcHRpb25zIzIxMTkzOTlmNDgyZWM3ZDJmNGI5MzIwOWNjNjk1NjQzZTM4ZmEzMjdkNjU2YTU2MjJmNjFmNzI1MDBkYzlkMDI.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -8980,7 +8980,7 @@
           "message": "Використовувати розумну відправку."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlB1c2hTZW5kT3B0aW9ucyMxM2UyOGQwNmVhZWQ0ZTQ2OWE2NWFjMDMwNTFiNjE4MzRiYzYzZGQxZTM5NDc4ODBhYjZhZjk0ZDYzOTg5ZGEw.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlB1c2hTZW5kT3B0aW9ucyMxM2UyOGQwNmVhZWQ0ZTQ2OWE2NWFjMDMwNTFiNjE4MzRiYzYzZGQxZTM5NDc4ODBhYjZhZjk0ZDYzOTg5ZGEw.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -9004,7 +9004,7 @@
           "message": "Параметри відстеження, пов'язані з кампанією"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.YWRkX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Add Tracking Params",
+          "source": "Add tracking params",
           "message": "Додати параметри відстеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.YWRkX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9016,7 +9016,7 @@
           "message": "Чи потрібні для кампанії особливі параметри відстеження. Якщо встановлено на False, параметри відстеження не використовуються."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Custom Tracking Params",
+          "source": "Custom tracking params",
           "message": "Спеціальні параметри відстеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9160,7 +9160,7 @@
           "message": "Значення параметра відстеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfY2xpY2tz.display_name": {
-          "source": "Is Tracking Clicks",
+          "source": "Is tracking clicks",
           "message": "Відстеження кліків"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfY2xpY2tz.short_desc": {
@@ -9172,7 +9172,7 @@
           "message": "Чи кампанія відстежує події кліку. Якщо не вказано, використовуються налаштування компанії."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfb3BlbnM.display_name": {
-          "source": "Is Tracking Opens",
+          "source": "Is tracking opens",
           "message": "Відстеження відкриття"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfb3BlbnM.short_desc": {
@@ -9184,7 +9184,7 @@
           "message": "Чи кампанія відстежує події відкриття. Якщо не вказано, використовуються налаштування компанії."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.YWRkX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Add Tracking Params",
+          "source": "Add tracking params",
           "message": "Додати параметри відстеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.YWRkX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9196,7 +9196,7 @@
           "message": "Чи потрібні для кампанії особливі параметри відстеження. Якщо встановлено на False, параметри відстеження не використовуються."
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Custom Tracking Params",
+          "source": "Custom tracking params",
           "message": "Спеціальні параметри відстеження"
         },
         "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9320,7 +9320,7 @@
           "message": "Якщо кампанія має бути відправлена з використанням часової зони отримувача або відправлена статично в заданому часі."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.aXNfbG9jYWw.display_name": {
-          "source": "Is Local",
+          "source": "Is local",
           "message": "Локальний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.aXNfbG9jYWw.short_desc": {
@@ -9336,7 +9336,7 @@
           "message": "1"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.c2VuZF9wYXN0X3JlY2lwaWVudHNfaW1tZWRpYXRlbHk.display_name": {
-          "source": "Send Past Recipients Immediately",
+          "source": "Send past recipients immediately",
           "message": "Надіслати попередніх одержувачів одразу"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipMb2NhbFN0YXRpY1NlbmQjNGQxODFjNTdiZWRmYzExNWU5NjI3NjljYjEwMWRiODY4OTE0NzBhOTIwNjZiN2RkNWYyMzZmMWFmNmU2M2EwYw.field.c2VuZF9wYXN0X3JlY2lwaWVudHNfaW1tZWRpYXRlbHk.short_desc": {
@@ -9348,7 +9348,7 @@
           "message": "Визначає, чи слід надсилати у часову зону одержувача, якщо заданий час минув. Дійсно лише для локальних надсилань."
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipOb25Mb2NhbFN0YXRpY1NlbmQjNGRiOTJlY2JjMDg0ODZhMzg1MTY5N2M3NGI3NTQ3YTI2OTdjM2MzYjk1NzNiNTYxZGRmNjRkZWRkMTQxYTU2MQ.field.aXNfbG9jYWw.display_name": {
-          "source": "Is Local",
+          "source": "Is local",
           "message": "Локальний"
         },
         "app.S2xhdml5bw.type.YWN0aW9uOmRYQmtZWFJsWDJOaGJYQmhhV2R1OipOb25Mb2NhbFN0YXRpY1NlbmQjNGRiOTJlY2JjMDg0ODZhMzg1MTY5N2M3NGI3NTQ3YTI2OTdjM2MzYjk1NzNiNTYxZGRmNjRkZWRkMTQxYTU2MQ.field.aXNfbG9jYWw.short_desc": {
@@ -9384,7 +9384,7 @@
           "message": "обмежений"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.union.KlRocm90dGxlZFNlbmRTdHJhdGVneSNjNjJiOTZhZTA4NjI5OWQxY2I0ODYwNjZjMjY1ZDRlYjUxY2VmYWFhMzY3YzY4NTBmZjFmYWQ5OTM1NTgyNTVl.field.dGhyb3R0bGVfcGVyY2VudGFnZQ.display_name": {
-          "source": "Throttle Percentage",
+          "source": "Throttle percentage",
           "message": "Відсоток обмеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.union.KlRocm90dGxlZFNlbmRTdHJhdGVneSNjNjJiOTZhZTA4NjI5OWQxY2I0ODYwNjZjMjY1ZDRlYjUxY2VmYWFhMzY3YzY4NTBmZjFmYWQ5OTM1NTgyNTVl.field.dGhyb3R0bGVfcGVyY2VudGFnZQ.short_desc": {
@@ -9484,7 +9484,7 @@
           "message": "Параметри, що використовуються під час надсилання кампанії"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KkVtYWlsU2VuZE9wdGlvbnMjMGYwZDM4ODc2MGQ4M2U0Mzc3NTRhNmFhNjI0MGJmNWE3NmE1YjYzYjMyNzgxYzdmZjA0MmZiMDdmZjRlY2IzMw.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KkVtYWlsU2VuZE9wdGlvbnMjMGYwZDM4ODc2MGQ4M2U0Mzc3NTRhNmFhNjI0MGJmNWE3NmE1YjYzYjMyNzgxYzdmZjA0MmZiMDdmZjRlY2IzMw.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -9496,7 +9496,7 @@
           "message": "Використовувати розумну відправку."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlNNU1NlbmRPcHRpb25zIzIxMTkzOTlmNDgyZWM3ZDJmNGI5MzIwOWNjNjk1NjQzZTM4ZmEzMjdkNjU2YTU2MjJmNjFmNzI1MDBkYzlkMDI.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlNNU1NlbmRPcHRpb25zIzIxMTkzOTlmNDgyZWM3ZDJmNGI5MzIwOWNjNjk1NjQzZTM4ZmEzMjdkNjU2YTU2MjJmNjFmNzI1MDBkYzlkMDI.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -9508,7 +9508,7 @@
           "message": "Використовувати розумну відправку."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlB1c2hTZW5kT3B0aW9ucyMxM2UyOGQwNmVhZWQ0ZTQ2OWE2NWFjMDMwNTFiNjE4MzRiYzYzZGQxZTM5NDc4ODBhYjZhZjk0ZDYzOTg5ZGEw.field.dXNlX3NtYXJ0X3NlbmRpbmc.display_name": {
-          "source": "Use Smart Sending",
+          "source": "Use smart sending",
           "message": "Використовувати розумну відправку"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.union.KlB1c2hTZW5kT3B0aW9ucyMxM2UyOGQwNmVhZWQ0ZTQ2OWE2NWFjMDMwNTFiNjE4MzRiYzYzZGQxZTM5NDc4ODBhYjZhZjk0ZDYzOTg5ZGEw.field.dXNlX3NtYXJ0X3NlbmRpbmc.short_desc": {
@@ -9532,7 +9532,7 @@
           "message": "Параметри відстеження, пов'язані з кампанією"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.YWRkX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Add Tracking Params",
+          "source": "Add tracking params",
           "message": "Додати параметри відстеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.YWRkX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9544,7 +9544,7 @@
           "message": "Чи потрібні для кампанії особливі параметри відстеження. Якщо встановлено на False, параметри відстеження не використовуються."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Custom Tracking Params",
+          "source": "Custom tracking params",
           "message": "Спеціальні параметри відстеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9688,7 +9688,7 @@
           "message": "Значення параметра відстеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfY2xpY2tz.display_name": {
-          "source": "Is Tracking Clicks",
+          "source": "Is tracking clicks",
           "message": "Відстеження кліків"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfY2xpY2tz.short_desc": {
@@ -9700,7 +9700,7 @@
           "message": "Чи кампанія відстежує події кліку. Якщо не вказано, використовуються налаштування компанії."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfb3BlbnM.display_name": {
-          "source": "Is Tracking Opens",
+          "source": "Is tracking opens",
           "message": "Відстеження відкриття"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc0VtYWlsVHJhY2tpbmdPcHRpb25zIzQ2ZDYxMWJjYWI4NDQ1MzY0MmVjZTBmZWJkNjgxOTE4YmQzODcwMzRiYTk3ZDBhNTgyNTcyOWE3YjUwYzNhNDY.field.aXNfdHJhY2tpbmdfb3BlbnM.short_desc": {
@@ -9712,7 +9712,7 @@
           "message": "Чи кампанія відстежує події відкриття. Якщо не вказано, використовуються налаштування компанії."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.YWRkX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Add Tracking Params",
+          "source": "Add tracking params",
           "message": "Додати параметри відстеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.YWRkX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9724,7 +9724,7 @@
           "message": "Чи потрібні для кампанії особливі параметри відстеження. Якщо встановлено на False, параметри відстеження не використовуються."
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.display_name": {
-          "source": "Custom Tracking Params",
+          "source": "Custom tracking params",
           "message": "Спеціальні параметри відстеження"
         },
         "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.union.KkNhbXBhaWduc1NNU1RyYWNraW5nT3B0aW9ucyM2Y2VkODc0MGQ5NmFlNWRlMjYzNGUyN2IxZTZmMTM5OTI4NTE4ZDcwMjJhYmY0NTNhNDAwNTViMjc5MWZhMGNk.field.Y3VzdG9tX3RyYWNraW5nX3BhcmFtcw.short_desc": {
@@ -9760,7 +9760,7 @@
           "message": "ID кампанії для видалення"
         },
         "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.display_name": {
-          "source": "Send Campaign",
+          "source": "Send campaign",
           "message": "Надіслати кампанію"
         },
         "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.short_desc": {
@@ -9784,7 +9784,7 @@
           "message": "ID кампанії для надсилання"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
-          "source": "List Events",
+          "source": "List events",
           "message": "Отримати список подій"
         },
         "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
@@ -9916,7 +9916,7 @@
           "message": "ID події"
         },
         "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.display_name": {
-          "source": "List Metrics",
+          "source": "List metrics",
           "message": "Список метрик"
         },
         "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.short_desc": {
@@ -9964,7 +9964,7 @@
           "message": "ID метрики"
         },
         "app.S2xhdml5bw.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Пошук записів"
         },
         "app.S2xhdml5bw.action.c2VhcmNo.short_desc": {
@@ -9988,7 +9988,7 @@
           "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
         },
         "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Знайти один запис"
         },
         "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -10012,7 +10012,7 @@
           "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
         },
         "app.S2xhdml5bw.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Створити записи"
         },
         "app.S2xhdml5bw.action.Y3JlYXRl.short_desc": {
@@ -10036,7 +10036,7 @@
           "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
         },
         "app.S2xhdml5bw.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Оновити записи"
         },
         "app.S2xhdml5bw.action.dXBkYXRl.short_desc": {
@@ -10060,7 +10060,7 @@
           "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
         },
         "app.S2xhdml5bw.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Видалити записи"
         },
         "app.S2xhdml5bw.action.ZGVsZXRl.short_desc": {
@@ -10084,7 +10084,7 @@
           "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
         },
         "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.display_name": {
-          "source": "Add Profile to List",
+          "source": "Add profile to list",
           "message": "Додати профіль до списку"
         },
         "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.short_desc": {
@@ -10120,7 +10120,7 @@
           "message": "Список, до якого слід додати профіль"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.display_name": {
-          "source": "Remove Profile from List",
+          "source": "Remove profile from list",
           "message": "Вилучити профіль зі списку"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "Список, з якого слід вилучити профіль"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.display_name": {
-          "source": "Add Tag to List",
+          "source": "Add tag to list",
           "message": "Додати тег до списку"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "Список, до якого слід застосувати тег"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.display_name": {
-          "source": "Remove Tag from List",
+          "source": "Remove tag from list",
           "message": "Вилучити тег зі списку"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.short_desc": {
@@ -10228,7 +10228,7 @@
           "message": "Список, з якого слід вилучити тег"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
-          "source": "Add Tag to Segment",
+          "source": "Add tag to segment",
           "message": "Додати тег до сегмента"
         },
         "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
@@ -10264,7 +10264,7 @@
           "message": "Сегмент, до якого слід застосувати тег"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
-          "source": "Remove Tag from Segment",
+          "source": "Remove tag from segment",
           "message": "Вилучити тег із сегмента"
         },
         "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {

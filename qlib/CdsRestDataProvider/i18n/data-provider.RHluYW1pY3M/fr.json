@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Créer un enregistrement"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Le nom de la table Dynamics, ex. : `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Rechercher un seul enregistrement"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Le nom de la table Dynamics, ex. : `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Rechercher des enregistrements"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Le nom de la table Dynamics, ex. : `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Mettre à jour des enregistrements"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Le nom de la table Dynamics, ex. : `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Supprimer les enregistrements"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

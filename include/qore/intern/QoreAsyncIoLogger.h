@@ -80,9 +80,10 @@ DLLLOCAL void qore_async_io_log(int level, const char* fmt, ...);
 //! Logs a message via the global async I/O controller's own logger, if it has one
 /** Does not fall back to the global async I/O logger, so the two fallbacks cannot recurse.
 
-    @return true if the message was handed to the controller's logger
-*/
-/** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+    @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
+
+    @return true if the message was handed to the controller's logger; false if the controller has no logger or its
+    logger cannot take the message, because its Program is being torn down (qore#7698)
 */
 DLLLOCAL bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args,
     ExceptionSink* logger_xsink = nullptr);
@@ -91,8 +92,9 @@ DLLLOCAL bool qore_async_io_controller_log_v(int level, const char* fmt, va_list
 /** @param logger_xsink if not null, receives an exception that the logger raises; otherwise it is discarded
 
     @return false if there is no logger to take the message (neither the global async I/O logger nor the global
-    controller's logger); a logger that is not enabled for the level counts as taking it, as does one that raises an
-    exception
+    controller's logger), or if neither can take it, because its Program is being torn down (a global async I/O
+    logger that cannot take it leaves it to the global controller's logger; qore#7698); a logger that is not enabled
+    for the level counts as taking it, as does one that raises an exception
 */
 DLLLOCAL bool qore_async_io_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink = nullptr);
 

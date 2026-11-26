@@ -70,7 +70,7 @@ static void warn_absolute_null_nothing_comparison(const QoreProgramLocation* loc
 }
 
 QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder l(left, xsink);
+    QoreOperandEvalHolder l(left, xsink, this->snapshotLeft());
     if (*xsink)
         return QoreValue();
 

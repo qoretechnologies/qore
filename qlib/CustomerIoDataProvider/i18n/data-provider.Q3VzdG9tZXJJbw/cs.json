@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
-          "source": "List People",
+          "source": "List people",
           "message": "Vypsat osoby"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Filtrovat osoby podle interního ID Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
-          "source": "Get Person",
+          "source": "Get person",
           "message": "Získat osobu"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
@@ -412,7 +412,7 @@
           "message": "ID zákazníka, e-mail nebo cio_id k vyhledání"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
-          "source": "Create/Update Customer",
+          "source": "Create/update customer",
           "message": "Vytvořit/aktualizovat zákazníka"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Vlastní atributy k nastavení u zákazníka"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete Customer",
+          "source": "Delete customer",
           "message": "Smazat zákazníka"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Jedinečný identifikátor zákazníka ke smazání"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
-          "source": "Suppress Customer",
+          "source": "Suppress customer",
           "message": "Potlačit zákazníka"
         },
         "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Jedinečný identifikátor zákazníka k potlačení"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
-          "source": "Unsuppress Customer",
+          "source": "Unsuppress customer",
           "message": "Zrušit potlačení zákazníka"
         },
         "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Jedinečný identifikátor zákazníka pro zrušení potlačení"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
-          "source": "Merge Customers",
+          "source": "Merge customers",
           "message": "Sloučit zákazníky"
         },
         "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
@@ -628,7 +628,7 @@
           "message": "Hodnota sekundárního identifikátoru"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "Zobrazit seznam segmentů"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Počet výsledků na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get Segment",
+          "source": "Get segment",
           "message": "Získat segment"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Jedinečné ID segmentu v Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
-          "source": "Get Segment People",
+          "source": "Get segment people",
           "message": "Získat lidi v segmentu"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
@@ -724,7 +724,7 @@
           "message": "Číslo stránky pro stránkované výsledky"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Seznam kampaní"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -760,7 +760,7 @@
           "message": "Počet výsledků na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "Získat kampaň"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Jedinečné ID kampaně Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
-          "source": "Get Campaign Metrics",
+          "source": "Get campaign metrics",
           "message": "Získat metriky kampaně"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
@@ -820,7 +820,7 @@
           "message": "Období pro agregaci metrik"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
-          "source": "Get Campaign Actions",
+          "source": "Get campaign actions",
           "message": "Získat akce kampaně"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
@@ -844,7 +844,7 @@
           "message": "Jedinečné ID kampaně Customer.io pro získání akcí"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
-          "source": "List Broadcasts",
+          "source": "List broadcasts",
           "message": "Vypsat vysílání"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
@@ -880,7 +880,7 @@
           "message": "Počet výsledků na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
-          "source": "Get Broadcast",
+          "source": "Get broadcast",
           "message": "Získat broadcast"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Jedinečné ID broadcastu Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
-          "source": "Trigger Broadcast",
+          "source": "Trigger broadcast",
           "message": "Spustit broadcast"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Přepsat tělo zprávy obsahem HTML"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
-          "source": "Send Transactional Push",
+          "source": "Send transactional push",
           "message": "Odeslat transakční push oznámení"
         },
         "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Přepsat text těla push oznámení"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Seznam kolekcí"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Počet výsledků na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Získat kolekci"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Jedinečné ID kolekce Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "Vytvořit kolekci"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "URL externího zdroje dat pro kolekci"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Update Collection",
+          "source": "Update collection",
           "message": "Aktualizovat kolekci"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1468,7 +1468,7 @@
           "message": "Aktualizovaná URL pro externí zdroj dat"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "Smazat kolekci"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "Jedinečné ID kolekce v Customer.io ke smazání"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
-          "source": "List Snippets",
+          "source": "List snippets",
           "message": "Vypsat úryvky"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Získat seznam všech úryvků ze služby Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
-          "source": "Get Snippet",
+          "source": "Get snippet",
           "message": "Získat snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "Jedinečný identifikátor názvu snippetu k načtení"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Create Snippet",
+          "source": "Create snippet",
           "message": "Vytvořit fragment"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
@@ -1564,7 +1564,7 @@
           "message": "Obsah fragmentu"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
-          "source": "Update Snippet",
+          "source": "Update snippet",
           "message": "Aktualizovat snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Aktualizovaný obsah snippetu"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
-          "source": "Delete Snippet",
+          "source": "Delete snippet",
           "message": "Smazat snippet"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "Jedinečný identifikátor názvu snippetu ke smazání"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
-          "source": "Create Export",
+          "source": "Create export",
           "message": "Vytvořit export"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "Filtry, které se mají použít na export"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
-          "source": "Get Export Status",
+          "source": "Get export status",
           "message": "Získat stav exportu"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "Jedinečné ID exportu Customer.io pro kontrolu stavu"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
-          "source": "Download Export",
+          "source": "Download export",
           "message": "Stáhnout export"
         },
         "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
@@ -1716,7 +1716,7 @@
           "message": "Jedinečné ID exportu v Customer.io ke stažení"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
-          "source": "List Deliveries",
+          "source": "List deliveries",
           "message": "Vypsat doručení"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Filtrovat zprávy odeslané v toto časové razítko Unix nebo dříve"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get Message",
+          "source": "Get message",
           "message": "Získat zprávu"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -1848,7 +1848,7 @@
           "message": "Jedinečné ID zprávy Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
+          "source": "List activities",
           "message": "Vypsat aktivity"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Filtrovat aktivity do tohoto unixového časového razítka (včetně)"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
-          "source": "List Newsletters",
+          "source": "List newsletters",
           "message": "Vypsat newslettery"
         },
         "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
@@ -1944,7 +1944,7 @@
           "message": "Počet výsledků na stránku"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
-          "source": "Get Newsletter",
+          "source": "Get newsletter",
           "message": "Získat newsletter"
         },
         "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Jedinečné ID newsletteru Customer.io"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
-          "source": "Track Event",
+          "source": "Track event",
           "message": "Zaznamenat událost"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Unixové časové razítko události"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
-          "source": "Track Anonymous Event",
+          "source": "Track anonymous event",
           "message": "Zaznamenat anonymní událost"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Unixové časové razítko události"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
-          "source": "Track Page View",
+          "source": "Track page view",
           "message": "Zaznamenat zobrazení stránky"
         },
         "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
@@ -2148,7 +2148,7 @@
           "message": "Unixové časové razítko pro událost zobrazení stránky"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
-          "source": "Add Device",
+          "source": "Add device",
           "message": "Přidat zařízení"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "Atributy zařízení"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
-          "source": "Delete Device",
+          "source": "Delete device",
           "message": "Smazat zařízení"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "Token zařízení k odebrání"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
-          "source": "Create/Update Object",
+          "source": "Create/update object",
           "message": "Vytvořit/aktualizovat objekt"
         },
         "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
@@ -2312,7 +2312,7 @@
           "message": "Vlastní atributy k nastavení u objektu"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Smazat objekt"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -2348,7 +2348,7 @@
           "message": "Identifikátor objektu"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Add Relationships",
+          "source": "Add relationships",
           "message": "Přidat vztahy"
         },
         "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "Seznam hashů identifikátorů, každý s 'identifier' a volitelně 'relationship_attributes'"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
-          "source": "Delete Relationships",
+          "source": "Delete relationships",
           "message": "Smazat vazby"
         },
         "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
@@ -2444,7 +2444,7 @@
           "message": "Seznam hashů identifikátorů k odpojení od objektu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
-          "source": "Watch Email Sent",
+          "source": "Watch email sent",
           "message": "Sledovat odeslání e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
@@ -2456,7 +2456,7 @@
           "message": "Přijmout oznámení při odeslání e-mailu přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
-          "source": "Watch Email Delivered",
+          "source": "Watch email delivered",
           "message": "Sledovat doručení e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
@@ -2468,7 +2468,7 @@
           "message": "Přijmout oznámení při doručení e-mailu přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
-          "source": "Watch Email Opened",
+          "source": "Watch email opened",
           "message": "Sledovat otevření e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
@@ -2480,7 +2480,7 @@
           "message": "Přijmout oznámení při otevření e-mailu přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Watch Email Clicked",
+          "source": "Watch email clicked",
           "message": "Sledovat kliknutí na e-mail"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Přijmout oznámení při kliknutí na odkaz v e-mailu přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Watch Email Bounced",
+          "source": "Watch email bounced",
           "message": "Sledovat vrácení e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Přijmout oznámení, když se e-mail vrátí jako nedoručitelný přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
-          "source": "Watch Email Dropped",
+          "source": "Watch email dropped",
           "message": "Sledovat zahození e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
@@ -2516,7 +2516,7 @@
           "message": "Přijmout oznámení při zahození e-mailu službou Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
-          "source": "Watch Email Spammed",
+          "source": "Watch email spammed",
           "message": "Sledovat označení e-mailu jako spam"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
@@ -2528,7 +2528,7 @@
           "message": "Přijmout oznámení při označení e-mailu jako spam přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Email Unsubscribed",
+          "source": "Watch email unsubscribed",
           "message": "Sledovat odhlášení z e-mailu"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
@@ -2540,7 +2540,7 @@
           "message": "Přijmout oznámení, když se příjemce odhlásí prostřednictvím e-mailu z Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
-          "source": "Watch SMS Sent",
+          "source": "Watch SMS sent",
           "message": "Sledovat odeslání SMS"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
@@ -2552,7 +2552,7 @@
           "message": "Přijmout oznámení při odeslání SMS zprávy přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
-          "source": "Watch SMS Delivered",
+          "source": "Watch SMS delivered",
           "message": "Sledovat doručení SMS"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "Přijmout oznámení při doručení SMS zprávy přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
-          "source": "Watch SMS Failed",
+          "source": "Watch SMS failed",
           "message": "Sledovat selhání SMS"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
@@ -2576,7 +2576,7 @@
           "message": "Přijmout oznámení při selhání odeslání SMS zprávy přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
-          "source": "Watch SMS Clicked",
+          "source": "Watch SMS clicked",
           "message": "Sledovat kliknutí na SMS"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
@@ -2588,7 +2588,7 @@
           "message": "Přijmout oznámení při kliknutí na odkaz v SMS zprávě přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
-          "source": "Watch Push Sent",
+          "source": "Watch push sent",
           "message": "Sledovat odeslání push notifikace"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
@@ -2600,7 +2600,7 @@
           "message": "Příjem oznámení, když je odeslána push notifikace přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
-          "source": "Watch Push Delivered",
+          "source": "Watch push delivered",
           "message": "Sledovat doručení push notifikace"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
@@ -2612,7 +2612,7 @@
           "message": "Příjem oznámení, když je doručena push notifikace přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
-          "source": "Watch Push Opened",
+          "source": "Watch push opened",
           "message": "Sledovat otevření push notifikace"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Příjem oznámení, když je otevřena push notifikace přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
-          "source": "Watch Push Failed",
+          "source": "Watch push failed",
           "message": "Sledovat selhání push notifikace"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
@@ -2636,7 +2636,7 @@
           "message": "Příjem oznámení, když se nepodaří odeslat push notifikaci přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
-          "source": "Watch Slack Sent",
+          "source": "Watch Slack sent",
           "message": "Sledovat odeslání ve Slacku"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Příjem oznámení, když je odeslána zpráva na Slack přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
-          "source": "Watch Slack Clicked",
+          "source": "Watch Slack clicked",
           "message": "Sledovat kliknutí ve Slacku"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
@@ -2660,7 +2660,7 @@
           "message": "Příjem oznámení, když dojde ke kliknutí na odkaz ve zprávě na Slacku přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
-          "source": "Watch Slack Failed",
+          "source": "Watch Slack failed",
           "message": "Sledovat selhání ve Slacku"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
@@ -2672,7 +2672,7 @@
           "message": "Příjem oznámení, když se nepodaří odeslat zprávu na Slack přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
-          "source": "Watch Subscribed",
+          "source": "Watch subscribed",
           "message": "Sledovat přihlášení k odběru"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Příjem oznámení, když se zákazník přihlásí k odběru přes Customer.io."
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
-          "source": "Watch Unsubscribed",
+          "source": "Watch unsubscribed",
           "message": "Sledovat odhlášení z odběru"
         },
         "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {

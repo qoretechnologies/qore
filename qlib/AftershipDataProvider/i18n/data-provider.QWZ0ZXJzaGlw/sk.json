@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
-          "source": "Create Tracking",
+          "source": "Create tracking",
           "message": "Vytvoriť sledovanie"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
@@ -772,7 +772,7 @@
           "message": "ID sledovania Aftership na načítanie"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
-          "source": "Search Trackings",
+          "source": "Search trackings",
           "message": "Vyhľadať sledovania"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "Počet sledovaní na stránku (max. 200)"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
-          "source": "Update Tracking",
+          "source": "Update tracking",
           "message": "Aktualizovať sledovanie"
         },
         "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
@@ -1360,7 +1360,7 @@
           "message": "Spôsob prepravnej služby zvolený pri pokladni"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
-          "source": "Delete Tracking",
+          "source": "Delete tracking",
           "message": "Odstrániť sledovanie"
         },
         "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
@@ -1408,7 +1408,7 @@
           "message": "ID sledovania Aftership na opätovné sledovanie (znova aktivuje expirované sledovania)"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
-          "source": "Mark as Completed",
+          "source": "Mark as completed",
           "message": "Označiť ako dokončené"
         },
         "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "Získať zoznam všetkých kuriérov podporovaných službou Aftership"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
-          "source": "Detect Courier",
+          "source": "Detect courier",
           "message": "Zistiť kuriéra"
         },
         "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
@@ -1636,7 +1636,7 @@
           "message": "Kód skupiny kuriérov pre detekciu viacerých slugov (napr. `fedex-group`)"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
-          "source": "Search Returns",
+          "source": "Search returns",
           "message": "Vyhľadať vrátenia"
         },
         "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Počet vrátení na stránku (1-50, predvolené `10`)"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
-          "source": "Create Return",
+          "source": "Create return",
           "message": "Vytvoriť vrátenie"
         },
         "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "ID vrátenia Aftership alebo číslo RMA na načítanie"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
-          "source": "Approve Return",
+          "source": "Approve return",
           "message": "Schváliť vrátenie"
         },
         "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "ID vrátenia Aftership na schválenie"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
-          "source": "Reject Return",
+          "source": "Reject return",
           "message": "Odmietnuť vrátenie"
         },
         "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Dôvod odmietnutia vrátenia"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
-          "source": "Resolve Return",
+          "source": "Resolve return",
           "message": "Vyriešiť vrátenie"
         },
         "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "ID vrátenia Aftership na označenie ako vyriešené"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
-          "source": "Add Return Shipment",
+          "source": "Add return shipment",
           "message": "Pridať spätnú zásielku"
         },
         "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Kód kuriéra pre spätnú zásielku (napr. `fedex`, `ups`)"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
-          "source": "Tracking Status Changed",
+          "source": "Tracking status changed",
           "message": "Stav sledovania zmenený"
         },
         "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {

@@ -619,6 +619,12 @@ public:
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
 
+    //! Debug-only: holds or releases the writes of the socket's HTTP/2 session (qore#7653)
+    /** @param hold true to hold the writes
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no HTTP/2 session
+    */
+    DLLLOCAL int dbgHoldH2Writes(bool hold, ExceptionSink* xsink);
+
     //! Debug-only: writes data on the TLS connection of the socket in the calling thread, without the I/O thread
     /** Called via the @c dbg_tls_answer_and_reset() debug builtin in @ref lib/ql_debug.cpp, so a test peer can answer
         while the I/O thread of its socket is held by a debug hook (issue #7523).  The socket must have no I/O

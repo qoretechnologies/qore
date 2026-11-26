@@ -60,7 +60,7 @@ module FilePoller {
             "path": "/",
             "action": "file-received",
             "subtype": "filepoller",
-            "display_name": "New File Created",
+            "display_name": "New file created",
             "short_desc": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
             "desc": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. "
                 "Move it outside the watched directory or rename it so that it no longer matches the file mask.",

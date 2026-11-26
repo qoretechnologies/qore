@@ -407,6 +407,32 @@ public:
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
 
+    //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
+    //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)
+    /** Called only for an object marked as shared, before the copy is made.  It decides as checkSharedMethodChange()
+        does (code that is sandboxed or acts for sandboxed code; fails closed), with no update-scope exemption: such
+        code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
+        (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
+        of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
+        copy method is where a class resets them.  Such code is also refused a copy with the copy method of another
+        class than the object's (Reflection's CopyMethod of a base class), which would not run the copy methods of
+        the object's subclasses.  The copy is never marked as shared here.
+
+        @param copy_cls the class whose copy runs
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
+    //! (qore#7673)
+    /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
+
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedSerialize(ExceptionSink* xsink) const;
+
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
     */

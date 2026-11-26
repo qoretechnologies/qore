@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Rechercher des messages"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Jeton de page pour récupérer une page spécifique de résultats dans la liste"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Récupérer un message"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "L'ID du message à récupérer"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Récupérer une pièce jointe"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "L'identifiant de la pièce jointe à récupérer"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nouvel e-mail"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Nombre maximal de messages remis au cours d'un cycle d'interrogation ; non défini ou `0` signifie aucune limite.\n\nLa limite est appliquée à partir du message le plus **ancien** du backlog, de sorte que le curseur de surveillance continue d'avancer de manière contiguë et que les messages restants soient remis lors des cycles suivants plutôt qu'ignorés. Utilisez cette option pour limiter le travail qu'un seul cycle peut effectuer lorsqu'un backlog important risque de s'accumuler"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nouvelles pièces jointes d'e-mail"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Nombre maximal de messages remis au cours d'un cycle d'interrogation ; non défini ou `0` signifie aucune limite.\n\nLa limite est appliquée à partir du message le plus **ancien** du backlog, de sorte que le curseur de surveillance continue d'avancer de manière contiguë et que les messages restants soient remis lors des cycles suivants plutôt qu'ignorés. Utilisez cette option pour limiter le travail qu'un seul cycle peut effectuer lorsqu'un backlog important risque de s'accumuler"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Déplacer un message vers la corbeille"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "L'ID du message à déplacer vers la corbeille ; les événements de surveillance transmettent cette valeur sous `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Supprimer un message"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "La valeur de l'en-tête `References` : les valeurs `Message-ID` des messages de la conversation à laquelle on répond, du plus ancien au plus récent, séparées par des espaces et chevrons compris. Si elle n'est pas définie, `in_reply_to` est utilisé. Les événements de surveillance transmettent l'en-tête `References` du message d'origine"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Rechercher des messages avec leurs métadonnées"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Les en-têtes de message à récupérer pour chaque message correspondant ; ignoré sauf si `format` vaut `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Restaurer un message depuis la corbeille"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "L'ID du message à restaurer depuis la corbeille ; les événements de surveillance transmettent cette valeur sous `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Modifier les étiquettes d'un message"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Les ID des étiquettes à retirer du message ; une étiquette est identifiée par son ID (ex. : `INBOX`, `UNREAD`, `Label_12`), pas par son nom"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Lister les étiquettes"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Liste toutes les étiquettes du compte, aussi bien les étiquettes système de Gmail (`INBOX`, `UNREAD`, `STARRED`, etc.) que les étiquettes créées par l'utilisateur, chacune avec l'ID qu'acceptent `modify-message-labels` et l'option de recherche `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Créer une étiquette"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Ne pas afficher les messages portant l'étiquette dans la liste des messages"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Créer un brouillon"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "La valeur de l'en-tête `References` : les valeurs `Message-ID` des messages de la conversation à laquelle on répond, du plus ancien au plus récent, séparées par des espaces et chevrons compris. Si elle n'est pas définie, `in_reply_to` est utilisé. Les événements de surveillance transmettent l'en-tête `References` du message d'origine"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Rechercher des brouillons"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Jeton de page pour récupérer une page spécifique de résultats dans la liste"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Récupérer un brouillon"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Le message complet sous forme de données MIME encodées en base64url dans `raw` ; le corps n'est pas analysé"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Envoyer un brouillon"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "L'ID du brouillon à envoyer ; `list-drafts` et `create-draft` renvoient cette valeur sous `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Supprimer un brouillon"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

@@ -472,8 +472,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipjb250ZXh0QW55T2ZPbmVPZiM4YTU3ZTA5ZTgyY2E5OWQ0MjJiNzNiMGE1YTUzM2MxMDhiZjcyMWY4MWQxMWM4M2I2OGZlY2E5ZDI3YTBhNDRh.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -496,8 +496,8 @@
           "message": "Extra parameters to pass."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
-          "message": "Code Blocks"
+          "source": "Code blocks",
+          "message": "Code blocks"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.Y29kZUJsb2Nrcw.short_desc": {
           "source": "Number of code blocks to return for each result",
@@ -508,8 +508,8 @@
           "message": "Number of code blocks to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
-          "message": "Image Links"
+          "source": "Image links",
+          "message": "Image links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.aW1hZ2VMaW5rcw.short_desc": {
           "source": "Number of images to return for each result",
@@ -532,8 +532,8 @@
           "message": "Number of URLs to return from each webpage."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
-          "message": "Rich Image Links"
+          "source": "Rich image links",
+          "message": "Rich image links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaEltYWdlTGlua3M.short_desc": {
           "source": "Number of rich image links to return for each result",
@@ -544,8 +544,8 @@
           "message": "Number of rich image links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
-          "message": "Rich Links"
+          "source": "Rich links",
+          "message": "Rich links"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipleHRyYXNBbnlPZiNkYTgyZDVkYjYwMDIwODVlMWRiY2MzZTkyMTdlYmEzYjJjMDIwNmY1YmMxNWI2ZWNmY2Q2ZDViMjI2ZjVjOGFh.field.cmljaExpbmtz.short_desc": {
           "source": "Number of rich links to return for each result",
@@ -592,8 +592,8 @@
           "message": "Deprecated and will be removed in a future release. Currently ignored. Pass highlights: true for default highlights, or { query } to guide selection with your own query."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum number of characters to return for highlights",
@@ -604,8 +604,8 @@
           "message": "Maximum number of characters to return for highlights. Controls the total length of highlight text returned per URL. Maximum supported value is 10000. Not compatible with highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
-          "message": "Num Sentences"
+          "source": "Num sentences",
+          "message": "Num sentences"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOipoaWdobGlnaHRzQW55T2ZPbmVPZiM2Nzc5ZWRjMDFhMGZiNWZkMzUyYjM5YzEyYzFlMTI4MGY5MjM1YzdkMjFhMWYyMmZjYmVjNGEzYTUyYTEzY2I3.field.bnVtU2VudGVuY2Vz.short_desc": {
           "source": "Deprecated and will be removed in a future release",
@@ -680,8 +680,8 @@
           "message": "preferred"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
-          "message": "Livecrawl Timeout"
+          "source": "Livecrawl timeout",
+          "message": "Livecrawl timeout"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
           "source": "The timeout for livecrawling in milliseconds",
@@ -692,8 +692,8 @@
           "message": "The timeout for livecrawling in milliseconds."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
-          "message": "Max Age Hours"
+          "source": "Max age hours",
+          "message": "Max age hours"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
           "source": "Maximum age of cached content in hours",
@@ -704,8 +704,8 @@
           "message": "Maximum age of cached content in hours. Positive values use cached content if it is less than this many hours old; 0 fetches fresh content and is the supported way to apply text rendering options to newly fetched pages; -1 always uses cache; omitted uses fallback fetching when cached content is unavailable. Maximum supported value is 720 hours."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
-          "message": "Subpage Target"
+          "source": "Subpage target",
+          "message": "Subpage target"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
           "source": "Term to find specific subpages of search results",
@@ -776,8 +776,8 @@
           "message": "Text extraction options for each result."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
-          "message": "Exclude Sections"
+          "source": "Exclude sections",
+          "message": "Exclude sections"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Exclude content classified into these semantic page sections",
@@ -788,8 +788,8 @@
           "message": "Exclude content classified into these semantic page sections. Section classification is best-effort. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
-          "message": "Include HTML Tags"
+          "source": "Include HTML tags",
+          "message": "Include HTML tags"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
           "source": "If true, include lightweight HTML tags in returned text instead of plain…",
@@ -800,8 +800,8 @@
           "message": "If true, include lightweight HTML tags in returned text instead of plain markdown-style text. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
-          "message": "Include Sections"
+          "source": "Include sections",
+          "message": "Include sections"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Best-effort",
@@ -812,8 +812,8 @@
           "message": "Best-effort. Only include content classified into these semantic page sections. Section classification may be unavailable or incomplete for some pages; validate output if strict filtering is required. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOip0ZXh0QW55T2ZPbmVPZiNiNzdhOTE0YjEyNjBhNzRhNzRiMGNhODczMWZmNjkxNmRiOTJmYTE5ZTczMjMwMDIxMTY5MGU0ZWFiM2IyZjkx.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum character limit for the full page text",
@@ -932,8 +932,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -1020,8 +1020,8 @@
           "message": "text"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
-          "message": "Additional Properties"
+          "source": "Additional properties",
+          "message": "Additional properties"
         },
         "app.RXhh.action.c2VhcmNo.option.b3V0cHV0U2NoZW1h.union.Km91dHB1dFNjaGVtYUFueU9mT25lT2YjM2NhNTNiMmYwY2ZiMGU0YTVhYmNiYzYyN2U0MWY4ZDU5MzM4MWVjY2Q1YmU0Y2NjODIwNzJhOGFiMzRiMzIwOA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
@@ -1068,8 +1068,8 @@
           "message": "Return the response as a server-sent event stream.  Leave this off unless the caller consumes SSE: an action returns the whole response."
         },
         "app.RXhh.action.YW5zd2Vy.display_name": {
-          "source": "Answer a Question",
-          "message": "Answer a Question"
+          "source": "Answer a question",
+          "message": "Answer a question"
         },
         "app.RXhh.action.YW5zd2Vy.short_desc": {
           "source": "Answer a question from the web, with citations",
@@ -1144,8 +1144,8 @@
           "message": "A [JSON Schema Draft 7](https://json-schema.org/draft-07) description of the answer you want back, which makes the result structured data rather than prose."
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
-          "message": "Additional Properties"
+          "source": "Additional properties",
+          "message": "Additional properties"
         },
         "app.RXhh.action.YW5zd2Vy.option.b3V0cHV0U2NoZW1h.field.YWRkaXRpb25hbFByb3BlcnRpZXM.short_desc": {
           "source": "Whether to allow properties not listed in 'properties'",
@@ -1240,8 +1240,8 @@
           "message": "The two-letter ISO country code of the user, e.g. US."
         },
         "app.RXhh.action.Y29udGVudHM.display_name": {
-          "source": "Get Contents",
-          "message": "Get Contents"
+          "source": "Get contents",
+          "message": "Get contents"
         },
         "app.RXhh.action.Y29udGVudHM.short_desc": {
           "source": "Fetch the text, highlights or a summary of pages",
@@ -1288,8 +1288,8 @@
           "message": "Text extraction options for each result."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
-          "message": "Exclude Sections"
+          "source": "Exclude sections",
+          "message": "Exclude sections"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Exclude content classified into these semantic page sections",
@@ -1300,8 +1300,8 @@
           "message": "Exclude content classified into these semantic page sections. Section classification is best-effort. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
-          "message": "Include HTML Tags"
+          "source": "Include HTML tags",
+          "message": "Include HTML tags"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
           "source": "If true, include lightweight HTML tags in returned text instead of plain…",
@@ -1312,8 +1312,8 @@
           "message": "If true, include lightweight HTML tags in returned text instead of plain markdown-style text. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
-          "message": "Include Sections"
+          "source": "Include sections",
+          "message": "Include sections"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Best-effort",
@@ -1324,8 +1324,8 @@
           "message": "Best-effort. Only include content classified into these semantic page sections. Section classification may be unavailable or incomplete for some pages; validate output if strict filtering is required. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum character limit for the full page text",
@@ -1396,8 +1396,8 @@
           "message": "Deprecated and will be removed in a future release. Currently ignored. Pass highlights: true for default highlights, or { query } to guide selection with your own query."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum number of characters to return for highlights",
@@ -1408,8 +1408,8 @@
           "message": "Maximum number of characters to return for highlights. Controls the total length of highlight text returned per URL. Maximum supported value is 10000. Not compatible with highlights.dynamic."
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
-          "message": "Num Sentences"
+          "source": "Num sentences",
+          "message": "Num sentences"
         },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
           "source": "Deprecated and will be removed in a future release",
@@ -1548,8 +1548,8 @@
           "message": "Extra parameters to pass."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
-          "message": "Code Blocks"
+          "source": "Code blocks",
+          "message": "Code blocks"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.Y29kZUJsb2Nrcw.short_desc": {
           "source": "Number of code blocks to return for each result",
@@ -1560,8 +1560,8 @@
           "message": "Number of code blocks to return for each result."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
-          "message": "Image Links"
+          "source": "Image links",
+          "message": "Image links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.aW1hZ2VMaW5rcw.short_desc": {
           "source": "Number of images to return for each result",
@@ -1584,8 +1584,8 @@
           "message": "Number of URLs to return from each webpage."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
-          "message": "Rich Image Links"
+          "source": "Rich image links",
+          "message": "Rich image links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaEltYWdlTGlua3M.short_desc": {
           "source": "Number of rich image links to return for each result",
@@ -1596,8 +1596,8 @@
           "message": "Number of rich image links to return for each result."
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
-          "message": "Rich Links"
+          "source": "Rich links",
+          "message": "Rich links"
         },
         "app.RXhh.action.Y29udGVudHM.option.ZXh0cmFz.field.cmljaExpbmtz.short_desc": {
           "source": "Number of rich links to return for each result",
@@ -1620,8 +1620,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.action.Y29udGVudHM.option.Y29udGV4dA.union.KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -1680,8 +1680,8 @@
           "message": "Term to find specific subpages of search results. Can be a single string or an array of strings."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
-          "source": "Find Similar Links",
-          "message": "Find Similar Links"
+          "source": "Find similar links",
+          "message": "Find similar links"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
           "source": "Find pages similar to a URL",
@@ -1788,8 +1788,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmNvbnRleHRBbnlPZk9uZU9mIzhhNTdlMDllODJjYTk5ZDQyMmI3M2IwYTVhNTMzYzEwOGJmNzIxZjgxZDExYzgzYjY4ZmVjYTlkMjdhMGE0NGE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -1812,8 +1812,8 @@
           "message": "Extra parameters to pass."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
-          "message": "Code Blocks"
+          "source": "Code blocks",
+          "message": "Code blocks"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.Y29kZUJsb2Nrcw.short_desc": {
           "source": "Number of code blocks to return for each result",
@@ -1824,8 +1824,8 @@
           "message": "Number of code blocks to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
-          "message": "Image Links"
+          "source": "Image links",
+          "message": "Image links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.aW1hZ2VMaW5rcw.short_desc": {
           "source": "Number of images to return for each result",
@@ -1848,8 +1848,8 @@
           "message": "Number of URLs to return from each webpage."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
-          "message": "Rich Image Links"
+          "source": "Rich image links",
+          "message": "Rich image links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaEltYWdlTGlua3M.short_desc": {
           "source": "Number of rich image links to return for each result",
@@ -1860,8 +1860,8 @@
           "message": "Number of rich image links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
-          "message": "Rich Links"
+          "source": "Rich links",
+          "message": "Rich links"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmV4dHJhc0FueU9mI2RhODJkNWRiNjAwMjA4NWUxZGJjYzNlOTIxN2ViYTNiMmMwMjA2ZjViYzE1YjZlY2ZjZDZkNWIyMjZmNWM4YWE.field.cmljaExpbmtz.short_desc": {
           "source": "Number of rich links to return for each result",
@@ -1908,8 +1908,8 @@
           "message": "Deprecated and will be removed in a future release. Currently ignored. Pass highlights: true for default highlights, or { query } to guide selection with your own query."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum number of characters to return for highlights",
@@ -1920,8 +1920,8 @@
           "message": "Maximum number of characters to return for highlights. Controls the total length of highlight text returned per URL. Maximum supported value is 10000. Not compatible with highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
-          "message": "Num Sentences"
+          "source": "Num sentences",
+          "message": "Num sentences"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KmhpZ2hsaWdodHNBbnlPZk9uZU9mIzY3NzllZGMwMWEwZmI1ZmQzNTJiMzljMTJjMWUxMjgwZjkyMzVjN2QyMWExZjIyZmNiZWM0YTNhNTJhMTNjYjc.field.bnVtU2VudGVuY2Vz.short_desc": {
           "source": "Deprecated and will be removed in a future release",
@@ -1996,8 +1996,8 @@
           "message": "preferred"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
-          "message": "Livecrawl Timeout"
+          "source": "Livecrawl timeout",
+          "message": "Livecrawl timeout"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
           "source": "The timeout for livecrawling in milliseconds",
@@ -2008,8 +2008,8 @@
           "message": "The timeout for livecrawling in milliseconds."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
-          "message": "Max Age Hours"
+          "source": "Max age hours",
+          "message": "Max age hours"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bWF4QWdlSG91cnM.short_desc": {
           "source": "Maximum age of cached content in hours",
@@ -2020,8 +2020,8 @@
           "message": "Maximum age of cached content in hours. Positive values use cached content if it is less than this many hours old; 0 fetches fresh content and is the supported way to apply text rendering options to newly fetched pages; -1 always uses cache; omitted uses fallback fetching when cached content is unavailable. Maximum supported value is 720 hours."
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
-          "message": "Subpage Target"
+          "source": "Subpage target",
+          "message": "Subpage target"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.c3VicGFnZVRhcmdldA.short_desc": {
           "source": "Term to find specific subpages of search results",
@@ -2092,8 +2092,8 @@
           "message": "Text extraction options for each result."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
-          "message": "Exclude Sections"
+          "source": "Exclude sections",
+          "message": "Exclude sections"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Exclude content classified into these semantic page sections",
@@ -2104,8 +2104,8 @@
           "message": "Exclude content classified into these semantic page sections. Section classification is best-effort. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
-          "message": "Include HTML Tags"
+          "source": "Include HTML tags",
+          "message": "Include HTML tags"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
           "source": "If true, include lightweight HTML tags in returned text instead of plain…",
@@ -2116,8 +2116,8 @@
           "message": "If true, include lightweight HTML tags in returned text instead of plain markdown-style text. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
-          "message": "Include Sections"
+          "source": "Include sections",
+          "message": "Include sections"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Best-effort",
@@ -2128,8 +2128,8 @@
           "message": "Best-effort. Only include content classified into these semantic page sections. Section classification may be unavailable or incomplete for some pages; validate output if strict filtering is required. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6KnRleHRBbnlPZk9uZU9mI2I3N2E5MTRiMTI2MGE3NGE3NGIwY2E4NzMxZmY2OTE2ZGI5MmZhMTllNzMyMzAwMjExNjkwZTRlYWIzYjJmOTE.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum character limit for the full page text",
@@ -2236,8 +2236,8 @@
           "message": "Only links with a published date before this will be returned. Must be specified in ISO 8601 format."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.display_name": {
-          "source": "Start a Research Run",
-          "message": "Start a Research Run"
+          "source": "Start a research run",
+          "message": "Start a research run"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.short_desc": {
           "source": "Ask the research agent a question and get the run it started",
@@ -2452,8 +2452,8 @@
           "message": "Optional per-run spending limit for the metered `auto` and `max` efforts. Runs that finish early may cost less than the limit."
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.display_name": {
-          "source": "Max Cost Dollars",
-          "message": "Max Cost Dollars"
+          "source": "Max cost dollars",
+          "message": "Max cost dollars"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.YnVkZ2V0.field.bWF4Q29zdERvbGxhcnM.short_desc": {
           "source": "Maximum amount this run can spend in US dollars",
@@ -2484,8 +2484,8 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.Y3JlYXRlLWFnZW50LXJ1bg.option.RXhhLUJldGE.short_desc": {
           "source": "Comma-separated beta feature tokens for opting into experimental features",
@@ -2496,8 +2496,8 @@
           "message": "Comma-separated beta feature tokens for opting into experimental features."
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.display_name": {
-          "source": "List Research Runs",
-          "message": "List Research Runs"
+          "source": "List research runs",
+          "message": "List research runs"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW5z.short_desc": {
           "source": "List the research runs for this team",
@@ -2624,8 +2624,8 @@
           "message": "text/event-stream"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.display_name": {
-          "source": "Last Event ID",
-          "message": "Last Event ID"
+          "source": "Last event ID",
+          "message": "Last event ID"
         },
         "app.RXhh.action.bGlzdC1hZ2VudC1ydW4tZXZlbnRz.option.TGFzdC1FdmVudC1JRA.short_desc": {
           "source": "For SSE replay, return only events after this event ID",
@@ -2684,8 +2684,8 @@
           "message": "Agent run ID. New run IDs are returned with the `agent_run_` prefix."
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.c3RvcC1hZ2VudC1ydW4.option.RXhhLUJldGE.short_desc": {
           "source": "Comma-separated beta feature tokens for opting into experimental features",
@@ -2720,8 +2720,8 @@
           "message": "Agent run ID. New run IDs are returned with the `agent_run_` prefix."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create a Batch",
-          "message": "Create a Batch"
+          "source": "Create a batch",
+          "message": "Create a batch"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.short_desc": {
           "source": "Run many requests asynchronously in one job",
@@ -2816,8 +2816,8 @@
           "message": "Caller-provided metadata stored with the batch."
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.Y3JlYXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
           "source": "Required beta token for the Batch API",
@@ -2832,8 +2832,8 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
-          "message": "List Batches"
+          "source": "List batches",
+          "message": "List batches"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.short_desc": {
           "source": "List the batches for this team",
@@ -2884,8 +2884,8 @@
           "message": "completed"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.bGlzdC1iYXRjaGVz.option.RXhhLUJldGE.short_desc": {
           "source": "Required beta token for the Batch API",
@@ -2924,8 +2924,8 @@
           "message": "Batch ID."
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.Z2V0LWJhdGNo.option.RXhhLUJldGE.short_desc": {
           "source": "Required beta token for the Batch API",
@@ -2964,8 +2964,8 @@
           "message": "Batch ID."
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.Y2FuY2VsLWJhdGNo.option.RXhhLUJldGE.short_desc": {
           "source": "Required beta token for the Batch API",
@@ -3004,8 +3004,8 @@
           "message": "Batch ID."
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.display_name": {
-          "source": "Exa Beta",
-          "message": "Exa Beta"
+          "source": "Exa beta",
+          "message": "Exa beta"
         },
         "app.RXhh.action.ZGVsZXRlLWJhdGNo.option.RXhhLUJldGE.short_desc": {
           "source": "Required beta token for the Batch API",
@@ -3020,8 +3020,8 @@
           "message": "batches-2026-06-06"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.display_name": {
-          "source": "Create a Search Monitor",
-          "message": "Create a Search Monitor"
+          "source": "Create a search monitor",
+          "message": "Create a search monitor"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.short_desc": {
           "source": "Run a search on a schedule and deliver new results to a webhook",
@@ -3080,8 +3080,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -3104,8 +3104,8 @@
           "message": "Extra parameters to pass."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
-          "message": "Code Blocks"
+          "source": "Code blocks",
+          "message": "Code blocks"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
           "source": "Number of code blocks to return for each result",
@@ -3116,8 +3116,8 @@
           "message": "Number of code blocks to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
-          "message": "Image Links"
+          "source": "Image links",
+          "message": "Image links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
           "source": "Number of images to return for each result",
@@ -3140,8 +3140,8 @@
           "message": "Number of URLs to return from each webpage."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
-          "message": "Rich Image Links"
+          "source": "Rich image links",
+          "message": "Rich image links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
           "source": "Number of rich image links to return for each result",
@@ -3152,8 +3152,8 @@
           "message": "Number of rich image links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
-          "message": "Rich Links"
+          "source": "Rich links",
+          "message": "Rich links"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
           "source": "Number of rich links to return for each result",
@@ -3164,8 +3164,8 @@
           "message": "Number of rich links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
-          "message": "Filter Empty Results"
+          "source": "Filter empty results",
+          "message": "Filter empty results"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
           "source": "Filter out results with no content",
@@ -3212,8 +3212,8 @@
           "message": "Deprecated and will be removed in a future release. Currently ignored. Pass highlights: true for default highlights, or { query } to guide selection with your own query."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum number of characters to return for highlights",
@@ -3224,8 +3224,8 @@
           "message": "Maximum number of characters to return for highlights. Controls the total length of highlight text returned per URL. Maximum supported value is 10000. Not compatible with highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
-          "message": "Num Sentences"
+          "source": "Num sentences",
+          "message": "Num sentences"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
           "source": "Deprecated and will be removed in a future release",
@@ -3284,8 +3284,8 @@
           "message": "Crawl strategy for fetching page content"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
-          "message": "Livecrawl Timeout"
+          "source": "Livecrawl timeout",
+          "message": "Livecrawl timeout"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
           "source": "The timeout for livecrawling in milliseconds",
@@ -3296,8 +3296,8 @@
           "message": "The timeout for livecrawling in milliseconds."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
-          "message": "Max Age Hours"
+          "source": "Max age hours",
+          "message": "Max age hours"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
           "source": "Maximum age of cached content in hours",
@@ -3308,8 +3308,8 @@
           "message": "Maximum age of cached content in hours. Positive values use cached content if it is less than this many hours old; 0 fetches fresh content and is the supported way to apply text rendering options to newly fetched pages; -1 always uses cache; omitted uses fallback fetching when cached content is unavailable. Maximum supported value is 720 hours."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
-          "message": "Subpage Target"
+          "source": "Subpage target",
+          "message": "Subpage target"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
           "source": "Term to find specific subpages of search results",
@@ -3344,8 +3344,8 @@
           "message": "Return an LLM-generated summary. Pass `true` for defaults, or an object with `query` and `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
-          "message": "Max Tokens"
+          "source": "Max tokens",
+          "message": "Max tokens"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
           "source": "Maximum tokens for the generated summary",
@@ -3380,8 +3380,8 @@
           "message": "Text extraction options for each result."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
-          "message": "Exclude Sections"
+          "source": "Exclude sections",
+          "message": "Exclude sections"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Exclude content classified into these semantic page sections",
@@ -3392,8 +3392,8 @@
           "message": "Exclude content classified into these semantic page sections. Section classification is best-effort. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
-          "message": "Include HTML Tags"
+          "source": "Include HTML tags",
+          "message": "Include HTML tags"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
           "source": "If true, include lightweight HTML tags in returned text instead of plain…",
@@ -3404,8 +3404,8 @@
           "message": "If true, include lightweight HTML tags in returned text instead of plain markdown-style text. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
-          "message": "Include Sections"
+          "source": "Include sections",
+          "message": "Include sections"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Best-effort",
@@ -3416,8 +3416,8 @@
           "message": "Best-effort. Only include content classified into these semantic page sections. Section classification may be unavailable or incomplete for some pages; validate output if strict filtering is required. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum character limit for the full page text",
@@ -3452,8 +3452,8 @@
           "message": "full"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
-          "message": "Exclude Domains"
+          "source": "Exclude domains",
+          "message": "Exclude domains"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
           "source": "Exclude these domains from search results",
@@ -3464,8 +3464,8 @@
           "message": "Exclude these domains from search results."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
-          "message": "Include Domains"
+          "source": "Include domains",
+          "message": "Include domains"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
           "source": "Restrict search results to these domains",
@@ -3476,8 +3476,8 @@
           "message": "Restrict search results to these domains."
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
-          "message": "Num Results"
+          "source": "Num results",
+          "message": "Num results"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
           "source": "Number of results to return",
@@ -3600,8 +3600,8 @@
           "message": "text"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
-          "message": "Additional Properties"
+          "source": "Additional properties",
+          "message": "Additional properties"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
@@ -3636,8 +3636,8 @@
           "message": "Key-value pairs echoed back in each webhook delivery, so a receiver can route updates without looking the monitor up."
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.display_name": {
-          "source": "List Search Monitors",
-          "message": "List Search Monitors"
+          "source": "List search monitors",
+          "message": "List search monitors"
         },
         "app.RXhh.action.bGlzdC1tb25pdG9ycw.short_desc": {
           "source": "List the search monitors for this team",
@@ -3836,8 +3836,8 @@
           "message": "Deprecated: Use highlights or text instead. Returns page contents as a combined context string."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmNvbnRleHRPbmVPZiNkYTI5YTVjNTU4YTJkNjY0ZTQwNmZmN2Q0MDYxZjMyMDk4MjQwYTUyYTRkMGQ4MjljZmNmNmQyYzk0Zjg3MDY1.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Deprecated",
@@ -3860,8 +3860,8 @@
           "message": "Extra parameters to pass."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.display_name": {
-          "source": "Code Blocks",
-          "message": "Code Blocks"
+          "source": "Code blocks",
+          "message": "Code blocks"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.Y29kZUJsb2Nrcw.short_desc": {
           "source": "Number of code blocks to return for each result",
@@ -3872,8 +3872,8 @@
           "message": "Number of code blocks to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.display_name": {
-          "source": "Image Links",
-          "message": "Image Links"
+          "source": "Image links",
+          "message": "Image links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.aW1hZ2VMaW5rcw.short_desc": {
           "source": "Number of images to return for each result",
@@ -3896,8 +3896,8 @@
           "message": "Number of URLs to return from each webpage."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.display_name": {
-          "source": "Rich Image Links",
-          "message": "Rich Image Links"
+          "source": "Rich image links",
+          "message": "Rich image links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaEltYWdlTGlua3M.short_desc": {
           "source": "Number of rich image links to return for each result",
@@ -3908,8 +3908,8 @@
           "message": "Number of rich image links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.display_name": {
-          "source": "Rich Links",
-          "message": "Rich Links"
+          "source": "Rich links",
+          "message": "Rich links"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmV4dHJhcyNlODVjZmUxMDEwZDRlNDZkNTU2M2Q3NDJmNTM0MTg2NzgxMDYzNDQ1NDZjMzExYmNjYmY4MGJlZjU4MDkwMDlm.field.cmljaExpbmtz.short_desc": {
           "source": "Number of rich links to return for each result",
@@ -3920,8 +3920,8 @@
           "message": "Number of rich links to return for each result."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.display_name": {
-          "source": "Filter Empty Results",
-          "message": "Filter Empty Results"
+          "source": "Filter empty results",
+          "message": "Filter empty results"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.ZmlsdGVyRW1wdHlSZXN1bHRz.short_desc": {
           "source": "Filter out results with no content",
@@ -3968,8 +3968,8 @@
           "message": "Deprecated and will be removed in a future release. Currently ignored. Pass highlights: true for default highlights, or { query } to guide selection with your own query."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum number of characters to return for highlights",
@@ -3980,8 +3980,8 @@
           "message": "Maximum number of characters to return for highlights. Controls the total length of highlight text returned per URL. Maximum supported value is 10000. Not compatible with highlights.dynamic."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.display_name": {
-          "source": "Num Sentences",
-          "message": "Num Sentences"
+          "source": "Num sentences",
+          "message": "Num sentences"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KmhpZ2hsaWdodHNPbmVPZiM1NzhmYzZjOWQ0M2ExMjE4ZDVlODI5ZWZhMjllNDdjNWVkMmY5OTZlMWQ3MDNmOTE3ZTdmM2I4MDJmZWJhNWQ5.field.bnVtU2VudGVuY2Vz.short_desc": {
           "source": "Deprecated and will be removed in a future release",
@@ -4040,8 +4040,8 @@
           "message": "Crawl strategy for fetching page content"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
-          "source": "Livecrawl Timeout",
-          "message": "Livecrawl Timeout"
+          "source": "Livecrawl timeout",
+          "message": "Livecrawl timeout"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bGl2ZWNyYXdsVGltZW91dA.short_desc": {
           "source": "The timeout for livecrawling in milliseconds",
@@ -4052,8 +4052,8 @@
           "message": "The timeout for livecrawling in milliseconds."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.display_name": {
-          "source": "Max Age Hours",
-          "message": "Max Age Hours"
+          "source": "Max age hours",
+          "message": "Max age hours"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.bWF4QWdlSG91cnM.short_desc": {
           "source": "Maximum age of cached content in hours",
@@ -4064,8 +4064,8 @@
           "message": "Maximum age of cached content in hours. Positive values use cached content if it is less than this many hours old; 0 fetches fresh content and is the supported way to apply text rendering options to newly fetched pages; -1 always uses cache; omitted uses fallback fetching when cached content is unavailable. Maximum supported value is 720 hours."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.display_name": {
-          "source": "Subpage Target",
-          "message": "Subpage Target"
+          "source": "Subpage target",
+          "message": "Subpage target"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KlNlYXJjaE1vbml0b3JDb250ZW50cyM4NTUyNTZiMGQ5MjU0ZWZiYjYxN2EwZTczY2EyNzQ5ZGE2Y2MyNGFlNDBhNDQ0ZGM2MjFhNGU3NjAzZTE0ZmRj.field.c3VicGFnZVRhcmdldA.short_desc": {
           "source": "Term to find specific subpages of search results",
@@ -4100,8 +4100,8 @@
           "message": "Return an LLM-generated summary. Pass `true` for defaults, or an object with `query` and `maxTokens`."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.display_name": {
-          "source": "Max Tokens",
-          "message": "Max Tokens"
+          "source": "Max tokens",
+          "message": "Max tokens"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnN1bW1hcnlPbmVPZiM2N2YyZmQzZWVjMWY2YmZkMjM1YTVjNjQwNDRiNzViZWJiM2I1YjMwNmM2M2I0ODUwOTA3NDlmNDcyNjc2YWQ0.field.bWF4VG9rZW5z.short_desc": {
           "source": "Maximum tokens for the generated summary",
@@ -4136,8 +4136,8 @@
           "message": "Text extraction options for each result."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Exclude Sections",
-          "message": "Exclude Sections"
+          "source": "Exclude sections",
+          "message": "Exclude sections"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.ZXhjbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Exclude content classified into these semantic page sections",
@@ -4148,8 +4148,8 @@
           "message": "Exclude content classified into these semantic page sections. Section classification is best-effort. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.display_name": {
-          "source": "Include HTML Tags",
-          "message": "Include HTML Tags"
+          "source": "Include HTML tags",
+          "message": "Include HTML tags"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZUh0bWxUYWdz.short_desc": {
           "source": "If true, include lightweight HTML tags in returned text instead of plain…",
@@ -4160,8 +4160,8 @@
           "message": "If true, include lightweight HTML tags in returned text instead of plain markdown-style text. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.display_name": {
-          "source": "Include Sections",
-          "message": "Include Sections"
+          "source": "Include sections",
+          "message": "Include sections"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.aW5jbHVkZVNlY3Rpb25z.short_desc": {
           "source": "Best-effort",
@@ -4172,8 +4172,8 @@
           "message": "Best-effort. Only include content classified into these semantic page sections. Section classification may be unavailable or incomplete for some pages; validate output if strict filtering is required. Use maxAgeHours: 0 when you need this applied to freshly fetched content."
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.display_name": {
-          "source": "Max Characters",
-          "message": "Max Characters"
+          "source": "Max characters",
+          "message": "Max characters"
         },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6KnRleHRPbmVPZiNlOTFlNjBmNjJmMWUxNDFhMjczMGZmZDc1M2ZlZTY5YWQyZmYzZTkxZDRlOTFhOWY0Yzk1YTZiODgyOTdmY2Nk.field.bWF4Q2hhcmFjdGVycw.short_desc": {
           "source": "Maximum character limit for the full page text",
@@ -4208,8 +4208,8 @@
           "message": "full"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
-          "source": "Exclude Domains",
-          "message": "Exclude Domains"
+          "source": "Exclude domains",
+          "message": "Exclude domains"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.short_desc": {
           "source": "Exclude these domains from search results",
@@ -4220,8 +4220,8 @@
           "message": "Exclude these domains from search results."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.display_name": {
-          "source": "Include Domains",
-          "message": "Include Domains"
+          "source": "Include domains",
+          "message": "Include domains"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.aW5jbHVkZURvbWFpbnM.short_desc": {
           "source": "Restrict search results to these domains",
@@ -4232,8 +4232,8 @@
           "message": "Restrict search results to these domains."
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.display_name": {
-          "source": "Num Results",
-          "message": "Num Results"
+          "source": "Num results",
+          "message": "Num results"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.bnVtUmVzdWx0cw.short_desc": {
           "source": "Number of results to return",
@@ -4320,8 +4320,8 @@
           "message": "text"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.YWRkaXRpb25hbFByb3BlcnRpZXM.display_name": {
-          "source": "Additional Properties",
-          "message": "Additional Properties"
+          "source": "Additional properties",
+          "message": "Additional properties"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.b3V0cHV0U2NoZW1h.union.KlNlYXJjaE1vbml0b3JPdXRwdXRTY2hlbWFBbnlPZk9uZU9mIzY5YTVjY2FhOGU4ZjY3MmVjNWIzYzRiOGU1NWZjMjI2OTliMDg4MWFiMWM0YjUzMDAzYTk5MDE5MTI5NTM0ZDQ.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
@@ -4416,8 +4416,8 @@
           "message": "The monitor ID"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.display_name": {
-          "source": "Act on Several Monitors",
-          "message": "Act on Several Monitors"
+          "source": "Act on several monitors",
+          "message": "Act on several monitors"
         },
         "app.RXhh.action.YmF0Y2gtbW9uaXRvcnM.short_desc": {
           "source": "Pause, resume or delete every monitor matching a filter",

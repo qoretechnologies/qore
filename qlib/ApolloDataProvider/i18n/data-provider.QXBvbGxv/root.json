@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -432,8 +432,8 @@
           "message": "The ID of the user who owns this contact"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -516,8 +516,8 @@
           "message": "Contact current location"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
-          "message": "Search Contacts"
+          "source": "Search contacts",
+          "message": "Search contacts"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
           "source": "Search contacts",
@@ -568,8 +568,8 @@
           "message": "Maximum results"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -588,8 +588,8 @@
           "message": "The contact ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
-          "message": "Create an Account"
+          "source": "Create an account",
+          "message": "Create an account"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
           "source": "Create a new account",
@@ -644,8 +644,8 @@
           "message": "Owner user ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
-          "message": "Update an Account"
+          "source": "Update an account",
+          "message": "Update an account"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
           "source": "Update an existing account",
@@ -704,8 +704,8 @@
           "message": "Owner user ID"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
-          "message": "Search Accounts"
+          "source": "Search accounts",
+          "message": "Search accounts"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
           "source": "Search accounts",
@@ -748,8 +748,8 @@
           "message": "Maximum results"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
-          "message": "Get an Account"
+          "source": "Get an account",
+          "message": "Get an account"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Get a single account by ID",
@@ -768,8 +768,8 @@
           "message": "The account ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
-          "message": "Create a Deal"
+          "source": "Create a deal",
+          "message": "Create a deal"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
           "source": "Create a new deal",
@@ -848,8 +848,8 @@
           "message": "Associated account ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
-          "message": "Update a Deal"
+          "source": "Update a deal",
+          "message": "Update a deal"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
           "source": "Update an existing deal",
@@ -916,8 +916,8 @@
           "message": "Owner user ID"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
-          "message": "List Deals"
+          "source": "List deals",
+          "message": "List deals"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
           "source": "List deals",
@@ -944,8 +944,8 @@
           "message": "Maximum results"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
-          "message": "Get a Deal"
+          "source": "Get a deal",
+          "message": "Get a deal"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
           "source": "Get a single deal by ID",
@@ -1180,8 +1180,8 @@
           "message": "Results per page (max 100)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
-          "message": "Search Organizations"
+          "source": "Search organizations",
+          "message": "Search organizations"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
           "source": "Search Apollo's organization database",
@@ -1248,8 +1248,8 @@
           "message": "Results per page (max 100)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
-          "message": "Contact Created"
+          "source": "Contact created",
+          "message": "Contact created"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
           "source": "Watch for new contacts",
@@ -1260,8 +1260,8 @@
           "message": "Triggers when a new contact is created in Apollo"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
-          "message": "Contact Updated"
+          "source": "Contact updated",
+          "message": "Contact updated"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
           "source": "Watch for contact updates",
@@ -1272,8 +1272,8 @@
           "message": "Triggers when a contact is updated in Apollo"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
-          "message": "Account Created"
+          "source": "Account created",
+          "message": "Account created"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
           "source": "Watch for new accounts",
@@ -1284,8 +1284,8 @@
           "message": "Triggers when a new account is created in Apollo"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
-          "message": "Deal Created"
+          "source": "Deal created",
+          "message": "Deal created"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {
           "source": "Watch for new deals",

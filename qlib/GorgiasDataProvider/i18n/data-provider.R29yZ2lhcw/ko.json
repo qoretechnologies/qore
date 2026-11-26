@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
-          "source": "Create a Ticket",
+          "source": "Create a ticket",
           "message": "티켓 생성"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
@@ -964,7 +964,7 @@
           "message": "티켓을 스팸으로 표시할지 여부입니다. 기본값: `False`"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
-          "source": "Update a Ticket",
+          "source": "Update a ticket",
           "message": "티켓 업데이트"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "티켓을 스누즈할 ISO 8601 타임스탬프"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
-          "source": "Delete a Ticket",
+          "source": "Delete a ticket",
           "message": "티켓 삭제"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "삭제할 티켓의 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
-          "source": "List Tickets",
+          "source": "List tickets",
           "message": "티켓 목록"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "최대 결과 수"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
-          "source": "Get a Ticket",
+          "source": "Get a ticket",
           "message": "티켓 가져오기"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "티켓 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "고객 생성"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "고객 업데이트"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "고객 삭제"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "삭제할 고객의 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "고객 목록 조회"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "최대 결과 수"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "고객 가져오기"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "고객 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "태그 만들기"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "태그의 16진수 색상 코드(예: `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "태그 업데이트"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "태그의 16진수 색상 코드(예: `#F58D86`)"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "태그 삭제"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "삭제할 태그의 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "태그 목록"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "최대 결과 수"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "태그 가져오기"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "태그 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create a Message",
+          "source": "Create a message",
           "message": "메시지 생성"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
@@ -2412,7 +2412,7 @@
           "message": "첨부 파일의 URL"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
-          "source": "List Messages",
+          "source": "List messages",
           "message": "메시지 목록 조회"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "최대 결과 수"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get a Message",
+          "source": "Get a message",
           "message": "메시지 가져오기"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "메시지 ID"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Update a Message",
+          "source": "Update a message",
           "message": "메시지 업데이트"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "첨부 파일의 URL"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "메시지 삭제"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "삭제할 메시지의 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "사용자 목록"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "최대 결과 수"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
+          "source": "Get a user",
           "message": "사용자 가져오기"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "사용자 ID"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
-          "source": "New Ticket",
+          "source": "New ticket",
           "message": "새 티켓"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "Gorgias에서 새 티켓이 생성될 때 실행됩니다"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
-          "source": "Ticket Updated",
+          "source": "Ticket updated",
           "message": "티켓 업데이트됨"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {

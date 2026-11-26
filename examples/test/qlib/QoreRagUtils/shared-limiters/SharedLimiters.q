@@ -7,7 +7,9 @@
 %enable-all-warnings
 %no-child-restrictions
 
-%requires QoreRagUtils
+# EmbedderRateLimiter is declared by QoreRagTypes, which VoyageRestClient requires: QoreRagUtils, which loads the
+# ml module and its native libraries (whose output depends on the host, qore#7686), is not needed
+%requires QoreRagTypes
 %requires VoyageRestClient
 
 const Url = "https://api.voyageai.com/v1";
@@ -19,7 +21,7 @@ EmbedderRateLimiter host = VoyageRestClientBase::getRateLimiter(VoyageRestClient
 # the code of a tenant (a sandboxed Program) that uses the same account
 const TenantCode = "
 %modern
-%requires QoreRagUtils
+%requires QoreRagTypes
 %requires VoyageRestClient
 
 const Url = \"https://api.voyageai.com/v1\";

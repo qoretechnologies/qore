@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Create a Contract",
+          "source": "Create a contract",
           "message": "Vytvoriť zmluvu"
         },
         "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
@@ -512,7 +512,7 @@
           "message": "Dátum ukončenia zmluvy (formát RRRR-MM-DD), ak je k dispozícii"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Terminate a Contract",
+          "source": "Terminate a contract",
           "message": "Ukončiť zmluvu"
         },
         "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
@@ -560,7 +560,7 @@
           "message": "Posledný deň, kedy bude pracovník aktívny (formát RRRR-MM-DD)"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
-          "source": "Sign a Contract",
+          "source": "Sign a contract",
           "message": "Podpísať zmluvu"
         },
         "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Jedinečný identifikátor zmluvy na podpis"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
-          "source": "Search Contracts",
+          "source": "Search contracts",
           "message": "Vyhľadať zmluvy"
         },
         "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
@@ -688,7 +688,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
-          "source": "Get a Contract",
+          "source": "Get a contract",
           "message": "Získať zmluvu"
         },
         "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
@@ -712,7 +712,7 @@
           "message": "Jedinečný identifikátor zmluvy"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
-          "source": "Update a Contract",
+          "source": "Update a contract",
           "message": "Aktualizovať zmluvu"
         },
         "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Aktualizovaný názov pracovnej pozície pre zmluvu"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
-          "source": "Submit a Timesheet",
+          "source": "Submit a timesheet",
           "message": "Odoslať časový výkaz"
         },
         "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
@@ -844,7 +844,7 @@
           "message": "Popis vykonanej práce"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Update a Timesheet",
+          "source": "Update a timesheet",
           "message": "Aktualizovať časový výkaz"
         },
         "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Aktualizovaný opis vykonanej práce"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
-          "source": "Approve a Timesheet",
+          "source": "Approve a timesheet",
           "message": "Schváliť časový výkaz"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Jedinečný identifikátor položky časového výkazu na schválenie"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
-          "source": "Reject a Timesheet",
+          "source": "Reject a timesheet",
           "message": "Zamietnuť časový výkaz"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Vysvetlenie, prečo bola položka časového výkazu zamietnutá"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
-          "source": "Search Timesheets",
+          "source": "Search timesheets",
           "message": "Vyhľadať časové výkazy"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
-          "source": "Get a Timesheet",
+          "source": "Get a timesheet",
           "message": "Získať časový výkaz"
         },
         "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "Jedinečný identifikátor položky časového výkazu"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
-          "source": "Delete a Timesheet",
+          "source": "Delete a timesheet",
           "message": "Odstrániť časový výkaz"
         },
         "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Jedinečný identifikátor záznamu časového výkazu, ktorý sa má odstrániť"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Create an Invoice Adjustment",
+          "source": "Create an invoice adjustment",
           "message": "Vytvoriť úpravu faktúry"
         },
         "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "Vysvetlenie, prečo sa táto úprava faktúry vytvára"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Update an Invoice Adjustment",
+          "source": "Update an invoice adjustment",
           "message": "Aktualizovať úpravu faktúry"
         },
         "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Aktualizované vysvetlenie tejto úpravy faktúry"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Review an Invoice Adjustment",
+          "source": "Review an invoice adjustment",
           "message": "Skontrolovať úpravu faktúry"
         },
         "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Odmietnuť úpravu"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
-          "source": "Search Invoice Adjustments",
+          "source": "Search invoice adjustments",
           "message": "Vyhľadať úpravy faktúr"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
@@ -1380,7 +1380,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Get an Invoice Adjustment",
+          "source": "Get an invoice adjustment",
           "message": "Získať úpravu faktúry"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Jedinečný identifikátor úpravy faktúry"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
-          "source": "Delete an Invoice Adjustment",
+          "source": "Delete an invoice adjustment",
           "message": "Odstrániť úpravu faktúry"
         },
         "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "Jedinečný identifikátor úpravy faktúry, ktorá sa má odstrániť"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
-          "source": "Create a Worker",
+          "source": "Create a worker",
           "message": "Vytvoriť pracovníka"
         },
         "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Telefónne číslo pracovníka v medzinárodnom formáte"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
-          "source": "Update a Worker",
+          "source": "Update a worker",
           "message": "Aktualizovať pracovníka"
         },
         "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Úroveň lead"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
-          "source": "Search Workers",
+          "source": "Search workers",
           "message": "Vyhľadať pracovníkov"
         },
         "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
@@ -1712,7 +1712,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
-          "source": "Get a Worker",
+          "source": "Get a worker",
           "message": "Získať pracovníka"
         },
         "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
@@ -1736,7 +1736,7 @@
           "message": "Jedinečný identifikátor pracovníka"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Create a Time-Off Request",
+          "source": "Create a time-off request",
           "message": "Vytvoriť žiadosť o voľno"
         },
         "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -1808,7 +1808,7 @@
           "message": "Voliteľné poznámky alebo dôvod žiadosti o voľno"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
-          "source": "Search Time-Off Types",
+          "source": "Search time-off types",
           "message": "Vyhľadať typy voľna"
         },
         "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
@@ -1844,7 +1844,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
-          "source": "List Legal Entities",
+          "source": "List legal entities",
           "message": "Zoznam právnických osôb"
         },
         "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
-          "source": "Search Invoices",
+          "source": "Search invoices",
           "message": "Vyhľadať faktúry"
         },
         "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
@@ -1988,7 +1988,7 @@
           "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "Získať faktúru"
         },
         "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "Jedinečný identifikátor faktúry"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
-          "source": "Approve a Time-Off Request",
+          "source": "Approve a time-off request",
           "message": "Schváliť žiadosť o voľno"
         },
         "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Jedinečný identifikátor žiadosti o voľno na schválenie"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
-          "source": "Reject a Time-Off Request",
+          "source": "Reject a time-off request",
           "message": "Zamietnuť žiadosť o voľno"
         },
         "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
@@ -2072,7 +2072,7 @@
           "message": "Vysvetlenie, prečo bola žiadosť o voľno zamietnutá"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
-          "source": "Contract Created",
+          "source": "Contract created",
           "message": "Vytvorená zmluva"
         },
         "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
-          "source": "Contract Status Updated",
+          "source": "Contract status updated",
           "message": "Stav zmluvy bol aktualizovaný"
         },
         "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
-          "source": "Contract Terminated",
+          "source": "Contract terminated",
           "message": "Zmluva bola ukončená"
         },
         "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
-          "source": "Invoice Adjustment Created",
+          "source": "Invoice adjustment created",
           "message": "Úprava faktúry vytvorená"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
-          "source": "Invoice Adjustment Reviewed",
+          "source": "Invoice adjustment reviewed",
           "message": "Úprava faktúry posúdená"
         },
         "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
@@ -2252,7 +2252,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
-          "source": "Timesheet Submitted",
+          "source": "Timesheet submitted",
           "message": "Časový výkaz odoslaný"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
@@ -2288,7 +2288,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
-          "source": "Timesheet Reviewed",
+          "source": "Timesheet reviewed",
           "message": "Časový výkaz posúdený"
         },
         "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
-          "source": "Time-Off Request Created",
+          "source": "Time-off request created",
           "message": "Žiadosť o voľno vytvorená"
         },
         "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
-          "source": "Time-Off Request Updated",
+          "source": "Time-off request updated",
           "message": "Žiadosť o voľno aktualizovaná"
         },
         "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
@@ -2396,7 +2396,7 @@
           "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
-          "source": "Time-Off Request Reviewed",
+          "source": "Time-off request reviewed",
           "message": "Žiadosť o voľno posúdená"
         },
         "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {

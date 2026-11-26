@@ -38,7 +38,7 @@ thread_local int nesting_depth = 0;
 //! counts a message level of a conversion, and checks the nesting depth and the thread's stack
 class NestingGuard {
 public:
-    DLLLOCAL NestingGuard(const Descriptor* desc, ExceptionSink* xsink) {
+    NestingGuard(const Descriptor* desc, ExceptionSink* xsink) {
         // the top-level message is level 0
         if (++nesting_depth > ProtobufHelper::MaxNesting + 1) {
             xsink->raiseException("PROTOBUF-DEPTH-ERROR", "message type '%s' is nested more than %d levels deep; "
@@ -52,11 +52,11 @@ public:
         ok = true;
     }
 
-    DLLLOCAL ~NestingGuard() {
+    ~NestingGuard() {
         --nesting_depth;
     }
 
-    DLLLOCAL explicit operator bool() const {
+    explicit operator bool() const {
         return ok;
     }
 

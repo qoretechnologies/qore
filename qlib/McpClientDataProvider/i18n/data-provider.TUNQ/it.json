@@ -16,7 +16,7 @@
           "message": "Connettiti ai server MCP per l'integrazione di strumenti, risorse e prompt di IA"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
+          "source": "Call tool",
           "message": "Chiama strumento"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Esegui uno strumento MCP con gli argomenti forniti e restituisci il risultato"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
+          "source": "List tools",
           "message": "Elenca strumenti"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Elenca tutti gli strumenti disponibili sul server MCP"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "Leggi risorsa"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Leggi il contenuto da una risorsa MCP tramite URI"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
+          "source": "List resources",
           "message": "Elenca risorse"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Elenca tutte le risorse disponibili sul server MCP"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "Ottieni prompt"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Ottieni un modello di prompt dal server MCP con argomenti"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
+          "source": "List prompts",
           "message": "Elenca prompt"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Elenca tutti i prompt disponibili sul server MCP"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
+          "source": "Get completion",
           "message": "Ottieni completamento"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Ottieni suggerimenti di completamento automatico per prompt o risorse"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
+          "source": "Ping server",
           "message": "Esegui ping del server"
         },
         "app.TUNQ.action.cGluZw.short_desc": {

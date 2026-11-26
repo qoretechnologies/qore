@@ -472,7 +472,7 @@
           "message": "Citácie"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.display_name": {
-          "source": "Content Index",
+          "source": "Content index",
           "message": "Index obsahu"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.short_desc": {
@@ -512,7 +512,7 @@
           "message": "Jedinečný identifikátor dokumentu"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0VG9vbFNvdXJjZSNlY2M5ZjAyZGMyNzczOTUzZjNhNGNhNzJkNGM1ODIwY2ZkZWQxYTFlMTFlZDdlNDY3MDU3M2MwY2IwZWI3ODg1.field.dG9vbF9vdXRwdXQ.display_name": {
-          "source": "Tool Output",
+          "source": "Tool output",
           "message": "Výstup nástroja"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0RG9jdW1lbnRTb3VyY2UjMjA3M2MwZDYyZjk5ZGY0Yzk0ZmZlNzZhODAyNzY3ZDNjY2I3NjVkYjc3MTViZWMxYWI1ODFmNGQ5NjU4ZWUwNQ.field.ZG9jdW1lbnQ.display_name": {
@@ -604,7 +604,7 @@
           "message": "asistent"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9jYWxscw.display_name": {
-          "source": "Tool Calls",
+          "source": "Tool calls",
           "message": "Volania nástrojov"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpUb29sQ2FsbFYyI2M3MjkxMWRkZTU4YzRkNThhMWI5ZGVlNzI3YzZjMTQyYTQ5ZDc0MWRhODA3YzI0ODZmYmY0ZTdiNmNhNDEwY2Q.field.ZnVuY3Rpb24.display_name": {
@@ -636,7 +636,7 @@
           "message": "funkcia"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.display_name": {
-          "source": "Tool Plan",
+          "source": "Tool plan",
           "message": "Plán nástroja"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.short_desc": {
@@ -724,7 +724,7 @@
           "message": "nástroj"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID volania nástroja"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -800,7 +800,7 @@
           "message": "funkcia"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.display_name": {
-          "source": "Strict Tools",
+          "source": "Strict tools",
           "message": "Prísne nástroje"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Jedinečný identifikátor dokumentu, ktorý bude použitý v citáciách. Ak nie je poskytnutý, bude automaticky vygenerovaný identifikátor."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.display_name": {
-          "source": "Citation Options",
+          "source": "Citation options",
           "message": "Možnosti citácie"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.short_desc": {
@@ -924,7 +924,7 @@
           "message": "json_objekt"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "Schéma JSON"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.short_desc": {
@@ -956,7 +956,7 @@
           "message": "json_objekt"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.display_name": {
-          "source": "Safety Mode",
+          "source": "Safety mode",
           "message": "Bezpečný režim"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Ak je to špecifikované, backend vynaloží maximálne úsilie na vzorkovanie tokenov\ndeterministicky tak, že opakované žiadosti s tým istým\nseed a parametre by mali vrátiť rovnaký výsledok. však\ndeterminizmus nemožno úplne zaručiť."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
-          "source": "Frequency Penalty",
+          "source": "Frequency penalty",
           "message": "Penalizácia frekvencie"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Predvolená hodnota je `0.0`, minimálna hodnota `0.0`, maximálna hodnota `1.0`.\nPoužíva sa na zníženie opakovateľnosti generovaných tokenov. Čím vyššia je hodnota, tým silnejší je trest aplikovaný na predtým prítomné žetóny, úmerne tomu, koľkokrát sa už objavili vo výzve alebo predchádzajúcej generácii."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
-          "source": "Presence Penalty",
+          "source": "Presence penalty",
           "message": "Penalizácia prítomnosti"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "Predvolená hodnota je `false`. Pri nastavení na `true` sa do odpovede zahrnú pravdepodobnosti protokolov vygenerovaných tokenov."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "Výber nástroja"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Konfigurácia pre [funkcie uvažovania](https://docs.cohere.com/docs/reasoning)."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.display_name": {
-          "source": "Token Budget",
+          "source": "Token budget",
           "message": "Tokenový rozpočet"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Riadi, ako skoro bude žiadosť vybavená. Nižšie čísla označujú vyššiu prioritu (predvolené: 0, najvyššia). Keď je systém zaťažený, požiadavky s vyššou prioritou sa spracujú ako prvé a je najmenej pravdepodobné, že budú zrušené."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Vytvoriť embeddingy"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "ID jedného z dostupných [modelov na vkladanie](https://docs.cohere.com/docs/cohere-embed)."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Typ vstupu"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "adresa_obrázku"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Maximálny počet tokenov"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Maximálny počet tokenov na vloženie na jeden vstup. Ak je vstupný text dlhší, bude skrátený podľa parametra `truncate`."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
-          "source": "Output Dimension",
+          "source": "Output dimension",
           "message": "Výstupný rozmer"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Počet rozmerov výstupného vloženia. Toto je k dispozícii iba pre modely `embed-v4` a novšie.\nMožné hodnoty sú `256`, `512`, `1024` a `1536`. Predvolená hodnota je `1536`."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "Typy tvorby embeddingov"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Riadi, ako skoro bude žiadosť vybavená. Nižšie čísla označujú vyššiu prioritu (predvolené: 0, najvyššia). Keď je systém zaťažený, požiadavky s vyššou prioritou sa spracujú ako prvé a je najmenej pravdepodobné, že budú zrušené."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Preusporiadať dokumenty"
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Počet vrátených najlepšie hodnotených dokumentov."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.display_name": {
-          "source": "Max Tokens per Doc",
+          "source": "Max tokens per doc",
           "message": "Maximálny počet tokenov na dokument"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Riadi, ako skoro bude žiadosť vybavená. Nižšie čísla označujú vyššiu prioritu (predvolené: 0, najvyššia). Keď je systém zaťažený, požiadavky s vyššou prioritou sa spracujú ako prvé a je najmenej pravdepodobné, že budú zrušené."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Text",
+          "source": "Classify text",
           "message": "Klasifikovať text"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Koniec"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Zoznam modelov"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Zoznam modelov dostupných pre tento účet. Filtrujte podľa `endpoint` a vyberte si kompatibilný model. Nasledujte `next_page_token` pomocou `page_token`, aby ste získali ďalšie strany."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "Veľkosť strany"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "Maximálny počet modelov, ktoré sa majú zahrnúť na stránku\nPredvolená hodnota je `20`, minimálna hodnota `1`, maximálna hodnota `1000`."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "Token stránky"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Generovať"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.display_name": {
-          "source": "Default Only",
+          "source": "Default only",
           "message": "Len predvolené"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Model"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.display_name": {
-          "source": "Tokenize Text",
+          "source": "Tokenize text",
           "message": "Tokenizovať text"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Vstup bude tokenizovaný tokenizátorom, ktorý používa tento model."
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.display_name": {
-          "source": "Detokenize Tokens",
+          "source": "Detokenize tokens",
           "message": "Previesť tokeny na text"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Voliteľný parameter na poskytnutie názvu modelu. Tým sa zabezpečí, že detokenizáciu vykoná tokenizér používaný daným modelom."
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.cGFyc2U.display_name": {
-          "source": "Parse Document Image",
+          "source": "Parse document image",
           "message": "Analyzovať obrázok dokumentu"
         },
         "app.Q29oZXJl.action.cGFyc2U.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "adresa_obrázku"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
-          "source": "Output Format",
+          "source": "Output format",
           "message": "Výstupný formát"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
@@ -1924,7 +1924,7 @@
           "message": "Markdown"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Prepísať zvuk"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "Názov súboru"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Vytvoriť dataset"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Názov súboru"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.display_name": {
-          "source": "Eval Data",
+          "source": "Eval data",
           "message": "Eval Data"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Vstup dávkového chatu V2"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.display_name": {
-          "source": "Keep Original File",
+          "source": "Keep original file",
           "message": "Ponechať pôvodný súbor"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.short_desc": {
@@ -2532,7 +2532,7 @@
           "message": "Označuje, či sa má pôvodný súbor uložiť."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.display_name": {
-          "source": "Skip Malformed Input",
+          "source": "Skip malformed input",
           "message": "Preskočiť chybný vstup"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "Označuje, či sa majú zrušiť riadky s chybným vstupom (namiesto zlyhania kontroly overenia). Vynechané riadky sa vrátia do poľa upozornení."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.display_name": {
-          "source": "Keep Fields",
+          "source": "Keep fields",
           "message": "Ponechať polia"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Zoznam názvov polí, ktoré zostanú v množine údajov. V predvolenom nastavení si množina údajov zachová iba požadované polia uvedené v [schéme pre príslušný typ množiny údajov] (https://docs.cohere.com/docs/datasets#dataset-types). Napríklad množiny údajov typu `embed-input` vypustia všetky polia iné ako požadované pole `text`. Ak v nahranom súbore chýba niektoré z polí v `keep_fields`, overenie množiny údajov zlyhá."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.display_name": {
-          "source": "Optional Fields",
+          "source": "Optional fields",
           "message": "Voliteľné polia"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "Zoznam názvov polí, ktoré zostanú v množine údajov. V predvolenom nastavení si množina údajov zachová iba požadované polia uvedené v [schéme pre príslušný typ množiny údajov] (https://docs.cohere.com/docs/datasets#dataset-types). Napríklad množiny údajov typu `embed-input` vypustia všetky polia okrem požadovaného poľa `text`. Ak v nahranom súbore chýba niektoré z polí v `optional_fields`, overenie množiny údajov prebehne."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.display_name": {
-          "source": "Text Separator",
+          "source": "Text separator",
           "message": "Oddeľovač textu"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Nahrané nespracované súbory .txt budú rozdelené na položky pomocou hodnoty text_separator."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.display_name": {
-          "source": "CSV Delimiter",
+          "source": "CSV delimiter",
           "message": "Oddeľovač CSV"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "Oddeľovač používaný na nahrávanie súborov .csv."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2604,7 +2604,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Zoznam dátových množín"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Nájdite množiny údajov na spracovanie alebo kontrolu. Filtrujte podľa typu a stavu overenia a na stránkovanie použite `limit` a `offset`."
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.display_name": {
-          "source": "Dataset Type",
+          "source": "Dataset type",
           "message": "Typ množiny údajov"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "voliteľné posunutie začiatku výsledkov"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.display_name": {
-          "source": "Validation Status",
+          "source": "Validation status",
           "message": "Stav overenia"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Preskočené"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.display_name": {
-          "source": "Get Dataset Usage",
+          "source": "Get dataset usage",
           "message": "Získajte využitie množiny údajov"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "Pred nahraním ďalších údajov skontrolujte využitie úložiska množiny údajov."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2852,7 +2852,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.display_name": {
-          "source": "Create Embedding Job",
+          "source": "Create embedding job",
           "message": "Vytvoriť úlohu tvorby embeddingov"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "ID [množiny údajov](https://docs.cohere.com/docs/datasets). Množina údajov musí byť typu `embed-input` a musí mať stav overenia `Validated`"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Typ vstupu"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "Názov úlohy vloženia."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "Typy tvorby embeddingov"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Koniec"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.display_name": {
-          "source": "List Embedding Jobs",
+          "source": "List embedding jobs",
           "message": "Vypísať úlohy tvorby embeddingov"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "Uveďte zoznam úloh tvorby embeddingov a skontrolujte ich aktuálny stav."
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "ID úlohy vloženia, ktorá sa má načítať."
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "ID úlohy vloženia, ktorú chcete zrušiť."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Vytvoriť dávku"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "Názov dávky (napr. `foobar`)."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.display_name": {
-          "source": "Input Dataset ID",
+          "source": "Input dataset ID",
           "message": "Zadajte ID množiny údajov"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Názov modelu, ktorý šarža používa."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Vypísať dávky"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Zoznam úloh dávkového odvodzovania. Postupujte podľa `next_page_token` pomocou `page_token` na načítanie nasledujúcich stránok."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "Veľkosť strany"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.short_desc": {
@@ -3156,7 +3156,7 @@
           "message": "Maximálny počet dávok na vrátenie. Služba môže vrátiť menej ako\ntúto hodnotu.\nAk nie je uvedené, vráti sa najviac 50 šarží.\nMaximálna hodnota je 1000; hodnoty nad 1000 budú vytlačené na 1000."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "Token stránky"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Token stránky prijatý z predchádzajúceho volania `ListBatches`.\nPoskytnite to, aby ste načítali nasledujúcu stránku."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.display_name": {
-          "source": "Order By",
+          "source": "Order by",
           "message": "Zoradiť podľa"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Dávky je možné zoradiť podľa času vytvorenia alebo času poslednej aktualizácie.\nPoužite `created_at` pre čas vytvorenia alebo `updated_at` pre čas poslednej aktualizácie."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "ID šarže."
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "ID šarže."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Názov projektu, ktorý vytvára požiadavku."
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.display_name": {
-          "source": "Check API Key",
+          "source": "Check API key",
           "message": "Overiť kľúč API"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Skontrolujte kľúč API pripojenia bez generovania obsahu. Skontrolujte boolovský výsledok `valid`; Samotný úspech HTTP neznamená, že kľúč je platný. Toto nekontroluje zostávajúcu skúšobnú kvótu."
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "X Meno klienta"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {

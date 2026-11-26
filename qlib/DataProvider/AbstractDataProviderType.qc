@@ -593,14 +593,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
     /** A value that a type refuses is reported with \c TYPE-VALUE-ERROR.  A type never refuses a value with one of
         the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack),
-        nor with \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the
-        value no longer exists: they mean that the check itself failed, so they keep their code, to be told apart
-        from a value that was refused.
+        with \c THREAD-CANCELLED (the thread checking the value was cancelled), nor with
+        \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the value no
+        longer exists: they mean that the check itself failed, so they keep their code, to be told apart from a value
+        that was refused.
 
         @param err the code of the error raised when the part of the value was checked
 
-        @return the error code to report: \a err if it is a language error or \c SCHEMA-DOCUMENT-DESTROYED,
-        otherwise \c TYPE-VALUE-ERROR
+        @return the error code to report: \a err if it is a language error, \c THREAD-CANCELLED or
+        \c SCHEMA-DOCUMENT-DESTROYED, otherwise \c TYPE-VALUE-ERROR
 
         @since DataProvider 3.11
     */
@@ -609,6 +610,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             case "RUNTIME-TYPE-ERROR":
             case "RUNTIME-OVERLOAD-ERROR":
             case "STACK-LIMIT-EXCEEDED":
+            # the check was cancelled with its thread; it did not refuse the value (qore#7734)
+            case "THREAD-CANCELLED":
             # a schema whose document has been destroyed cannot check the value (see the OpenApi3 and Swagger
             # modules); this is a condition of the lifetime of the type, not a refused value
             case "SCHEMA-DOCUMENT-DESTROYED":
@@ -640,9 +643,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns True if an error raised when one alternative of a union checked a value means that the check failed
     /** A union tries its alternatives in turn, and an alternative that refuses the value does not match it.  An
-        error that means that the check itself failed (a call that no variant accepts, an exhausted stack or a schema
-        whose document no longer exists) must be raised instead of trying the next alternative.  \c RUNTIME-TYPE-ERROR
-        is not one of them here, as a type from outside this module may still refuse a value with it.
+        error that means that the check itself failed (a call that no variant accepts, an exhausted stack, a cancelled
+        thread or a schema whose document no longer exists) must be raised instead of trying the next alternative.
+        \c RUNTIME-TYPE-ERROR is not one of them here, as a type from outside this module may still refuse a value
+        with it.
 
         @param err the code of the error raised by the alternative
 
@@ -1291,19 +1295,46 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"),
         such as a shared REST schema that caches the types that it builds, also marks the type as a shared object
         (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), so that sandboxed code cannot
-        change its members in any way, also not with Reflection.
+        change its members in any way, also not with Reflection.  A type that was frozen by code that may not share
+        objects, such as sandboxed code freezing a type of its own, is marked then, with the types and fields that it
+        holds, when code that may share objects freezes it again, as when such code registers it in the process-wide
+        type cache (qore#7735).  A type or field that sandboxed code created cannot be marked, so a type that is a
+        shared object, or that is registered in the process-wide type cache, cannot hold one: registering such a type,
+        or adding such a type or field to a type that is a shared object, raises \c DATA-PROVIDER-REGISTRATION-DENIED
+        (qore#7740).
 
         @since DataProvider 3.12
     */
     freeze() {
+        bool can_share = SandboxManager::canShareObjects();
         if (frozen) {
-            return;
+            if (SandboxManager::isSharedObject(self)) {
+                # the process-wide type cache gets the type: every type and field that it holds, also one added
+                # before, must be a shared object (qore#7740)
+                if (Priv::_freeze_requires_marking) {
+                    Priv::check_held_shared(self);
+                }
+                return;
+            }
+            # a type frozen where it could not be marked as a shared object is marked, with the types and fields that
+            # it holds, when code that may share objects freezes it again (qore#7735)
+            if (!can_share) {
+                return;
+            }
+        } else {
+            frozen = True;
+            shared_object = True;
         }
-        frozen = True;
-        shared_object = True;
-        freezeImpl();
-        if (SandboxManager::canShareObjects()) {
+        # marked before the types and fields that it holds, so that a type that holds itself, directly or through
+        # them, is not frozen again
+        if (can_share) {
             SandboxManager::shareObject(self);
+        }
+        freezeImpl();
+        # a type that is a shared object holds only shared objects: a type or field that sandboxed code created
+        # cannot be marked (its methods run under that code's sandbox), and its creator could delete it (qore#7740)
+        if (can_share) {
+            Priv::check_held_shared(self, True);
         }
     }
 
@@ -1319,8 +1350,39 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         frozen = False;
     }
 
+    #! Freezes a type or field that the type holds from now on, as it is frozen; see freeze()
+    /** A type or field added to a type that is a shared object must be marked as one as well (qore#7740)
+
+        @throw DATA-PROVIDER-REGISTRATION-DENIED this type is a shared object, and the type or field added, or a type
+        or field that it holds, cannot be marked as one, as sandboxed code created it
+    */
+    private freezeHeld(object held) {
+        if (SandboxManager::isSharedObject(self)) {
+            Priv::freeze_for_shared(held);
+        } else {
+            held.freeze();
+        }
+    }
+
+    #! Returns the types and fields that the type holds, which a type that is a shared object must hold as such
+    /** The base class method returns @ref NOTHING; a type that holds other types or fields overrides it, as it
+        overrides freezeImpl()
+    */
+    private *list<object> getHeld() {
+    }
+
+    #! Returns the types and fields that the type holds; for the check of a type that is a shared object
+    /** @since DataProvider 3.13
+    */
+    final *list<object> getHeldTypesAndFields() {
+        return getHeld();
+    }
+
     #! Marks the types and fields that the type holds as shared; see freeze()
-    /** The base class method does nothing; a type that holds other types or fields overrides it
+    /** The base class method does nothing; a type that holds other types or fields overrides it.  It must only freeze
+        what the type holds and not change the type itself, which is marked as a shared object before it is called
+        (see freeze()); a type that overrides it also overrides getHeld(), which returns what it freezes, so that the
+        check of a shared type sees it (qore#7740)
     */
     private freezeImpl() {
     }
@@ -2358,4 +2420,84 @@ thread_local hash<string, hash<SoftTypeMemoInfo>> smap;
 
 #! Tracks the nesting depth of getSoftType() conversions, so that the memo is released by the outermost call
 thread_local int sdepth;
+
+#! True while a type or field is frozen for a type that is a shared object, or that the process-wide type cache gets
+/** Then every type and field that it holds must be marked as a shared object (qore#7740); see freeze_for_shared()
+*/
+thread_local *bool _freeze_requires_marking;
+
+#! The types and fields that the check of the current freeze for a shared type has seen; see check_held_shared()
+thread_local *list<object> _freeze_checked;
+
+#! Freezes a type or field that a shared type holds, or that the process-wide type cache gets
+/** The type or field, and every type and field that it holds, also one that was frozen before, must be a shared
+    object: one that sandboxed code created cannot be marked, as its methods run under that code's sandbox, and its
+    creator could delete it from a type that every Program of the process uses (qore#7740).  The holders check it,
+    not the members, whose methods a subclass of sandboxed code can override.
+
+    @throw DATA-PROVIDER-REGISTRATION-DENIED the type or field, or a type or field that it holds, is not a shared
+    object after it was frozen
+*/
+sub freeze_for_shared(object o) {
+    *bool old = _freeze_requires_marking;
+    *list<object> old_checked = _freeze_checked;
+    _freeze_requires_marking = True;
+    _freeze_checked = ();
+    on_exit {
+        _freeze_requires_marking = old;
+        _freeze_checked = old_checked;
+    }
+    o.freeze();
+    if (!SandboxManager::isSharedObject(o)) {
+        refuse_unmarked_member(o instanceof DataProvider::AbstractDataField ? "data field" : "data type", o.getName());
+    }
+}
+
+#! Raises an exception if a type or field that the shared type holds is not a shared object
+/** With \a shallow, only the type's own types and fields are checked (each type that it holds checked its own when
+    it was marked); otherwise, for the process-wide type cache, the whole graph of the type is checked once per freeze
+    (see freeze_for_shared()), as a type that was frozen before can hold what was added before it was marked
+
+    @throw DATA-PROVIDER-REGISTRATION-DENIED a type or field that the type holds is not a shared object
+*/
+sub check_held_shared(DataProvider::AbstractDataProviderType t, *bool shallow) {
+    list<object> todo = (t,);
+    while (todo) {
+        object o = shift todo;
+        if (o instanceof DataProvider::AbstractDataProviderType) {
+            DataProvider::AbstractDataProviderType ot = o;
+            if (!shallow) {
+                # objects compare by identity
+                if (select _freeze_checked, $1 == ot) {
+                    continue;
+                }
+                push _freeze_checked, ot;
+            }
+            foreach object held in (ot.getHeldTypesAndFields()) {
+                if (!SandboxManager::isSharedObject(held)) {
+                    refuse_unmarked_member(held instanceof DataProvider::AbstractDataField ? "data field" : "data type",
+                        held.getName());
+                }
+                if (held instanceof DataProvider::AbstractDataField) {
+                    DataProvider::AbstractDataProviderType ft = cast<DataProvider::AbstractDataField>(held).getType();
+                    if (!SandboxManager::isSharedObject(ft)) {
+                        refuse_unmarked_member("data type", ft.getName());
+                    }
+                    if (!shallow) {
+                        push todo, ft;
+                    }
+                } else if (!shallow) {
+                    push todo, held;
+                }
+            }
+        }
+    }
+}
+
+#! Raises the error of a type or field that is not a shared object, which a shared type cannot hold
+sub refuse_unmarked_member(string what, string name) {
+    throw "DATA-PROVIDER-REGISTRATION-DENIED", sprintf("%s %y cannot be marked as a shared object, as code that a "
+        "sandbox governs created it, or the sandbox of the calling code cannot be resolved: it cannot be held by a "
+        "type that every Program of the process shares, such as one in the process-wide type cache", what, name);
+}
 }

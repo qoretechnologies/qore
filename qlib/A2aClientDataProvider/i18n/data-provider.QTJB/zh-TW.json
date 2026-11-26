@@ -16,7 +16,7 @@
           "message": "連線至 A2A 代理以進行代理對代理的協作"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Agent Card",
+          "source": "Get agent card",
           "message": "取得代理卡"
         },
         "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
@@ -28,7 +28,7 @@
           "message": "擷取包含功能與技能的 A2A 代理卡"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
-          "source": "Get Extended Agent Card",
+          "source": "Get extended agent card",
           "message": "取得延伸代理卡"
         },
         "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
@@ -40,7 +40,7 @@
           "message": "取得包含額外詳細資訊的已驗證延伸代理卡"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send Message",
+          "source": "Send message",
           "message": "傳送訊息"
         },
         "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "多租戶支援的可選租戶識別碼"
         },
         "app.QTJB.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
+          "source": "Get task",
           "message": "取得任務"
         },
         "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
@@ -184,7 +184,7 @@
           "message": "要擷取之任務的唯一識別碼"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
-          "source": "Cancel Task",
+          "source": "Cancel task",
           "message": "取消任務"
         },
         "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
@@ -208,7 +208,7 @@
           "message": "要取消之任務的唯一識別碼"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "列出任務"
         },
         "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
@@ -256,7 +256,7 @@
           "message": "用於擷取下一頁結果的可選游標"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Set Push Notification Config",
+          "source": "Set push notification config",
           "message": "設定推播通知設定"
         },
         "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Webhook 的可選驗證 Token"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Get Push Notification Config",
+          "source": "Get push notification config",
           "message": "取得推播通知設定"
         },
         "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "用於管理推播通知設定的任務 ID"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
-          "source": "List Push Notification Configs",
+          "source": "List push notification configs",
           "message": "列出推播通知設定"
         },
         "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "用於管理推播通知設定的任務 ID"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
-          "source": "Delete Push Notification Config",
+          "source": "Delete push notification config",
           "message": "刪除推播通知設定"
         },
         "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "要刪除之推播通知設定的 ID"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
-          "source": "Task Status Update",
+          "source": "Task status update",
           "message": "任務狀態更新"
         },
         "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
@@ -400,7 +400,7 @@
           "message": "當 A2A 任務狀態變更時接收通知"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
-          "source": "Task Artifact Update",
+          "source": "Task artifact update",
           "message": "任務產物更新"
         },
         "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
@@ -412,7 +412,7 @@
           "message": "當新增或修改 A2A 任務產物時接收通知"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
-          "source": "Task Message Update",
+          "source": "Task message update",
           "message": "任務訊息更新"
         },
         "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {

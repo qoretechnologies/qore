@@ -209,6 +209,11 @@ hashdecl ListSerializationInfo {
     themselves; a reference to such an object that a custom deserialization method kept raises
     \c OBJECT-ALREADY-DELETED when it is used.
 
+    @anchor serializable_sandboxed_code
+    Sandboxed code does not get or set the non-public state of the classes that trusted code declared through
+    serialization, unless a class opts in with @ref Qore::SandboxSerializable "SandboxSerializable"; see
+    @ref sandbox_serialization (since %Qore 3.0).
+
     @since %Qore 0.9
  */
 qclass Serializable [
@@ -248,6 +253,8 @@ hash<SerializationInfo> h = obj.serializeToData();
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 hash<SerializationInfo> Serializable::serializeToData(*int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return s->serializeToData(self, flags, xsink);
@@ -269,6 +276,8 @@ obj.serialize(stream);
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 Serializable::serialize(OutputStream[OutputStream] output_stream, *int flags) [flags=NAMED_ARGS] {
     QoreSerializable::serialize(*self, **output_stream, flags, xsink);
@@ -291,6 +300,8 @@ binary b = obj.serialize();
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 binary Serializable::serialize(*int flags) [flags=NAMED_ARGS] {
     ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
@@ -340,6 +351,10 @@ class MyClass inherits Qore::Serializable {
     serialization logic in this case.
 
     @see deserializeMembers()
+
+    @note Code that is sandboxed or acts for sandboxed code cannot serialize an object that is shared by every
+    %Program of the process (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), whatever
+    this method does (see @ref sandbox_shared_objects)
 */
 private:internal *hash<auto> Serializable::serializeMembers(*hash<auto>[doc] members) [flags=NAMED_ARGS] {
 }
@@ -536,6 +551,8 @@ hash<SerializationInfo> h = serializeToData(val);
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 static hash<SerializationInfo> Serializable::serializeToData(auto value,
         *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -559,6 +576,8 @@ Serializable::serialize(val, stream);
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 static Serializable::serialize(auto value, OutputStream[OutputStream] output_stream, *int flags) [flags=NAMED_ARGS] {
     QoreSerializable::serialize(value, **output_stream, flags, xsink);
@@ -582,6 +601,8 @@ binary bin = Serializable::serialize(val);
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
+    @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
 */
 static binary Serializable::serialize(auto value, *int flags) [flags=NAMED_ARGS] {
     ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);

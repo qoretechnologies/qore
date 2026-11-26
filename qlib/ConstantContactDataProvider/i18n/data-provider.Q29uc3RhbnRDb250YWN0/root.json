@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -832,8 +832,8 @@
           "message": "The value for this custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -1316,8 +1316,8 @@
           "message": "The value for this custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -1336,8 +1336,8 @@
           "message": "The contact to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List all contacts",
@@ -1472,8 +1472,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -1492,8 +1492,8 @@
           "message": "The contact ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Create a Contact List",
-          "message": "Create a Contact List"
+          "source": "Create a contact list",
+          "message": "Create a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Create a new contact list",
@@ -1540,8 +1540,8 @@
           "message": "Whether to mark this list as a favorite"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Update a Contact List",
-          "message": "Update a Contact List"
+          "source": "Update a contact list",
+          "message": "Update a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Update an existing contact list",
@@ -1596,8 +1596,8 @@
           "message": "Whether to mark this list as a favorite"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Delete a Contact List",
-          "message": "Delete a Contact List"
+          "source": "Delete a contact list",
+          "message": "Delete a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Delete a contact list",
@@ -1616,8 +1616,8 @@
           "message": "The contact list to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
-          "source": "List Contact Lists",
-          "message": "List Contact Lists"
+          "source": "List contact lists",
+          "message": "List contact lists"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
           "source": "List all contact lists",
@@ -1648,8 +1648,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Get a Contact List",
-          "message": "Get a Contact List"
+          "source": "Get a contact list",
+          "message": "Get a contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Get a single contact list by ID",
@@ -1668,8 +1668,8 @@
           "message": "The contact list ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
-          "message": "Create a Tag"
+          "source": "Create a tag",
+          "message": "Create a tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a new tag",
@@ -1720,8 +1720,8 @@
           "message": "Tag created by the contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
-          "message": "Update a Tag"
+          "source": "Update a tag",
+          "message": "Update a tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
           "source": "Update an existing tag",
@@ -1752,8 +1752,8 @@
           "message": "The new name of the tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
-          "message": "Delete a Tag"
+          "source": "Delete a tag",
+          "message": "Delete a tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
           "source": "Delete a tag",
@@ -1772,8 +1772,8 @@
           "message": "The tag to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
           "source": "List all tags",
@@ -1804,8 +1804,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
-          "message": "Get a Tag"
+          "source": "Get a tag",
+          "message": "Get a tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
           "source": "Get a single tag by ID",
@@ -1824,8 +1824,8 @@
           "message": "The tag ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
-          "message": "Create a Custom Field"
+          "source": "Create a custom field",
+          "message": "Create a custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Create a new custom field",
@@ -1876,8 +1876,8 @@
           "message": "Date field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
-          "message": "Update a Custom Field"
+          "source": "Update a custom field",
+          "message": "Update a custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Update an existing custom field",
@@ -1908,8 +1908,8 @@
           "message": "The new label for the custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
-          "message": "Delete a Custom Field"
+          "source": "Delete a custom field",
+          "message": "Delete a custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Delete a custom field",
@@ -1928,8 +1928,8 @@
           "message": "The custom field to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
-          "message": "List Custom Fields"
+          "source": "List custom fields",
+          "message": "List custom fields"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
           "source": "List all custom fields",
@@ -1960,8 +1960,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Get a Custom Field",
-          "message": "Get a Custom Field"
+          "source": "Get a custom field",
+          "message": "Get a custom field"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
           "source": "Get a single custom field by ID",
@@ -1980,8 +1980,8 @@
           "message": "The custom field ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Create a Segment",
-          "message": "Create a Segment"
+          "source": "Create a segment",
+          "message": "Create a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
           "source": "Create a new segment",
@@ -2016,8 +2016,8 @@
           "message": "The criteria expression for the segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
-          "source": "Update a Segment",
-          "message": "Update a Segment"
+          "source": "Update a segment",
+          "message": "Update a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
           "source": "Update an existing segment",
@@ -2060,8 +2060,8 @@
           "message": "The new criteria expression for the segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
-          "source": "Delete a Segment",
-          "message": "Delete a Segment"
+          "source": "Delete a segment",
+          "message": "Delete a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
           "source": "Delete a segment",
@@ -2080,8 +2080,8 @@
           "message": "The segment to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
-          "message": "List Segments"
+          "source": "List segments",
+          "message": "List segments"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
           "source": "List all segments",
@@ -2156,8 +2156,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
-          "source": "Get a Segment",
-          "message": "Get a Segment"
+          "source": "Get a segment",
+          "message": "Get a segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
           "source": "Get a single segment by ID",
@@ -2176,8 +2176,8 @@
           "message": "The segment ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Create an Email Campaign",
-          "message": "Create an Email Campaign"
+          "source": "Create an email campaign",
+          "message": "Create an email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
           "source": "Create a new email campaign",
@@ -2472,8 +2472,8 @@
           "message": "The subject line of the email"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Update an Email Campaign",
-          "message": "Update an Email Campaign"
+          "source": "Update an email campaign",
+          "message": "Update an email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
           "source": "Update an existing email campaign",
@@ -2504,8 +2504,8 @@
           "message": "The new name of the email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Delete an Email Campaign",
-          "message": "Delete an Email Campaign"
+          "source": "Delete an email campaign",
+          "message": "Delete an email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
           "source": "Delete an email campaign",
@@ -2524,8 +2524,8 @@
           "message": "The email campaign to delete"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
-          "source": "Schedule an Email Campaign",
-          "message": "Schedule an Email Campaign"
+          "source": "Schedule an email campaign",
+          "message": "Schedule an email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
           "source": "Schedule an email campaign for sending",
@@ -2556,8 +2556,8 @@
           "message": "The scheduled send date in ISO-8601 format"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
-          "source": "List Email Campaigns",
-          "message": "List Email Campaigns"
+          "source": "List email campaigns",
+          "message": "List email campaigns"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
           "source": "List all email campaigns",
@@ -2648,8 +2648,8 @@
           "message": "Maximum number of results to return"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Get an Email Campaign",
-          "message": "Get an Email Campaign"
+          "source": "Get an email campaign",
+          "message": "Get an email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
           "source": "Get a single email campaign by ID",
@@ -2668,8 +2668,8 @@
           "message": "The email campaign ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Import Contacts",
-          "message": "Import Contacts"
+          "source": "Import contacts",
+          "message": "Import contacts"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
           "source": "Import contacts in bulk",
@@ -2704,8 +2704,8 @@
           "message": "List of contact list IDs to add the imported contacts to"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Export Contacts",
-          "message": "Export Contacts"
+          "source": "Export contacts",
+          "message": "Export contacts"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
           "source": "Export contacts in bulk",
@@ -2752,8 +2752,8 @@
           "message": "List of field names to include in the export"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Add List Members",
-          "message": "Add List Members"
+          "source": "Add list members",
+          "message": "Add list members"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
           "source": "Add contacts to lists in bulk",
@@ -2928,8 +2928,8 @@
           "message": "List of contact list IDs to add the contacts to"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Remove List Members",
-          "message": "Remove List Members"
+          "source": "Remove list members",
+          "message": "Remove list members"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
           "source": "Remove contacts from lists in bulk",
@@ -3104,8 +3104,8 @@
           "message": "List of contact list IDs to remove the contacts from"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
-          "source": "Get Email Summary",
-          "message": "Get Email Summary"
+          "source": "Get email summary",
+          "message": "Get email summary"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
           "source": "Get email campaign summary report",
@@ -3128,8 +3128,8 @@
           "message": "A list of email campaign IDs to get summaries for"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
-          "message": "Get Account"
+          "source": "Get account",
+          "message": "Get account"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Get account information",
@@ -3140,8 +3140,8 @@
           "message": "Get the Constant Contact account information"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
-          "message": "Update Account"
+          "source": "Update account",
+          "message": "Update account"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
           "source": "Update account information",
@@ -3232,8 +3232,8 @@
           "message": "The time zone ID (e.g., `US/Eastern`)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact",
-          "message": "New Contact"
+          "source": "New contact",
+          "message": "New contact"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Trigger when a new contact is created",
@@ -3256,8 +3256,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "New Email Campaign",
-          "message": "New Email Campaign"
+          "source": "New email campaign",
+          "message": "New email campaign"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
           "source": "Trigger when a new email campaign is created",
@@ -3280,8 +3280,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "New Contact List",
-          "message": "New Contact List"
+          "source": "New contact list",
+          "message": "New contact list"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
           "source": "Trigger when a new contact list is created",

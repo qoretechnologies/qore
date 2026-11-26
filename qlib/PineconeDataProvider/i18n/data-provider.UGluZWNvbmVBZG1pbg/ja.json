@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
+          "source": "List projects",
           "message": "プロジェクトの一覧表示"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1wcm9qZWN0cw.short_desc": {
@@ -352,7 +352,7 @@
           "message": "組織内のすべてのプロジェクトをリストします。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
+          "source": "Create project",
           "message": "プロジェクトを作成"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
@@ -400,7 +400,7 @@
           "message": "顧客管理の暗号化キー (CMEK) による暗号化を強制するかどうか。デフォルトは `false` です。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
-          "source": "List Organizations",
+          "source": "List organizations",
           "message": "組織の一覧取得"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
@@ -820,7 +820,7 @@
           "message": "データプレーンビューア"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "ユーザー一覧"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC11c2Vycw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "ユーザーID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.display_name": {
-          "source": "List Invites",
+          "source": "List invites",
           "message": "招待者のリストを表示する"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1pbnZpdGVz.short_desc": {
@@ -952,7 +952,7 @@
           "message": "前の応答の `pagination.next` からのカーソル。同じクエリ コンテキスト (パス パラメーター、フィルター、および `limit`) で再利用する必要があります。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.display_name": {
-          "source": "Create Invite",
+          "source": "Create invite",
           "message": "招待の作成"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLWludml0ZQ.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "招待ID"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.display_name": {
-          "source": "List Service Accounts",
+          "source": "List service accounts",
           "message": "サービスアカウントの一覧表示"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1zZXJ2aWNlLWFjY291bnRz.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "前の応答の `pagination.next` からのカーソル。同じクエリ コンテキスト (パス パラメーター、フィルター、および `limit`) で再利用する必要があります。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.display_name": {
-          "source": "Create Service Account",
+          "source": "Create service account",
           "message": "サービスアカウントの作成"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXNlcnZpY2UtYWNjb3VudA.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "サービスアカウントの一意の識別子。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.display_name": {
-          "source": "List Role Bindings",
+          "source": "List role bindings",
           "message": "ロールバインディングのリスト"
         },
         "app.UGluZWNvbmVBZG1pbg.action.bGlzdC1yb2xlLWJpbmRpbmdz.short_desc": {
@@ -1604,7 +1604,7 @@
           "message": "前の応答の `pagination.next` からのカーソル。同じクエリ コンテキスト (パス パラメーター、フィルター、および `limit`) で再利用する必要があります。"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.display_name": {
-          "source": "Create Role Binding",
+          "source": "Create role binding",
           "message": "ロールバインディングの作成"
         },
         "app.UGluZWNvbmVBZG1pbg.action.Y3JlYXRlLXJvbGUtYmluZGluZw.short_desc": {

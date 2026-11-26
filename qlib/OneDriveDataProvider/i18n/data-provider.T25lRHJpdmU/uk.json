@@ -1076,7 +1076,7 @@
           "message": "Дата й час закінчення терміну дії посилання для спільного доступу"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
+          "source": "File or folder changed",
           "message": "Файл або папку змінено"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {

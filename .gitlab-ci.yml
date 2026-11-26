@@ -202,6 +202,12 @@ check-build-separate-units:
   script:
     - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build-separate-units.sh
+  # the compiler output, for check-build-warnings
+  artifacts:
+    when: always
+    paths:
+      - build-separate-units/build.log
+    expire_in: 1 day
 
 # The Linux qmod builds pass the pinned image's native module directory to CMake. On macOS the job uses its
 # package-manager prefixes. A job can override either with QORE_EXTERNAL_MODULE_DIRS (a semicolon-separated list).
@@ -253,6 +259,60 @@ check-build-separate-units:
         QORE_QMOD_CACHE_RUNNER_TAG: qmod-cache-reader
         QORE_QMOD_CACHE_MACOS_RUNNER_TAG: macos
     - when: on_success
+
+# The compiler warnings in Qore's own sources (not in bundled third-party code or system headers) in the logs of the
+# jobs that build Qore (ci-build-log.sh: build/build.log of the build jobs, of test-macos and of build-perf, the only
+# release build with gcc, and build-separate-units/build.log of check-build-separate-units, whose separate compilation
+# units show warnings that the single compilation unit hides), reported by platform and build type, qore#7757: the job
+# downloads only that file of each job's artifacts, prints the warnings and keeps them as a report.  It exits with 3
+# when there are any, which is allowed, so the pipeline passes with a warning (the job is orange) and the warnings are
+# fixed in the next batch; any other failure of the check is a failure.  pipeline-passed does not need it, so it does
+# not wait for it (it waits for test-macos, which pipeline-passed also waits for).  The checker's tests:
+# examples/test/runner/test_check_build_warnings.py
+check-build-warnings:
+  stage: test
+  needs:
+    - job: resolve-qore-test-base-images
+    - job: tree-already-tested
+      optional: true
+    - job: build-ubuntu-amd64
+      optional: true
+      artifacts: false
+    - job: build-ubuntu-arm64
+      optional: true
+      artifacts: false
+    - job: build-alpine-amd64
+      optional: true
+      artifacts: false
+    - job: build-alpine-arm64
+      optional: true
+      artifacts: false
+    - job: test-macos
+      optional: true
+      artifacts: false
+    - job: check-build-separate-units
+      optional: true
+      artifacts: false
+    - job: build-perf
+      optional: true
+      artifacts: false
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - . test/docker_test/tree-tested-skip.sh
+    - python3 test/docker_test/check-build-warnings.py --fetch --report build-warnings.txt
+  allow_failure:
+    exit_codes: [3]
+  artifacts:
+    when: always
+    paths:
+      - build-warnings.txt
+      - build-warnings.json
+    expire_in: 7 days
 
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
@@ -629,10 +689,12 @@ test-macos:
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-macos\", \"description\": \"Gitlab CI macOS\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
+  # the crash dumps of failed tests, and the compiler output, for check-build-warnings
   artifacts:
-    when: on_failure
+    when: always
     paths:
       - crash-dumps/
+      - build/build.log
     expire_in: 7 days
 
 test-perf:

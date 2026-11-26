@@ -472,7 +472,7 @@
           "message": "Цитування"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.display_name": {
-          "source": "Content Index",
+          "source": "Content index",
           "message": "Індекс вмісту"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaXRhdGlvbiNmOTI2YzkxNTBkMjg2NzNhODJkNTZhOTk5ZDY2YjZhNWY5YzZkYmM2MTdhNzQxMTdjOGRiNTkyMWI3YTA4N2Vi.field.Y29udGVudF9pbmRleA.short_desc": {
@@ -512,7 +512,7 @@
           "message": "Унікальний ідентифікатор документа"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0VG9vbFNvdXJjZSNlY2M5ZjAyZGMyNzczOTUzZjNhNGNhNzJkNGM1ODIwY2ZkZWQxYTFlMTFlZDdlNDY3MDU3M2MwY2IwZWI3ODg1.field.dG9vbF9vdXRwdXQ.display_name": {
-          "source": "Tool Output",
+          "source": "Tool output",
           "message": "Вихід інструменту"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpDaGF0RG9jdW1lbnRTb3VyY2UjMjA3M2MwZDYyZjk5ZGY0Yzk0ZmZlNzZhODAyNzY3ZDNjY2I3NjVkYjc3MTViZWMxYWI1ODFmNGQ5NjU4ZWUwNQ.field.ZG9jdW1lbnQ.display_name": {
@@ -604,7 +604,7 @@
           "message": "асистент"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9jYWxscw.display_name": {
-          "source": "Tool Calls",
+          "source": "Tool calls",
           "message": "Виклики інструментів"
         },
         "app.Q29oZXJl.type.YWN0aW9uOlkyaGhkQTpUb29sQ2FsbFYyI2M3MjkxMWRkZTU4YzRkNThhMWI5ZGVlNzI3YzZjMTQyYTQ5ZDc0MWRhODA3YzI0ODZmYmY0ZTdiNmNhNDEwY2Q.field.ZnVuY3Rpb24.display_name": {
@@ -636,7 +636,7 @@
           "message": "функція"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.display_name": {
-          "source": "Tool Plan",
+          "source": "Tool plan",
           "message": "План інструменту"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.QXNzaXN0YW50TWVzc2FnZVYyI2JkZjQ2NDA5NmQ2MGMwMjgxM2FhOTdjNTI2ZThjMGIxZmU4NTZiYmEzNTg5NzUzYWY2NDg1YWNkYmU4NGY0MzE.field.dG9vbF9wbGFu.short_desc": {
@@ -724,7 +724,7 @@
           "message": "інструмент"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.display_name": {
-          "source": "Tool Call ID",
+          "source": "Tool call ID",
           "message": "ID виклику інструменту"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2VWMiM5MWQ1OGY2MWFhMTlhMDFkMzMxZGNiZDQ5N2JmYzcyMGUwZDBlNWYyZDc5NWQzOTAxMTI1ZTEyOTllNjM5ZDBh.field.dG9vbF9jYWxsX2lk.short_desc": {
@@ -800,7 +800,7 @@
           "message": "функція"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.display_name": {
-          "source": "Strict Tools",
+          "source": "Strict tools",
           "message": "Суворі інструменти"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c3RyaWN0X3Rvb2xz.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Унікальний ідентифікатор цього документа, який буде використовуватися в цитуваннях. Якщо не надано, ідентифікатор буде автоматично створено."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.display_name": {
-          "source": "Citation Options",
+          "source": "Citation options",
           "message": "Параметри цитування"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.Y2l0YXRpb25fb3B0aW9ucw.short_desc": {
@@ -924,7 +924,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.display_name": {
-          "source": "JSON Schema",
+          "source": "JSON schema",
           "message": "Схема JSON"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.union.Kkpzb25SZXNwb25zZUZvcm1hdFYyI2Q3Y2VlM2FkYjlkYzc3NzE0NTcxYTQ3ZmE5YjI5YTkzYjliYTFhOGJlOTk1NjUzM2NhODM2ZGQ4MjE0ODY4YmI.field.anNvbl9zY2hlbWE.short_desc": {
@@ -956,7 +956,7 @@
           "message": "json_object"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.display_name": {
-          "source": "Safety Mode",
+          "source": "Safety mode",
           "message": "Безпечний режим"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.c2FmZXR5X21vZGU.short_desc": {
@@ -1028,7 +1028,7 @@
           "message": "Якщо вказано, серверна частина докладе всіх зусиль для вибірки токенів\nдетерміновано, так що повторні запити з тим самим\nпочаткове значення та параметри повинні повертати однаковий результат. однак,\nдетермінізм не може бути повністю гарантований."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
-          "source": "Frequency Penalty",
+          "source": "Frequency penalty",
           "message": "Штраф за частоту"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "За замовчуванням `0.0`, мінімальне значення `0.0`, максимальне значення `1.0`.\nВикористовується для зменшення повторюваності згенерованих токенів. Чим вище значення, тим сильніший штраф застосовується до наявних раніше токенів, пропорційно до того, скільки разів вони вже з’являлися в підказці або попередньому створенні."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
-          "source": "Presence Penalty",
+          "source": "Presence penalty",
           "message": "Штраф за наявність"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "За замовчуванням `false`. Якщо встановлено значення `true`, журнал ймовірностей згенерованих токенів буде включено у відповідь."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
-          "source": "Tool Choice",
+          "source": "Tool choice",
           "message": "Вибір інструмента"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "Конфігурація для [функцій міркування] (https://docs.cohere.com/docs/reasoning)."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.display_name": {
-          "source": "Token Budget",
+          "source": "Token budget",
           "message": "Бюджет токенів"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.dGhpbmtpbmc.field.dG9rZW5fYnVkZ2V0.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Контролює час обробки запиту. Менші числа вказують на вищий пріоритет (за замовчуванням: 0, найвищий). Коли система перебуває під навантаженням, запити з вищим пріоритетом обробляються в першу чергу, і найменша ймовірність їх відкидання."
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y2hhdA.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1176,7 +1176,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Створити ембединги"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Ідентифікатор однієї з доступних [моделей для генерації ембедингів] (https://docs.cohere.com/docs/cohere-embed)."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Тип введення"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.display_name": {
-          "source": "Max Tokens",
+          "source": "Max tokens",
           "message": "Максимум токенів"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.bWF4X3Rva2Vucw.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "Максимальна кількість токенів для вбудовування на один вхід. Якщо введений текст довший за цей, його буде скорочено відповідно до параметра `truncate`."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
-          "source": "Output Dimension",
+          "source": "Output dimension",
           "message": "Вихідний розмір"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
@@ -1348,7 +1348,7 @@
           "message": "Кількість розмірів вихідного генерації ембедингів. Це доступно лише для `embed-v4` і новіших моделей.\nМожливі значення: `256`, `512`, `1024` та `1536`. Типовим є `1536`."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "Типи генерації ембедингів"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Контролює час обробки запиту. Менші числа вказують на вищий пріоритет (за замовчуванням: 0, найвищий). Коли система перебуває під навантаженням, запити з вищим пріоритетом обробляються в першу чергу, і найменша ймовірність їх відкидання."
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1428,7 +1428,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "Переранжувати документи"
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Кількість найвищих за рейтингом документів для повернення."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.display_name": {
-          "source": "Max Tokens per Doc",
+          "source": "Max tokens per doc",
           "message": "Максимальна кількість токенів на документ"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X3Rva2Vuc19wZXJfZG9j.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Контролює час обробки запиту. Менші числа вказують на вищий пріоритет (за замовчуванням: 0, найвищий). Коли система перебуває під навантаженням, запити з вищим пріоритетом обробляються в першу чергу, і найменша ймовірність їх відкидання."
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Text",
+          "source": "Classify text",
           "message": "Класифікувати текст"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Кінець"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
+          "source": "List models",
           "message": "Список моделей"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "Список моделей, доступних для цього облікового запису. Відфільтруйте за `endpoint`, щоб вибрати сумісну модель. Дотримуйтесь `next_page_token` з `page_token`, щоб отримати наступні сторінки."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "Розмір сторінки"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV9zaXpl.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "Максимальна кількість моделей для включення на сторінку\nЗа замовчуванням `20`, мінімальне значення `1`, максимальне значення `1000`."
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "Токен сторінки"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.cGFnZV90b2tlbg.short_desc": {
@@ -1704,7 +1704,7 @@
           "message": "Генерувати"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.display_name": {
-          "source": "Default Only",
+          "source": "Default only",
           "message": "Лише за умовчанням"
         },
         "app.Q29oZXJl.action.bGlzdC1tb2RlbHM.option.ZGVmYXVsdF9vbmx5.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "Модель"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Z2V0LW1vZGVs.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.display_name": {
-          "source": "Tokenize Text",
+          "source": "Tokenize text",
           "message": "Токенізувати текст"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.short_desc": {
@@ -1780,7 +1780,7 @@
           "message": "Введення буде токенізовано токенізатором, який використовується цією моделлю."
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.dG9rZW5pemU.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.display_name": {
-          "source": "Detokenize Tokens",
+          "source": "Detokenize tokens",
           "message": "Перетворити токени на текст"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "Додатковий параметр для надання назви моделі. This will ensure that the detokenization is done by the tokenizer used by that model."
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.ZGV0b2tlbml6ZQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.cGFyc2U.display_name": {
-          "source": "Parse Document Image",
+          "source": "Parse document image",
           "message": "Проаналізувати зображення документа"
         },
         "app.Q29oZXJl.action.cGFyc2U.short_desc": {
@@ -1904,7 +1904,7 @@
           "message": "image_url"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
-          "source": "Output Format",
+          "source": "Output format",
           "message": "Вихідний формат"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
@@ -1924,7 +1924,7 @@
           "message": "Markdown"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.cGFyc2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -1936,7 +1936,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.display_name": {
-          "source": "Transcribe Audio",
+          "source": "Transcribe audio",
           "message": "Транскрибувати аудіо"
         },
         "app.Q29oZXJl.action.dHJhbnNjcmliZQ.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "Ім’я файлу"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Створити набір даних"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Ім’я файлу"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.display_name": {
-          "source": "Eval Data",
+          "source": "Eval data",
           "message": "Eval Data"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.ZXZhbF9kYXRh.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Пакетний чат V2"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.display_name": {
-          "source": "Keep Original File",
+          "source": "Keep original file",
           "message": "Зберегти оригінальний файл"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9vcmlnaW5hbF9maWxl.short_desc": {
@@ -2532,7 +2532,7 @@
           "message": "Вказує, чи слід зберігати вихідний файл."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.display_name": {
-          "source": "Skip Malformed Input",
+          "source": "Skip malformed input",
           "message": "Пропустити неправильне введення"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.c2tpcF9tYWxmb3JtZWRfaW5wdXQ.short_desc": {
@@ -2544,7 +2544,7 @@
           "message": "Indicates whether rows with malformed input should be dropped (instead of failing the validation check). Пропущені рядки буде повернено в поле попереджень."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.display_name": {
-          "source": "Keep Fields",
+          "source": "Keep fields",
           "message": "Зберігайте поля"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.a2VlcF9maWVsZHM.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Список назв полів, які зберігатимуться в наборі даних. За замовчуванням набір даних зберігатиме лише обов’язкові поля, зазначені в [схемі для відповідного типу набору даних] (https://docs.cohere.com/docs/datasets#dataset-types). Наприклад, набори даних типу `embed-input` видалятимуть усі поля, крім обов’язкового поля `text`. Якщо будь-яке з полів у `keep_fields` відсутнє у завантаженому файлі, перевірка набору даних не вдасться."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.display_name": {
-          "source": "Optional Fields",
+          "source": "Optional fields",
           "message": "Необов'язкові поля"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.b3B0aW9uYWxfZmllbGRz.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "Список назв полів, які зберігатимуться в наборі даних. За замовчуванням набір даних зберігатиме лише обов’язкові поля, зазначені в [схемі для відповідного типу набору даних] (https://docs.cohere.com/docs/datasets#dataset-types). Наприклад, набори даних типу `embed-input` видалятимуть усі поля, крім обов’язкового поля `text`. Якщо будь-яке з полів у `optional_fields` відсутнє у завантаженому файлі, перевірка набору даних пройде."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.display_name": {
-          "source": "Text Separator",
+          "source": "Text separator",
           "message": "Роздільник тексту"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.dGV4dF9zZXBhcmF0b3I.short_desc": {
@@ -2580,7 +2580,7 @@
           "message": "Необроблені завантаження .txt буде розділено на записи за допомогою значення text_separator."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.display_name": {
-          "source": "CSV Delimiter",
+          "source": "CSV delimiter",
           "message": "Роздільник CSV"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.Y3N2X2RlbGltaXRlcg.short_desc": {
@@ -2592,7 +2592,7 @@
           "message": "Роздільник, який використовується для завантажень .csv."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2604,7 +2604,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.display_name": {
-          "source": "List Datasets",
+          "source": "List datasets",
           "message": "Список наборів даних"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.short_desc": {
@@ -2616,7 +2616,7 @@
           "message": "Знайдіть набори даних для обробки або перегляду. Фільтруйте за типом і статусом перевірки та використовуйте `limit` та `offset` для розбиття сторінок."
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.display_name": {
-          "source": "Dataset Type",
+          "source": "Dataset type",
           "message": "Тип набору даних"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.ZGF0YXNldFR5cGU.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "необов'язковий зсув до початку результатів"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.display_name": {
-          "source": "Validation Status",
+          "source": "Validation status",
           "message": "Статус перевірки"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.dmFsaWRhdGlvblN0YXR1cw.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Пропущено"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.bGlzdC1kYXRhc2V0cw.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "ID"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.ZGVsZXRlLWRhdGFzZXQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2828,7 +2828,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.display_name": {
-          "source": "Get Dataset Usage",
+          "source": "Get dataset usage",
           "message": "Отримати використання набору даних"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.short_desc": {
@@ -2840,7 +2840,7 @@
           "message": "Review dataset storage usage before uploading additional data."
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Z2V0LWRhdGFzZXQtdXNhZ2U.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2852,7 +2852,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.display_name": {
-          "source": "Create Embedding Job",
+          "source": "Create embedding job",
           "message": "Створити завдання генерації ембедингів"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Ідентифікатор [набору даних] (https://docs.cohere.com/docs/datasets). Набір даних має бути типу `embed-input` та мати статус перевірки `Validated`"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "Тип введення"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "Назва вбудовуваної роботи."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.display_name": {
-          "source": "Embedding Types",
+          "source": "Embedding types",
           "message": "Типи генерації ембедингів"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.ZW1iZWRkaW5nX3R5cGVz.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Кінець"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -2976,7 +2976,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.display_name": {
-          "source": "List Embedding Jobs",
+          "source": "List embedding jobs",
           "message": "Перелічити завдання генерації ембедингів"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "List embedding jobs and inspect their current status."
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.bGlzdC1lbWJlZC1qb2Jz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3024,7 +3024,7 @@
           "message": "Ідентифікатор завдання вбудовування, яке потрібно отримати."
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Z2V0LWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "Ідентифікатор завдання вбудовування, яке потрібно скасувати."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWVtYmVkLWpvYg.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3072,7 +3072,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.display_name": {
-          "source": "Create Batch",
+          "source": "Create batch",
           "message": "Створити пакет"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.short_desc": {
@@ -3096,7 +3096,7 @@
           "message": "Назва партії (наприклад, `foobar`)."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.display_name": {
-          "source": "Input Dataset ID",
+          "source": "Input dataset ID",
           "message": "Введіть ідентифікатор набору даних"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.aW5wdXRfZGF0YXNldF9pZA.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "Назва моделі, яку використовує партія."
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y3JlYXRlLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "Перелічити пакети"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Список завдань пакетного висновку. Follow `next_page_token` using `page_token` to retrieve subsequent pages."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.display_name": {
-          "source": "Page Size",
+          "source": "Page size",
           "message": "Розмір сторінки"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV9zaXpl.short_desc": {
@@ -3156,7 +3156,7 @@
           "message": "Максимальна кількість партій для повернення. Послуга може повернути менше ніж\nце значення.\nЯкщо не вказано, буде повернуто щонайбільше 50 партій.\nМаксимальне значення 1000; значення понад 1000 будуть приведені до 1000."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.display_name": {
-          "source": "Page Token",
+          "source": "Page token",
           "message": "Токен сторінки"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.cGFnZV90b2tlbg.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "A page token, received from a previous `ListBatches` call.\nВведіть це, щоб отримати наступну сторінку."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.display_name": {
-          "source": "Order By",
+          "source": "Order by",
           "message": "Сортувати за"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.b3JkZXJfYnk.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Batches can be ordered by creation time or last updated time.\nUse `created_at` for creation time or `updated_at` for last updated time."
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.bGlzdC1iYXRjaGVz.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3216,7 +3216,7 @@
           "message": "Ідентифікатор партії."
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Z2V0LWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "Ідентифікатор партії."
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y2FuY2VsLWJhdGNo.option.WC1DbGllbnQtTmFtZQ.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Назва проекту, який робить запит."
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.display_name": {
-          "source": "Check API Key",
+          "source": "Check API key",
           "message": "Перевірити ключ API"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.short_desc": {
@@ -3276,7 +3276,7 @@
           "message": "Перевірте ключ API підключення без створення вмісту. Перевірте логічний результат `valid`; Сам по собі успіх HTTP не означає, що ключ дійсний. Це не перевіряє залишок пробної квоти."
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.display_name": {
-          "source": "X Client Name",
+          "source": "X client name",
           "message": "Ім'я клієнта X"
         },
         "app.Q29oZXJl.action.Y2hlY2stYXBpLWtleQ.option.WC1DbGllbnQtTmFtZQ.short_desc": {

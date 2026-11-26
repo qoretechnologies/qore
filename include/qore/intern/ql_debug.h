@@ -180,6 +180,8 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+//! returns true if the stream held with dbg_quic_hold_stream_data() is held also after its body has ended (qore#7653)
+DLLLOCAL bool qore_dbg_quic_stream_end_held();
 
 //! releases the stream held with dbg_quic_hold_stream_data(..., True) if it is a stream of the session
 /** Called by Socket::flushQuicPendingData() on the I/O thread of the session's socket before it writes, so that the
@@ -343,6 +345,14 @@ DLLLOCAL bool qore_dbg_http_header_text_alloc_must_fail(const char* site);
 
 //! returns true if the buffer of a binary value must not grow to \a size bytes; set by dbg_fail_binary_reserve_over()
 DLLLOCAL bool qore_dbg_binary_reserve_must_fail(size_t size);
+
+//! one-shot: returns true if the allocation of the bucket array of the next hardening of the key map of a hash must
+//! fail (qore#7557); armed by dbg_fail_hash_harden_alloc()
+DLLLOCAL bool qore_dbg_hash_harden_alloc_must_fail();
+
+//! returns true while dbg_hash_insert_with_hash_of() inserts a member whose stored hash is not the hash of its key
+//! (qore#7557), so that qore_hash_private::addMemberKnownAbsent() does not assert that it is
+DLLLOCAL bool qore_dbg_hash_foreign_member_hash();
 
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);

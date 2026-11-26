@@ -76,6 +76,7 @@
 #include "qore/intern/QC_Gate.h"
 #include "qore/intern/QC_Sequence.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 #include "qore/intern/QC_Future.h"
@@ -103,6 +104,7 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -5572,6 +5574,21 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     rc.cls = c;
 }
 
+ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c, bool keep_class)
+        : td(thread_data.get()) {
+    old_obj = td->current_obj;
+    old_class = td->current_class;
+    td->current_obj = obj;
+    td->current_class = keep_class ? old_class : c;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    if (!keep_class) {
+        rc.cls = c;
+    }
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
         QoreSetCallProgramContext, ExceptionSink* xsink) : td(thread_data.get()), call_pgm_xsink(xsink) {
     // as the constructor without the call Program context, in one call
@@ -6189,7 +6206,7 @@ static const char* QORE_MODULE_PROGRAMS_CLOSED_DESC = "the Program of a module c
 
 static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* td, ExceptionSink* xsink) {
     ++td->module_entry_refusals;
-    xsink->raiseException("PROGRAM-ERROR", QORE_MODULE_PROGRAMS_CLOSED_DESC);
+    xsink->raiseException("PROGRAM-ERROR", "%s", QORE_MODULE_PROGRAMS_CLOSED_DESC);
 }
 
 //! returns true if the value is a string equal to the given one
@@ -6628,11 +6645,15 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us, 
 
 //! writes the warning that the cleanup no longer waits for the handles of work handed over to other threads
 static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names) {
-    char head[256];
-    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process waited " QLLD " ms after its "
-        "deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, which "
-        "did not end; the modules are left as they are:", qore_get_module_cleanup_handover_grace(), names.size(),
+    // a literal, so that the arguments are checked against it, and the size of the buffer follows from it
+#define QORE_DROPPED_HANDLES_HEAD "warning: the module cleanup at the end of the process waited " QLLD " ms after " \
+        "its deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, " \
+        "which did not end; the modules are left as they are:"
+    // the text, and the most that the two numbers (20 digits and a sign each) and the plural suffix can add
+    char head[sizeof(QORE_DROPPED_HANDLES_HEAD) + 2 * 21 + 1];
+    snprintf(head, sizeof head, QORE_DROPPED_HANDLES_HEAD, qore_get_module_cleanup_handover_grace(), names.size(),
         names.size() == 1 ? "" : "s");
+#undef QORE_DROPPED_HANDLES_HEAD
     // written with one call, so that the output of other threads does not split it
     try {
         std::string msg = head;
@@ -8020,6 +8041,31 @@ QoreProgram* qore_builtin_caller_program() {
         return nullptr;
     }
     return own->getProgram();
+}
+
+bool qore_innermost_frame_is_builtin() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    return own && own->getCallType() == CT_BUILTIN;
+}
+
+void qore_thread_program_stack(std::vector<QoreProgram*>& pgms) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    auto add = [&pgms] (QoreProgram* pgm) {
+        if (pgm && std::find(pgms.begin(), pgms.end(), pgm) == pgms.end()) {
+            pgms.push_back(pgm);
+        }
+    };
+    add(td->current_pgm);
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        add(ch->getOldProgram());
+    }
 }
 
 bool qore_caller_in_untrusted_module_init() {
@@ -9577,6 +9623,31 @@ static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, 
         }
     }
     return td->call_program_context && !qore_program_is_module_inline(td->call_program_context);
+}
+
+bool qore_trusted_build_hides_nothing() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
+    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
+    // acts for (fails closed: also if it cannot be resolved), the restrictions of the calling code that what the code
+    // creates would record (see qore_get_creation_origin_restrictions()), also those that a lent method masks (see
+    // qore_get_lent_to_restrictions()), and the code that lends what it creates (see qore_creation_by_lending_code()):
+    // under the barrier nothing that the builder creates is a capability
+    if (td->sandboxed_caller) {
+        return false;
+    }
+    if (qore_caller_sandbox_state_intern(nullptr)) {
+        return false;
+    }
+    if (!qore_get_calling_code_restrictions(td).empty() || !qore_get_lent_to_restrictions(td).empty()) {
+        return false;
+    }
+    bool in_lent_method;
+    const QoreProgram* lent_pgm;
+    return !qore_creation_by_lending_code(td, in_lent_method, lent_pgm);
 }
 
 QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans, bool* capability) {
@@ -11455,11 +11526,11 @@ namespace {
 class QoreProcessEndCallbacks {
 public:
     //! @param wait_ms the longest wait of a thread that reaches an end point while the callbacks run on another thread
-    DLLLOCAL explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
+    explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
     }
 
     //! Registers a callback of the process \a pid; returns its ID, or -1 if the process has started to end
-    DLLLOCAL int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
+    int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
         std::lock_guard<std::mutex> l(m);
         if (!isIdleLocked(pid)) {
             return -1;
@@ -11469,7 +11540,7 @@ public:
     }
 
     //! Deregisters a callback; never waits: 0 if it had not run, 1 if it ran or runs on another thread, -1 if unknown
-    DLLLOCAL int remove(int64 id) {
+    int remove(int64 id) {
         std::lock_guard<std::mutex> l(m);
         for (auto i = entries.begin(), e = entries.end(); i != e; ++i) {
             if (i->id == id) {
@@ -11487,7 +11558,7 @@ public:
 
         @return true if this call ran the callbacks
     */
-    DLLLOCAL bool run(qore_process_end_e reason, pid_t pid) {
+    bool run(qore_process_end_e reason, pid_t pid) {
         std::vector<Entry> snapshot;
         {
             std::unique_lock<std::mutex> l(m);
@@ -11545,19 +11616,19 @@ public:
 
 #ifdef DEBUG
     //! sets the wait bound
-    DLLLOCAL void setWaitMs(int64 ms) {
+    void setWaitMs(int64 ms) {
         std::lock_guard<std::mutex> l(m);
         wait_ms = ms;
     }
 
     //! waits until the callbacks have started to run, at most \a timeout_ms; returns true if they have
-    DLLLOCAL bool waitStarted(int64 timeout_ms) {
+    bool waitStarted(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return started_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return state != Idle; });
     }
 
     //! waits until a thread waits for the callbacks, at most \a timeout_ms; returns true if one does
-    DLLLOCAL bool waitWaiter(int64 timeout_ms) {
+    bool waitWaiter(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return waiter_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return waiters > 0; });
     }
@@ -11599,11 +11670,11 @@ private:
     int waiters = 0;
 #endif
 
-    DLLLOCAL bool isIdleLocked(pid_t pid) const {
+    bool isIdleLocked(pid_t pid) const {
         return state == Idle || state_pid != pid;
     }
 
-    DLLLOCAL Entry* findLocked(int64 id) {
+    Entry* findLocked(int64 id) {
         for (Entry& e : entries) {
             if (e.id == id) {
                 return &e;
@@ -13540,6 +13611,8 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initGateClass(*Thread));
     Thread->addSystemClass(initSequenceClass(*Thread));
     Thread->addSystemClass(initCounterClass(*Thread));
+    Thread->addSystemClass(initLazySharedValueClass(*Thread));
+    Thread->addSystemClass(initLazySharedMapClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
     Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));

@@ -712,7 +712,7 @@
           "message": "La generazione del contenuto i cui metadati devono essere aggiornati; se omessa, viene utilizzata la versione live"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "Carica oggetto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Esegue la scrittura solo se la generazione corrente dell'oggetto corrisponde a questo valore; passa `0` per scrivere solo se l'oggetto non esiste ancora, rendendo il caricamento una creazione sicura anziché una sovrascrittura"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "Scarica oggetto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "La generazione di contenuto da scaricare; se omessa, viene utilizzata la versione attiva"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Elimina oggetto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "La generazione di contenuto da eliminare; se omessa, viene eliminata la versione attiva. In un bucket con controllo delle versioni abilitato, l'eliminazione della versione attiva mantiene le generazioni precedenti ed è necessario specificare una generazione precisa per rimuoverla in modo permanente"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Copia oggetto"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Metadati definiti dall'utente per la copia come coppie chiave/valore; se omessi, vengono mantenuti i metadati dell'origine"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "Componi oggetti"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "Metadati definiti dall'utente per l'oggetto composto come coppie chiave/valore"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "Crea URL firmato"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

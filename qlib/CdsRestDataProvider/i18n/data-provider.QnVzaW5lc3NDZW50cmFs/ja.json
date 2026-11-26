@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "レコードを作成"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Business Centralテーブルの名前（例: `customers`）"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "単一レコードの検索"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Business Centralテーブルの名前（例: `customers`）"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "レコードの検索"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Business Centralテーブルの名前（例: `customers`）"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Business Centralテーブルの名前（例: `customers`）"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "レコードを削除"
         },
         "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

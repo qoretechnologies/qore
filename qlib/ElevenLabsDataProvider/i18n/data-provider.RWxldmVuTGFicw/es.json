@@ -1080,7 +1080,7 @@
           "message": "Los datos de audio de los cuales aislar la voz. Se eliminará el ruido de fondo y solo se conservará la voz"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
-          "source": "Speech to Text",
+          "source": "Speech to text",
           "message": "Voz a texto"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "PCM de 16 bits, 16 kHz mono, little-endian: menor latencia"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
-          "source": "Voice Design",
+          "source": "Voice design",
           "message": "Diseño de voz"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "El identificador único de la voz a recuperar"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
-          "source": "Create Voice",
+          "source": "Create voice",
           "message": "Crear voz"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "Etiquetas clave-valor para asociar con la voz"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
-          "source": "Edit Voice",
+          "source": "Edit voice",
           "message": "Editar voz"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Etiquetas clave-valor para asociar con la voz"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "Eliminar voz"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "El identificador único del elemento del historial a recuperar"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Delete History Item",
+          "source": "Delete history item",
           "message": "Eliminar elemento del historial"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "El código de idioma del audio doblado a descargar (p. ej., `es`, `fr`, `de`)"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
-          "source": "Delete Dubbing",
+          "source": "Delete dubbing",
           "message": "Eliminar doblaje"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "Mostrar solo los proyectos de doblaje de otros"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Create Pronunciation Dictionary",
+          "source": "Create pronunciation dictionary",
           "message": "Crear diccionario de pronunciación"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "El identificador único del diccionario de pronunciación a recuperar"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
-          "source": "Add Pronunciation Rules",
+          "source": "Add pronunciation rules",
           "message": "Agregar reglas de pronunciación"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {

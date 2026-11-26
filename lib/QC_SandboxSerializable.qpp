@@ -1,0 +1,104 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SandboxSerializable.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_SandboxSerializable.h"
+#include "qore/intern/QC_Serializable.h"
+
+static QoreHashNode* SandboxSerializable_serializer(const QoreObject& self, const QoreSerializable& s,
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
+    return nullptr;
+}
+
+static void SandboxSerializable_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
+    if (sdata) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "Deserialization data provided for the 'SandboxSerializable' "
+            "class where none was expected");
+        return;
+    }
+    self.setPrivate(CID_SANDBOXSERIALIZABLE, new QoreSerializable);
+}
+
+//! Marks a class whose non-public members sandboxed code may serialize and set by deserialization
+/** The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: when an
+    object is serialized for code that a sandbox governs, a non-public member (\c private, \c private:hierarchy or
+    \c private:internal) or static variable with a value that a class declared by trusted code declares raises a
+    \c SERIALIZATION-ERROR exception and the class's \c serializeMembers() method is not called; deserialization by such code into such a class is refused with a
+    \c DESERIALIZATION-ERROR exception when the class's hierarchy has non-transient non-public members, when the data
+    sets a non-public member or static variable, or when the class has a \c deserializeMembers() method.  Formatting
+    an object with \c %%y and the other formats that show an object's members follows the same rule (see
+    @ref sandbox_serialization).
+
+    A class declared by trusted code that inherits this class directly declares that its non-public state may be
+    serialized by and set by deserialization from sandboxed code; the rule above then does not apply to the members,
+    static variables and serialization methods that the class itself declares.  The declaration is not inherited: a subclass that declares
+    non-public members of its own must inherit this class directly too, so that a class is never opened by a base
+    class whose author did not know its members.  This class inherits @ref Qore::Serializable "Serializable", so a
+    class that inherits it is serializable.
+
+    A class declared by sandboxed code does not need this class: its members are serialized and deserialized as
+    declared.
+
+    @par Example
+    @code{.py}
+class SearchSpec inherits SandboxSerializable {
+    private {
+        # sandboxed code may serialize and deserialize this member
+        string query;
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+qclass SandboxSerializable [
+    arg=QoreSerializable* s;
+    vparent=Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(SandboxSerializable_serializer);
+    deserializer=SandboxSerializable_deserializer
+];
+
+//! Creates the object; this class only marks the class that inherits it
+/**
+ */
+SandboxSerializable::constructor() {
+    self->setPrivate(CID_SANDBOXSERIALIZABLE, new QoreSerializable);
+}
+
+//! Copies the object; this class only marks the class that inherits it
+/**
+ */
+SandboxSerializable::copy() {
+    self->setPrivate(CID_SANDBOXSERIALIZABLE, new QoreSerializable);
+}

@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
+          "source": "Generate content",
           "message": "Générer du contenu"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
@@ -984,7 +984,7 @@
           "message": "Texte d'instruction système facultatif définissant le comportement et le contexte pour le modèle"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
-          "source": "Stream Content",
+          "source": "Stream content",
           "message": "Diffuser le contenu en flux"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "Un titre facultatif pour le texte. S'applique uniquement lorsque `taskType` est `RETRIEVAL_DOCUMENT`"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
+          "source": "Count tokens",
           "message": "Compter les jetons"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
@@ -2036,7 +2036,7 @@
           "message": "Contenu généré par le modèle"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Téléverser un fichier"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Nom d'affichage facultatif pour le fichier téléversé. S'il n'est pas fourni, le nom de fichier du fichier téléversé est utilisé"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
+          "source": "Delete file",
           "message": "Supprimer le fichier"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2216,7 +2216,7 @@
           "message": "Le nom de ressource du fichier à supprimer (par ex., `files/abc-123`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Create Cached Content",
+          "source": "Create cached content",
           "message": "Créer du contenu mis en cache"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2400,7 +2400,7 @@
           "message": "Contenu généré par le modèle"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Delete Cached Content",
+          "source": "Delete cached content",
           "message": "Supprimer le contenu mis en cache"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Le nom de ressource du contenu mis en cache à supprimer"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Update Cached Content",
+          "source": "Update cached content",
           "message": "Mettre à jour le contenu mis en cache"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Nouvelle durée de vie pour le contenu mis en cache (ex. : `3600s` pour une heure)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Create File Search Store",
+          "source": "Create file search store",
           "message": "Créer un magasin de recherche de fichiers"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2496,7 +2496,7 @@
           "message": "Le nom d'affichage lisible par l'utilisateur pour le nouveau magasin de recherche de fichiers"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Delete File Search Store",
+          "source": "Delete file search store",
           "message": "Supprimer le magasin de recherche de fichiers"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Le nom de ressource du magasin de recherche de fichiers à supprimer"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
-          "source": "Import File to Search Store",
+          "source": "Import file to search store",
           "message": "Importer le fichier dans la banque de recherche"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {

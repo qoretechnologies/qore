@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
-          "source": "Query Points",
+          "source": "Query points",
           "message": "Dotaz na body"
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Vykonajte vektorové vyhľadávanie podobnosti, filtrovanie a hybridné vyhľadávanie v Qdrant kolekcii"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
-          "source": "Upsert Points",
+          "source": "Upsert points",
           "message": "Vložiť/aktualizovať body (Upsert)"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Vložte alebo aktualizujte body s vektormi a voliteľnými payloadmi v Qdrant kolekcii"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
+          "source": "Create collection",
           "message": "Vytvoriť kolekciu"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Vytvorte novú vektorovú kolekciu s konfigurovateľnými vektorovými parametrami a metrikami vzdialenosti"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "Zoznam kolekcií"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Získajte zoznam všetkých kolekcií v inštancii Qdrant"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
-          "source": "Count Points",
+          "source": "Count points",
           "message": "Spočítať body"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Spočítať počet bodov v kolekcii Qdrant, voliteľne s filtrom"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
-          "source": "Health Check",
+          "source": "Health check",
           "message": "Kontrola stavu (Health Check)"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Skontrolujte stav zdravia (health status) Qdrant servera"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
-          "source": "Delete Points",
+          "source": "Delete points",
           "message": "Odstrániť body"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Odstráňte body z Qdrant kolekcie podľa ID bodov alebo podľa podmienok filtra"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
-          "source": "Get Points",
+          "source": "Get points",
           "message": "Získať body"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Získajte konkrétne body z Qdrant kolekcie podľa ich ID vrátane vektorov a payloadov"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
-          "source": "Scroll Points",
+          "source": "Scroll points",
           "message": "Prechádzať body (Scroll)"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Prechádzajte všetkými bodmi v Qdrant kolekcii pomocou stránkovania typu scroll s voliteľným filtrovaním"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
+          "source": "Get collection",
           "message": "Získať kolekciu"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Získajte podrobné informácie o konkrétnej Qdrant kolekcii vrátane jej konfigurácie a stavu"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
+          "source": "Delete collection",
           "message": "Odstrániť kolekciu"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Odstráňte kolekciu a všetky jej dáta z inštancie Qdrant"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
-          "source": "Collection Exists",
+          "source": "Collection exists",
           "message": "Kolekcia existuje"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
@@ -484,7 +484,7 @@
           "message": "Skontrolovať, či v inštancii Qdrant existuje konkrétna kolekcia"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
-          "source": "Query Batch Points",
+          "source": "Query batch points",
           "message": "Dávkový dotaz na body"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Vykonajte viacero dotazov vektorového vyhľadávania podobnosti v jedinej dávkovej požiadavke voči Qdrant kolekcii"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
-          "source": "Query Grouped Points",
+          "source": "Query grouped points",
           "message": "Dotaz na zoskupené body"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
@@ -508,7 +508,7 @@
           "message": "Vykonajte vektorové vyhľadávanie podobnosti v Qdrant kolekcii s výsledkami zoskupenými podľa zadaného poľa v payloade"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
-          "source": "List All Aliases",
+          "source": "List all aliases",
           "message": "Zoznam všetkých aliasov"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Získajte zoznam všetkých aliasov a ich priradených kolekcií v inštancii Qdrant"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
-          "source": "Update Aliases",
+          "source": "Update aliases",
           "message": "Aktualizovať aliasy"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
@@ -532,7 +532,7 @@
           "message": "Vytvorte, premenujte alebo odstráňte aliasy kolekcií v inštancii Qdrant"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
-          "source": "Set Payload",
+          "source": "Set payload",
           "message": "Nastaviť payload"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
@@ -544,7 +544,7 @@
           "message": "Nastavte alebo aktualizujte páry kľúč-hodnota v payloade na bodoch v Qdrant kolekcii podľa ID bodov alebo podmienok filtra"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
-          "source": "Liveness Check",
+          "source": "Liveness check",
           "message": "Kontrola aktivity (Liveness Check)"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Skontrolujte, či je Qdrant server aktívny a reaguje"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
-          "source": "Batch Update Points",
+          "source": "Batch update points",
           "message": "Dávkovo aktualizovať body"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Vykonajte dávku rôznorodých operácií s bodmi (upsert, odstránenie, nastavenie/prepísanie/odstránenie/vymazanie payloadu, aktualizácia/odstránenie vektorov) v jedinej požiadavke pre vysoko výkonné hromadné aktualizácie"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
-          "source": "Search Points",
+          "source": "Search points",
           "message": "Hľadať body"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
@@ -580,7 +580,7 @@
           "message": "Vektorové vyhľadávanie podobnosti v Qdrant kolekcii vracajúce výsledky ako dátový tok záznamov pre efektívne spracovanie v pipeline"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
-          "source": "Create/Upsert Point",
+          "source": "Create/upsert point",
           "message": "Vytvoriť/aktualizovať bod"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {

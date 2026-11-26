@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
-          "source": "Chat Completion",
+          "source": "Chat completion",
           "message": "聊天生成"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
@@ -656,7 +656,7 @@
           "message": "代表終端使用者之不透明識別碼。於伺服器端記錄以用於濫用追蹤及用量歸屬；不影響內容產生。"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "建立嵌入"
         },
         "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -724,7 +724,7 @@
           "message": "代表終端使用者的高階識別碼。於伺服器端記錄以進行濫用追蹤與用量歸屬；不影響輸出結果。"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
-          "source": "Constrained Generation",
+          "source": "Constrained generation",
           "message": "受限產生"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
@@ -892,7 +892,7 @@
           "message": "當為 `True` 時，每個對數機率項目除了權杖 ID 外還會包含解碼後的權杖文字。更易於檢查，但負載較大。"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
-          "source": "Get Server Info",
+          "source": "Get server info",
           "message": "取得伺服器資訊"
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
@@ -904,7 +904,7 @@
           "message": "傳回 SGLang 伺服器的設定（模型名稱、tokenizer 路徑、max_total_tokens、chat_template 等）和執行階段狀態（版本、CUDA 裝置、GPU 數量）。對健康檢查與設定驗證很有用。"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
-          "source": "Flush KV Cache",
+          "source": "Flush KV cache",
           "message": "清除 KV 快取"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {

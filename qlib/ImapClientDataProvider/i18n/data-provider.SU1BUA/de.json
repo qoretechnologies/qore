@@ -16,7 +16,7 @@
           "message": "E-Mails auf jedem IMAP-Server lesen und verwalten.\n\n- Durchsuchen eines Postfachs mit serverseitigen Kriterien, sodass nur übereinstimmende Nachrichten übertragen werden\n- Abrufen einer gesamten Nachricht oder eines einzelnen MIME-Teils, wenn nur ein Anhang benötigt wird\n- Reagieren auf neue E-Mails bei deren Eingang mittels Server-Push, sofern der Server dies unterstützt\n- Ändern von Flags, Verschieben von Nachrichten zwischen Postfächern und Ablegen von Nachrichten mit `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) ist das Standard-Postfachprotokoll und für viele E-Mail-Anbieter der einzige programmatische Zugriff, den sie anbieten. Da Nachrichten auf dem Server verbleiben, kann eine Integration ein Postfach überwachen und auf eingehende Nachrichten reagieren, ohne die E-Mails des Kontos zu übernehmen.\n\nSowohl Kennwort- als auch OAuth2-Bearer-Token-Authentifizierung werden unterstützt; der Mechanismus wird anhand der Angaben des Servers ausgewählt"
         },
         "app.SU1BUA.action.c2VhcmNo.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Nach Nachrichten suchen"
         },
         "app.SU1BUA.action.c2VhcmNo.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Das Postfach mit `EXAMINE` anstelle von `SELECT` öffnen, sodass das Abrufen von Nachrichten keine Flags ändern kann"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Nachricht abrufen"
         },
         "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Setzt das Flag `\\Seen` für die Nachricht nach dem Abrufen.\n\nDas Abrufen selbst ändert niemals Flags; belassen Sie dies daher auf `False`, um eine Nachricht einzusehen, ohne dass der E-Mail-Client des Absenders sie als gelesen anzeigt"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Anhang abrufen"
         },
         "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -172,7 +172,7 @@
           "message": "Der abzurufende MIME-Teilspezifikator (z. B. `1`, `2.1`, `HEADER`, `TEXT`).\n\nDas Abrufen eines einzelnen Teils vermeidet die Übertragung der gesamten Nachricht, was relevant ist, wenn ein einzelner Anhang aus einer Nachricht mit mehreren großen Anhängen benötigt wird"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
-          "source": "List Mailboxes",
+          "source": "List mailboxes",
           "message": "Postfächer auflisten"
         },
         "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
@@ -220,7 +220,7 @@
           "message": "Nur Postfächer auflisten, die das Konto abonniert hat, unter Verwendung von `LSUB` anstelle von `LIST`"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
-          "source": "Change Message Flags",
+          "source": "Change message flags",
           "message": "Nachrichten-Flags ändern"
         },
         "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Alle Flags der Nachrichten durch die angegebenen Flags ersetzen"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
-          "source": "Move Messages",
+          "source": "Move messages",
           "message": "Nachrichten verschieben"
         },
         "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Die Nachrichten kopieren statt verschieben, sodass die Originale erhalten bleiben"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
-          "source": "Store a Message",
+          "source": "Store a message",
           "message": "Nachricht speichern"
         },
         "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Die für die Nachricht aufzuzeichnende Ankunftszeit; standardmäßig die Zeit, zu der der Server sie speichert"
         },
         "app.SU1BUA.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Neue E-Mail"
         },
         "app.SU1BUA.action.d2F0Y2g.short_desc": {
@@ -496,7 +496,7 @@
           "message": "Jede gemeldete Nachricht mit `\\Deleted` markieren und endgültig löschen (expunge), sobald ihr Ereignis ausgelöst wurde.\n\n**Dadurch werden E-Mails dauerhaft vom Server gelöscht**; verwenden Sie vorzugsweise `mark_seen` oder ein Verschieben in ein anderes Postfach, es sei denn, das Postfach ist eine Warteschlange, die geleert werden soll.\n\nDie Nachricht wird endgültig gelöscht, sobald ihr Ereignis **ausgelöst** wurde, was nicht dasselbe ist wie die **Verarbeitung** durch den Consumer. Wenn das Auslösen des Ereignisses eine Ausnahme auslöst, bleibt die Nachricht für den nächsten Durchlauf erhalten; ein Consumer, der das Ereignis empfängt und dann fehlschlägt, eine Zeitüberschreitung erleidet oder während der Verarbeitung neu gestartet wird, hat die einzige Kopie jedoch bereits verloren. Für Workloads, bei denen die Quellnachricht keinesfalls verloren gehen darf, lassen Sie diese Option deaktiviert und führen Sie die Aktion vom Consumer aus durch, sobald die Verarbeitung erfolgreich war: Jedes Ereignis enthält seine `uid`, und die Aktionen `set-flags` und `move-messages` nehmen diese entgegen"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Neue E-Mail-Anhänge"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {

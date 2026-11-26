@@ -171,6 +171,23 @@ module Schema {
             - [MyApp, "1.0.0", {exp: "now"}]
     @endcode
 
+    @par Example: An identity column
+    A column with \c identity is created with each database's own mechanism for generating its values (an identity
+    column, \c IDENTITY, \c AUTO_INCREMENT, ...; see @ref sqlutil_identity_columns), so it needs no sequence or
+    trigger; most databases allow one per table. It must be integral (\c int, or \c number without a scale) and has no \c default_value;
+    \c identity_start and \c identity_increment default to 1 and \c identity_generation to \c "by default"
+    (also \c "always", and \c "by default on null" on Oracle).
+    @code{.yaml}
+    tables:
+      orders:
+        columns:
+          id: {type: int, notnull: true, identity: true, identity_start: 1000, identity_increment: 10}
+          customer: {type: varchar, size: 80, notnull: true}
+        primary_key:
+          name: pk_orders
+          columns: [id]
+    @endcode
+
     @par Example: Schema with version-based migrations
     @code{.yaml}
     schema:
@@ -1009,6 +1026,10 @@ error: UNKNOWN-KEY at tables.customers.sequence_columns: table "customers": unkn
 
 
     @section schema_v1_9_0 Schema Module v1.9.0
+    - a data schema column written with the \c type shorthand can be a
+      @ref sqlutil_identity_columns "portable identity column" with \c identity, \c identity_start,
+      \c identity_increment and \c identity_generation; invalid combinations are reported at the key's path
+      (<a href="https://github.com/qoretechnologies/qore/issues/7747">issue 7747</a>)
     - added @ref Schema::DataSchemaLoader::loadHashChecked() "DataSchemaLoader::loadHashChecked()", which reports
       every problem of a data schema definition, as an error or a warning with the dotted path of its node, instead
       of an exception for the first one; see @ref schema_data_schema_issues

@@ -228,6 +228,11 @@ public:
     DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
+    //! The namespace of the declaration (QoreTypeOwner::getTypeOwnerNamespace(), qore#7680)
+    DLLLOCAL const qore_ns_private* getTypeOwnerNamespace() const {
+        return ns;
+    }
+
     //! The parent and the source of a copy
     DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
         if (parentHashDecl) {

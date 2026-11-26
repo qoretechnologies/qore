@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
-          "message": "Create a Contact"
+          "source": "Create a contact",
+          "message": "Create a contact"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Create a new contact",
@@ -524,8 +524,8 @@
           "message": "Contact time zone"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
-          "message": "Update a Contact"
+          "source": "Update a contact",
+          "message": "Update a contact"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
           "source": "Update an existing contact",
@@ -664,8 +664,8 @@
           "message": "Contact time zone"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
-          "message": "Delete a Contact"
+          "source": "Delete a contact",
+          "message": "Delete a contact"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
           "source": "Delete a contact",
@@ -684,8 +684,8 @@
           "message": "The contact to delete"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
-          "message": "Merge Contacts"
+          "source": "Merge contacts",
+          "message": "Merge contacts"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
           "source": "Merge two contacts",
@@ -712,8 +712,8 @@
           "message": "The contact to merge and delete"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List all contacts",
@@ -784,8 +784,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
-          "message": "Get a Contact"
+          "source": "Get a contact",
+          "message": "Get a contact"
         },
         "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
           "source": "Get a single contact by ID",
@@ -804,8 +804,8 @@
           "message": "The contact ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
-          "message": "Create a Company"
+          "source": "Create a company",
+          "message": "Create a company"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
           "source": "Create a new company",
@@ -852,8 +852,8 @@
           "message": "Company website"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
-          "message": "Update a Company"
+          "source": "Update a company",
+          "message": "Update a company"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
           "source": "Update an existing company",
@@ -904,8 +904,8 @@
           "message": "Company website"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
-          "message": "Delete a Company"
+          "source": "Delete a company",
+          "message": "Delete a company"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
           "source": "Delete a company",
@@ -924,8 +924,8 @@
           "message": "The company to delete"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
-          "message": "List Companies"
+          "source": "List companies",
+          "message": "List companies"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
           "source": "List all companies",
@@ -980,8 +980,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
-          "message": "Get a Company"
+          "source": "Get a company",
+          "message": "Get a company"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
           "source": "Get a single company by ID",
@@ -1000,8 +1000,8 @@
           "message": "The company ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
-          "message": "Create an Opportunity"
+          "source": "Create an opportunity",
+          "message": "Create an opportunity"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Create a new opportunity",
@@ -1072,8 +1072,8 @@
           "message": "Opportunity notes"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
-          "message": "Update an Opportunity"
+          "source": "Update an opportunity",
+          "message": "Update an opportunity"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Update an existing opportunity",
@@ -1140,8 +1140,8 @@
           "message": "Opportunity notes"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
-          "message": "Delete an Opportunity"
+          "source": "Delete an opportunity",
+          "message": "Delete an opportunity"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Delete an opportunity",
@@ -1160,8 +1160,8 @@
           "message": "The opportunity to delete"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
-          "message": "List Opportunities"
+          "source": "List opportunities",
+          "message": "List opportunities"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
           "source": "List all opportunities",
@@ -1224,8 +1224,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
-          "message": "Get an Opportunity"
+          "source": "Get an opportunity",
+          "message": "Get an opportunity"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
           "source": "Get a single opportunity by ID",
@@ -1244,8 +1244,8 @@
           "message": "The opportunity ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
-          "message": "Create an Order"
+          "source": "Create an order",
+          "message": "Create an order"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
           "source": "Create a new order",
@@ -1300,8 +1300,8 @@
           "message": "Promotional codes"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
-          "message": "List Orders"
+          "source": "List orders",
+          "message": "List orders"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
           "source": "List all orders",
@@ -1364,8 +1364,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
-          "message": "Get an Order"
+          "source": "Get an order",
+          "message": "Get an order"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
           "source": "Get a single order by ID",
@@ -1384,8 +1384,8 @@
           "message": "The order ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
-          "message": "Create a Tag"
+          "source": "Create a tag",
+          "message": "Create a tag"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a new tag",
@@ -1424,8 +1424,8 @@
           "message": "Tag category"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
-          "message": "Delete a Tag"
+          "source": "Delete a tag",
+          "message": "Delete a tag"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
           "source": "Delete a tag",
@@ -1444,8 +1444,8 @@
           "message": "The tag to delete"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
-          "message": "Apply Tag to Contact"
+          "source": "Apply tag to contact",
+          "message": "Apply tag to contact"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
           "source": "Apply a tag to a contact",
@@ -1476,8 +1476,8 @@
           "message": "List of integer tag IDs"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
-          "message": "Remove Tag from Contact"
+          "source": "Remove tag from contact",
+          "message": "Remove tag from contact"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
           "source": "Remove a tag from a contact",
@@ -1504,8 +1504,8 @@
           "message": "The tag to remove"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
           "source": "List all tags",
@@ -1548,8 +1548,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
-          "message": "Get a Tag"
+          "source": "Get a tag",
+          "message": "Get a tag"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
           "source": "Get a single tag by ID",
@@ -1568,8 +1568,8 @@
           "message": "The tag ID"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
-          "message": "Create a Note"
+          "source": "Create a note",
+          "message": "Create a note"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
           "source": "Create a new note",
@@ -1616,8 +1616,8 @@
           "message": "The type of note"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
-          "message": "Update a Note"
+          "source": "Update a note",
+          "message": "Update a note"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
           "source": "Update an existing note",
@@ -1660,8 +1660,8 @@
           "message": "Note body"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
-          "message": "Delete a Note"
+          "source": "Delete a note",
+          "message": "Delete a note"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
           "source": "Delete a note",
@@ -1688,8 +1688,8 @@
           "message": "The note to delete"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
-          "message": "List Notes"
+          "source": "List notes",
+          "message": "List notes"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
           "source": "List notes for a contact",
@@ -1724,8 +1724,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
-          "message": "Create a Task"
+          "source": "Create a task",
+          "message": "Create a task"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a new task",
@@ -1800,8 +1800,8 @@
           "message": "Assigned user"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
-          "message": "Update a Task"
+          "source": "Update a task",
+          "message": "Update a task"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update an existing task",
@@ -1860,8 +1860,8 @@
           "message": "Task completion status"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
-          "message": "Delete a Task"
+          "source": "Delete a task",
+          "message": "Delete a task"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a task",
@@ -1880,8 +1880,8 @@
           "message": "The task to delete"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List all tasks",
@@ -1940,8 +1940,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
-          "message": "Get a Task"
+          "source": "Get a task",
+          "message": "Get a task"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -1960,8 +1960,8 @@
           "message": "The task ID"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
-          "message": "List Emails"
+          "source": "List emails",
+          "message": "List emails"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
           "source": "List emails",
@@ -1996,8 +1996,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
-          "message": "Upload a File"
+          "source": "Upload a file",
+          "message": "Upload a file"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file",
@@ -2044,8 +2044,8 @@
           "message": "File visibility"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
-          "message": "Get a File"
+          "source": "Get a file",
+          "message": "Get a file"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get file details",
@@ -2064,8 +2064,8 @@
           "message": "The file to retrieve"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
-          "message": "Delete a File"
+          "source": "Delete a file",
+          "message": "Delete a file"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file",
@@ -2084,8 +2084,8 @@
           "message": "The file to delete"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
-          "message": "List Files"
+          "source": "List files",
+          "message": "List files"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
           "source": "List all files",
@@ -2140,8 +2140,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List all products",
@@ -2168,8 +2168,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
-          "message": "Get a Product"
+          "source": "Get a product",
+          "message": "Get a product"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -2188,8 +2188,8 @@
           "message": "The product ID"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
-          "message": "List Campaigns"
+          "source": "List campaigns",
+          "message": "List campaigns"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
           "source": "List all campaigns",
@@ -2228,8 +2228,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
-          "message": "List Affiliates"
+          "source": "List affiliates",
+          "message": "List affiliates"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
           "source": "List all affiliates",
@@ -2256,8 +2256,8 @@
           "message": "Maximum results"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
-          "message": "Contact Added"
+          "source": "Contact added",
+          "message": "Contact added"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
           "source": "Watch for new contacts",
@@ -2268,8 +2268,8 @@
           "message": "Triggers when a new contact is created in Keap"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
-          "message": "Contact Updated"
+          "source": "Contact updated",
+          "message": "Contact updated"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
           "source": "Watch for contact updates",
@@ -2280,8 +2280,8 @@
           "message": "Triggers when a contact is updated in Keap"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
-          "message": "Tag Applied"
+          "source": "Tag applied",
+          "message": "Tag applied"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
           "source": "Watch for tag applications",
@@ -2292,8 +2292,8 @@
           "message": "Triggers when a tag is applied to a contact in Keap"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
-          "message": "Opportunity Added"
+          "source": "Opportunity added",
+          "message": "Opportunity added"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
           "source": "Watch for new opportunities",
@@ -2304,8 +2304,8 @@
           "message": "Triggers when a new opportunity is created in Keap"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
-          "message": "Order Added"
+          "source": "Order added",
+          "message": "Order added"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
           "source": "Watch for new orders",
@@ -2316,8 +2316,8 @@
           "message": "Triggers when a new order is created in Keap"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
-          "message": "Task Created"
+          "source": "Task created",
+          "message": "Task created"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
           "source": "Watch for new tasks",
@@ -2328,8 +2328,8 @@
           "message": "Triggers when a new task is created in Keap"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
-          "message": "Note Added"
+          "source": "Note added",
+          "message": "Note added"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {
           "source": "Watch for new notes",

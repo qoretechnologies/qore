@@ -340,7 +340,7 @@
           "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Kontakt erstellen"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -432,7 +432,7 @@
           "message": "Die ID des Benutzers, dem dieser Kontakt gehört"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Kontakt aktualisieren"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -516,7 +516,7 @@
           "message": "Aktueller Standort des Kontakts"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "Kontakte suchen"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
@@ -568,7 +568,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Einen Kontakt abrufen"
         },
         "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -588,7 +588,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create an Account",
+          "source": "Create an account",
           "message": "Einen Account erstellen"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -644,7 +644,7 @@
           "message": "Benutzer-ID des Eigentümers"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update an Account",
+          "source": "Update an account",
           "message": "Einen Account aktualisieren"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -704,7 +704,7 @@
           "message": "Benutzer-ID des Eigentümers"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
-          "source": "Search Accounts",
+          "source": "Search accounts",
           "message": "Accounts suchen"
         },
         "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
@@ -748,7 +748,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "Einen Account abrufen"
         },
         "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "Die Account-ID"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create a Deal",
+          "source": "Create a deal",
           "message": "Einen Deal erstellen"
         },
         "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Zugehörige Account-ID"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update a Deal",
+          "source": "Update a deal",
           "message": "Deal aktualisieren"
         },
         "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
@@ -916,7 +916,7 @@
           "message": "Benutzer-ID des Eigentümers"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
+          "source": "List deals",
           "message": "Deals auflisten"
         },
         "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
@@ -944,7 +944,7 @@
           "message": "Maximale Ergebnisse"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get a Deal",
+          "source": "Get a deal",
           "message": "Einen Deal abrufen"
         },
         "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
@@ -1180,7 +1180,7 @@
           "message": "Ergebnisse pro Seite (max. 100)"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
-          "source": "Search Organizations",
+          "source": "Search organizations",
           "message": "Organisationen suchen"
         },
         "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
@@ -1248,7 +1248,7 @@
           "message": "Ergebnisse pro Seite (max. 100)"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Kontakt erstellt"
         },
         "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -1260,7 +1260,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Kontakt in Apollo erstellt wird"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Kontakt aktualisiert"
         },
         "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -1272,7 +1272,7 @@
           "message": "Wird ausgelöst, wenn ein Kontakt in Apollo aktualisiert wird"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
-          "source": "Account Created",
+          "source": "Account created",
           "message": "Account erstellt"
         },
         "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
@@ -1284,7 +1284,7 @@
           "message": "Wird ausgelöst, wenn ein neuer Account in Apollo erstellt wird"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
-          "source": "Deal Created",
+          "source": "Deal created",
           "message": "Deal erstellt"
         },
         "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {

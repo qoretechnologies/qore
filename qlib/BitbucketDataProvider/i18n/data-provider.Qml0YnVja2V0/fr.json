@@ -516,7 +516,7 @@
           "message": "Privé"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Politique de fork"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
@@ -540,7 +540,7 @@
           "message": "Langue"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "A des tickets"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
@@ -548,7 +548,7 @@
           "message": "\nLe suivi des tickets pour ce dépôt est activé. Les fonctionnalités\ndu suivi des tickets ne sont pas prises en charge pour les dépôts dans les espaces de travail\nadministrés via admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "A un wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
@@ -560,7 +560,7 @@
           "message": "Projet"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -568,7 +568,7 @@
           "message": "Description"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "A des dépôts visibles publiquement"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -576,7 +576,7 @@
           "message": "\nIndique si le projet contient des dépôts visibles publiquement.\nNotez que les projets privés ne peuvent pas contenir de dépôts publics."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Est privé"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -656,11 +656,11 @@
           "message": "Propriétaire"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nom d'affichage"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0c5emRBOip0ZWFtIzA1YWIwOTAzNzMxMzNiNjdhNjgwMjAwNmJjMGE1MTI0MDlkODFkZGYzMjU5NmQ2MjNhNDMyYTMyNWZjNjUwMzY.field.bGlua3M.display_name": {
@@ -768,7 +768,7 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Mis à jour le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -836,11 +836,11 @@
           "message": "Description"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Est privé"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Politique de fork"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
@@ -864,7 +864,7 @@
           "message": "Langue"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "A des tickets"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
@@ -872,7 +872,7 @@
           "message": "\nLe suivi des tickets pour ce dépôt est activé. Les fonctionnalités\ndu suivi des tickets ne sont pas prises en charge pour les dépôts dans les espaces de travail\nadministrés via admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "A un wiki"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
@@ -884,7 +884,7 @@
           "message": "Projet"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.ZGVzY3JpcHRpb24.display_name": {
@@ -892,7 +892,7 @@
           "message": "Description"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "A des dépôts visibles publiquement"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -900,7 +900,7 @@
           "message": "\nIndique si le projet contient des dépôts visibles publiquement.\nNotez que les projets privés ne peuvent pas contenir de dépôts publics."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Est privé"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1016,11 +1016,11 @@
           "message": "Propriétaire"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nom d'affichage"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqdGVhbSMwNWFiMDkwMzczMTMzYjY3YTY4MDIwMDZiYzBhNTEyNDA5ZDgxZGRmMzI1OTZkNjIzYTQzMmEzMjVmYzY1MDM2.field.bGlua3M.display_name": {
@@ -1140,7 +1140,7 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Mis à jour le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.field.dXVpZA.display_name": {
@@ -1176,7 +1176,7 @@
           "message": "Branche principale"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.display_name": {
-          "source": "Default Merge Strategy",
+          "source": "Default merge strategy",
           "message": "Stratégie de fusion par défaut"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.ZGVmYXVsdF9tZXJnZV9zdHJhdGVneQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "Nom"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.display_name": {
-          "source": "Merge Strategies",
+          "source": "Merge strategies",
           "message": "Stratégies de fusion"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.field.bWVyZ2Vfc3RyYXRlZ2llcw.short_desc": {
@@ -1308,11 +1308,11 @@
           "message": "Utilisateur"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nom d'affichage"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqYWNjb3VudCM2MGI4MDYxOWQ3MzA0OTAzYjYxNjY5MTg5MDkxZjE0YmUwNzk1NGRjOGQ0ZWNhNWY0NTgwY2UwOWRmYzM2NDVj.field.bGlua3M.display_name": {
@@ -1464,7 +1464,7 @@
           "message": "Approuvé"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.display_name": {
-          "source": "Participated On",
+          "source": "Participated on",
           "message": "Participé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpwYXJ0aWNpcGFudCNlYWE4M2RjYThlMWMyNTg2MWI5ZmY1OTAwN2RiZTAwYjEwZTU2MGJjNjIwYzRhZWViNmYzZmUzYjBkMzE1OTNh.field.cGFydGljaXBhdGVkX29u.short_desc": {
@@ -1512,7 +1512,7 @@
           "message": "Dépôt"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1520,7 +1520,7 @@
           "message": "Description"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.display_name": {
-          "source": "Fork Policy",
+          "source": "Fork policy",
           "message": "Politique de fork"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.Zm9ya19wb2xpY3k.desc": {
@@ -1540,7 +1540,7 @@
           "message": "no_forks"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.display_name": {
-          "source": "Full Name",
+          "source": "Full name",
           "message": "Nom complet"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.ZnVsbF9uYW1l.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "La concaténation du nom d'utilisateur du propriétaire du dépôt et du nom réduit, par exemple \"evzijst/interruptingcow\". C'est la même chaîne utilisée dans les URL Bitbucket."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.display_name": {
-          "source": "Has Issues",
+          "source": "Has issues",
           "message": "A des tickets"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX2lzc3Vlcw.desc": {
@@ -1560,7 +1560,7 @@
           "message": "\nLe suivi des tickets pour ce dépôt est activé. Les fonctionnalités\ndu suivi des tickets ne sont pas prises en charge pour les dépôts dans les espaces de travail\nadministrés via admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.display_name": {
-          "source": "Has Wiki",
+          "source": "Has wiki",
           "message": "A un wiki"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aGFzX3dpa2k.desc": {
@@ -1568,7 +1568,7 @@
           "message": "\nLe wiki pour ce dépôt est activé. Les fonctionnalités de\nwiki ne sont pas prises en charge pour les dépôts dans les espaces de travail\nadministrés via admin.atlassian.com.\n"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Est privé"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.bGFuZ3VhZ2U.display_name": {
@@ -1712,7 +1712,7 @@
           "message": "Projet"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.ZGVzY3JpcHRpb24.display_name": {
@@ -1720,7 +1720,7 @@
           "message": "Description"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
-          "source": "Has Publicly Visible Repos",
+          "source": "Has publicly visible repos",
           "message": "A des dépôts visibles publiquement"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
@@ -1728,7 +1728,7 @@
           "message": "\nIndique si le projet contient des dépôts visibles publiquement.\nNotez que les projets privés ne peuvent pas contenir de dépôts publics."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.display_name": {
-          "source": "Is Private",
+          "source": "Is private",
           "message": "Est privé"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.aXNfcHJpdmF0ZQ.desc": {
@@ -1772,7 +1772,7 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Mis à jour le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcHJvamVjdCNiOGQxNTQwMjc2ZTJiNTAxMDgwM2E3YmUwMDJlZDk3NDE3Mjg0M2QxYTBmYjViYTRlOGRmMDEzYmY2NjVhYjJh.field.dXVpZA.display_name": {
@@ -1804,7 +1804,7 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Mis à jour le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDoqcmVwb3NpdG9yeSNmNDQ4MzI1ZWM4YjVkZDhlOWE4N2YxNGYwN2MwN2E4OWQ2MTEyMDkyMmZmZjc4N2U0M2VhMWE4NDg1NmRlYmQ3.field.dXVpZA.display_name": {
@@ -1868,7 +1868,7 @@
           "message": "Le dépôt sur lequel travailler, spécifié par son slug ou par son UUID entre accolades.\n\nTous les autres éléments dont la portée est définie par un dépôt (commits, branches, pull requests) sont listés à partir de ce dépôt ; le modifier entraîne donc leur relecture."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
-          "source": "Redirect To",
+          "source": "Redirect to",
           "message": "Rediriger vers"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
@@ -2372,7 +2372,7 @@
           "message": "Le chemin du fichier auquel ce commentaire est ancré."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Partir de"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -2384,7 +2384,7 @@
           "message": "Le numéro de ligne de départ dans l'ancienne version du fichier, si le commentaire est multiligne. Null sinon."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Début à"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "Les membres auprès desquels demander une révision, sous la forme de leurs UUID de compte.\n\nBitbucket déclare ceci comme une liste d'objets utilisateur ; elle est présentée ici comme une liste d'identifiants et envoyée dans le format attendu par l'API.\n\nCette valeur est envoyée sous la forme de la liste d'objets utilisateur de Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Fermer la branche source"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Les membres auprès desquels demander une révision, sous la forme de leurs UUID de compte.\n\nBitbucket déclare ceci comme une liste d'objets utilisateur ; elle est présentée ici comme une liste d'identifiants et envoyée dans le format attendu par l'API.\n\nCette valeur est envoyée sous la forme de la liste d'objets utilisateur de Bitbucket, `[{\"type\": \"user\", \"uuid\": …}]`."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
-          "source": "Close Source Branch",
+          "source": "Close source branch",
           "message": "Fermer la branche source"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
@@ -3168,7 +3168,7 @@
           "message": "Le chemin du fichier auquel ce commentaire est ancré."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Partir de"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "Le numéro de ligne de départ dans l'ancienne version du fichier, si le commentaire est multiligne. Null sinon."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Début à"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3260,7 +3260,7 @@
           "message": "Le texte tel qu'il a été saisi par l'utilisateur."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.ZGVsZXRlZA.display_name": {
@@ -3300,7 +3300,7 @@
           "message": "Le chemin du fichier auquel ce commentaire est ancré."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Partir de"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3312,7 +3312,7 @@
           "message": "Le numéro de ligne de départ dans l'ancienne version du fichier, si le commentaire est multiligne. Null sinon."
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Début à"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmlubGluZSNjM2E1YWJmMjE0ODNiMDdkMmE3YjVkMzczOWNkZmE2MGJjZjM2MDc2MzgzOTEzYWI2Nzk3Zjg1ZDJhY2QyNGI1.field.c3RhcnRfdG8.short_desc": {
@@ -3408,7 +3408,7 @@
           "message": "Type"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXBkYXRlZF9vbg.display_name": {
-          "source": "Updated On",
+          "source": "Updated on",
           "message": "Mis à jour le"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.field.dXNlcg.display_name": {
@@ -3416,11 +3416,11 @@
           "message": "Utilisateur"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.Y3JlYXRlZF9vbg.display_name": {
-          "source": "Created On",
+          "source": "Created on",
           "message": "Créé le"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.ZGlzcGxheV9uYW1l.display_name": {
-          "source": "Display Name",
+          "source": "Display name",
           "message": "Nom d'affichage"
         },
         "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWc2JISmxjWFZsYzNSelgzQjFiR3hmY21WeGRXVnpkRjlwWkY5amIyMXRaVzUwYzE5d2IzTjA6KmFjY291bnQjNjBiODA2MTlkNzMwNDkwM2I2MTY2OTE4OTA5MWYxNGJlMDc5NTRkYzhkNGVjYTVmNDU4MGNlMDlkZmMzNjQ1Yw.field.bGlua3M.display_name": {
@@ -3692,7 +3692,7 @@
           "message": "Le chemin du fichier auquel ce commentaire est ancré."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.display_name": {
-          "source": "Start From",
+          "source": "Start from",
           "message": "Partir de"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfZnJvbQ.short_desc": {
@@ -3704,7 +3704,7 @@
           "message": "Le numéro de ligne de départ dans l'ancienne version du fichier, si le commentaire est multiligne. Null sinon."
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.display_name": {
-          "source": "Start To",
+          "source": "Start to",
           "message": "Début à"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.field.c3RhcnRfdG8.short_desc": {
@@ -3968,7 +3968,7 @@
           "message": "Le nombre d'enregistrements à renvoyer par requête, jusqu'au maximum de `100` autorisé par Bitbucket.\n\n`next` dans la réponse est l'URL de la page suivante ; effectuez la pagination sur sa présence plutôt que sur `size`, que Bitbucket ne renvoie pas pour toutes les collections."
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "Lister les espaces de travail"
         },
         "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
@@ -4148,7 +4148,7 @@
           "message": "Le nombre d'enregistrements à renvoyer par requête, jusqu'au maximum de `100` autorisé par Bitbucket.\n\n`next` dans la réponse est l'URL de la page suivante ; effectuez la pagination sur sa présence plutôt que sur `size`, que Bitbucket ne renvoie pas pour toutes les collections."
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "Rechercher des enregistrements"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
@@ -4172,7 +4172,7 @@
           "message": "La table avec laquelle travailler : `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` ou `branches`"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "Trouver un seul enregistrement"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4196,7 +4196,7 @@
           "message": "La table avec laquelle travailler : `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` ou `branches`"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "Créer des enregistrements"
         },
         "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
@@ -4220,7 +4220,7 @@
           "message": "La table avec laquelle travailler : `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` ou `branches`"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Mettre à jour des enregistrements"
         },
         "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "La table avec laquelle travailler : `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` ou `branches`"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Supprimer les enregistrements"
         },
         "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {

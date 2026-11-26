@@ -16,7 +16,7 @@
           "message": "Połącz z serwerami MCP w celu integracji narzędzi, zasobów i promptów AI"
         },
         "app.TUNQ.action.Y2FsbC10b29s.display_name": {
-          "source": "Call Tool",
+          "source": "Call tool",
           "message": "Wywołaj narzędzie"
         },
         "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
@@ -28,7 +28,7 @@
           "message": "Wykonaj narzędzie MCP z podanymi argumentami i zwróć wynik"
         },
         "app.TUNQ.action.bGlzdC10b29scw.display_name": {
-          "source": "List Tools",
+          "source": "List tools",
           "message": "Lista narzędzi"
         },
         "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
@@ -40,7 +40,7 @@
           "message": "Wyświetl listę wszystkich narzędzi dostępnych na serwerze MCP"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
-          "source": "Read Resource",
+          "source": "Read resource",
           "message": "Odczytaj zasób"
         },
         "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Odczytaj zawartość z zasobu MCP według identyfikatora URI"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
-          "source": "List Resources",
+          "source": "List resources",
           "message": "Lista zasobów"
         },
         "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
@@ -64,7 +64,7 @@
           "message": "Wyświetl listę wszystkich zasobów dostępnych na serwerze MCP"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
-          "source": "Get Prompt",
+          "source": "Get prompt",
           "message": "Pobierz prompt"
         },
         "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Pobierz szablon promptu z serwera MCP z argumentami"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
-          "source": "List Prompts",
+          "source": "List prompts",
           "message": "Lista promptów"
         },
         "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Wyświetl listę wszystkich promptów dostępnych na serwerze MCP"
         },
         "app.TUNQ.action.Y29tcGxldGU.display_name": {
-          "source": "Get Completion",
+          "source": "Get completion",
           "message": "Pobierz uzupełnienie"
         },
         "app.TUNQ.action.Y29tcGxldGU.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Pobierz sugestie autouzupełniania dla promptów lub zasobów"
         },
         "app.TUNQ.action.cGluZw.display_name": {
-          "source": "Ping Server",
+          "source": "Ping server",
           "message": "Pinguj serwer"
         },
         "app.TUNQ.action.cGluZw.short_desc": {

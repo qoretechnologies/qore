@@ -1080,7 +1080,7 @@
           "message": "音声を分離する対象のオーディオデータ。背景ノイズが除去され、音声のみが保持されます"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
-          "source": "Speech to Text",
+          "source": "Speech to text",
           "message": "Speech to Text"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "PCM 16ビット、16kHz モノラル、リトルエンディアン — 低レイテンシ"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
-          "source": "Voice Design",
+          "source": "Voice design",
           "message": "ボイスデザイン"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "取得するボイスの一意の識別子"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
-          "source": "Create Voice",
+          "source": "Create voice",
           "message": "音声を作成"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
@@ -1536,7 +1536,7 @@
           "message": "音声に関連付けるキーと値のラベル"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
-          "source": "Edit Voice",
+          "source": "Edit voice",
           "message": "ボイスを編集"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "音声に関連付けるキーと値のラベル"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
+          "source": "Delete voice",
           "message": "ボイスを削除"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
@@ -1692,7 +1692,7 @@
           "message": "取得する履歴アイテムの一意の識別子"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Delete History Item",
+          "source": "Delete history item",
           "message": "履歴アイテムを削除"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
@@ -1956,7 +1956,7 @@
           "message": "ダウンロードする吹き替え音声の言語コード（例: `es`、`fr`、`de`）"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
-          "source": "Delete Dubbing",
+          "source": "Delete dubbing",
           "message": "ダビングを削除"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "他のユーザーのダビングプロジェクトのみを表示"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Create Pronunciation Dictionary",
+          "source": "Create pronunciation dictionary",
           "message": "発音辞書を作成"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
@@ -2212,7 +2212,7 @@
           "message": "取得する発音辞書の一意の識別子"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
-          "source": "Add Pronunciation Rules",
+          "source": "Add pronunciation rules",
           "message": "発音ルールを追加"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {

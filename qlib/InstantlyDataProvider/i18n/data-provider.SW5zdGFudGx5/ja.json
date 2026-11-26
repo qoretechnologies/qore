@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "アカウント一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -400,7 +400,7 @@
           "message": "送信エラー"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
+          "source": "Create account",
           "message": "アカウントを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
@@ -488,7 +488,7 @@
           "message": "アクティブ"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "アカウントの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -512,7 +512,7 @@
           "message": "取得するアカウントの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.display_name": {
-          "source": "Patch Account",
+          "source": "Patch account",
           "message": "アカウントを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYWNjb3VudA.short_desc": {
@@ -560,7 +560,7 @@
           "message": "このアカウントに設定するカスタムトラッキングドメイン"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
+          "source": "Delete account",
           "message": "アカウントを削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
@@ -584,7 +584,7 @@
           "message": "削除する一意のアカウントUUID"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.display_name": {
-          "source": "Pause Account",
+          "source": "Pause account",
           "message": "アカウントを一時停止"
         },
         "app.SW5zdGFudGx5.action.cGF1c2UtYWNjb3VudA.short_desc": {
@@ -608,7 +608,7 @@
           "message": "一時停止する一意のアカウントUUID"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.display_name": {
-          "source": "Resume Account",
+          "source": "Resume account",
           "message": "アカウントを再開"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLWFjY291bnQ.short_desc": {
@@ -632,7 +632,7 @@
           "message": "再開する固有のアカウントUUID"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.display_name": {
-          "source": "Mark Account Fixed",
+          "source": "Mark account fixed",
           "message": "アカウントを修正済みとしてマーク"
         },
         "app.SW5zdGFudGx5.action.bWFyay1hY2NvdW50LWZpeGVk.short_desc": {
@@ -656,7 +656,7 @@
           "message": "修正済みとしてマークする一意のアカウントUUID"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.display_name": {
-          "source": "Test Account Vitals",
+          "source": "Test account vitals",
           "message": "アカウントのバイタルをテスト"
         },
         "app.SW5zdGFudGx5.action.dGVzdC1hY2NvdW50LXZpdGFscw.short_desc": {
@@ -680,7 +680,7 @@
           "message": "バイタルをテストする固有のアカウントUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.display_name": {
-          "source": "Get Warmup Analytics",
+          "source": "Get warmup analytics",
           "message": "ウォームアップアナリティクスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdhcm11cC1hbmFseXRpY3M.short_desc": {
@@ -704,7 +704,7 @@
           "message": "ウォームアップアナリティクスを取得するメールアドレスのリスト（1〜100件）"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.display_name": {
-          "source": "Get Custom Tracking Domain Status",
+          "source": "Get custom tracking domain status",
           "message": "カスタムトラッキングドメインステータスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10cmFja2luZy1kb21haW4tc3RhdHVz.short_desc": {
@@ -728,7 +728,7 @@
           "message": "ステータスを確認するオプションのカスタムトラッキングドメイン"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "キャンペーン一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -796,7 +796,7 @@
           "message": "名前でキャンペーンを絞り込み"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
+          "source": "Create campaign",
           "message": "キャンペーンを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "`True` の場合、このバリエーションは送信に使用されません。デフォルトではすべてのバリエーションが有効です"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
+          "source": "Get campaign",
           "message": "キャンペーンの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWdu.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "取得するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.display_name": {
-          "source": "Patch Campaign",
+          "source": "Patch campaign",
           "message": "キャンペーンを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24.short_desc": {
@@ -1088,7 +1088,7 @@
           "message": "1日に送信できる最大メール数の更新値"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.display_name": {
-          "source": "Delete Campaign",
+          "source": "Delete campaign",
           "message": "キャンペーンの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWdu.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "削除する一意のキャンペーンUUID"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.display_name": {
-          "source": "Update Campaign Status",
+          "source": "Update campaign status",
           "message": "キャンペーンステータスを更新"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWNhbXBhaWduLXN0YXR1cw.short_desc": {
@@ -1168,7 +1168,7 @@
           "message": "実行中のサブシーケンス"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.display_name": {
-          "source": "Share Campaign",
+          "source": "Share campaign",
           "message": "キャンペーンを共有"
         },
         "app.SW5zdGFudGx5.action.c2hhcmUtY2FtcGFpZ24.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "共有リンクを生成するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Analytics",
+          "source": "Get campaign analytics",
           "message": "キャンペーンアナリティクスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcw.short_desc": {
@@ -1216,7 +1216,7 @@
           "message": "アナリティクスを取得するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.display_name": {
-          "source": "Get Campaign Analytics Overview",
+          "source": "Get campaign analytics overview",
           "message": "キャンペーンアナリティクス概要の取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWFuYWx5dGljcy1vdmVydmlldw.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "アナリティクス概要を取得するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.display_name": {
-          "source": "Get Campaign Daily Analytics",
+          "source": "Get campaign daily analytics",
           "message": "キャンペーン日別アナリティクスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWRhaWx5LWFuYWx5dGljcw.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "日別アナリティクスを取得するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.display_name": {
-          "source": "Get Campaign Step Analytics",
+          "source": "Get campaign step analytics",
           "message": "キャンペーンステップ別アナリティクスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN0ZXAtYW5hbHl0aWNz.short_desc": {
@@ -1288,7 +1288,7 @@
           "message": "ステップ別アナリティクスを取得するキャンペーンの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.display_name": {
-          "source": "List Campaign Subsequences",
+          "source": "List campaign subsequences",
           "message": "キャンペーンサブシーケンスのリスト"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jYW1wYWlnbi1zdWJzZXF1ZW5jZXM.short_desc": {
@@ -1336,7 +1336,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Create Campaign Subsequence",
+          "source": "Create campaign subsequence",
           "message": "キャンペーンサブシーケンスを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "作成するサブシーケンスの名前"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Get Campaign Subsequence",
+          "source": "Get campaign subsequence",
           "message": "キャンペーンサブシーケンスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1396,7 +1396,7 @@
           "message": "取得するサブシーケンスの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.display_name": {
-          "source": "Patch Campaign Subsequence",
+          "source": "Patch campaign subsequence",
           "message": "キャンペーンサブシーケンスを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY2FtcGFpZ24tc3Vic2VxdWVuY2U.short_desc": {
@@ -1432,7 +1432,7 @@
           "message": "更新後のサブシーケンス名"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Delete Campaign Subsequence",
+          "source": "Delete campaign subsequence",
           "message": "キャンペーンサブシーケンスの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWNhbXBhaWduLXN1YnNlcXVlbmNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "削除する一意のサブシーケンスUUID"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.display_name": {
-          "source": "Pause Subsequence",
+          "source": "Pause subsequence",
           "message": "サブシーケンスを一時停止"
         },
         "app.SW5zdGFudGx5.action.cGF1c2Utc3Vic2VxdWVuY2U.short_desc": {
@@ -1480,7 +1480,7 @@
           "message": "一時停止する一意のサブシーケンスUUID"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Resume Subsequence",
+          "source": "Resume subsequence",
           "message": "サブシーケンスを再開"
         },
         "app.SW5zdGFudGx5.action.cmVzdW1lLXN1YnNlcXVlbmNl.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "再開する固有のサブシーケンスUUID"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Duplicate Subsequence",
+          "source": "Duplicate subsequence",
           "message": "サブシーケンスの複製"
         },
         "app.SW5zdGFudGx5.action.ZHVwbGljYXRlLXN1YnNlcXVlbmNl.short_desc": {
@@ -1528,7 +1528,7 @@
           "message": "複製する一意のサブシーケンスUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "リードを一覧表示"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkcw.short_desc": {
@@ -1624,7 +1624,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
+          "source": "Create lead",
           "message": "リードを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "リードを追加するリードリストのUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
+          "source": "Get lead",
           "message": "リードを取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQ.short_desc": {
@@ -1756,7 +1756,7 @@
           "message": "取得するリードの一意の識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.display_name": {
-          "source": "Patch Lead",
+          "source": "Patch lead",
           "message": "リードを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZA.short_desc": {
@@ -1840,7 +1840,7 @@
           "message": "リードのウェブサイトURL"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
+          "source": "Delete lead",
           "message": "リードを削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "削除するリードの一意識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.display_name": {
-          "source": "Merge Leads",
+          "source": "Merge leads",
           "message": "リードを統合"
         },
         "app.SW5zdGFudGx5.action.bWVyZ2UtbGVhZHM.short_desc": {
@@ -1900,7 +1900,7 @@
           "message": "統合する2番目のリードの一意の識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.display_name": {
-          "source": "Move Leads",
+          "source": "Move leads",
           "message": "リードを移動"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkcw.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "リードの移動先となるリードリストのUUID"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.display_name": {
-          "source": "Move Lead to Subsequence",
+          "source": "Move lead to subsequence",
           "message": "リードをサブシーケンスに移動"
         },
         "app.SW5zdGFudGx5.action.bW92ZS1sZWFkLXRvLXN1YnNlcXVlbmNl.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "移動先サブシーケンスの一意識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.display_name": {
-          "source": "Remove Lead from Subsequence",
+          "source": "Remove lead from subsequence",
           "message": "サブシーケンスからリードを削除"
         },
         "app.SW5zdGFudGx5.action.cmVtb3ZlLWxlYWQtZnJvbS1zdWJzZXF1ZW5jZQ.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "リードを削除する対象のサブシーケンスの一意識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.display_name": {
-          "source": "Update Lead Interest Status",
+          "source": "Update lead interest status",
           "message": "リードの関心ステータスを更新"
         },
         "app.SW5zdGFudGx5.action.dXBkYXRlLWxlYWQtaW50ZXJlc3Qtc3RhdHVz.short_desc": {
@@ -2088,7 +2088,7 @@
           "message": "担当者違い"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.display_name": {
-          "source": "Bulk Assign Leads",
+          "source": "Bulk assign leads",
           "message": "リードの一括割り当て"
         },
         "app.SW5zdGFudGx5.action.YnVsay1hc3NpZ24tbGVhZHM.short_desc": {
@@ -2124,7 +2124,7 @@
           "message": "リードの割り当て先となるユーザーUUIDのリスト"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.display_name": {
-          "source": "Export Leads",
+          "source": "Export leads",
           "message": "リードのエクスポート"
         },
         "app.SW5zdGFudGx5.action.ZXhwb3J0LWxlYWRz.short_desc": {
@@ -2172,7 +2172,7 @@
           "message": "エクスポートのフォーマット"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.display_name": {
-          "source": "List Lead Lists",
+          "source": "List lead lists",
           "message": "リードリスト一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxpc3Rz.short_desc": {
@@ -2196,7 +2196,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Create Lead List",
+          "source": "Create lead list",
           "message": "リードリストの作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2220,7 +2220,7 @@
           "message": "作成するリードリストの名前"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.display_name": {
-          "source": "Get Lead List",
+          "source": "Get lead list",
           "message": "リードリストの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGlzdA.short_desc": {
@@ -2244,7 +2244,7 @@
           "message": "取得するリードリストの一意の識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.display_name": {
-          "source": "Patch Lead List",
+          "source": "Patch lead list",
           "message": "リードリストを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1saXN0.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "リードリストの新しい名前"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.display_name": {
-          "source": "Delete Lead List",
+          "source": "Delete lead list",
           "message": "リードリストの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGlzdA.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "削除するリードリストの一意識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.display_name": {
-          "source": "List Lead Labels",
+          "source": "List lead labels",
           "message": "リードラベル一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1sZWFkLWxhYmVscw.short_desc": {
@@ -2364,7 +2364,7 @@
           "message": "1ページあたりに返す結果の最大数（1〜100）"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Create Lead Label",
+          "source": "Create lead label",
           "message": "リードラベルの作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "ラベルの説明"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.display_name": {
-          "source": "Get Lead Label",
+          "source": "Get lead label",
           "message": "リードラベルの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWxlYWQtbGFiZWw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "取得するラベルの一意の識別子（UUID）"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.display_name": {
-          "source": "Patch Lead Label",
+          "source": "Patch lead label",
           "message": "リードラベルを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtbGVhZC1sYWJlbA.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "ラベルの説明"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.display_name": {
-          "source": "Delete Lead Label",
+          "source": "Delete lead label",
           "message": "リードレーベルの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWxlYWQtbGFiZWw.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "レーベルが削除されたときにリードおよびメールを再割り当てする関心ステータス"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "メールを一覧表示"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -2632,7 +2632,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
+          "source": "Get email",
           "message": "メールの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWls.short_desc": {
@@ -2656,7 +2656,7 @@
           "message": "取得するメールの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.display_name": {
-          "source": "Patch Email",
+          "source": "Patch email",
           "message": "メールを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtZW1haWw.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "更新されたメールの本文コンテンツ"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
+          "source": "Delete email",
           "message": "メールの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2728,7 +2728,7 @@
           "message": "削除する一意のメールUUID"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.display_name": {
-          "source": "Reply to Email",
+          "source": "Reply to email",
           "message": "メールに返信"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktdG8tZW1haWw.short_desc": {
@@ -2776,7 +2776,7 @@
           "message": "返信の送信元メールアドレス"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.display_name": {
-          "source": "Count Unread Emails",
+          "source": "Count unread emails",
           "message": "未読メール数をカウント"
         },
         "app.SW5zdGFudGx5.action.Y291bnQtdW5yZWFkLWVtYWlscw.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "受信トレイ内の未読メールの件数を取得します。"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.display_name": {
-          "source": "Mark Thread as Read",
+          "source": "Mark thread as read",
           "message": "スレッドを既読としてマーク"
         },
         "app.SW5zdGFudGx5.action.bWFyay10aHJlYWQtYXMtcmVhZA.short_desc": {
@@ -2812,7 +2812,7 @@
           "message": "スレッドを既読としてマークするメールの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.display_name": {
-          "source": "Get Campaign for Email",
+          "source": "Get campaign for email",
           "message": "メールのキャンペーンを取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWNhbXBhaWduLWZvci1lbWFpbA.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "キャンペーンを取得するメールの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.display_name": {
-          "source": "List Block List",
+          "source": "List block list",
           "message": "ブロックリストの取得"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1ibG9jay1saXN0.short_desc": {
@@ -2860,7 +2860,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Create Block List Entry",
+          "source": "Create block list entry",
           "message": "ブロックリストエントリを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "ブロックリストに追加するメールアドレスまたはドメイン"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.display_name": {
-          "source": "Delete Block List Entry",
+          "source": "Delete block list entry",
           "message": "ブロックリストエントリの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWJsb2NrLWxpc3QtZW50cnk.short_desc": {
@@ -2908,7 +2908,7 @@
           "message": "削除する一意のブロックリストエントリUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.display_name": {
-          "source": "Patch Block List",
+          "source": "Patch block list",
           "message": "ブロックリストを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtYmxvY2stbGlzdA.short_desc": {
@@ -2944,7 +2944,7 @@
           "message": "ブロックリストエントリの更新後のメールアドレスまたはドメイン"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.display_name": {
-          "source": "List Custom Tags",
+          "source": "List custom tags",
           "message": "カスタムタグ一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1jdXN0b20tdGFncw.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Create Custom Tag",
+          "source": "Create custom tag",
           "message": "カスタムタグを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3016,7 +3016,7 @@
           "message": "タグが適用されるリソースタイプ（例: account、campaign）"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.display_name": {
-          "source": "Get Custom Tag",
+          "source": "Get custom tag",
           "message": "カスタムタグの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWN1c3RvbS10YWc.short_desc": {
@@ -3040,7 +3040,7 @@
           "message": "取得するカスタムタグの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.display_name": {
-          "source": "Patch Custom Tag",
+          "source": "Patch custom tag",
           "message": "カスタムタグを更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtY3VzdG9tLXRhZw.short_desc": {
@@ -3088,7 +3088,7 @@
           "message": "カスタムタグの更新後のリソースタイプ"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.display_name": {
-          "source": "Delete Custom Tag",
+          "source": "Delete custom tag",
           "message": "カスタムタグの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWN1c3RvbS10YWc.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "削除する一意のカスタムタグUUID"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.display_name": {
-          "source": "Assign Custom Tag",
+          "source": "Assign custom tag",
           "message": "カスタムタグの割り当て"
         },
         "app.SW5zdGFudGx5.action.YXNzaWduLWN1c3RvbS10YWc.short_desc": {
@@ -3180,7 +3180,7 @@
           "message": "タグの割り当てを解除する"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.display_name": {
-          "source": "List Inbox Placement Tests",
+          "source": "List inbox placement tests",
           "message": "受信トレイ配置テスト一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pbmJveC1wbGFjZW1lbnQtdGVzdHM.short_desc": {
@@ -3204,7 +3204,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Create Inbox Placement Test",
+          "source": "Create inbox placement test",
           "message": "受信トレイ配置テストを作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "外部から"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Get Inbox Placement Test",
+          "source": "Get inbox placement test",
           "message": "受信トレイ配置テストの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "取得する受信トレイ配置テストの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.display_name": {
-          "source": "Patch Inbox Placement Test",
+          "source": "Patch inbox placement test",
           "message": "インボックス配置テストを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtaW5ib3gtcGxhY2VtZW50LXRlc3Q.short_desc": {
@@ -3352,7 +3352,7 @@
           "message": "完了"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.display_name": {
-          "source": "Delete Inbox Placement Test",
+          "source": "Delete inbox placement test",
           "message": "受信トレイ配置テストの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLWluYm94LXBsYWNlbWVudC10ZXN0.short_desc": {
@@ -3376,7 +3376,7 @@
           "message": "削除する一意の受信トレイ配置テストUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.display_name": {
-          "source": "Get Inbox Placement Analytics",
+          "source": "Get inbox placement analytics",
           "message": "受信トレイ配置アナリティクスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWluYm94LXBsYWNlbWVudC1hbmFseXRpY3M.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "プロバイダー間の配信到達性を示す受信トレイ配置アナリティクスデータを取得します。"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.display_name": {
-          "source": "Get IP Analytics Stats by Date",
+          "source": "Get IP analytics stats by date",
           "message": "日付別IPアナリティクス統計の取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS1kYXRl.short_desc": {
@@ -3424,7 +3424,7 @@
           "message": "アナリティクスの日付範囲フィルターの終了日"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.display_name": {
-          "source": "Get IP Analytics Stats by Test",
+          "source": "Get IP analytics stats by test",
           "message": "テスト別IPアナリティクス統計の取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWFuYWx5dGljcy1zdGF0cy1ieS10ZXN0.short_desc": {
@@ -3448,7 +3448,7 @@
           "message": "統計を取得する受信トレイ配置テストの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.display_name": {
-          "source": "Get IP Deliverability Insights",
+          "source": "Get IP deliverability insights",
           "message": "IP到達性インサイトの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWRlbGl2ZXJhYmlsaXR5LWluc2lnaHRz.short_desc": {
@@ -3460,7 +3460,7 @@
           "message": "受信トレイ配置テストの到達性インサイトを取得します。"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.display_name": {
-          "source": "List IP Analytics",
+          "source": "List IP analytics",
           "message": "IPアナリティクス一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1hbmFseXRpY3M.short_desc": {
@@ -3484,7 +3484,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.display_name": {
-          "source": "Get IP Blacklist Report",
+          "source": "Get IP blacklist report",
           "message": "IPブラックリストレポートの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWlwLWJsYWNrbGlzdC1yZXBvcnQ.short_desc": {
@@ -3508,7 +3508,7 @@
           "message": "取得するブラックリストレポートの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.display_name": {
-          "source": "List IP Blacklist Reports",
+          "source": "List IP blacklist reports",
           "message": "IPブラックリストレポート一覧"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1pcC1ibGFja2xpc3QtcmVwb3J0cw.short_desc": {
@@ -3556,7 +3556,7 @@
           "message": "検証するメールアドレス"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.display_name": {
-          "source": "Get Email Verification Status",
+          "source": "Get email verification status",
           "message": "メール検証ステータスの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWVtYWlsLXZlcmlmaWNhdGlvbi1zdGF0dXM.short_desc": {
@@ -3580,7 +3580,7 @@
           "message": "ステータスを確認するメール検証の一意のUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.display_name": {
-          "source": "List Background Jobs",
+          "source": "List background jobs",
           "message": "バックグラウンドジョブのリスト"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1iYWNrZ3JvdW5kLWpvYnM.short_desc": {
@@ -3604,7 +3604,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.display_name": {
-          "source": "Get Background Job",
+          "source": "Get background job",
           "message": "バックグラウンドジョブの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LWJhY2tncm91bmQtam9i.short_desc": {
@@ -3628,7 +3628,7 @@
           "message": "取得するバックグラウンドジョブの一意のUUID"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
-          "source": "Get Workspace",
+          "source": "Get workspace",
           "message": "ワークスペースを取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
@@ -3640,7 +3640,7 @@
           "message": "現在のワークスペースに関する情報を取得します。"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.display_name": {
-          "source": "Get Workspace Admin",
+          "source": "Get workspace admin",
           "message": "ワークスペース管理者の取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1hZG1pbg.short_desc": {
@@ -3652,7 +3652,7 @@
           "message": "ワークスペースに関する管理者情報を取得します。"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.display_name": {
-          "source": "Patch Workspace",
+          "source": "Patch workspace",
           "message": "ワークスペースを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNl.short_desc": {
@@ -3676,7 +3676,7 @@
           "message": "ワークスペースの新しい名前"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.display_name": {
-          "source": "List Workspace Members",
+          "source": "List workspace members",
           "message": "ワークスペースメンバーの一覧取得"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtbWVtYmVycw.short_desc": {
@@ -3700,7 +3700,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Create Workspace Member",
+          "source": "Create workspace member",
           "message": "ワークスペースメンバーの作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3760,7 +3760,7 @@
           "message": "ワークスペースメンバーの姓"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Get Workspace Member",
+          "source": "Get workspace member",
           "message": "ワークスペースメンバーの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3784,7 +3784,7 @@
           "message": "取得する一意のワークスペースメンバーUUID"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.display_name": {
-          "source": "Patch Workspace Member",
+          "source": "Patch workspace member",
           "message": "ワークスペースメンバーを一部更新"
         },
         "app.SW5zdGFudGx5.action.cGF0Y2gtd29ya3NwYWNlLW1lbWJlcg.short_desc": {
@@ -3844,7 +3844,7 @@
           "message": "ワークスペースメンバーの新しい姓"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Member",
+          "source": "Delete workspace member",
           "message": "ワークスペースメンバーの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1tZW1iZXI.short_desc": {
@@ -3868,7 +3868,7 @@
           "message": "削除する一意のワークスペースメンバーUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.display_name": {
-          "source": "List Workspace Group Members",
+          "source": "List workspace group members",
           "message": "ワークスペースグループメンバーのリスト"
         },
         "app.SW5zdGFudGx5.action.bGlzdC13b3Jrc3BhY2UtZ3JvdXAtbWVtYmVycw.short_desc": {
@@ -3892,7 +3892,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Create Workspace Group Member",
+          "source": "Create workspace group member",
           "message": "ワークスペースグループメンバーの作成"
         },
         "app.SW5zdGFudGx5.action.Y3JlYXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3940,7 +3940,7 @@
           "message": "ワークスペースグループ内でメンバーに割り当てるロール"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Get Workspace Group Member",
+          "source": "Get workspace group member",
           "message": "ワークスペースグループメンバーの取得"
         },
         "app.SW5zdGFudGx5.action.Z2V0LXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3964,7 +3964,7 @@
           "message": "取得する一意のワークスペースグループメンバーUUID"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.display_name": {
-          "source": "Delete Workspace Group Member",
+          "source": "Delete workspace group member",
           "message": "ワークスペースグループメンバーの削除"
         },
         "app.SW5zdGFudGx5.action.ZGVsZXRlLXdvcmtzcGFjZS1ncm91cC1tZW1iZXI.short_desc": {
@@ -3988,7 +3988,7 @@
           "message": "削除する一意のワークスペースグループメンバーUUID"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.display_name": {
-          "source": "List Audit Logs",
+          "source": "List audit logs",
           "message": "監査ログのリスト"
         },
         "app.SW5zdGFudGx5.action.bGlzdC1hdWRpdC1sb2dz.short_desc": {
@@ -4072,7 +4072,7 @@
           "message": "1ページあたりに返す結果の最大数"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.display_name": {
-          "source": "Reply Received",
+          "source": "Reply received",
           "message": "返信を受信"
         },
         "app.SW5zdGFudGx5.action.cmVwbHktcmVjZWl2ZWQ.short_desc": {
@@ -4084,7 +4084,7 @@
           "message": "このイベントは、キャンペーンメールへの返信を受信したときにトリガーされます。"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
+          "source": "Email bounced",
           "message": "メールのバウンス"
         },
         "app.SW5zdGFudGx5.action.ZW1haWwtYm91bmNlZA.short_desc": {
@@ -4096,7 +4096,7 @@
           "message": "このイベントは、キャンペーンメールがバウンスしたときにトリガーされます。"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Interested",
+          "source": "Lead interested",
           "message": "リードの関心あり"
         },
         "app.SW5zdGFudGx5.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
@@ -4108,7 +4108,7 @@
           "message": "このイベントは、リードの興味・関心ステータスが「関心あり」に変わったときにトリガーされます。"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.display_name": {
-          "source": "Campaign Completed",
+          "source": "Campaign completed",
           "message": "キャンペーン完了"
         },
         "app.SW5zdGFudGx5.action.Y2FtcGFpZ24tY29tcGxldGVk.short_desc": {

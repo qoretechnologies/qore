@@ -16,8 +16,8 @@
           "message": "Catch fraud, forecast sales, segment customers, and simplify complex data — all in your data pipeline without external dependencies. Includes anomaly detection (flag unusual transactions or sensor failures), clustering (discover customer segments or geographic hotspots), forecasting (predict revenue with seasonal patterns), regression (estimate prices from features), and dimensionality reduction (compress 50 fields to 3 key values)."
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.display_name": {
-          "source": "Detect Unusual Data Points",
-          "message": "Detect Unusual Data Points"
+          "source": "Detect unusual data points",
+          "message": "Detect unusual data points"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
           "source": "Finds anomalies by isolating unusual records from normal ones",
@@ -88,8 +88,8 @@
           "message": "A value between `0.0` and `1.0` that determines when a record is flagged as anomalous; records scoring at or above this threshold are classified as anomalies; lower values flag more records as anomalous, higher values flag fewer.\n\n**Typical values**: `0.5` (standard), `0.6`–`0.7` (conservative — only obvious anomalies); default: `0.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Find Natural Groups in Data",
-          "message": "Find Natural Groups in Data"
+          "source": "Find natural groups in data",
+          "message": "Find natural groups in data"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
           "source": "Discovers groups based on data density without specifying how many",
@@ -184,8 +184,8 @@
           "message": "Measures the angle between data points rather than magnitude; best when the direction matters more than the size of values"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.display_name": {
-          "source": "Divide Data into Groups",
-          "message": "Divide Data into Groups"
+          "source": "Divide data into groups",
+          "message": "Divide data into groups"
         },
         "app.TUwtQW5hbHl0aWNz.action.a21lYW5zLWNsdXN0ZXJpbmc.short_desc": {
           "source": "Assigns each record to one of a specified number of groups",
@@ -288,8 +288,8 @@
           "message": "When `output_mode` is `dataframe`, include `centroid_distance_<n>` columns for each cluster centroid. Disable this when downstream steps only need the winning `cluster` and nearest `distance` values; default: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.display_name": {
-          "source": "Simplify Complex Data",
-          "message": "Simplify Complex Data"
+          "source": "Simplify complex data",
+          "message": "Simplify complex data"
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
           "source": "Reduces many fields to fewer combined values preserving key patterns",
@@ -380,8 +380,8 @@
           "message": "When `output_mode` is `dataframe`, include the original input fields alongside `component_<n>` columns. Disable this when downstream steps only need principal components to reduce output size and improve throughput; default: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.display_name": {
-          "source": "Forecast Future Values",
-          "message": "Forecast Future Values"
+          "source": "Forecast future values",
+          "message": "Forecast future values"
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
           "source": "Predicts future values accounting for trends and seasonal patterns",
@@ -528,8 +528,8 @@
           "message": "A value between `0.0` and `1.0` controlling how rapidly the trend flattens in long-range forecasts; values closer to `1.0` allow the trend to persist longer; values closer to `0.0` flatten the trend more quickly; only used when damped trend is enabled.\n\n**Typical values**: `0.8`–`0.98` (common range); leave unset to let the algorithm choose automatically"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Values from Input Data",
-          "message": "Predict Values from Input Data"
+          "source": "Predict values from input data",
+          "message": "Predict values from input data"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
           "source": "Learns a formula to predict a target value from input fields",
@@ -600,8 +600,8 @@
           "message": "When enabled, input fields are scaled to have similar ranges before fitting; this can improve accuracy when input fields have very different units or magnitudes (e.g., mixing square feet and number of rooms); default: `False` (disabled)"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.display_name": {
-          "source": "Detect Local Outliers",
-          "message": "Detect Local Outliers"
+          "source": "Detect local outliers",
+          "message": "Detect local outliers"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9m.short_desc": {
           "source": "Finds points that are unusual compared to their neighbors",
@@ -660,8 +660,8 @@
           "message": "The outlier score cutoff; a score of `1.0` means a point has the same density as its neighbors (normal); scores significantly above `1.0` indicate the point is in a less dense region than its neighbors (anomalous); lower thresholds flag more records.\n\n**Typical values**: `1.5` (standard — catches moderate outliers), `2.0` (conservative — only strong outliers); default: `1.5`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.display_name": {
-          "source": "Group Data with Probabilities",
-          "message": "Group Data with Probabilities"
+          "source": "Group data with probabilities",
+          "message": "Group data with probabilities"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z21t.short_desc": {
           "source": "Assigns each record to groups with probability scores",
@@ -736,8 +736,8 @@
           "message": "Clusters are axis-aligned ellipses; faster and more stable with limited data but cannot capture correlations between fields"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.display_name": {
-          "source": "Run Pre-Trained Model",
-          "message": "Run Pre-Trained Model"
+          "source": "Run pre-trained model",
+          "message": "Run pre-trained model"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.short_desc": {
           "source": "Runs a pre-trained ONNX model on data records",
@@ -968,8 +968,8 @@
           "message": "When `output_mode` is `columns` or `dataframe`, include the original input feature columns alongside ONNX output columns. Disable this when downstream steps only need model outputs to reduce output size and improve throughput. Default: `False`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.display_name": {
-          "source": "Run Registered Model",
-          "message": "Run Registered Model"
+          "source": "Run registered model",
+          "message": "Run registered model"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.short_desc": {
           "source": "Runs a pre-trained model loaded from the model registry",
@@ -1188,8 +1188,8 @@
           "message": "Optional `tokenizer.json` artifact name to load from the model registry for `causal-lm` execution. Omit this when the package manifest already identifies the tokenizer artifact."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.display_name": {
-          "source": "Separate Trends and Seasonal Patterns",
-          "message": "Separate Trends and Seasonal Patterns"
+          "source": "Separate trends and seasonal patterns",
+          "message": "Separate trends and seasonal patterns"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
           "source": "Breaks time series data into trend, seasonal, and leftover parts",
@@ -1264,8 +1264,8 @@
           "message": "Seasonal variations scale with the overall level; best when the seasonal pattern grows as the data values increase"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.display_name": {
-          "source": "Put All Fields on the Same Scale",
-          "message": "Put All Fields on the Same Scale"
+          "source": "Put all fields on the same scale",
+          "message": "Put all fields on the same scale"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.short_desc": {
           "source": "Makes fields comparable by adjusting each to a common scale",
@@ -1332,8 +1332,8 @@
           "message": "When `output_mode` is `dataframe`, include the original input fields alongside the `scaled_<field>` columns. Disable this when downstream steps only need the scaled columns to reduce output size and improve throughput; default: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.display_name": {
-          "source": "Normalize Values to a Range",
-          "message": "Normalize Values to a Range"
+          "source": "Normalize values to a range",
+          "message": "Normalize values to a range"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.short_desc": {
           "source": "Converts field values to a fixed range like 0 to 1",
@@ -1424,8 +1424,8 @@
           "message": "When `output_mode` is `dataframe`, include the original input fields alongside the `scaled_<field>` columns. Disable this when downstream steps only need normalized columns to reduce output size and improve throughput; default: `True`"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.display_name": {
-          "source": "Fill In Missing Data",
-          "message": "Fill In Missing Data"
+          "source": "Fill in missing data",
+          "message": "Fill in missing data"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
@@ -1516,8 +1516,8 @@
           "message": "The number to use for filling gaps when the fill method is set to \"Fixed Value\". For example, `0` to fill with zero, or `-1` as a sentinel value; ignored when using other fill methods; default: `0.0`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.display_name": {
-          "source": "Score Your Category Predictions",
-          "message": "Score Your Category Predictions"
+          "source": "Score your category predictions",
+          "message": "Score your category predictions"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2xhc3NpZmljYXRpb24tbWV0cmljcw.short_desc": {
           "source": "Checks how often your model picks the right category",
@@ -1564,8 +1564,8 @@
           "message": "How many records to collect before computing a quality score. All records in the batch are evaluated together.\n\n**Tip**: use at least `50` for meaningful scores; `200`+ for a detailed per-category breakdown"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.display_name": {
-          "source": "Score Your Number Predictions",
-          "message": "Score Your Number Predictions"
+          "source": "Score your number predictions",
+          "message": "Score your number predictions"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVncmVzc2lvbi1tZXRyaWNz.short_desc": {
           "source": "Checks how close your predicted numbers are to the actual values",
@@ -1612,8 +1612,8 @@
           "message": "How many records to collect before computing a quality score. All records in the batch are evaluated together.\n\n**Tip**: use at least `30` for meaningful scores; `200`+ for a stable assessment"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.display_name": {
-          "source": "Score Your Data Groupings",
-          "message": "Score Your Data Groupings"
+          "source": "Score your data groupings",
+          "message": "Score your data groupings"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.short_desc": {
           "source": "Checks whether your groups are distinct and meaningful",
@@ -1660,8 +1660,8 @@
           "message": "How many records to collect before computing a quality score. All records in the batch are evaluated together. The batch must contain at least 2 distinct groups.\n\n**Tip**: use at least `50` for meaningful scores"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.display_name": {
-          "source": "Categorize Records",
-          "message": "Categorize Records"
+          "source": "Categorize records",
+          "message": "Categorize records"
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
           "source": "Predicts which category each record belongs to based on its features",
@@ -1784,8 +1784,8 @@
           "message": "Whether to include a baseline constant. This should almost always be enabled — it allows the model to account for the overall tendency in the data (e.g., if most applications are approved, the baseline captures that).\n\nDefault: enabled"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify by Similarity",
-          "message": "Classify by Similarity"
+          "source": "Classify by similarity",
+          "message": "Classify by similarity"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
           "source": "Predicts each record's category based on its nearest neighbors",
@@ -1908,8 +1908,8 @@
           "message": "Neighbors that are more similar to the new record have a bigger say in the prediction — a very similar record counts more than a somewhat similar one"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers by Similarity",
-          "message": "Predict Numbers by Similarity"
+          "source": "Predict numbers by similarity",
+          "message": "Predict numbers by similarity"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.short_desc": {
           "source": "Predicts a numeric value based on similar records",
@@ -2032,8 +2032,8 @@
           "message": "Records that are more similar to the new record have a bigger effect on the predicted value"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Decision Rules",
-          "message": "Classify with Decision Rules"
+          "source": "Classify with decision rules",
+          "message": "Classify with decision rules"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
           "source": "Learns if/then rules from data to categorize records",
@@ -2120,8 +2120,8 @@
           "message": "Measures the information gained by each split. May produce slightly more balanced trees but is computationally slower"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Decision Rules",
-          "message": "Predict Numbers with Decision Rules"
+          "source": "Predict numbers with decision rules",
+          "message": "Predict numbers with decision rules"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
           "source": "Learns if/then rules from data to estimate numeric values",
@@ -2180,8 +2180,8 @@
           "message": "The maximum number of levels in the decision tree. Deeper trees can capture more complex patterns but may memorize the training data instead of learning general rules.\n\n**Tip**: start with `5`–`15`; increase if accuracy is too low, decrease if the model overfits\n\nDefault: `10`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.display_name": {
-          "source": "Classify with Multiple Decision Trees",
-          "message": "Classify with Multiple Decision Trees"
+          "source": "Classify with multiple decision trees",
+          "message": "Classify with multiple decision trees"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.short_desc": {
           "source": "Combines many decision trees for more accurate categorization",
@@ -2280,8 +2280,8 @@
           "message": "Each tree considers log2 of the total number of fields at each split. Uses fewer features, increasing tree diversity"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.display_name": {
-          "source": "Predict Numbers with Multiple Trees",
-          "message": "Predict Numbers with Multiple Trees"
+          "source": "Predict numbers with multiple trees",
+          "message": "Predict numbers with multiple trees"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
           "source": "Combines many decision trees for more accurate numeric predictions",
@@ -2380,8 +2380,8 @@
           "message": "Each tree considers log2 of the total number of fields at each split. Uses fewer features, increasing tree diversity"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.display_name": {
-          "source": "Classify with Gradient Boosting",
-          "message": "Classify with Gradient Boosting"
+          "source": "Classify with gradient boosting",
+          "message": "Classify with gradient boosting"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LWNsYXNzaWZpY2F0aW9u.short_desc": {
           "source": "Sequentially builds trees that correct each other's mistakes",
@@ -2504,8 +2504,8 @@
           "message": "The maximum number of levels in each tree. Gradient boosting typically uses shallow trees (stumps or small trees) that each capture one aspect of the pattern.\n\n**Tip**: `2`–`6` works best for gradient boosting; deeper trees risk overfitting\n\nDefault: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.display_name": {
-          "source": "Predict Numbers with Gradient Boosting",
-          "message": "Predict Numbers with Gradient Boosting"
+          "source": "Predict numbers with gradient boosting",
+          "message": "Predict numbers with gradient boosting"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z2J0LXJlZ3Jlc3Npb24.short_desc": {
           "source": "Sequentially builds trees for accurate numeric predictions",
@@ -2628,8 +2628,8 @@
           "message": "The maximum number of levels in each tree. Gradient boosting typically uses shallow trees that each capture one aspect of the pattern.\n\n**Tip**: `2`–`6` works best for gradient boosting; deeper trees risk overfitting\n\nDefault: `3`"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.display_name": {
-          "source": "Compute Rolling Statistics",
-          "message": "Compute Rolling Statistics"
+          "source": "Compute rolling statistics",
+          "message": "Compute rolling statistics"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
           "source": "Enriches each record with rolling window statistics for numeric fields",
@@ -2716,8 +2716,8 @@
           "message": "The total of all values in the current window. Useful for tracking cumulative metrics like rolling revenue or total events"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.display_name": {
-          "source": "Smooth with Moving Average",
-          "message": "Smooth with Moving Average"
+          "source": "Smooth with moving average",
+          "message": "Smooth with moving average"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.short_desc": {
           "source": "Enriches each record with an exponential weighted moving average",
@@ -2792,8 +2792,8 @@
           "message": "Almost no smoothing — tracks the raw signal closely, best for detecting sudden shifts immediately"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.display_name": {
-          "source": "Profile Data Quality",
-          "message": "Profile Data Quality"
+          "source": "Profile data quality",
+          "message": "Profile data quality"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
           "source": "Profiles data quality for specified fields in a batch of records",
@@ -2828,8 +2828,8 @@
           "message": "How many records to collect before computing a profile report. All records in the batch are analyzed together.\n\n**Tip**: use at least `50` for meaningful statistics; `200`+ for reliable outlier detection"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.display_name": {
-          "source": "Validate Record Schema",
-          "message": "Validate Record Schema"
+          "source": "Validate record schema",
+          "message": "Validate record schema"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
           "source": "Validates each record against a schema",
@@ -2888,8 +2888,8 @@
           "message": "Throw a VALIDATION-ERROR exception when a record fails validation; stops the pipeline immediately on the first invalid record"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.display_name": {
-          "source": "Clean Up Text",
-          "message": "Clean Up Text"
+          "source": "Clean up text",
+          "message": "Clean up text"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.short_desc": {
           "source": "Standardizes text by removing noise, HTML, and inconsistent formatting",
@@ -2964,8 +2964,8 @@
           "message": "Apply Unicode NFKC normalization (placeholder, pass-through for now)"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.display_name": {
-          "source": "Count Tokens in Text",
-          "message": "Count Tokens in Text"
+          "source": "Count tokens in text",
+          "message": "Count tokens in text"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
           "source": "Measures how many tokens a text field contains for a given AI model",
@@ -3144,8 +3144,8 @@
           "message": "Whether to include special tokens (such as `[CLS]` and `[SEP]`) in the token count. Set to `True` to match the count that a model would actually see, or `False` for the raw content token count."
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.display_name": {
-          "source": "Split Text into Searchable Chunks",
-          "message": "Split Text into Searchable Chunks"
+          "source": "Split text into searchable chunks",
+          "message": "Split text into searchable chunks"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
@@ -3392,8 +3392,8 @@
           "message": "Generous overlap for maximum context preservation at the cost of more chunks and storage"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.display_name": {
-          "source": "Convert Text to Search Vectors",
-          "message": "Convert Text to Search Vectors"
+          "source": "Convert text to search vectors",
+          "message": "Convert text to search vectors"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
           "source": "Turns text into numeric vectors for AI-powered similarity search",
@@ -3736,8 +3736,8 @@
           "message": "Optional tenant identifier to scope registry model artifacts."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.display_name": {
-          "source": "Extract Structured Data from Text",
-          "message": "Extract Structured Data from Text"
+          "source": "Extract structured data from text",
+          "message": "Extract structured data from text"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.short_desc": {
           "source": "Pulls structured fields from unstructured text using an LLM",
@@ -3904,8 +3904,8 @@
           "message": "Maximum number of retry attempts when extraction output fails schema validation. Default is 2."
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.display_name": {
-          "source": "Re-rank Search Results by Relevance",
-          "message": "Re-rank Search Results by Relevance"
+          "source": "Re-rank search results by relevance",
+          "message": "Re-rank search results by relevance"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
           "source": "Scores and re-orders search results using a cross-encoder model",
@@ -4196,8 +4196,8 @@
           "message": "Optional tenant identifier to scope registry model artifacts."
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.display_name": {
-          "source": "Split Text at Semantic Boundaries",
-          "message": "Split Text at Semantic Boundaries"
+          "source": "Split text at semantic boundaries",
+          "message": "Split text at semantic boundaries"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
           "source": "Chunks text where topics change instead of at fixed token counts",
@@ -4500,8 +4500,8 @@
           "message": "Optional tenant identifier to scope registry model artifacts."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.display_name": {
-          "source": "Block Unsafe Records",
-          "message": "Block Unsafe Records"
+          "source": "Block unsafe records",
+          "message": "Block unsafe records"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
           "source": "Drops records that contain PII, prompt injections, or policy violations",
@@ -4536,8 +4536,8 @@
           "message": "A list of guardrail rule configurations. Each rule has:\n- `type` — rule type (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high`, or `critical`\n- `params` — rule-specific parameters\n\nRecords that fail any rule are dropped from the pipeline."
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.display_name": {
-          "source": "Check and Annotate Text Safety",
-          "message": "Check and Annotate Text Safety"
+          "source": "Check and annotate text safety",
+          "message": "Check and annotate text safety"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
           "source": "Enriches records with guardrail results and optionally redacts PII",
@@ -4572,8 +4572,8 @@
           "message": "A list of guardrail rule configurations. Each rule has:\n- `type` — rule type (`pii`, `prompt_injection`, `output_format`, `topic_restriction`)\n- `severity` — `warning`, `high`, or `critical`\n- `params` — rule-specific parameters\n\nEach record is enriched with `_guardrail_passed` (bool) and `_guardrail_violations` (list). If PII redaction is configured, the text field is replaced with the redacted version."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.display_name": {
-          "source": "Extract Text from Any Document",
-          "message": "Extract Text from Any Document"
+          "source": "Extract text from any document",
+          "message": "Extract text from any document"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
           "source": "Reads text from PDFs, images, and scanned documents automatically",
@@ -4668,8 +4668,8 @@
           "message": "If a PDF page has fewer than this many characters of extractable text, it is treated as scanned and OCR is applied. Default: `50`."
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.display_name": {
-          "source": "Analyze Images with Vision AI",
-          "message": "Analyze Images with Vision AI"
+          "source": "Analyze images with vision AI",
+          "message": "Analyze images with vision AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {
           "source": "Uses a vision LLM to describe images, extract tables, or read text",

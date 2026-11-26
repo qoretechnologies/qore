@@ -16,7 +16,7 @@
           "message": "MongoDB 是一種用於海量資料儲存的文件導向 NoSQL 資料庫"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
-          "source": "Insert Document",
+          "source": "Insert document",
           "message": "插入文件"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
@@ -52,7 +52,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.ZmluZA.display_name": {
-          "source": "Find Documents",
+          "source": "Find documents",
           "message": "尋找文件"
         },
         "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "更新文件"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "刪除文件"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
-          "source": "Aggregation Pipeline",
+          "source": "Aggregation pipeline",
           "message": "聚合管道"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
@@ -196,7 +196,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.YnVsaw.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "批次操作"
         },
         "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.display_name": {
-          "source": "Find One Document",
+          "source": "Find one document",
           "message": "尋找單一文件"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.short_desc": {
@@ -268,7 +268,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.display_name": {
-          "source": "Count Documents",
+          "source": "Count documents",
           "message": "計算文件數"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.short_desc": {
@@ -304,7 +304,7 @@
           "message": "MongoDB 集合的名稱"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "向量搜尋"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.short_desc": {

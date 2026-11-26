@@ -16,7 +16,7 @@
           "message": "Odczytuj i zapisuj rozdzielane komunikaty medyczne [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) na potrzeby przepływów integracji i transformacji.\n\n**Możliwości**:\n- Zachowanie struktury komunikatu i niestandardowych segmentów `Z` bez konieczności definiowania stałego schematu\n- Odczyt niestandardowych separatorów z `MSH` i obsługa sekwencji ucieczki HL7\n- Udostępnianie jednego sparsowanego segmentu na rekord za pośrednictwem API DataProvider\n- Serializacja sparsowanych komunikatów lub prostych rekordów segmentów z powrotem do tekstu HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.display_name": {
-          "source": "Read HL7 v2 Message",
+          "source": "Read HL7 v2 message",
           "message": "Odczytaj komunikat HL7 v2"
         },
         "app.SEw3djI.action.cmVhZA.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Zachowaj tekst w kodowaniu wejściowym tak, jak został odczytany, bez sprawdzania"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read HL7 v2 Inline Data",
+          "source": "Read HL7 v2 inline data",
           "message": "Odczytaj dane inline HL7 v2"
         },
         "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Dane inline komunikatu HL7 v2. Użyj tej opcji, gdy komunikat znajduje się już w pamięci."
         },
         "app.SEw3djI.action.d3JpdGU.display_name": {
-          "source": "Write HL7 v2 Message",
+          "source": "Write HL7 v2 message",
           "message": "Zapisz komunikat HL7 v2"
         },
         "app.SEw3djI.action.d3JpdGU.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Ścieżka do zapisu zserializowanego komunikatu HL7 v2."
         },
         "app.SEw3djI.action.c2NoZW1h.display_name": {
-          "source": "Load HL7 v2 Schema",
+          "source": "Load HL7 v2 schema",
           "message": "Załaduj schemat HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1h.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Jeśli `True`, ignoruje pamięć podręczną schematów w pamięci RAM i ponownie ładuje artefakt schematu."
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
-          "source": "HL7 v2 Schema Summary",
+          "source": "HL7 v2 schema summary",
           "message": "Podsumowanie schematu HL7 v2"
         },
         "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {

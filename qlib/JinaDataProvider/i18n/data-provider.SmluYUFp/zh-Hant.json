@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "建立嵌入"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -796,7 +796,7 @@
           "message": "輸出向量的大小。支援範圍由所選的 `model` 決定。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.display_name": {
-          "source": "Embedding Type",
+          "source": "Embedding type",
           "message": "嵌入類型"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW1iZWRkaW5nX3R5cGU.short_desc": {
@@ -848,7 +848,7 @@
           "message": "若為 `true`，則截斷超出模型最大 token 限制的輸入，而不是傳回錯誤。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
-          "source": "Late Chunking",
+          "source": "Late chunking",
           "message": "延遲分塊 (Late Chunking)"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
@@ -860,7 +860,7 @@
           "message": "設為 `True` 時，會先將所有輸入視為單一序列處理，再進行分割，以保留區塊間的脈絡。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.display_name": {
-          "source": "Return Multivector",
+          "source": "Return multivector",
           "message": "傳回多向量"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX211bHRpdmVjdG9y.short_desc": {
@@ -872,7 +872,7 @@
           "message": "若為 `true`，則每個 token 傳回一個嵌入。無法與 `dimensions` 搭配使用。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.display_name": {
-          "source": "Return Tokenized Input",
+          "source": "Return tokenized input",
           "message": "傳回分詞輸入"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.cmV0dXJuX3Rva2VuaXplZF9pbnB1dA.short_desc": {
@@ -884,7 +884,7 @@
           "message": "若為 `true`，則傳回 token 以及多向量嵌入。需要 `return_multivector=true`。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
-          "source": "Input Type",
+          "source": "Input type",
           "message": "輸入類型"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
@@ -904,7 +904,7 @@
           "message": "文件"
         },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
-          "source": "Rerank Documents",
+          "source": "Rerank documents",
           "message": "重新排序文件"
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "圖片作為 URL 或 base64 編碼字串。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
-          "source": "Top N",
+          "source": "Top n",
           "message": "前 N 項"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
@@ -1048,7 +1048,7 @@
           "message": "要傳回的最佳結果數量。若未設定，則傳回所有文件。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
-          "source": "Return Documents",
+          "source": "Return documents",
           "message": "傳回文件"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
@@ -1060,7 +1060,7 @@
           "message": "設為 `True`（預設值）時，每筆結果都會包含文件內容。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.display_name": {
-          "source": "Max Doc Length",
+          "source": "Max doc length",
           "message": "最大文件長度"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.bWF4X2RvY19sZW5ndGg.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "每個文件最大Token數 (1-8192)。省略則使用模型預設值 (jina-reranker-v3 為 2048，jina-reranker-v3.5 為 8192)。"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.display_name": {
-          "source": "Return Embeddings",
+          "source": "Return embeddings",
           "message": "傳回嵌入"
         },
         "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2VtYmVkZGluZ3M.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "若為 `true`，則傳回文件嵌入以及相關性分數。"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.display_name": {
-          "source": "Classify Content",
+          "source": "Classify content",
           "message": "分類內容"
         },
         "app.SmluYUFp.action.Y2xhc3NpZnk.short_desc": {
@@ -1292,7 +1292,7 @@
           "message": "候選標籤：最多512個標籤的列表，或最多8組、每組最多64個標籤的字典。"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.display_name": {
-          "source": "Train or Update Classifier",
+          "source": "Train or update classifier",
           "message": "訓練或更新分類器"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.short_desc": {
@@ -1572,7 +1572,7 @@
           "message": "公開"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.display_name": {
-          "source": "Num Iters",
+          "source": "Num iters",
           "message": "迭代次數"
         },
         "app.SmluYUFp.action.dHJhaW4tY2xhc3NpZmllcg.option.bnVtX2l0ZXJz.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "訓練過程的迭代次數。"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
-          "source": "List Classifiers",
+          "source": "List classifiers",
           "message": "列出分類器"
         },
         "app.SmluYUFp.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
@@ -1656,7 +1656,7 @@
           "message": "要擷取其功能和定價的模型。"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Batch Embeddings",
+          "source": "Create batch embeddings",
           "message": "建立批次嵌入"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWJhdGNoLWVtYmVkZGluZ3M.short_desc": {
@@ -1864,7 +1864,7 @@
           "message": "要檢查或取消的嵌入批次。"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.display_name": {
-          "source": "List Batches",
+          "source": "List batches",
           "message": "列出批次"
         },
         "app.SmluYUFp.action.bGlzdC1iYXRjaGVz.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "在結果中包含網站圖示。"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.display_name": {
-          "source": "Segment Text",
+          "source": "Segment text",
           "message": "分割文字"
         },
         "app.SmluYUFp.action.c2VnbWVudC10ZXh0.short_desc": {
@@ -3388,7 +3388,7 @@
           "message": "僅返回這麼多結尾的令牌。"
         },
         "app.SmluYUFp.action.Y2hhdA.display_name": {
-          "source": "Chat with Vision Model",
+          "source": "Chat with vision model",
           "message": "與視覺模型聊天"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
@@ -3540,7 +3540,7 @@
           "message": "控制回應變化的取樣溫度。"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.display_name": {
-          "source": "Deep Search",
+          "source": "Deep search",
           "message": "深度搜尋"
         },
         "app.SmluYUFp.action.ZGVlcC1zZWFyY2g.short_desc": {
@@ -3872,7 +3872,7 @@
           "message": "僅從這些網域讀取來源。"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.display_name": {
-          "source": "Download Batch Output",
+          "source": "Download batch output",
           "message": "下載批次輸出"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtb3V0cHV0.short_desc": {
@@ -3896,7 +3896,7 @@
           "message": "已完成的批次，其 JSONL 結果或錯誤可供下載。"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.display_name": {
-          "source": "Download Batch Errors",
+          "source": "Download batch errors",
           "message": "下載批次錯誤"
         },
         "app.SmluYUFp.action.ZG93bmxvYWQtYmF0Y2gtZXJyb3Jz.short_desc": {

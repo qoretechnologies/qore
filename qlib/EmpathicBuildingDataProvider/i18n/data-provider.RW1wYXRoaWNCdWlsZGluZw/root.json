@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.display_name": {
-          "source": "Create Measurements",
-          "message": "Create Measurements"
+          "source": "Create measurements",
+          "message": "Create measurements"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.Y3JlYXRlLW1lYXN1cmVtZW50cw.short_desc": {
           "source": "Post measurements to an EmpathicBuilding instance",
@@ -376,8 +376,8 @@
           "message": "List of measurement events to create"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.display_name": {
-          "source": "Booking Ref",
-          "message": "Booking Ref"
+          "source": "Booking ref",
+          "message": "Booking ref"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.type.YWN0aW9uOlkzSmxZWFJsTFcxbFlYTjFjbVZ0Wlc1MGN3OkVtcGF0aGljQnVpbGRpbmdNZWFzdXJlbWVudEV2ZW50VHlwZTpoYXNoPGF1dG8-Izc2MzA5M2UzNzk1Mzg3NTRmMTU2ODU1ZGI5ZDhjMWVjMmI3YjFhZGQ3YTM2MTI4NWFlYmEyNTVmOTlkNTUyMGM.field.Ym9va2luZ19yZWY.short_desc": {
           "source": "The booking reference for the reservation",
@@ -472,8 +472,8 @@
           "message": "An ID value from the remote / vendor system"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.display_name": {
-          "source": "Sensor Events",
-          "message": "Sensor Events"
+          "source": "Sensor events",
+          "message": "Sensor events"
         },
         "app.RW1wYXRoaWNCdWlsZGluZw.action.d2F0Y2gtc2Vuc29y.short_desc": {
           "source": "Watch for events on a particular Empathic Building sensor",

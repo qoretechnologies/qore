@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
-          "message": "Multi Chat"
+          "source": "Multi chat",
+          "message": "Multi chat"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
           "source": "Chat by sending several messages at once",
@@ -1320,8 +1320,8 @@
           "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file for an assistant, for fine tuning, or for batch processing",
@@ -1524,8 +1524,8 @@
           "message": "The filename"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file stored on OpenAI",
@@ -1548,8 +1548,8 @@
           "message": "The ID or OpenAI file name of the file to delete"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Create an Assistant",
-          "message": "Create an Assistant"
+          "source": "Create an assistant",
+          "message": "Create an assistant"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
           "source": "Create an assistant",
@@ -1892,8 +1892,8 @@
           "message": "Specifies that the model must produce valid JSON on output"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Update Assistant",
-          "message": "Update Assistant"
+          "source": "Update assistant",
+          "message": "Update assistant"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
           "source": "Update an assistant",
@@ -2248,8 +2248,8 @@
           "message": "Specifies that the model must produce valid JSON on output"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
-          "source": "Delete Assistant",
-          "message": "Delete Assistant"
+          "source": "Delete assistant",
+          "message": "Delete assistant"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
           "source": "Delete an assistant",
@@ -2272,8 +2272,8 @@
           "message": "The ID of the assistant to delete"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
-          "source": "Create a Thread",
-          "message": "Create a Thread"
+          "source": "Create a thread",
+          "message": "Create a thread"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
           "source": "Create a thread",
@@ -2536,8 +2536,8 @@
           "message": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maxium of 512 characters long"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
-          "source": "Update Thread",
-          "message": "Update Thread"
+          "source": "Update thread",
+          "message": "Update thread"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
           "source": "Update a thread",
@@ -2812,8 +2812,8 @@
           "message": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maxium of 512 characters long"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
-          "source": "Delete Thread",
-          "message": "Delete Thread"
+          "source": "Delete thread",
+          "message": "Delete thread"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
           "source": "Delete a thread",
@@ -2836,8 +2836,8 @@
           "message": "Thread ID"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
-          "message": "Process Request With a Model"
+          "source": "Process request with a model",
+          "message": "Process request with a model"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -5008,8 +5008,8 @@
           "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
-          "message": "Stream Response"
+          "source": "Stream response",
+          "message": "Stream response"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",
@@ -7180,8 +7180,8 @@
           "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Create a Conversation",
-          "message": "Create a Conversation"
+          "source": "Create a conversation",
+          "message": "Create a conversation"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Create a conversation to hold response history",
@@ -7572,8 +7572,8 @@
           "message": "The ID of the conversation"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Update a Conversation",
-          "message": "Update a Conversation"
+          "source": "Update a conversation",
+          "message": "Update a conversation"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Update the metadata of a conversation",
@@ -7608,8 +7608,8 @@
           "message": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard. Keys are strings with a maximum length of 64 characters; values are strings with a maximum length of 512 characters"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
-          "source": "Delete a Conversation",
-          "message": "Delete a Conversation"
+          "source": "Delete a conversation",
+          "message": "Delete a conversation"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
           "source": "Delete a conversation",
@@ -7728,8 +7728,8 @@
           "message": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
-          "source": "Add Items to a Conversation",
-          "message": "Add Items to a Conversation"
+          "source": "Add items to a conversation",
+          "message": "Add items to a conversation"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
           "source": "Add items to a conversation",
@@ -8156,8 +8156,8 @@
           "message": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
-          "source": "Delete a Conversation Item",
-          "message": "Delete a Conversation Item"
+          "source": "Delete a conversation item",
+          "message": "Delete a conversation item"
         },
         "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
           "source": "Delete an item from a conversation",
@@ -8192,8 +8192,8 @@
           "message": "The item within the conversation; the list is populated from the selected conversation"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
-          "source": "Cancel a Response",
-          "message": "Cancel a Response"
+          "source": "Cancel a response",
+          "message": "Cancel a response"
         },
         "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
           "source": "Cancel a background response",
@@ -8312,8 +8312,8 @@
           "message": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
-          "source": "Generate an Image",
-          "message": "Generate an Image"
+          "source": "Generate an image",
+          "message": "Generate an image"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -8660,8 +8660,8 @@
           "message": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
-          "source": "Transcribe Audio",
-          "message": "Transcribe Audio"
+          "source": "Transcribe audio",
+          "message": "Transcribe audio"
         },
         "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
           "source": "Transcribe an audio file into text",

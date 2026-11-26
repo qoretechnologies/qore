@@ -16,7 +16,7 @@
           "message": "MongoDB est une base de données NoSQL orientée document pour le stockage de données à haut volume"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
-          "source": "Insert Document",
+          "source": "Insert document",
           "message": "Insérer un document"
         },
         "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.ZmluZA.display_name": {
-          "source": "Find Documents",
+          "source": "Find documents",
           "message": "Rechercher des documents"
         },
         "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
@@ -88,7 +88,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
-          "source": "Update Documents",
+          "source": "Update documents",
           "message": "Mettre à jour les documents"
         },
         "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
-          "source": "Delete Documents",
+          "source": "Delete documents",
           "message": "Supprimer les documents"
         },
         "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
@@ -160,7 +160,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
-          "source": "Aggregation Pipeline",
+          "source": "Aggregation pipeline",
           "message": "Pipeline d'agrégation"
         },
         "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
@@ -196,7 +196,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.YnVsaw.display_name": {
-          "source": "Bulk Operations",
+          "source": "Bulk operations",
           "message": "Opérations en bloc"
         },
         "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
@@ -232,7 +232,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.display_name": {
-          "source": "Find One Document",
+          "source": "Find one document",
           "message": "Trouver un document"
         },
         "app.TW9uZ29EQg.action.ZmluZC1vbmU.short_desc": {
@@ -268,7 +268,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.display_name": {
-          "source": "Count Documents",
+          "source": "Count documents",
           "message": "Compter les documents"
         },
         "app.TW9uZ29EQg.action.Y291bnQ.short_desc": {
@@ -304,7 +304,7 @@
           "message": "Le nom de la collection MongoDB"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.display_name": {
-          "source": "Vector Search",
+          "source": "Vector search",
           "message": "Recherche vectorielle"
         },
         "app.TW9uZ29EQg.action.dmVjdG9yLXNlYXJjaA.short_desc": {

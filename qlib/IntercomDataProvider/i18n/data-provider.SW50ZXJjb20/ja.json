@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
-          "source": "Search Contacts",
+          "source": "Search contacts",
           "message": "連絡先を検索"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
@@ -624,7 +624,7 @@
           "message": "降順"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "統合履歴を含める"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -636,7 +636,7 @@
           "message": "レスポンス内の各連絡先に`merge_history`配列を含めるには`true`を渡します。`user`ロールを持つ連絡先に対してのみ返されます。"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "連絡先一覧"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
@@ -672,7 +672,7 @@
           "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "統合履歴を含める"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -732,7 +732,7 @@
           "message": "指定した管理者の一意の識別子。"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "タグのリスト取得"
         },
         "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
@@ -840,7 +840,7 @@
           "message": "Intercomによって割り当てられたタグの一意の識別子"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
-          "source": "Create or Update Company",
+          "source": "Create or update company",
           "message": "会社を作成または更新"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
@@ -924,7 +924,7 @@
           "message": "会社に関連付けたプランの名前。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "月間利用額"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -936,7 +936,7 @@
           "message": "この会社がビジネスにもたらす収益の額。浮動小数点数は切り捨てられる点に注意してください（整数のみ許可され、155.98は155に切り捨てられます）。また、上限は2**31-1または2147483647です。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "カスタム属性"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -960,7 +960,7 @@
           "message": "お客様によって会社が作成された日時。\n\nこの値は1970-01-01Zからの経過秒数の整数として送信されます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
-          "source": "Update Last Request At",
+          "source": "Update last request at",
           "message": "最終リクエスト日時を更新"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
@@ -972,7 +972,7 @@
           "message": "trueに設定すると、会社の最終アクセス日時が現在に更新されます。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "会社一覧を取得"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
@@ -1020,7 +1020,7 @@
           "message": "`asc` または `desc`。会社を昇順または降順で返します。デフォルトは desc です"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
-          "source": "Create Conversation",
+          "source": "Create conversation",
           "message": "会話を作成"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
@@ -1100,7 +1100,7 @@
           "message": "メールの件名。メッセージタイプがメールの場合にのみ適用されます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
-          "source": "Attachment Urls",
+          "source": "Attachment urls",
           "message": "添付ファイルURL"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
@@ -1112,7 +1112,7 @@
           "message": "添付ファイルとして追加される画像URLのリスト。最大10個のURLを含めることができます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "作成日時"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "この会話に関連付けるブランドの一意の識別子。"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
-          "source": "Search Conversations",
+          "source": "Search conversations",
           "message": "会話を検索"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
@@ -1376,7 +1376,7 @@
           "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
-          "source": "Include Monitors",
+          "source": "Include monitors",
           "message": "モニターを含める"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "true に設定すると、各会話に応答としてフラグを立てた QA モニター結果を含む `monitor_evaluations` 配列が含まれます。"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
-          "source": "Include Scorecards",
+          "source": "Include scorecards",
           "message": "スコアカードを含める"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "true に設定すると、各会話に応答として QA スコアカード結果を含む `scorecards` 配列が含まれます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
-          "source": "Create Message",
+          "source": "Create message",
           "message": "メッセージを作成"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
@@ -1412,7 +1412,7 @@
           "message": "**チームメンバーから**連絡先にメッセージを送信し、新しい会話を開始します。\n\n`message_type` で配信方法を選択します: `email` には `subject` が必要、`in_app` はメッセンジャーに表示、`whatsapp` には承認済みの `template` が必要です。\n\n既存の会話に追加するには**会話に返信**を使用してください。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
-          "source": "Message Type",
+          "source": "Message type",
           "message": "メッセージタイプ"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "送信メッセージのスタイル。可能な値は `plain` または `personal` です。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "作成日時"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
@@ -1732,7 +1732,7 @@
           "message": "リード"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
-          "source": "Create Conversation Without Contact Reply",
+          "source": "Create conversation without contact reply",
           "message": "連絡先の返信なしで会話を作成"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
@@ -1744,7 +1744,7 @@
           "message": "連絡先からの返信がなくても、メッセージの受信トレイで会話を開くかどうか。指定しない場合のデフォルトはfalseです。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
-          "source": "Submit Data Event",
+          "source": "Submit data event",
           "message": "データイベントを送信"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
@@ -1828,7 +1828,7 @@
           "message": "イベントに関するオプションのメタデータ。"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
-          "source": "List Data Events",
+          "source": "List data events",
           "message": "データイベント一覧"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
@@ -1856,7 +1856,7 @@
           "message": "ユーザーID"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjM2UxZDZmZGM2Y2I1MjI3ZTEwNGRkOGZkYmI2MjJhODAwNDM2NTVmN2YyMzAwNWQ3OGY1MjZlYWIzY2ViYTg0Yg.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
-          "source": "Intercom User ID",
+          "source": "Intercom user ID",
           "message": "IntercomユーザーID"
         },
         "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.ZmlsdGVyT25lT2YjNzVlNDdjMWNlM2FhMGZjOTc1YTM0ZGViZmM5MmE2NjI3YWNlMTE3MmEzZDNkN2JlYjdlMzQ3NjZmMjdhMWZlNg.field.ZW1haWw.display_name": {
@@ -1892,7 +1892,7 @@
           "message": "サマリーフラグ"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
-          "source": "List Articles",
+          "source": "List articles",
           "message": "記事一覧"
         },
         "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
-          "source": "List Collections",
+          "source": "List collections",
           "message": "コレクションの一覧表示"
         },
         "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
-          "source": "Create Article",
+          "source": "Create article",
           "message": "記事を作成"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "記事の親コレクションまたはセクションのID。このフィールドがない記事は単独で存在します。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "翻訳コンテンツ"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "記事の内容。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "AIチャットボットの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "記事が AI Chatbot で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "AI Copilotの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "記事が AI Copilot で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "AIセールスエージェントの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2120,7 +2120,7 @@
           "message": "記事が AI Sales Agent で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "オーディエンスID"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "記事の本文（HTML形式）"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown本文"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "記事の本文（markdown形式）"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "作成日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "記事の説明"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "下書き更新日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -2204,7 +2204,7 @@
           "message": "このロケールのステージドドラフトが最後に編集された時刻（秒）、またはステージドドラフトがない場合は`null`。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "非公開変更有無"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "更新日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -2748,7 +2748,7 @@
           "message": "記事の説明。多言語記事の場合、デフォルト言語のコンテンツの説明になります。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown本文"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -2760,7 +2760,7 @@
           "message": "Markdown形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body` の代替手段であり、HTMLの代わりにMarkdownとしてコンテンツを提供できます。`body` とは排他です。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "オーディエンスID"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -2772,7 +2772,7 @@
           "message": "Fin AI Agentのターゲティング用にこの記事に割り当てるオーディエンスIDのリスト。トップレベルの `audience_ids` を送信すると、すべてのロケールに同じセットがブロードキャストされます。ロケールごとのターゲティングには、代わりに `translated_content.<locale>.audience_ids` を使用してください。同一リクエストでトップレベルとロケールごとの両方を送信した場合、トップレベルが優先されます。不明なオーディエンスIDは404エラーを返します。部分的なコミットは行われません。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "AIチャットボットの利用可否"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2784,7 +2784,7 @@
           "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "AI Copilotの利用可否"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2796,7 +2796,7 @@
           "message": "記事をAI Copilotで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "AIセールスエージェントの利用可否"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -2808,7 +2808,7 @@
           "message": "記事をAIセールスエージェントで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "公開予定日時"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "記事の将来の公開をスケジュールするISO 8601タイムスタンプ。`state: \"published\"` と一緒に設定すると、即時公開される代わりに記事の公開がスケジュールされます。`null` を設定すると、保留中の公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。`state: \"draft\"` と組み合わせると400 `parameter_invalid` が返されます。`scheduled_unpublish_at` と同じリクエストで送信すると400が返されます (記事ごとに設定できる保留中のスケジュールは1件のみです)。空文字列は400 `parameter_invalid` を返します。"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "非公開予定日時"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -2832,7 +2832,7 @@
           "message": "記事の将来の非公開化をスケジュール設定するISO 8601形式のタイムスタンプ。`null` を設定すると保留中の非公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは 400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。記事が一度も公開されていない場合は 400 `parameter_invalid` で拒否されます。`scheduled_publish_at` と同じリクエストで送信すると400が返されます（記事ごとに保留できるスケジュールは1つのみ）。空文字列は 400 `parameter_invalid` を返します。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
-          "source": "List Teammates",
+          "source": "List teammates",
           "message": "チームメイト一覧"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "ワークスペースへのアクセス権を持つチームメイト一覧を取得します。\n\nこれは、記事の作成者、ノートや返信の担当チームメイト、メッセージの送信者など、チームメイト選択ドロップダウンで呼び出すアクションとして提供されています。\n\nこの一覧はページネーションされません。Intercomはすべての結果を `admins` 配列として1つのレスポンスで返します。"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
-          "source": "Display Avatar",
+          "source": "Display avatar",
           "message": "アバターを表示"
         },
         "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
@@ -2880,7 +2880,7 @@
           "message": "contact_id"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "統合履歴を含める"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -2952,7 +2952,7 @@
           "message": "連絡先のメールアドレス"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
-          "source": "Email Verified",
+          "source": "Email verified",
           "message": "メールアドレス確認済み"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
@@ -3000,7 +3000,7 @@
           "message": "連絡先のアバターを含む画像URL"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
-          "source": "Signed Up At",
+          "source": "Signed up at",
           "message": "サインアップ日時"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "(秒単位のUnixタイムスタンプ) 連絡先がサインアップした指定日時。\n\nこの値は1970-01-01Z以降の秒数を表す整数として送信されます。"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
-          "source": "Last Seen At",
+          "source": "Last seen at",
           "message": "最終確認日時"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
@@ -3036,7 +3036,7 @@
           "message": "連絡先のアカウント所有権が割り当てられた管理者のID"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
-          "source": "Unsubscribed from Emails",
+          "source": "Unsubscribed from emails",
           "message": "メール配信停止済み"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "連絡先がメール購読を解除しているかどうか"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "カスタム属性"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3060,7 +3060,7 @@
           "message": "連絡先に設定されているカスタム属性"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
-          "source": "Include Merge History",
+          "source": "Include merge history",
           "message": "統合履歴を含める"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
@@ -3120,7 +3120,7 @@
           "message": "対象とする会話の ID"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
-          "source": "Display As",
+          "source": "Display as",
           "message": "表示形式"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
@@ -3132,7 +3132,7 @@
           "message": "会話メッセージをプレーンテキストで取得するには plaintext に設定します。これは body フィールドと subject フィールドの両方に影響します。インラインリンクは `label (url)` としてレンダリングされ、表示テキストと並んでリンク URL も保持されます。"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
-          "source": "Include Translations",
+          "source": "Include translations",
           "message": "翻訳を含める"
         },
         "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
@@ -3252,7 +3252,7 @@
           "message": "この会社が事業を展開している業界。"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
-          "source": "Custom Attributes",
+          "source": "Custom attributes",
           "message": "カスタム属性"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
@@ -3264,7 +3264,7 @@
           "message": "Intercomに保存したい会社に関するその他のデータを含むキー/値ペアのハッシュ。"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
-          "source": "Monthly Spend",
+          "source": "Monthly spend",
           "message": "月間利用額"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
@@ -3384,7 +3384,7 @@
           "message": "HTML形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body_markdown` とは排他です。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown本文"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3440,7 +3440,7 @@
           "message": "記事の親コレクションまたはセクションのID。このフィールドがない記事は単独で存在します。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
-          "source": "Parent Type",
+          "source": "Parent type",
           "message": "親タイプ"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
@@ -3452,7 +3452,7 @@
           "message": "親のタイプ（`collection` または `section` のいずれか）。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
-          "source": "Translated Content",
+          "source": "Translated content",
           "message": "翻訳コンテンツ"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
@@ -3476,7 +3476,7 @@
           "message": "記事の内容。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "AIチャットボットの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3488,7 +3488,7 @@
           "message": "記事が AI Chatbot で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "AI Copilotの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -3500,7 +3500,7 @@
           "message": "記事が AI Copilot で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "AIセールスエージェントの利用可否"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "記事が AI Sales Agent で利用可能か。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "オーディエンスID"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.YXVkaWVuY2VfaWRz.short_desc": {
@@ -3548,7 +3548,7 @@
           "message": "記事の本文（HTML形式）"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.display_name": {
-          "source": "Body Markdown",
+          "source": "Body markdown",
           "message": "Markdown本文"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Ym9keV9tYXJrZG93bg.short_desc": {
@@ -3560,7 +3560,7 @@
           "message": "記事の本文（markdown形式）"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.display_name": {
-          "source": "Created At",
+          "source": "Created at",
           "message": "作成日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.Y3JlYXRlZF9hdA.short_desc": {
@@ -3584,7 +3584,7 @@
           "message": "記事の説明"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
-          "source": "Draft Updated At",
+          "source": "Draft updated at",
           "message": "下書き更新日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
@@ -3596,7 +3596,7 @@
           "message": "このロケールのステージドドラフトが最後に編集された時刻（秒）、またはステージドドラフトがない場合は`null`。"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
-          "source": "Has Unpublished Changes",
+          "source": "Has unpublished changes",
           "message": "非公開変更有無"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
@@ -3656,7 +3656,7 @@
           "message": "article_content"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.display_name": {
-          "source": "Updated At",
+          "source": "Updated at",
           "message": "更新日時"
         },
         "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUToqYXJ0aWNsZV9jb250ZW50IzllMGY3NjI4ZTg5YTViYWYxMzdjMTVlMDBjM2Y1YjMyODY2ODY5Y2ZlMjQxYzM1NWNiMmU2YjNkNTI0Y2NhNGU.field.dXBkYXRlZF9hdA.short_desc": {
@@ -4128,7 +4128,7 @@
           "message": "記事の内容。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
-          "source": "Audience Ids",
+          "source": "Audience ids",
           "message": "オーディエンスID"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
@@ -4140,7 +4140,7 @@
           "message": "Fin AI Agent のターゲティング用にこの記事に割り当てるオーディエンス ID のリスト。トップレベルの `audience_ids` を送信すると、すべてのロケールに同じセットが配信されます。`audience_ids: []` を送信すると、すべてのロケールからすべてのオーディエンスメンバーシップがクリアされます。ロケールごとのターゲティングを行うには、代わりに `translated_content.<locale>.audience_ids` を使用してください。同じリクエストでトップレベルとロケールごとの両方を送信すると、トップレベルが優先されます。不明なオーディエンス ID を指定すると 404 エラーが返されます。一部のみのコミットは行われません。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Chatbot Availability",
+          "source": "AI chatbot availability",
           "message": "AIチャットボットの利用可否"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4152,7 +4152,7 @@
           "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "AI Copilot Availability",
+          "source": "AI copilot availability",
           "message": "AI Copilotの利用可否"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
@@ -4164,7 +4164,7 @@
           "message": "記事をAI Copilotで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
-          "source": "AI Sales Agent Availability",
+          "source": "AI sales agent availability",
           "message": "AIセールスエージェントの利用可否"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
@@ -4176,7 +4176,7 @@
           "message": "記事をAIセールスエージェントで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
-          "source": "Scheduled Publish At",
+          "source": "Scheduled publish at",
           "message": "公開予定日時"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
@@ -4188,7 +4188,7 @@
           "message": "記事の将来の公開をスケジュールするISO 8601タイムスタンプ。`state: \"published\"` と一緒に設定すると、即時公開される代わりに記事の公開がスケジュールされます。`null` を設定すると、保留中の公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。`state: \"draft\"` と組み合わせると400 `parameter_invalid` が返されます。`scheduled_unpublish_at` と同じリクエストで送信すると400が返されます (記事ごとに設定できる保留中のスケジュールは1件のみです)。空文字列は400 `parameter_invalid` を返します。"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
-          "source": "Scheduled Unpublish At",
+          "source": "Scheduled unpublish at",
           "message": "非公開予定日時"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
@@ -4296,7 +4296,7 @@
           "message": "指定したタグの一意な識別子"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
+          "source": "Search records",
           "message": "レコードの検索"
         },
         "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
@@ -4320,7 +4320,7 @@
           "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
+          "source": "Find a single record",
           "message": "単一レコードの検索"
         },
         "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
@@ -4344,7 +4344,7 @@
           "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
+          "source": "Create records",
           "message": "レコードを作成"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
@@ -4368,7 +4368,7 @@
           "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "レコードを更新"
         },
         "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
@@ -4392,7 +4392,7 @@
           "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "レコードを削除"
         },
         "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {

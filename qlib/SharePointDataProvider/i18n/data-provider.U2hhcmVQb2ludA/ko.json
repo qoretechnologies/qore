@@ -1960,7 +1960,7 @@
           "message": "대상 목록 항목"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "문서 추가됨"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "문서 라이브러리에 문서가 추가될 때 트리거됩니다. 라이브러리를 다시 읽는 대신 중단된 지점부터 정확히 다시 시작하는 델타 쿼리를 사용합니다."
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "문서 수정됨"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "라이브러리에 이미 있는 문서가 수정될 때 트리거됩니다. 라이브러리를 다시 읽는 대신 중단된 지점부터 정확히 다시 시작하는 델타 쿼리를 사용합니다."
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "폴더 추가됨"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "문서 라이브러리에 폴더가 추가될 때 트리거됩니다."
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "목록 항목 추가됨"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

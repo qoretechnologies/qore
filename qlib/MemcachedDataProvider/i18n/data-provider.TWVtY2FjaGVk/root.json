@@ -16,8 +16,8 @@
           "message": "Memcached distributed memory object caching system"
         },
         "app.TWVtY2FjaGVk.action.c2V0.display_name": {
-          "source": "Set Value",
-          "message": "Set Value"
+          "source": "Set value",
+          "message": "Set value"
         },
         "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
           "source": "Store a value in the cache",
@@ -28,8 +28,8 @@
           "message": "Store a key-value pair in memcached, overwriting any existing value"
         },
         "app.TWVtY2FjaGVk.action.YWRk.display_name": {
-          "source": "Add Value",
-          "message": "Add Value"
+          "source": "Add value",
+          "message": "Add value"
         },
         "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
           "source": "Store a value only if key doesn't exist",
@@ -40,8 +40,8 @@
           "message": "Store a key-value pair in memcached only if the key doesn't already exist"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
-          "source": "Replace Value",
-          "message": "Replace Value"
+          "source": "Replace value",
+          "message": "Replace value"
         },
         "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
           "source": "Replace an existing value",
@@ -52,8 +52,8 @@
           "message": "Replace a value in memcached only if the key already exists"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
-          "source": "Compare and Swap",
-          "message": "Compare and Swap"
+          "source": "Compare and swap",
+          "message": "Compare and swap"
         },
         "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
           "source": "Update value with optimistic locking",
@@ -64,8 +64,8 @@
           "message": "Update a value only if its CAS token matches (optimistic locking)"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
-          "source": "Get Value",
-          "message": "Get Value"
+          "source": "Get value",
+          "message": "Get value"
         },
         "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
           "source": "Retrieve a value from the cache",
@@ -88,8 +88,8 @@
           "message": "Retrieve a cached value with its CAS token for optimistic locking"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
-          "source": "Multi-Get",
-          "message": "Multi-Get"
+          "source": "Multi-get",
+          "message": "Multi-get"
         },
         "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
           "source": "Retrieve multiple values",
@@ -172,8 +172,8 @@
           "message": "Retrieve the memcached server version"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
-          "source": "Flush All",
-          "message": "Flush All"
+          "source": "Flush all",
+          "message": "Flush all"
         },
         "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {
           "source": "Clear all cached data",

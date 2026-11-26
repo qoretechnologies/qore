@@ -340,7 +340,7 @@
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
-          "source": "Retrieve Order Items",
+          "source": "Retrieve order items",
           "message": "注文項目の取得"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
@@ -604,7 +604,7 @@
           "message": "返答するレコードの最大数"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
-          "source": "Retrieve Payment Information",
+          "source": "Retrieve payment information",
           "message": "支払い情報の取得"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
@@ -832,7 +832,7 @@
           "message": "返答するレコードの最大数"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
-          "source": "Retrieve Customer Information",
+          "source": "Retrieve customer information",
           "message": "顧客情報の取得"
         },
         "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {

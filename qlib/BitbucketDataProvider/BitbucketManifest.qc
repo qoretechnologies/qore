@@ -961,7 +961,7 @@ public class BitbucketManifest {
                 "action": "workspaces_get",
                 "method": "GET",
                 "path": "/user/workspaces",
-                "display_name": "List Workspaces",
+                "display_name": "List workspaces",
                 "short_desc": "List the workspaces the credential can see",
                 "desc": "Lists the workspaces the authenticated user can reach.\n\n"
                     "`administrator` narrows the listing to the ones they administer.\n\n"

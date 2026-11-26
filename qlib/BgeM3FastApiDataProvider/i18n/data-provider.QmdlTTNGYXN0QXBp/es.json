@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
-          "source": "Create Embeddings",
+          "source": "Create embeddings",
           "message": "Crear embeddings"
         },
         "app.QmdlTTNGYXN0QXBp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Número máximo de textos que procesa el sidecar por lote de codificador interno. Cuando no se establece, se utiliza el valor predeterminado del propio sidecar (`256`). Los valores más bajos reducen la presión de memoria a expensas del rendimiento."
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.display_name": {
-          "source": "Get Health",
+          "source": "Get health",
           "message": "Obtener estado de salud"
         },
         "app.QmdlTTNGYXN0QXBp.action.aGVhbHRo.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Devuelve el estado de actividad (liveness) del sidecar (típicamente `\"ok\"`) y datos de presión de memoria del host. Los enrutadores ascendentes pueden usar el campo `pressure` para controlar la escalada de retroceso entre el enrutamiento local y en la nube."
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.display_name": {
-          "source": "Get Metrics",
+          "source": "Get metrics",
           "message": "Obtener métricas"
         },
         "app.QmdlTTNGYXN0QXBp.action.bWV0cmljcw.short_desc": {

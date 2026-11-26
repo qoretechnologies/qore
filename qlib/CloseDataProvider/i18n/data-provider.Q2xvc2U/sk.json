@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "Vytvoriť leada"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "PSČ alebo poštové číslo"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update a Lead",
+          "source": "Update a lead",
           "message": "Aktualizovať lead"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Nová URL adresa webovej lokality priradená k leadu"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "Odstrániť potenciálneho zákazníka"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -728,7 +728,7 @@
           "message": "Lead na odstránenie"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Zoznam potenciálnych zákazníkov"
         },
         "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
@@ -784,7 +784,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "Získať leada"
         },
         "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -804,7 +804,7 @@
           "message": "ID leada"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Create a Contact",
+          "source": "Create a contact",
           "message": "Vytvoriť kontakt"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
@@ -956,7 +956,7 @@
           "message": "Hodnota URL"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
-          "source": "Update a Contact",
+          "source": "Update a contact",
           "message": "Aktualizovať kontakt"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Typ telefónneho čísla (napr. `mobile`, `office`, `home`, `fax`)"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
-          "source": "Delete a Contact",
+          "source": "Delete a contact",
           "message": "Odstrániť kontakt"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
@@ -1092,7 +1092,7 @@
           "message": "Kontakt na vymazanie"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Zoznam kontaktov"
         },
         "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
@@ -1136,7 +1136,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
-          "source": "Get a Contact",
+          "source": "Get a contact",
           "message": "Získať kontakt"
         },
         "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
@@ -1156,7 +1156,7 @@
           "message": "ID kontaktu"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Vytvoriť príležitosť"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1308,7 +1308,7 @@
           "message": "Dátum prehry vo formáte YYYY-MM-DD"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Aktualizovať príležitosť"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1400,7 +1400,7 @@
           "message": "Nová textová poznámka k príležitosti"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Odstrániť príležitosť"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1420,7 +1420,7 @@
           "message": "Príležitosť na odstránenie"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Zoznam príležitostí"
         },
         "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Získať príležitosť"
         },
         "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1544,7 +1544,7 @@
           "message": "ID príležitosti"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Vytvoriť úlohu"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1620,7 +1620,7 @@
           "message": "ID používateľa, ktorému sa má táto úloha priradiť"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Aktualizovať úlohu"
         },
         "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "Nový textový popis alebo telo úlohy"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Odstrániť úlohu"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1708,7 +1708,7 @@
           "message": "Úloha na vymazanie"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Zoznam úloh"
         },
         "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
@@ -1796,7 +1796,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Získať úlohu"
         },
         "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
@@ -1964,7 +1964,7 @@
           "message": "Poznámka vo formáte HTML pre tento hovor"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
-          "source": "Update a Call",
+          "source": "Update a call",
           "message": "Aktualizovať hovor"
         },
         "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Nové vyhodnotenie alebo výsledok hovoru"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
-          "source": "Delete a Call",
+          "source": "Delete a call",
           "message": "Odstrániť hovor"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "Hovor na odstránenie"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
-          "source": "List Calls",
+          "source": "List calls",
           "message": "Zoznam hovorov"
         },
         "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
-          "source": "Get a Call",
+          "source": "Get a call",
           "message": "Získať hovor"
         },
         "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "ID hovoru"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
-          "source": "Create an Email",
+          "source": "Create an email",
           "message": "Vytvoriť e-mail"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "Odchádzajúci e-mail"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete an Email",
+          "source": "Delete an email",
           "message": "Odstrániť e-mail"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
@@ -2284,7 +2284,7 @@
           "message": "E-mail na odstránenie"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Zoznam e-mailov"
         },
         "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
@@ -2340,7 +2340,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get an Email",
+          "source": "Get an email",
           "message": "Získať e-mail"
         },
         "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
@@ -2360,7 +2360,7 @@
           "message": "ID e-mailu"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Vytvoriť poznámku"
         },
         "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -2428,7 +2428,7 @@
           "message": "Nastavte na `True`, ak chcete túto poznámku pripnúť na začiatok"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Aktualizovať poznámku"
         },
         "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Nový HTML obsah poznámky"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Odstrániť poznámku"
         },
         "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -2492,7 +2492,7 @@
           "message": "Poznámka na odstránenie"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Zoznam poznámok"
         },
         "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get a Note",
+          "source": "Get a note",
           "message": "Získať poznámku"
         },
         "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
@@ -2568,7 +2568,7 @@
           "message": "ID poznámky"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
-          "source": "List Meetings",
+          "source": "List meetings",
           "message": "Zoznam stretnutí"
         },
         "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
@@ -2624,7 +2624,7 @@
           "message": "Maximálny počet výsledkov na vrátenie"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
-          "source": "Get a Meeting",
+          "source": "Get a meeting",
           "message": "Získať stretnutie"
         },
         "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
@@ -2820,7 +2820,7 @@
           "message": "ID SMS"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
-          "source": "Lead Created",
+          "source": "Lead created",
           "message": "Lead vytvorený"
         },
         "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
@@ -2844,7 +2844,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
-          "source": "Lead Updated",
+          "source": "Lead updated",
           "message": "Lead aktualizovaný"
         },
         "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
@@ -2868,7 +2868,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
-          "source": "Lead Deleted",
+          "source": "Lead deleted",
           "message": "Lead odstránený"
         },
         "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
@@ -2892,7 +2892,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Kontakt vytvorený"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -2916,7 +2916,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Kontakt bol aktualizovaný"
         },
         "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2940,7 +2940,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
-          "source": "Contact Deleted",
+          "source": "Contact deleted",
           "message": "Kontakt odstránený"
         },
         "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
@@ -2964,7 +2964,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
-          "source": "Opportunity Created",
+          "source": "Opportunity created",
           "message": "Príležitosť vytvorená"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
@@ -2988,7 +2988,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
-          "source": "Opportunity Updated",
+          "source": "Opportunity updated",
           "message": "Príležitosť aktualizovaná"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
@@ -3012,7 +3012,7 @@
           "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
-          "source": "Opportunity Deleted",
+          "source": "Opportunity deleted",
           "message": "Príležitosť odstránená"
         },
         "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {
