@@ -92,6 +92,19 @@ int sub request(HttpClientConnectionManager mgr, string url, string path) {
     int status = r.future.get(20s).status_code;
     return status;
 }
+#! leases a connection of the lent manager, or releases the kept one; returns what happened
+string sub lease(HttpClientConnectionManager mgr, string url, string what) {
+    try {
+        if (what == \"release\") {
+            mgr.releaseConnection(kept.getConnection());
+        } else {
+            mgr.leaseConnection(url);
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 #! True if the view worked during the borrower's request
 bool sub viewDuringRequest() {
     return during;
@@ -228,6 +241,10 @@ class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
 
             assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
             assertTrue(p.callFunction("viewDuringRequest"), protocol + ": the view works during the request");
+            assertEq("PERMISSION-DENIED", p.callFunction("lease", mgr, srv.url, "lease"),
+                protocol + ": the borrower leases no connection");
+            assertEq("PERMISSION-DENIED", p.callFunction("lease", mgr, srv.url, "release"),
+                protocol + ": the borrower releases no connection");
             int borrowed = p.callFunction("connId");
             # the host's request reuses the connection
             string result;
@@ -268,6 +285,9 @@ class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
             HttpClientConnectionView view = sh.getConnectionView();
             assertTrue(view.isActive(), c.protocol + ": the owner's view is active after its request");
             assertTrue(view.isReady(), c.protocol + ": the owner's view works after its request");
+            # the owner leases and releases a connection
+            HttpClientConnection leased = mgr.leaseConnection(srv.url);
+            mgr.releaseConnection(leased);
             HttpClientConnection conn = sh.getConnection();
             conn.close();
             assertEq(200, hostRequest(mgr, srv.url, "/again")[0], c.protocol + ": the owner closed its connection");

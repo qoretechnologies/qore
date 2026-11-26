@@ -773,9 +773,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @return the leased connection
 
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7570):
+        the session of a lease is pinned (see pinConnection()), which such code cannot do
+
         @since HttpClientIo 1.0
     */
     HttpClientConnection leaseConnection(string url, *bool non_blocking) {
+        checkLeaseCaller();
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -813,6 +817,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @since HttpClientIo 1.0
     */
     releaseConnection(HttpClientConnection conn, *bool discard) {
+        checkLeaseCaller();
         if (discard) {
             log(LoggerLevel::DEBUG, "discarding leased %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
@@ -866,6 +871,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         checkPinCaller();
         AutoLock al(pin_lock);
         remove pinned_conn;
+    }
+
+    #! Raises an exception if restricted code that does not own the manager leases or releases a connection (qore#7570)
+    /** A leased connection is the manager's: the session that uses it is pinned (see pinConnection()), which restricted
+        code that does not own the manager cannot do, and releasing it closes it or gives it back to the pool, which the
+        host's requests use, so the code gets no connection to lease and may release none
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager
+    */
+    private:internal checkLeaseCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot lease or release a connection of a "
+                "connection manager that it does not own";
+        }
     }
 
     #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
