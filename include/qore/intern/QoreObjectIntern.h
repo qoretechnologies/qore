@@ -52,6 +52,12 @@
 
 #define OS_OK            0
 #define OS_DELETED      -1
+//! the status of an object that the thread with TID 0 destroys
+/** q_gettid() is 0 in the signal handler thread (get_signal_thread_entry()) and in code that runs once its thread's
+    data is destroyed, which is OS_OK: such a deletion marks the object with this value instead, so that it is seen
+    being destroyed (qore_object_private::getDestroyingStatus())
+*/
+#define OS_DESTROYING_TID0 -2
 
 // object access constants
 #define QOA_OK           0
@@ -285,7 +291,7 @@ public:
 
     const QoreClass* theclass;
     const QoreTypeInfo* instantiated_type = nullptr;
-    //! OS_OK, the TID of the thread running the destructor, or OS_DELETED
+    //! OS_OK, the status of the thread running the destructor (getDestroyingStatus()), or OS_DELETED
     /** Changed under the object's write lock, but read without it where a stale value only defers a decision: by
         the dereference fast paths, and by RSet::canDelete() and the scan for the other objects of a recursive set,
         whose locks it does not hold while another thread can be deleting them.  Atomic for those reads.
@@ -400,7 +406,15 @@ public:
 
     //! Returns true if the calling thread is running the destructor of the object
     DLLLOCAL bool inDestructorOfThisThread() const {
-        return status.load(std::memory_order_acquire) == q_gettid();
+        return status.load(std::memory_order_acquire) == getDestroyingStatus();
+    }
+
+    //! Returns the status with which the calling thread marks an object that it destroys: its TID, or
+    //! OS_DESTROYING_TID0 for TID 0 (the signal handler thread), which would be OS_OK
+    DLLLOCAL static int getDestroyingStatus() {
+        int tid = q_gettid();
+        assert(tid >= 0);
+        return tid ? tid : OS_DESTROYING_TID0;
     }
 
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1

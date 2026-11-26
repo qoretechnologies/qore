@@ -1303,6 +1303,19 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         @since A2aServerHandler 1.0
     */
+    #! Returns the keys of the request context that the handler adds for its methods, which the code of a restricted
+    #! %Program gets also when the request is filtered for it (qore#7724)
+    /** The A2A protocol version of the request (\c a2a_version) and the extensions activated for it
+        (\c a2a_extensions); a subclass that adds keys of its own returns them with these
+
+        @return the keys of the request context that the handler adds for its methods
+
+        @see JsonRpcHandler::JsonRpcHandler::getRpcContextKeys()
+    */
+    private *list<string> getRpcContextKeys() {
+        return ("a2a_version", "a2a_extensions");
+    }
+
     private list<string> negotiateExtensions(hash<auto> hdr) {
         *string value;
         foreach string key in (keys hdr) {
