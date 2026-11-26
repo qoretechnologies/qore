@@ -32,35 +32,40 @@
    fun:_ZN4llvm10AsmPrinter16emitFunctionBodyEv
 }
 #
-# LLVM 21 (the same build), with valgrind 3.22.0: InstCombine reports "Conditional jump or move depends on uninitialised
-# value(s)" for a binary operator (add, sub, mul, and, or, xor) whose first operand is a select and whose second is
-# not.  The five innermost frames are functions of libLLVM that its dynamic symbol table does not name (identified in
-# the disassembly): InstCombinerImpl::SimplifySelectsFeedingBinaryOp() <- foldUsingDistributiveLaws() <- the
-# visitor of the operator (visitAnd() for Qore's code) <- InstCombinerImpl::run() <- combineInstructionsOverFunction(),
-# under InstCombinePass::run().  The source tests "LHSIsSelect && RHSIsSelect && A == D", and the arm64 code evaluates
+# LLVM 21.1 on aarch64 only (/usr/lib/aarch64-linux-gnu/libLLVM.so.21.1, Ubuntu's build), with valgrind 3.22.0:
+# InstCombine reports "Conditional jump or move depends on uninitialised value(s)" for a binary operator (add, sub, mul,
+# and, or, xor) whose first operand is a select and whose second is not.  The five innermost frames are functions of
+# libLLVM that its dynamic symbol table does not name (identified in the disassembly):
+# InstCombinerImpl::SimplifySelectsFeedingBinaryOp() <- foldUsingDistributiveLaws() <- the visitor of the operator
+# (visitAnd() for Qore's code) <- InstCombinerImpl::run() <- combineInstructionsOverFunction(), under
+# InstCombinePass::run().  The source tests "LHSIsSelect && RHSIsSelect && A == D", and the aarch64 code evaluates
 # A == D without a branch (cmp, csel, and), reading D, a local variable that only a select as the second operand
 # writes (valgrind --track-origins=yes: "created by a stack allocation" in that function); the csel gives 0 either
 # way, but memcheck makes its result undefined when its condition is.  The JIT on amd64 has no such report.  Qore's
 # JIT emits this shape when emitWeakSharedTest() (lib/QoreIRToLLVM.cpp) masks the pointer of a value that
 # emitHelperRef() selected (the weak share check of a store, qore#7342), ex: "int s; for (...) { s += i * 2; }"
-# (examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qr).  Reproduced with no Qore code, with the same frames,
-# by LLVM's own opt on the module below (f.ll), and by a program that makes only the calls of optimizeModule()
-# (lib/QoreJIT.cpp: a native TargetMachine, PassBuilder, buildPerModuleDefaultPipeline(O2), run()) on the same
-# function built with IRBuilder (CreateSelect(), CreateAnd(), CreateRet()):
-#     define i64 @f(i1 %c, i64 %x) {
-#       %s = select i1 %c, i64 64, i64 32
-#       %r = and i64 %s, %x
-#       ret i64 %r
-#     }
-#   valgrind --track-origins=yes opt-21 -passes='instcombine<no-verify-fixpoint>' -disable-output f.ll
-# The entry names the five frames of libLLVM under InstCombinePass::run() by their object, as they have no names.
+# (examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qr; valgrind-suppressions.qtest compiles such code).
+# examples/test/valgrind-repro/llvm21-instcombine-csel/ reproduces it with no Qore code and the same libLLVM frames:
+# run.sh runs LLVM's own opt on f.ll (a select feeding an "and") and instcombine_select_and.cpp, a program that makes
+# only the calls of optimizeModule() (lib/QoreJIT.cpp) on the same function.  Remove the entry when LLVM is fixed
+# (qore#7729).
+# The entry matches only InstCombine run by the JIT's optimizeModule() for compileFunctionInternal(), the same stack in
+# a background and a synchronous compile (QORE_JIT_SYNC_COMPILE=1; both run on the JIT's compile thread): the five
+# frames of libLLVM by their object, as they have no names, and the named frames down to Qore's code, eleven frames,
+# within valgrind's default --num-callers of 12 (the frames of the static optimizeModule() are those of a debug build,
+# which the CI test jobs test).
 {
    llvm21-instcombine-select-binop-arm64-csel
    Memcheck:Cond
-   obj:*/libLLVM.so.21.1
-   obj:*/libLLVM.so.21.1
-   obj:*/libLLVM.so.21.1
-   obj:*/libLLVM.so.21.1
-   obj:*/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
+   obj:*/aarch64-linux-gnu/libLLVM.so.21.1
    fun:_ZN4llvm15InstCombinePass3runERNS_8FunctionERNS_15AnalysisManagerIS1_JEEE
+   fun:_ZN4llvm11PassManagerINS_8FunctionENS_15AnalysisManagerIS1_JEEEJEE3runERS1_RS3_
+   fun:_ZN4llvm27ModuleToFunctionPassAdaptor3runERNS_6ModuleERNS_15AnalysisManagerIS1_JEEE
+   fun:_ZN4llvm11PassManagerINS_6ModuleENS_15AnalysisManagerIS1_JEEEJEE3runERS1_RS3_
+   fun:_ZL14optimizeModuleRN4llvm6ModuleEiPKSt6atomicIbE
+   fun:_ZN7QoreJIT23compileFunctionInternalERK14QoreIRFunctionRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEPvPKS8_
 }
