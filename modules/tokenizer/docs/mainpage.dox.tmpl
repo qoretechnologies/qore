@@ -28,12 +28,14 @@
     - \c Sequence — chains multiple normalizers
     - \c Replace / \c Prepend / \c Lowercase / \c StripAccents / \c Strip
       (\c Replace supports both HuggingFace \c {"String": "..."} and
-      \c {"Regex": "..."} patterns)
+      \c {"Regex": "..."} patterns. Regular expressions match Unicode characters and insert the replacement literally.)
 
     @subsection tokenizer_pretokenizers Supported Pre-tokenizers
     - \c BertPreTokenizer — split on whitespace and punctuation
     - \c ByteLevel — GPT-2 byte-to-unicode mapping with regex splitting
     - \c Metaspace — SentencePiece word boundary marking with \c ▁
+    - \c Punctuation — isolates ASCII punctuation and Unicode punctuation characters
+    - \c Digits — splits Unicode numbers into runs, or into individual characters with \c individual_digits
     - \c Whitespace / \c WhitespaceSplit / \c Sequence
 
     @subsection tokenizer_postprocessors Supported Post-processors
@@ -47,7 +49,8 @@
     - \c ByteLevel — reverses GPT-2 byte mapping
     - \c Metaspace — replaces \c ▁ back to spaces
     - \c ByteFallback — decodes \c \<0xHH\> byte tokens to UTF-8
-    - \c Fuse / \c Strip / \c Replace / \c Sequence
+    - \c BPEDecoder — converts the configured word suffix into spaces
+    - \c Fuse / \c Strip / \c Replace / \c Sequence — see @ref tokenizer_decodeguide
 
     @section tokenizer_text_encoding Text Encodings
 
@@ -62,9 +65,8 @@
     - text in another encoding is converted to UTF-8, so the same text gives the same token IDs in any encoding;
       the offsets of an encoding (\c offset_mapping) are byte offsets in the UTF-8 form of the text
 
-    A regular expression of a \c Split pre-tokenizer that cannot be matched against the text (ex: a match limit, or
-    text made invalid UTF-8 by a \c Replace normalizer whose pattern matches part of a character) raises
-    \c PRETOKENIZER-MATCH-ERROR; the rest of the text is never left unsplit.
+    If a regular expression in a \c Split pre-tokenizer reaches its match limit, encoding raises
+    \c PRETOKENIZER-MATCH-ERROR.
 
     Decoded text (@ref Qore::Tokenizer::HFTokenizer::decode() "decode()",
     @ref Qore::Tokenizer::HFTokenizer::decodeBatch() "decodeBatch()") is always valid UTF-8.  Token IDs that give

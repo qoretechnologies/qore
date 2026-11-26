@@ -1,0 +1,5 @@
+type cache: the host's lookup: "registered", the tenant's lookup: null
+type cache registration: the host's lookup: "host", the tenant's lookup: null
+scheme registry: the host's lookup: "HttpConnection", the tenant's lookup: null
+a type that the module loads for the tenant: "hash<auto>", unknown: null
+the tenant's own loader result: "own", the cache: null

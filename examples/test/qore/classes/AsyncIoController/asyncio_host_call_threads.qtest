@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandboxed host calls with async I/O operations on several I/O threads (EventNotifier polling)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# qore#7148 with qore#7624: host code that acts for a tenant, with operations on several I/O threads
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoHostCallThreadsTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The number of I/O threads: operations on different sockets run on different threads
+const IoThreads = 4;
+
+#! A poll operation that waits for its notifier until it is canceled
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+#! the operation objects of the host's submissions, kept for the life of the test
+class Held {
+    public {
+        static list<auto> ops = ();
+        static Mutex lck();
+    }
+}
+
+#! a host function that the tenant calls: submits an operation of the host's class with the key for its caller
+Queue sub host_submit(EventNotifier n, string key, string owner, bool replace) {
+    WaitingOperation op(n);
+    {
+        AutoLock al(Held::lck);
+        push Held::ops, op;
+    }
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        "sock": n,
+        "spop": op,
+        "owner": owner,
+        "key": key,
+        "to": -1s,
+    }, replace);
+}
+
+#! the tenant's code: it submits its own operations, and others through the host's code
+const TenantSource = "%modern
+class TenantWaitingOperation inherits AbstractPollOperation<auto> {
+    private { object notifier; }
+    constructor(object n) { notifier = n; }
+    string getGoal() { return \"waiting\"; }
+    string getState() { return \"waiting\"; }
+    bool goalReached() { return False; }
+    *hash<SocketPollInfo> continuePoll() { return <SocketPollInfo>{\"events\": SOCK_POLLIN, \"socket\": notifier}; }
+}
+auto sub submit_own(object n, string key) {
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": new TenantWaitingOperation(n),
+        \"owner\": key,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+auto sub submit_via_host(object n, string key, string owner, bool replace) {
+    return host_submit(n, key, owner, replace);
+}
+";
+
+#! Host code that acts for a tenant, with the operations of a key on different I/O threads (qore#7148, qore#7624)
+/** The key of an operation is unique in the controller, also across I/O threads (qore#7624), and the host's code that
+    a tenant calls acts for the tenant's application (qore#7148): it does not replace the host's operation with the key
+    on another I/O thread, also when the host's operation replaced the tenant's on its own thread, and it replaces the
+    tenant's own.  The test needs a library with debugging, for dbg_async_io_route_thread().
+*/
+class AsyncIoHostCallThreadsTest inherits QUnit::Test {
+    private {
+        int serial;
+    }
+
+    constructor() : Test("AsyncIoHostCallThreadsTest", "1.0") {
+        # the thread count is set once, while the controller has no operation
+        if (Option::HAVE_LIBRARY_DEBUGGING && exists_function("dbg_async_io_route_thread")) {
+            AsyncIoController::setMaxIoThreads(IoThreads);
+        }
+        addTestCase("host code acting for a tenant does not replace the host's operation on another I/O thread",
+            \hostOpTest());
+        addTestCase("host code acting for a tenant replaces the tenant's operation on another I/O thread",
+            \ownOpTest());
+        addTestCase("host code acting for a tenant does not replace across threads the host's replacement of the "
+            "tenant's operation", \replacedOnOwnThreadTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_async_io_route_thread")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! Returns a notifier routed to the given I/O thread (\a same), or to another one
+    private EventNotifier getNotifier(int thread, bool same) {
+        for (int i = 0; i < 1000; ++i) {
+            EventNotifier n();
+            if ((call_function("dbg_async_io_route_thread", n) == thread) == same) {
+                return n;
+            }
+        }
+        fail(sprintf("no notifier is routed %s I/O thread %d", same ? "to" : "away from", thread));
+    }
+
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.importFunction("host_submit");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+
+    #! checks that the submission is refused: its operation is not started, and its result is a canceled result
+    private checkRefused(Queue rq, string msg) {
+        hash<auto> res = rq.get(HangGuard);
+        assertTrue(res.canceled, msg + ": the submission is refused");
+        assertEq("ASYNC-IO-KEY-ERROR", res.ex.err, msg);
+    }
+
+    hostOpTest() {
+        skipIfNoDebugging();
+        Program tenant = getTenant();
+        string key = getName("host-op");
+        EventNotifier a();
+        int thread = call_function("dbg_async_io_route_thread", a);
+        EventNotifier b = getNotifier(thread, False);
+        Queue rq = host_submit(a, key, key, False);
+        on_exit AsyncIoController::cancelByOwner(key);
+        on_exit AsyncIoController::cancelByOwner(key + "-tenant");
+        checkRefused(tenant.callFunction("submit_via_host", b, key, key + "-tenant", True), "the host's operation");
+        assertEq(0, rq.size(), "the host's operation was not replaced");
+        assertTrue(AsyncIoController::cancelByKey(key), "the host's operation is still there");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    ownOpTest() {
+        skipIfNoDebugging();
+        Program tenant = getTenant();
+        string key = getName("own-op");
+        EventNotifier a();
+        int thread = call_function("dbg_async_io_route_thread", a);
+        EventNotifier b = getNotifier(thread, False);
+        auto rq = tenant.callFunction("submit_own", a, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        on_exit AsyncIoController::cancelByOwner(key + "-tenant");
+        Queue nrq = tenant.callFunction("submit_via_host", b, key, key + "-tenant", True);
+        assertTrue(rq.get(HangGuard).canceled, "the tenant's operation was replaced");
+        assertEq(0, nrq.size(), "the replacement runs");
+        assertTrue(AsyncIoController::cancelByKey(key), "the replacement has the key");
+        assertTrue(nrq.get(HangGuard).canceled);
+    }
+
+    replacedOnOwnThreadTest() {
+        skipIfNoDebugging();
+        Program tenant = getTenant();
+        string key = getName("replaced-own-thread");
+        EventNotifier a();
+        int thread = call_function("dbg_async_io_route_thread", a);
+        EventNotifier a2 = getNotifier(thread, True);
+        EventNotifier b = getNotifier(thread, False);
+        # the tenant's operation, replaced by the host's on the same I/O thread
+        auto trq = tenant.callFunction("submit_own", a, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        on_exit AsyncIoController::cancelByOwner(key + "-host");
+        on_exit AsyncIoController::cancelByOwner(key + "-tenant");
+        Queue hrq = host_submit(a2, key, key + "-host", True);
+        assertTrue(trq.get(HangGuard).canceled, "the host replaced the tenant's operation");
+        # host code acting for the tenant cannot replace the host's operation from another I/O thread
+        checkRefused(tenant.callFunction("submit_via_host", b, key, key + "-tenant", True),
+            "the host's replacement");
+        assertEq(0, hrq.size(), "the host's operation was not replaced");
+        assertTrue(AsyncIoController::cancelByKey(key), "the host's operation is still there");
+        assertTrue(hrq.get(HangGuard).canceled);
+    }
+}

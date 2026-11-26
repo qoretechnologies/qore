@@ -1131,7 +1131,15 @@ public:
         DatagramSupported,
         FirstSessionStreamAcked,
         StreamAcked,
+        SetInputStreamSendBound,
     };
+
+    //! Sets the bounds that the SetInputStreamSendBound action applies (qore#7280)
+    DLLLOCAL void setSendBound(int64_t n_min_rate, int64_t n_window_ms, int64_t n_stall_ms) {
+        min_rate = n_min_rate;
+        window_ms = n_window_ms;
+        stall_ms = n_stall_ms;
+    }
 
     DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
             int64_t session_id = 0, int64_t stream_id = 0)
@@ -1218,6 +1226,15 @@ public:
             case Action::StreamAcked:
                 setStreamAcked();
                 break;
+
+            case Action::SetInputStreamSendBound: {
+                std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+                if (session) {
+                    session->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+                }
+                output = (bool)session;
+                break;
+            }
         }
 
         if (*xsink) {
@@ -1237,6 +1254,11 @@ public:
     }
 
 private:
+    //! the bounds that SetInputStreamSendBound applies
+    int64_t min_rate = 0;
+    int64_t window_ms = 0;
+    int64_t stall_ms = 0;
+
     DLLLOCAL QoreValue defaultValue() const {
         switch (action) {
             case Action::FirstSessionClosed:
@@ -1247,6 +1269,7 @@ private:
                 return 0;
             case Action::GoawayReceived:
             case Action::DatagramSupported:
+            case Action::SetInputStreamSendBound:
                 return false;
             case Action::GoawayState:
             case Action::PeerCertificate:
@@ -4888,8 +4911,10 @@ bool QoreSocketObject::hasPendingData() const {
     // Check H2/H3 session for pending data at the protocol level:
     // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
     //   but not yet drained by the poll operation
-    // - wantWrite(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE)
-    //   OR bytes buffered in our send_buffer waiting to go out
+    // - wantWriteNow(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE) and no earlier output in our
+    //   send_buffer waits for the socket; output that the socket refused waits for the socket to become writable,
+    //   which the operation waits for (SOCK_POLLOUT), so running it at once would only repeat the refused write
+    //   while the peer does not read (qoretechnologies/qore#7641)
     // Without these checks, the SSL/TCP buffers appear empty so epoll never
     // triggers a re-poll, but the H2 session has actionable work.
     //
@@ -4900,7 +4925,7 @@ bool QoreSocketObject::hasPendingData() const {
     // inbound data waiting to be processed shows up in SSL_pending() /
     // buflen (checked above) — not in nghttp2's internal state.
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (h2 && (h2->hasStreamData() || h2->wantWrite())) {
+    if (h2 && (h2->hasStreamData() || h2->wantWriteNow())) {
         return true;
     }
     return false;
@@ -7238,6 +7263,17 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         owner_name.c_str(), xsink);
 }
 
+int qore_socket_object_h2_set_input_stream_send_bound(QoreSocketObject* s, int64_t min_rate, int64_t window_ms,
+        int64_t stall_ms, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    h2->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+    return 0;
+}
+
 int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
     if (!h2) {
@@ -7266,6 +7302,22 @@ int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t
         return -1;
     }
     return rv->getAsBigInt();
+}
+
+int qore_socket_object_quic_set_input_stream_send_bound(QoreSocketObject* s, int64_t session_id, int64_t min_rate,
+        int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink) {
+    QoreSocketObjectQuicQueryPollOperation* op = new QoreSocketObjectQuicQueryPollOperation(s,
+        QoreSocketObjectQuicQueryPollOperation::Action::SetInputStreamSendBound, session_id, 0);
+    op->setSendBound(min_rate, window_ms, stall_ms);
+    ValueHolder rv(qore_socket_object_exec_quic_query(s, op, "setQuicInputStreamSendBound", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!rv->getAsBool()) {
+        xsink->raiseException("QUIC-SESSION-ERROR", "no QUIC session %lld", (long long)session_id);
+        return -1;
+    }
+    return 0;
 }
 
 int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
@@ -7342,6 +7394,11 @@ static bool qore_socket_object_set_action_consume_hook(AbstractAsyncAction* acti
     }
     // startSseStreaming(): the events are taken from the action's Queue
     if (SseAction* a = dynamic_cast<SseAction*>(action)) {
+        return a->setConsumeHook(hook);
+    }
+    // the AWS binary event stream (qore#7247): installed in a ChannelAction, which takes the hook above; an action of
+    // its own takes it as SseAction does
+    if (EventStreamAction* a = dynamic_cast<EventStreamAction*>(action)) {
         return a->setConsumeHook(hook);
     }
     return false;

@@ -1,0 +1,36 @@
+the cache: rec/a: "string", rec/b: "inner", rec/b/x: "string", children: ["a", "b"] ["x"]
+test-7674/rec setOrReplaceType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec addChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec getCreateChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec setType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec removeChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec lock(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec lockAll(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec clear(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a setOrReplaceType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a addChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a getCreateChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a setType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a removeChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a lock(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a lockAll(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/a clear(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b setOrReplaceType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b addChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b getCreateChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b setType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b removeChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b lock(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b lockAll(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b clear(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x setOrReplaceType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x addChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x getCreateChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x setType(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x removeChild(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x lock(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x lockAll(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+test-7674/rec/b/x clear(): DATA-PROVIDER-REGISTRATION-DENIED, the cache: unchanged
+the tenant's own entry: changed, changed
+a field entry of a tree marked later: DATA-PROVIDER-REGISTRATION-DENIED, type: "string"
+trusted code replaces the type of a field: "host", restores it: "string"

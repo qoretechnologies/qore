@@ -9352,6 +9352,39 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Sets the bounds of the HTTP/2 response bodies that the I/O thread sends from InputStreams on this connection
+/** A body sent with @ref submitHttp2StreamingResponseWithStream() holds no thread, but a client that takes its data
+    very slowly would hold its stream and buffer for as long as it likes.  With these bounds, the bodies that wait for
+    a client that takes less than \a min_rate bytes per second on all its streams together, or that takes nothing of a
+    body for \a stall_timeout, are ended with \c RST_STREAM, and the event is logged.
+
+    The bounds of a connection are set once, with its first body; later calls are ignored.
+
+    @param min_rate the minimum rate in bytes per second; 0 disables the check
+    @param window the window of the minimum rate
+    @param stall_timeout the time without progress after which a body is ended; a value that is not positive keeps
+    the default of 30 minutes
+
+    @throw HTTP2-ERROR no HTTP/2 session is active
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttp2InputStreamSendBound(int min_rate, timeout window, timeout stall_timeout = 30m)
+        [flags=NAMED_ARGS; dom=NETWORK] {
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of the minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    qore_socket_object_h2_set_input_stream_send_bound(s, min_rate, window, stall_timeout, xsink);
+    return QoreValue();
+}
+
 //! Returns the number of bytes of an HTTP/2 stream's buffered data that the connection has taken so far
 /** The count never decreases; a sender that waits for a full send buffer to drain (see
     @ref waitForHttp2StreamDrain()) can tell from it whether the connection still takes the data (the peer grants
@@ -10011,6 +10044,40 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     int rc = s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
         (bool)end_stream, xsink);
     return rc;
+}
+
+//! Sets the bounds of the HTTP/3 response bodies that the I/O thread sends from InputStreams on a QUIC connection
+/** A body sent with @ref submitQuicStreamingResponseWithStream() holds no thread, but a client that takes its data
+    very slowly would hold its stream and buffer for as long as it likes.  With these bounds, the bodies that wait for
+    a client that takes less than \a min_rate bytes per second on all its streams together, or that acknowledges
+    nothing of a body for \a stall_timeout, are ended with \c RESET_STREAM, and the event is logged.
+
+    The bounds of a connection are set once, with its first body; later calls are ignored.
+
+    @param session_id the QUIC session ID of the connection
+    @param min_rate the minimum rate in bytes per second; 0 disables the check
+    @param window the window of the minimum rate
+    @param stall_timeout the time without progress after which a body is ended; a value that is not positive keeps
+    the default of 30 minutes
+
+    @throw QUIC-SESSION-ERROR no such QUIC session
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+
+    @since %Qore 3.0
+*/
+nothing Socket::setQuicInputStreamSendBound(int session_id, int min_rate, timeout window,
+        timeout stall_timeout = 30m) [flags=NAMED_ARGS; dom=NETWORK] {
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of the minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    qore_socket_object_quic_set_input_stream_send_bound(s, session_id, min_rate, window, stall_timeout, xsink);
+    return QoreValue();
 }
 
 //! Submit HTTP/3 streaming response with InputStream body (non-blocking)

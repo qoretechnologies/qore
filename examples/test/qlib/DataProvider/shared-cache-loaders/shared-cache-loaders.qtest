@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedCacheLoadersTest
+
+#! Regression test for issue #7679: a sandboxed caller's loader runs without the lock of a process-wide cache
+/** A loader that sandboxed code gives to a lookup of the process-wide data provider type cache or connection scheme
+    registry runs without the lock of the cache held: a lookup or registration of the host made while the loader waits
+    completes, the tenant gets what its loader returns, which no other caller sees, and the module still loads a type
+    for the tenant on demand.
+
+    SharedCacheLoaders.q makes the checks; its output must be the one in SharedCacheLoaders.expected in every
+    execution mode.
+*/
+class SharedCacheLoadersTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedCacheLoaders.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedCacheLoaders.expected");
+    }
+
+    constructor() : QUnit::Test("loaders of the process-wide caches", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, which choose their own execution
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        # the lookups of unknown types load no data provider modules of the environment, which report on stderr
+        return sprintf("env -u QORE_DATA_PROVIDERS %s --exec-mode=%s %s", shellQuote(qore_bin), mode,
+            shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

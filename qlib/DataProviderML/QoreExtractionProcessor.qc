@@ -27,7 +27,11 @@ public namespace DataProviderML {
 #! Pipeline processor that extracts structured data from text using an LLM
 /** Uses an LLM to extract typed structured data from a text field according
     to a schema template (NER, invoice, contact, sentiment) or a custom schema.
-    Each record is enriched with extraction results.
+    Choose a preset with \c schema_template. To define customer-specific fields, omit the preset and supply
+    \c custom_schema with a name, description, and list of fields. A field is required by default. For example,
+    a shipment schema can declare a string reference, an ISO delivery date as a string, and an integer quantity.
+    A configured preset takes precedence over a custom schema. Each output record carries the extracted fields,
+    validation status and model usage. Invalid records also carry the validation errors.
 
     @par Example:
     @code{.py}
@@ -101,10 +105,11 @@ public class QoreExtractionProcessor inherits AbstractDataProviderMLProcessor {
             "custom_schema": <DataProviderOptionInfo>{
                 "display_name": "Custom Schema",
                 "short_desc": "Custom extraction schema as a hash",
-                "desc": "A custom extraction schema hash with keys: `name` (string), "
-                    "`description` (string), `fields` (list of field definitions). Each "
-                    "field has: `name`, `type`, `description`, `required` (bool).\n\n"
-                    "Use this instead of `schema_template` for custom extraction tasks.",
+                "desc": "Omit `schema_template` and set `name`, `description`, and a nonempty list of "
+                    "`fields`. Each field has a unique `name`, a `description`, and a JSON type "
+                    "(`string`, `number`, `integer`, `boolean`, `array`, or `object`). "
+                    "`required` defaults to true. Array fields can specify `items`, object fields "
+                    "can specify `properties`, and `enum_values` lists the permitted values.",
                 "type": AbstractDataProviderTypeMap."hash",
                 "required": False,
             },
@@ -388,10 +393,10 @@ public class QoreExtractionProcessor inherits AbstractDataProviderMLProcessor {
     #! Builds a custom ExtractionSchemaInfo from a user-provided hash
     private hash<QoreStructuredExtraction::ExtractionSchemaInfo> buildCustomSchema(
             hash<auto> schema_hash) {
-        if (!schema_hash.name.val()) {
+        if (schema_hash.name.typeCode() != NT_STRING || !schema_hash.name.val()) {
             throw "CONSTRUCTOR-ERROR", "custom_schema must have a 'name' key";
         }
-        if (!schema_hash.description.val()) {
+        if (schema_hash.description.typeCode() != NT_STRING || !schema_hash.description.val()) {
             throw "CONSTRUCTOR-ERROR", "custom_schema must have a 'description' key";
         }
         if (!schema_hash.fields || schema_hash.fields.typeCode() != NT_LIST) {
@@ -400,18 +405,28 @@ public class QoreExtractionProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         list<hash<QoreStructuredExtraction::ExtractionFieldDef>> fields = ();
-        foreach hash<auto> field_hash in (schema_hash.fields) {
-            if (!field_hash.name.val() || !field_hash.type.val()
-                    || !field_hash.description.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "each field in custom_schema.fields must have 'name', 'type', "
-                    "and 'description' keys";
+        hash<string, bool> names;
+        foreach auto field in (schema_hash.fields) {
+            if (field.typeCode() != NT_HASH || field.name.typeCode() != NT_STRING || !field.name.val()
+                    || field.description.typeCode() != NT_STRING || !field.description.val()) {
+                throw "CONSTRUCTOR-ERROR", "each field in custom_schema.fields needs a name and description";
             }
+            if (!inlist(field.type, ("string", "number", "integer", "boolean", "array", "object"))) {
+                throw "CONSTRUCTOR-ERROR", sprintf("unsupported type %y for extraction field %y",
+                    field.type, field.name);
+            }
+            if (names{field.name}) {
+                throw "CONSTRUCTOR-ERROR", sprintf("duplicate extraction field %y", field.name);
+            }
+            names{field.name} = True;
             push fields, <QoreStructuredExtraction::ExtractionFieldDef>{
-                "name": field_hash.name,
-                "type": field_hash.type,
-                "description": field_hash.description,
-                "required": field_hash.required ?? True,
+                "name": field.name,
+                "type": field.type,
+                "description": field.description,
+                "required": field.required ?? True,
+                "items": field.items,
+                "properties": field.properties,
+                "enum_values": field.enum_values,
             };
         }
 

@@ -187,6 +187,18 @@
           "source": "One or more `Bcc:` addresses for the email",
           "message": "電子郵件的一或多個 `Bcc:` 位址"
         },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "純文字替代內容"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "HTML 內文的純文字表示"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "當內文為非空的 text/html 字串時，會先在 multipart/alternative 郵件中傳送此非空的純文字。省略此項則只傳送內文本身。"
+        },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "本文編碼"
@@ -226,6 +238,14 @@
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
           "source": "The MIME type of the message body",
           "message": "郵件本文的 MIME 類型"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "純文字"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML 文字"
         },
         "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
           "source": "CC",
