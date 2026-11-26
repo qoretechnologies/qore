@@ -156,7 +156,9 @@
     - the module creates the directory with mode 0700 and refuses (with
       \c KRB5-SANDBOX-ERROR) a directory that is a link, belongs to another
       user or that other users can use, a temporary directory that other users
-      can write to without the sticky bit (which is not supported), and a
+      can write to without the sticky bit or that belongs to another user
+      than root or the effective user of the process (which can rename the
+      entries of others in it; neither is supported), and a
       replay cache file that is not a regular file of the effective user with
       one link, when the credential is acquired and before each acceptor step,
       as the library opens the file by name for every authenticator

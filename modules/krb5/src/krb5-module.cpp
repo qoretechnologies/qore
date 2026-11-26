@@ -42,7 +42,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <mutex>
+#include <atomic>
 #include <random>
 #include <strings.h>
 #include <fcntl.h>
@@ -798,6 +798,13 @@ static int krb5_check_rcache(const std::string& dir, const std::string& path, Ex
             tmp.c_str());
         return -1;
     }
+    // the owner of a directory can rename and remove the entries of others in it, also with the sticky bit
+    if (st.st_uid && st.st_uid != geteuid()) {
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the temporary directory '%s' of the replay caches of the "
+            "GSSAPI acceptors of code that a sandbox governs belongs to another user than root or the effective user "
+            "of the process", context, tmp.c_str());
+        return -1;
+    }
     if (lstat(dir.c_str(), &st) || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077)) {
         xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the replay cache directory '%s' of the GSSAPI acceptors of "
             "code that a sandbox governs is not a directory that only the effective user of the process can use",
@@ -832,30 +839,47 @@ static int krb5_check_rcache(const std::string& dir, const std::string& path, Ex
     return 0;
 }
 
+//! The token of a process (see krb5_process_token())
+struct Krb5ProcessToken {
+    //! the process that the token was made for
+    pid_t pid;
+    //! the token
+    std::string token;
+};
+
 //! Gives a token of the process, which makes names of the module that are unique only in the process unique on the
 //! host; a new one after a fork
-/** @return 0 for OK, -1 if an exception was raised
+/** Lock-free, so that a fork while another thread makes a token cannot leave a lock held in the child: a token is an
+    immutable object that an atomic pointer publishes; a caller that finds none, or one of another process (the
+    parent, after a fork), makes one and publishes it unless another thread was faster.  The object that a token of
+    the process replaces after a fork is not freed (once per fork; the parent may still use it).
+
+    @return 0 for OK, -1 if an exception was raised
 */
 static int krb5_process_token(std::string& out, ExceptionSink* xsink) {
-    static std::mutex lck;
-    static pid_t token_pid = 0;
-    static std::string token;
-    std::lock_guard<std::mutex> guard(lck);
+    static std::atomic<Krb5ProcessToken*> current(nullptr);
     pid_t pid = getpid();
-    if (pid != token_pid) {
+    Krb5ProcessToken* t = current.load(std::memory_order_acquire);
+    while (!t || t->pid != pid) {
+        Krb5ProcessToken* nt;
         try {
             std::random_device rd;
             std::string rv = std::to_string(pid) + '-';
             krb5_append_hex(rv, std::to_string(rd()) + '-' + std::to_string(rd()));
-            token = rv;
-            token_pid = pid;
+            nt = new Krb5ProcessToken{pid, rv};
         } catch (const std::exception&) {
             xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from keytab: no random source "
                 "is available for the name of the replay cache of a GSSAPI acceptor of code that a sandbox governs");
             return -1;
         }
+        if (current.compare_exchange_strong(t, nt, std::memory_order_acq_rel, std::memory_order_acquire)) {
+            t = nt;
+        } else {
+            // another thread published one first: t is it
+            delete nt;
+        }
     }
-    out = token;
+    out = t->token;
     return 0;
 }
 
