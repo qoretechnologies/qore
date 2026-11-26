@@ -7,9 +7,9 @@
 %enable-all-warnings
 
 # a weak or opaque assignment to a variable that holds a reference assigns the referenced lvalue with its type: the
-# value is converted to the type of the referenced lvalue (a softlist takes a list of the value), and the weak
-# reference designates the converted value, which lives until the end of the statement (qore#7164); a container that
-# the conversion would replace with a new one raises RUNTIME-TYPE-ERROR (qore#7237)
+# value is checked and converted with the type of the referenced lvalue, not with that of the variable (qore#7164); a
+# container that the conversion would replace with a new one raises RUNTIME-TYPE-ERROR (qore#7237), as does a value that
+# is not a list, which a softlist lvalue would wrap in a new list that the reference would designate (qore#7619)
 
 softlist<auto> gsl;
 
@@ -26,7 +26,11 @@ sub show(string name, auto v) {
 sub reference_local() {
     softlist<auto> l;
     reference r = \l;
-    show("reference local: value", (r := 1));
+    try {
+        show("reference local: value", (r := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("reference local: value: %s\n", ex.err);
+    }
     show("reference local: after", l);
     show("reference local: read through", r);
 }
@@ -34,14 +38,22 @@ sub reference_local() {
 sub reference_local_opaque() {
     softlist<auto> l;
     reference r = \l;
-    show("reference local opaque: value", (r @= 1));
+    try {
+        show("reference local opaque: value", (r @= 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("reference local opaque: value: %s\n", ex.err);
+    }
     show("reference local opaque: after", l);
 }
 
 sub auto_local() {
     softlist<auto> l;
     auto a = \l;
-    show("auto local: value", (a := 1));
+    try {
+        show("auto local: value", (a := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("auto local: value: %s\n", ex.err);
+    }
     show("auto local: after", l);
 }
 
@@ -58,23 +70,39 @@ sub auto_local_without_reference(bool give) {
 }
 
 sub reference_param(reference r) {
-    show("reference parameter: value", (r := 1));
+    try {
+        show("reference parameter: value", (r := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("reference parameter: value: %s\n", ex.err);
+    }
 }
 
 sub auto_param(auto a) {
-    show("auto parameter: value", (a := 1));
+    try {
+        show("auto parameter: value", (a := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("auto parameter: value: %s\n", ex.err);
+    }
 }
 
 # a local that is given a reference as a value (an element of a list), in a function that creates no reference
 sub reference_element(list<auto> refs) {
     auto a = refs[0];
-    show("reference element: value", (a := 1));
+    try {
+        show("reference element: value", (a := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("reference element: value: %s\n", ex.err);
+    }
 }
 
 # the variable of a foreach loop that is given a reference by an element, in a function that creates no reference
 sub reference_foreach(list<auto> refs) {
     foreach auto v in (refs) {
-        show("foreach reference element: value", (v := 1));
+        try {
+            show("foreach reference element: value", (v := 1));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("foreach reference element: value: %s\n", ex.err);
+        }
     }
 }
 
@@ -82,7 +110,11 @@ sub closure_reference() {
     softlist<auto> l;
     reference r = \l;
     code c = sub () {
-        show("closure reference: value", (r := 1));
+        try {
+            show("closure reference: value", (r := 1));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("closure reference: value: %s\n", ex.err);
+        }
     };
     c();
     show("closure reference: after", l);
@@ -91,7 +123,11 @@ sub closure_reference() {
 sub string_softlist() {
     *softlist<softint> l;
     reference r = \l;
-    show("softlist<softint>: value", (r := "3"));
+    try {
+        show("softlist<softint>: value", (r := "3"));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("softlist<softint>: value: %s\n", ex.err);
+    }
     show("softlist<softint>: after", l);
 }
 
@@ -137,22 +173,30 @@ sub type_error() {
 
 sub global_target() {
     reference r = \gsl;
-    show("global: value", (r := 1));
+    try {
+        show("global: value", (r := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("global: value: %s\n", ex.err);
+    }
     show("global: after", gsl);
 }
 
 sub member_target() {
     Holder o();
     reference r = \o.sl;
-    show("member: value", (r := 1));
+    try {
+        show("member: value", (r := 1));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("member: value: %s\n", ex.err);
+    }
     show("member: after", o.sl);
 }
 
 sub statement_lifetime() {
     softlist<auto> l;
     reference r = \l;
-    # the converted value lives until the end of the statement, so the weak reference reads it in the same statement
-    show("statement lifetime: same statement", (r := 1, l)[1]);
+    # a list made by the statement lives until its end, so the weak reference reads it in the same statement
+    show("statement lifetime: same statement", (r := list(1), l)[1]);
     show("statement lifetime: next statement", l);
 }
 

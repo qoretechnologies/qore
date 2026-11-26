@@ -259,6 +259,36 @@ static bool qore_parse_weak_store_converts(const QoreTypeInfo* target_ti, const 
         || QoreTypeInfo::isNoNarrowContainer(target_ti);
 }
 
+//! returns true if a weak or opaque assignment of a value of type \a value_ti to an lvalue of type \a target_ti is
+//! known at parse time to wrap the value in a new list, or to convert no value to a new empty list (qore#7619)
+/** The lvalue's type is a softlist type (softlist, *softlist, softlist<T>), which wraps a value that is not a list in
+    a new list, and converts NOTHING and NULL to a new empty list unless it takes NOTHING (*softlist, *softlist<T>);
+    the value's type cannot be a list, nor, for a type that takes NOTHING, NOTHING or NULL.  A value that can be a
+    list is checked by qore_parse_weak_store_converts() and at run time; any other case is refused by the run-time
+    check of LValueHelper::assign()
+
+    @param no_value set to true if the value is known to be NOTHING or NULL
+*/
+static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
+        bool& no_value) {
+    if (!QoreTypeInfo::hasType(value_ti) || !QoreTypeInfo::isSoftListType(target_ti)
+            || QoreTypeInfo::isReference(value_ti)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(value_ti, NT_LIST) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    bool maybe_nothing = QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(value_ti, NT_NULL) != QTI_NOT_EQUAL;
+    // a *softlist lvalue keeps NOTHING, and converts NULL to it: a value that can be either is left to run time
+    if (maybe_nothing && QoreTypeInfo::parseReturns(target_ti, NT_NOTHING) != QTI_NOT_EQUAL) {
+        return false;
+    }
+    no_value = QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT
+        || QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT;
+    return true;
+}
+
 int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
         AssignmentMode mode) {
     int err = parseInitIntern(parse_context, mode);
@@ -711,7 +741,15 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                 target_ti = decl_ti;
             }
         }
-        if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
+        // a softlist lvalue that is known to wrap the value in a new list, or to convert no value to a new empty list,
+        // is refused likewise (qore#7619)
+        bool no_value = false;
+        if (qore_parse_weak_store_wraps(ti, parse_context.typeInfo, no_value)) {
+            qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
+                qore_weak_store_wrap_desc(mode == AssignmentMode::Weak, QoreTypeInfo::getName(parse_context.typeInfo),
+                    QoreTypeInfo::getName(ti), no_value));
+            err = -1;
+        } else if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
             qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
                 qore_weak_store_conversion_desc(mode == AssignmentMode::Weak,
                     QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(target_ti)));

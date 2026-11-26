@@ -271,20 +271,21 @@ sub paths() {
     printf("list element value: %s\n", desc(v3));
     remove v3;
 
-    # the list that the softlist type makes of the value is a temporary of the statement; v4 takes a copy of its own
-    # (qore#7342)
+    # a list made by the statement is a temporary of the statement; v4 takes a copy of its own (qore#7342); a value
+    # that is not a list cannot be assigned weakly to a softlist variable, which would wrap it in a new list
+    # (qore#7619)
     softlist<auto> sl;
-    auto v4 = (sl := 1);
+    auto v4 = (sl := list(1));
     printf("softlist value: %y %s sl=%y\n", v4, v4.fullType(), sl);
     remove v4;
     # native code kept the list of a plain local softlist variable after the statement (qore#7142)
     printf("softlist released: sl=%y\n", sl);
     softlist<auto> sl2;
-    printf("softlist in the statement: %y\n", (sl2 := 2));
+    printf("softlist in the statement: %y\n", (sl2 := list(2)));
     printf("softlist after the statement: sl2=%y\n", sl2);
     softlist<auto> csl;
     code fsl = auto sub () { return csl; };
-    auto v5 = (csl := 1);
+    auto v5 = (csl := list(1));
     printf("closure softlist value: %y %s\n", v5, v5.fullType());
     remove v5;
     printf("closure softlist released: csl=%y\n", fsl());
