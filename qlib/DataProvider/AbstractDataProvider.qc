@@ -5906,7 +5906,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
         *hash<string, hash<ActionOptionInfo>> rv = action.options;
-        if ((*AbstractDataProviderType type = getRequestTypeWithOptions(options))) {
+        # an action whose request type is the nothing type takes no request: it has no request data option
+        *AbstractDataProviderType type = getRequestTypeWithOptions(options);
+        if (!AbstractDataProviderType::isNothingType(type)) {
             if (*hash<auto> fields = type.getFields()) {
                 rv += DataProviderActionCatalog::getActionOptionFromFields(fields);
             } else {
