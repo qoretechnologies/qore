@@ -221,6 +221,7 @@ public:
         }
         fp += "|b";
         if (p->scl) {
+            BCSMList::View sv = p->scl->sml.view();
             for (BCNode* n : *p->scl) {
                 // a parent class is kept alive by the list of the class's ancestors (BCSMList::append() references
                 // it), not by the edge: a class whose hierarchy was not initialized (such as one that is circular or
@@ -231,7 +232,7 @@ public:
                 // and an entry can be another QoreClass of the class (one imported into the Program, as the AOT
                 // loader adds it with qore_class_private::addBaseClass())
                 if (failed || !n->sclass
-                    || std::none_of(p->scl->sml.begin(), p->scl->sml.end(),
+                    || std::none_of(sv.begin(), sv.end(),
                         [n](const class_virt_pair_t& i) {
                             return qore_class_private::get(*i.first)->cls == n->sclass;
                         })) {

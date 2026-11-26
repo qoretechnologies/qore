@@ -1115,9 +1115,17 @@ public:
 
     //! initializes a builtin class after all base classes have been added
     /** Call this after all base classes are set up but before any operation that may trigger recursive
-        class loading (e.g., method type resolution). Ensures the class and all its parents are properly
-        initialized so that recursive loading chains cannot prematurely initialize the class with an
-        incomplete parent list.
+        class loading (e.g., method type resolution).  It initializes the class and its builtin parent classes
+        that are not initialized yet, and marks the class's own list of base classes as complete: no base class
+        may be added to the class after this call.  Registering the class in a namespace with
+        QoreNamespace::addSystemClass() marks it complete too.
+
+        A subclass can be created and can inherit this class before this call (when the creation of one of this
+        class's base classes creates the subclass, as with classes created lazily from another language); the
+        ancestors that this class gets afterwards are added to the subclass when the ancestry of this class is
+        complete: when this function has been called for the class and the ancestries of all of its parent
+        classes are complete.  Until then the subclass has only the ancestors that this class had when the
+        subclass inherited it.
 
         Safe to call multiple times; subsequent calls are no-ops.
 

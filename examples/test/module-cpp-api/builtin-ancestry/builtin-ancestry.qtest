@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "ancestryprobe" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is
+# not installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires ancestryprobe
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BuiltinAncestryTest
+
+#! Tests the ancestry of builtin subclasses created while their parent classes get base classes (qore#7614)
+/** The ancestryprobe module creates builtin classes at run time with the C++ API as the jni module does: class A is
+    created; while its base classes are added, B is created with A as a parent class, initialized and registered;
+    then A gets more base classes and is initialized and registered.  B (and C, a subclass of B created in the gap)
+    must then have the ancestors that A got afterwards: before qore#7614 was fixed, B had only the ancestors that A
+    had when B inherited it, so an object of B was not an instance of the later ones, and setting the private data
+    of a later ancestor failed an assertion of a debug build (qore_object_private::addVirtualPrivateData()).
+*/
+class BuiltinAncestryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("builtin class ancestry", "1.0", \ARGV) {
+        addTestCase("virtual inheritance", \virtualTest());
+        addTestCase("non-virtual inheritance", \nonVirtualTest());
+        addTestCase("subclasses deleted before the parent class is complete", \deletedSubclassTest());
+        addTestCase("a parent class that is never complete", \neverClosedTest());
+        addTestCase("concurrent readers", \concurrentReadersTest());
+        set_return_value(main());
+    }
+
+    virtualTest() {
+        hash<auto> h = AncestryProbe::gap(True);
+        # B is used while A gets base classes: it has only the ones A had
+        assertFalse(h.b_late_before);
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+        assertTrue(h.b_late_parent);
+        assertTrue(h.b_plain);
+        assertTrue(h.c_a);
+        assertTrue(h.c_late);
+        assertTrue(h.c_late_parent);
+        assertTrue(h.c_plain);
+        assertEq(3, h.b_iterated_late);
+        assertTrue(h.obj_instanceof_late);
+        assertTrue(h.obj_instanceof_plain);
+        assertEq(42, h.obj_late_data);
+        assertEq(42, h.obj_late_parent_data);
+        assertEq(42, h.obj_late_value);
+    }
+
+    nonVirtualTest() {
+        hash<auto> h = AncestryProbe::gap(False);
+        assertFalse(h.b_late_before);
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+        assertTrue(h.b_late_parent);
+        assertTrue(h.b_plain);
+        assertTrue(h.c_late);
+        assertTrue(h.c_plain);
+        assertEq(3, h.b_iterated_late);
+        assertTrue(h.obj_instanceof_late);
+        assertEq(42, h.obj_late_data);
+        assertEq(42, h.obj_late_value);
+        # the destructor of the later ancestor runs for the object of B (BCSMList::execDestructors())
+        assertEq(1, h.late_destructors);
+    }
+
+    deletedSubclassTest() {
+        hash<auto> h = AncestryProbe::deletedSubclass();
+        assertTrue(h.a_late);
+        assertTrue(h.e_late);
+    }
+
+    neverClosedTest() {
+        hash<auto> h = AncestryProbe::neverClosed();
+        assertTrue(h.b_early);
+        assertTrue(h.c_early);
+        # A is never complete: its later base class is never added to its subclasses
+        assertFalse(h.b_late);
+        assertFalse(h.c_late);
+    }
+
+    concurrentReadersTest() {
+        # enough later ancestors for several appends that need a larger array while the reader reads
+        int n = 200;
+        hash<auto> h = AncestryProbe::concurrentReaders(n);
+        assertEq(n, h.found);
+        # B, A and the later ancestors, then the later ones by their ID
+        assertEq(2 * n + 2, h.last_seen);
+        assertTrue(h.reads_positive);
+    }
+}

@@ -2957,6 +2957,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a builtin class that a module creates as a subclass of a class whose base classes are still being added (such
+      as a class created from Java by the \c jni module) gets the ancestors that the parent class gets afterwards,
+      so that its objects are instances of them and keep their private data
+      (<a href="https://github.com/qoretechnologies/qore/issues/7614">issue 7614</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)

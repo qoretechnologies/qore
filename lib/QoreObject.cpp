@@ -2630,7 +2630,8 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     if (!sml)
         return;
 
-    for (class_list_t::const_iterator i = sml->begin(), e = sml->end(); i != e; ++i) {
+    BCSMList::View v = sml->view();
+    for (BCSMList::const_iterator i = v.begin(), e = v.end(); i != e; ++i) {
         //printd(5, "qore_object_private::addVirtualPrivateData() this: %p i: %p '%s' key: %d virt: %s\n", this,
         //  i->first, i->first->getName(), i->first->getID(), i->second ? "true" : "false");
         if (i->second)
