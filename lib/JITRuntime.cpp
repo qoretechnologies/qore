@@ -135,24 +135,40 @@
 #include <qore/intern/BackquoteNode.h>
 #include <qore/intern/QoreStringFastPathCalls.h>
 
+//! the ordinary call of a string fast path whose work raised an exception (see qore_rt_string_fast_path())
+template <typename Call>
+static __attribute__((noinline, cold)) auto qore_rt_string_fast_path_call(ExceptionSink* xsink, Call call)
+        -> decltype(call()) {
+    // the exception of the work, which the call raises again in the builtin's frame
+    xsink->clear();
+    return call();
+}
+
 //! runs the work of a string fast path; an exception is raised by the ordinary call instead (qore#7711)
-/** The work of the fast path runs without the builtin's call and its frame.  If it raises an exception, the exception
-    is discarded and \a call makes the ordinary call, which raises it again in the builtin's frame, as the AST
-    interpreter does; if an exception is pending when the fast path starts, its work would add an exception without the
-    frame to it, so \a call makes the call at once.  The work has no effect but its result (see
-    QoreStringFastPathCalls.h).  The path without an exception tests the sink twice and makes no call.
+/** The work of the fast path runs without the builtin's call and its frame.  If it raises an exception, it sets
+    \a failed in the branch in which it detects the exception (a status that it computes or its own test of the sink),
+    and the exception is discarded and \a call makes the ordinary call, which raises it again in the builtin's frame,
+    as the AST interpreter does.  The work has no effect but its result (see QoreStringFastPathCalls.h), and the path
+    without an exception makes no test that the work did not make before.
+
+    No caller makes the call with an exception pending, which the work would add its exception to and which the
+    discarding would release with it: JIT and AOT code test the sink after every instruction that can raise one and
+    branch to the handler (QoreIRToLLVM::emitExceptionCheck(); deferred exception checking is not enabled by any
+    caller of QoreIRToLLVM), the IR interpreter does so after every instruction too, a block-exit handler (on_exit,
+    on_error) runs with the exceptions of its block set aside, and the JIT runtime's call path
+    (qore_rt_call_with_args_impl()) is reached by calls only.
 */
 template <typename Work, typename Call>
 static inline __attribute__((always_inline)) auto qore_rt_string_fast_path(ExceptionSink* xsink, Work work, Call call)
-        -> decltype(work()) {
-    if (!xsink || !*xsink) [[likely]] {
-        auto result = work();
-        if (!xsink || !*xsink) [[likely]] {
-            return result;
-        }
-        xsink->clear();
+        -> decltype(work(std::declval<bool&>())) {
+    assert(!xsink || !*xsink);
+    bool failed = false;
+    auto result = work(failed);
+    if (failed) [[unlikely]] {
+        assert(xsink);
+        return qore_rt_string_fast_path_call(xsink, call);
     }
-    return call();
+    return result;
 }
 
 
@@ -12923,8 +12939,10 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_rt_string_conca
 
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
         uint64_t* args, int nargs, int32_t characters, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_string_concat_multi_measure_work(args, nargs, characters, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        int64_t result = qore_rt_string_concat_multi_measure_work(args, nargs, characters, xsink);
+        failed = xsink && *xsink;
+        return result;
     }, [&]() -> int64_t {
         ValueHolder concatenated(qore_rt_string_concat_for_calls(args, nargs, false, xsink), xsink);
         if (*xsink) {
@@ -12938,8 +12956,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         uint64_t* args, int nargs, uint64_t pattern_bits, int32_t operation,
         int64_t offset, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_string_concat_multi_search_work(args, nargs, pattern_bits, operation, offset, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        int64_t result = qore_rt_string_concat_multi_search_work(args, nargs, pattern_bits, operation, offset, xsink);
+        failed = xsink && *xsink;
+        return result;
     }, [&]() -> int64_t {
         if (operation < 0 || operation > 4) {
             // the error of the work
@@ -12964,7 +12984,11 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
         return qore_rt_string_concat_multi_pipeline_search_work(args, nargs, start, length, has_substr, has_length,
             pattern_bits, operation, offset, transform, xsink);
     };
-    return qore_rt_string_fast_path(xsink, work, [&]() -> int64_t {
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        int64_t result = work();
+        failed = xsink && *xsink;
+        return result;
+    }, [&]() -> int64_t {
         if (nargs < 0 || (nargs && !args) || has_substr < 0 || has_substr > 1 || has_length < 0 || has_length > 1
                 || (!has_substr && has_length) || operation < 0 || operation > 4 || transform < 0 || transform > 2) {
             // the error of the work
@@ -12996,8 +13020,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
 //! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args, int nargs,
         int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_string_concat_multi_substr_work(args, nargs, start, length, has_length, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        uint64_t result = qore_rt_string_concat_multi_substr_work(args, nargs, start, length, has_length, xsink);
+        failed = xsink && *xsink;
+        return result;
     }, [&]() {
         ValueHolder concatenated(qore_rt_string_concat_for_calls(args, nargs, true, xsink), xsink);
         if (*xsink) {
@@ -13121,7 +13147,11 @@ static int64_t qore_rt_string_case_compare_work(
 template <typename Work>
 static QORE_ALWAYS_INLINE int64_t qore_rt_string_case_comparison(uint64_t value, int32_t upper, ExceptionSink* xsink,
         Work work) {
-    return qore_rt_string_fast_path(xsink, work, [&]() -> int64_t {
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        int64_t result = work();
+        failed = xsink && *xsink;
+        return result;
+    }, [&]() -> int64_t {
         {
             ValueHolder transformed(qore_string_call_case(fromBits(value), upper, false, xsink), xsink);
             if (*xsink) {
@@ -13616,15 +13646,36 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
 // --- Phase 5.2b: Single-argument string functions ---
 
 //! The fast path of length(): a string, a binary, or no value
-static uint64_t qore_fast_length_string(QoreValue arg, ExceptionSink* xsink);
+//! the number of characters of a string node, as qore_string_private::characterCount() counts them; \a failed is
+//! set if it raised an exception (see qore_rt_string_fast_path())
+static QORE_ALWAYS_INLINE int64_t qore_rt_string_node_length(const QoreStringNode* str, ExceptionSink* xsink,
+        bool& failed) {
+    const qore_string_private* p = qore_string_private::get(*str);
+    // the text of UTF-8 that is all ASCII, the usual case, is counted without a test of the sink
+    if (p->getEncoding() == QCS_UTF8) {
+        const char* b = p->effective_buf();
+        size_t prefix = p->getAsciiPrefix(b, p->len);
+        if (prefix == p->len) {
+            return static_cast<int64_t>(prefix);
+        }
+    }
+    size_t count = qore_string_private::characterCount(*str, xsink);
+    if (xsink && *xsink) {
+        failed = true;
+        return 0;
+    }
+    return static_cast<int64_t>(count);
+}
+
+static uint64_t qore_fast_length_string(QoreValue arg, ExceptionSink* xsink, bool& failed);
 
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
     // the length of a string raises INVALID-ENCODING for text that is not valid in its encoding, in the frame of the
     // ordinary call (qore#7711)
     if (arg.isShortString() || (arg.hasNode() && arg.getInternalNode()->getType() == NT_STRING)) {
-        return qore_rt_string_fast_path(xsink, [&]() {
-            return qore_fast_length_string(arg, xsink);
+        return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+            return qore_fast_length_string(arg, xsink, failed);
         }, [&]() {
             return toBits(qore_string_call_length(arg, true, xsink));
         });
@@ -13641,27 +13692,20 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
 }
 
 //! the work of qore_fast_length() for a string node or a short string
-static uint64_t qore_fast_length_string(QoreValue arg, ExceptionSink* xsink) {
+static uint64_t qore_fast_length_string(QoreValue arg, ExceptionSink* xsink, bool& failed) {
     if (arg.isShortString()) {
         bool invalid;
         size_t count = qore_short_string_utf8_length(arg, invalid);
         if (invalid) {
-            QoreStringValueHelper str(arg);
-            qore_string_private::get(**str)->raiseInvalidEncoding(xsink);
+            // the ordinary call raises INVALID-ENCODING
+            failed = static_cast<bool>(xsink);
             return toBits(0);
         }
         return toBits(static_cast<int64_t>(count));
     }
-    if (arg.hasNode()) {
-        const AbstractQoreNode* node = arg.getInternalNode();
-        if (node->getType() == NT_STRING) {
-            // note: safe; the node of the value, read under arg.hasNode() above
-            const auto* str = static_cast<const QoreStringNode*>(node);
-            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
-        }
-    }
-    assert(false);
-    return toBits(static_cast<int64_t>(0));
+    // note: safe; the node of the value, which the caller tested
+    return toBits(qore_rt_string_node_length(static_cast<const QoreStringNode*>(arg.getInternalNode()), xsink,
+        failed));
 }
 
 // --- Phase 5.3: Additional fast-path optimizations ---
@@ -26773,7 +26817,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_strp_noguard(uint64_t val_bi
 }
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_work(uint64_t val_bits,
-        uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
+        uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink, bool& failed) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue arg = fromBits(arg_bits);
@@ -26811,6 +26855,7 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_work(ui
 
     QoreStringValueHelper pattern(arg, str->getEncoding(), xsink);
     if (xsink && *xsink) {
+        failed = true;
         return 0;
     }
     // a character has no bytes of its own in a stateful encoding (ex: ISO-2022-JP), so its text is compared and
@@ -26821,8 +26866,14 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_work(ui
                 return str->startsWith(**pattern) ? 1 : 0;
             case 1:
                 return str->endsWith(**pattern) ? 1 : 0;
-            case 2:
-                return qore_string_private::get(**str)->containsText(**pattern, xsink) ? 1 : 0;
+            case 2: {
+                bool rv = qore_string_private::get(**str)->containsText(**pattern, xsink);
+                if (xsink && *xsink) {
+                    failed = true;
+                    return 0;
+                }
+                return rv ? 1 : 0;
+            }
         }
     }
     return eval_predicate(pattern->c_str(), pattern->size());
@@ -26830,8 +26881,8 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_work(ui
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_impl(uint64_t val_bits,
         uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_pseudo_string_predicate_native_work(val_bits, arg_bits, predicate, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        return qore_rt_pseudo_string_predicate_native_work(val_bits, arg_bits, predicate, xsink, failed);
     }, [&]() -> int64_t {
         return qore_string_call_search(fromBits(val_bits), fromBits(arg_bits),
             static_cast<QoreStringSearchCall>(predicate), 0, xsink).getAsBool() ? 1 : 0;
@@ -26854,16 +26905,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t v
 }
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_find_native_work(uint64_t val_bits,
-        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink, bool& failed) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue substring = fromBits(substring_bits);
     QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
     if (xsink && *xsink) {
+        failed = true;
         return 0;
     }
     qore_offset_t result = str->index(**pattern, offset, xsink);
     if (xsink && *xsink) {
+        failed = true;
         return 0;
     }
     return static_cast<int64_t>(result);
@@ -26871,8 +26924,8 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_find_native_work(uint64_
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_find_native_impl(uint64_t val_bits,
         uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_pseudo_string_find_native_work(val_bits, substring_bits, offset, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        return qore_rt_pseudo_string_find_native_work(val_bits, substring_bits, offset, xsink, failed);
     }, [&]() -> int64_t {
         return qore_string_call_search(fromBits(val_bits), fromBits(substring_bits), QoreStringSearchCall::Find,
             offset, xsink).getAsBigInt();
@@ -26895,16 +26948,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bi
 }
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_rfind_native_work(uint64_t val_bits,
-        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink, bool& failed) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue substring = fromBits(substring_bits);
     QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
     if (xsink && *xsink) {
+        failed = true;
         return 0;
     }
     qore_offset_t result = str->rindex(**pattern, offset, xsink);
     if (xsink && *xsink) {
+        failed = true;
         return 0;
     }
     return static_cast<int64_t>(result);
@@ -26912,8 +26967,8 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_rfind_native_work(uint64
 
 static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_rfind_native_impl(uint64_t val_bits,
         uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_pseudo_string_rfind_native_work(val_bits, substring_bits, offset, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        return qore_rt_pseudo_string_rfind_native_work(val_bits, substring_bits, offset, xsink, failed);
     }, [&]() -> int64_t {
         return qore_string_call_search(fromBits(val_bits), fromBits(substring_bits), QoreStringSearchCall::RFind,
             offset, xsink).getAsBigInt();
@@ -26930,9 +26985,9 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_rfind_native_noguard(uint64_t
 //! The fast path of index() for assigned string arguments; an exception has the frame of index()
 extern "C" DLLEXPORT uint64_t qore_fast_index_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
         ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        int64_t result = qore_rt_pseudo_string_find_native_work(val_bits, substring_bits, offset, xsink);
-        return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        return toBits(QoreValue(qore_rt_pseudo_string_find_native_work(val_bits, substring_bits, offset, xsink,
+            failed)));
     }, [&]() {
         return toBits(qore_string_call_index(fromBits(val_bits), fromBits(substring_bits), false, offset, xsink));
     });
@@ -26941,9 +26996,9 @@ extern "C" DLLEXPORT uint64_t qore_fast_index_string(uint64_t val_bits, uint64_t
 //! The fast path of rindex() for assigned string arguments; an exception has the frame of rindex()
 extern "C" DLLEXPORT uint64_t qore_fast_rindex_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
         ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
-        int64_t result = qore_rt_pseudo_string_rfind_native_work(val_bits, substring_bits, offset, xsink);
-        return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        return toBits(QoreValue(qore_rt_pseudo_string_rfind_native_work(val_bits, substring_bits, offset, xsink,
+            failed)));
     }, [&]() {
         return toBits(qore_string_call_index(fromBits(val_bits), fromBits(substring_bits), true, offset, xsink));
     });
@@ -26961,13 +27016,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_b
 //! <string>::substr(), or substr() (\a function), of a string
 static uint64_t qore_rt_string_substr_fast(uint64_t val_bits, int64_t start, int64_t length, int32_t has_length,
         bool function, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() {
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
         QoreValue v = fromBits(val_bits);
         QoreStringNodeValueHelper str(v);
         QoreStringNode* result = has_length
             ? str->substr(start, length, xsink)
             : str->substr(start, xsink);
         if (xsink && *xsink) {
+            failed = true;
             return toBits(QoreValue());
         }
         if (!result) {
@@ -26993,12 +27049,13 @@ extern "C" DLLEXPORT uint64_t qore_fast_substr_string(uint64_t val_bits,
 //! <string>::lwr() or <string>::upr(), or tolower() or toupper() (\a function), of a string
 static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionSink* xsink, bool upper,
         bool function = false) {
-    return qore_rt_string_fast_path(xsink, [&]() {
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
         QoreValue v = fromBits(val_bits);
         QoreStringValueHelper str(v);
         SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
         int rc = upper ? do_toupper(*(*rv), *str, xsink) : do_tolower(*(*rv), *str, xsink);
         if (rc || (xsink && *xsink)) {
+            failed = xsink && *xsink;
             return toBits(QoreValue());
         }
         return toBits(rv.release());
@@ -27031,40 +27088,35 @@ extern "C" DLLEXPORT uint64_t qore_fast_toupper_string(uint64_t val_bits, Except
 //! INVALID-ENCODING for text that is not valid in its encoding, as the builtin does
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue value = fromBits(val_bits);
-    // a string node, as the base always is at run time; any other value (a short string, a string enum member) and a
-    // pending exception take the ordinary call (see qore_rt_string_fast_path())
-    if (value.hasNode() && value.getInternalNode()->getType() == NT_STRING) [[likely]] {
+    // a string node, as the base always is at run time; any other value (a short string, a string enum member) takes
+    // the ordinary call
+    if (!value.hasNode() || value.getInternalNode()->getType() != NT_STRING) [[unlikely]] {
+        return toBits(qore_string_call_length(value, false, xsink));
+    }
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
         // note: safe; the node of the value, read under value.hasNode() above
-        const auto* str = static_cast<const QoreStringNode*>(value.getInternalNode());
-        if (!xsink) {
-            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, nullptr)));
-        }
-        if (!*xsink) [[likely]] {
-            size_t count = qore_string_private::characterCount(*str, xsink);
-            if (!*xsink) [[likely]] {
-                return toBits(static_cast<int64_t>(count));
-            }
-            xsink->clear();
-        }
-    }
-    if (!xsink) {
-        QoreStringValueHelper str(value);
-        return toBits(static_cast<int64_t>(qore_string_private::characterCount(**str, nullptr)));
-    }
-    return toBits(qore_string_call_length(value, false, xsink));
+        return toBits(qore_rt_string_node_length(static_cast<const QoreStringNode*>(value.getInternalNode()), xsink,
+            failed));
+    }, [&]() {
+        return toBits(qore_string_call_length(value, false, xsink));
+    });
 }
 
 //! Measure an assigned string after case conversion without retaining the transformed value.
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
         uint64_t val_bits, int32_t upper, int32_t characters, ExceptionSink* xsink) {
-    return qore_rt_string_fast_path(xsink, [&]() -> int64_t {
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) -> int64_t {
         QoreValue v = fromBits(val_bits);
         QoreStringValueHelper str(v);
         int64_t result = 0;
         int rc = upper
             ? do_toupper_measure(*str, characters, result, xsink)
             : do_tolower_measure(*str, characters, result, xsink);
-        return rc || (xsink && *xsink) ? 0 : result;
+        if (rc || (xsink && *xsink)) {
+            failed = xsink && *xsink;
+            return 0;
+        }
+        return result;
     }, [&]() -> int64_t {
         // the calls that the fusion stands for: s.lwr().length() or s.lwr().size() (or upr())
         ValueHolder transformed(qore_string_call_case(fromBits(val_bits), upper, false, xsink), xsink);
@@ -27139,8 +27191,10 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
     const bool function = static_cast<int32_t>(consumer) & QORE_STRING_CASE_CONSUMER_FUNCTION;
     consumer = static_cast<QoreStringCaseConsumer>(
         static_cast<int32_t>(consumer) & ~QORE_STRING_CASE_CONSUMER_FUNCTION);
-    return qore_rt_string_fast_path(xsink, [&]() {
-        return qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
+    return qore_rt_string_fast_path(xsink, [&](bool& failed) {
+        int64_t result = qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
+        failed = xsink && *xsink;
+        return result;
     }, [&]() -> int64_t {
         if (static_cast<int32_t>(consumer) < static_cast<int32_t>(QoreStringCaseConsumer::StartsWith)
                 || static_cast<int32_t>(consumer) > static_cast<int32_t>(QoreStringCaseConsumer::RFind)
