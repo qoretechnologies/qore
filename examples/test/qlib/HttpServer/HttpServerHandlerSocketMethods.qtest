@@ -81,6 +81,11 @@ class TenantWholeReadHandler inherits AbstractHttpRequestHandler {
 AbstractHttpRequestHandler sub get_whole_read_handler() {
     return new TenantWholeReadHandler();
 }
+
+# reads the whole chunked body of the socket of a request that trusted code gives it
+string sub tenant_whole_read(Socket s) {
+    return tenant_try(sub () { s.readHTTPChunkedBody(20s); });
+}
 ";
 
 #! Returns "ok" or the error of the call
@@ -234,6 +239,26 @@ class MethodsHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A trusted handler that lifts the socket's limit of a chunked body and gives the socket to restricted code to read
+class TrustedLiftHandler inherits AbstractHttpRequestHandler {
+    private {
+        Program tenant;
+    }
+
+    constructor(Program tenant) {
+        self.tenant = tenant;
+        setHandlerSocketView();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        s.setMaxChunkedBodySize(0);
+        hash<HttpResponseInfo> rv = probe_response({"read": tenant.callFunction("tenant_whole_read", s)});
+        rv.close = True;
+        return rv;
+    }
+}
+
 #! Reports what the socket of its request gives for the rest of its body, which the server did not read
 class RestRequest inherits AbstractStreamRequest {
     private {
@@ -323,6 +348,8 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
         addTestCase("restricted code sets only the server's limits of a chunked body", \tenantLimitTest());
         addTestCase("a limit that restricted code set does not lift the bound of a read of the whole body",
             \tenantWholeReadTest());
+        addTestCase("a read of the whole body that restricted code makes keeps the bound of the connection",
+            \tenantWholeReadTest(), True);
         set_return_value(main());
         delete server;
     }
@@ -484,12 +511,16 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
         assertEq(string(MaxBodySize), r.max);
     }
 
-    tenantWholeReadTest() {
+    #! with \a trusted_lift, a trusted handler sets the limit and restricted code reads the body; otherwise restricted
+    #! code does both
+    tenantWholeReadTest(*bool trusted_lift) {
         # a server without a limit of the request body: the listener's limit of a body read as a stream is 0 (none),
         # and the server reads at most DefaultMaxRequestBodySize into memory
         HttpServer srv(<HttpServerOptionInfo>{});
         on_exit delete srv;
-        srv.setDefaultHandler("tenant", tenant.callFunction("get_whole_read_handler"));
+        srv.setDefaultHandler("tenant", trusted_lift
+            ? new TrustedLiftHandler(tenant)
+            : tenant.callFunction("get_whole_read_handler"));
         int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         srv.waitForAsyncIo();
 
@@ -514,7 +545,9 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
             c.send("0\r\n\r\n", HangGuard);
         }
         hash<auto> r = parse(readResponse(c));
-        assertEq("ok", r.set, "restricted code can set the listener's limit");
+        if (!trusted_lift) {
+            assertEq("ok", r.set, "restricted code can set the listener's limit");
+        }
         assertEq("HTTP-BODY-TOO-LARGE", r.read, "the whole body is read with at most the connection's limit");
     }
 

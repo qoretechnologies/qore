@@ -12078,8 +12078,9 @@ class Http1HandlerSocket inherits Qore::Socket {
         request sets, and the connection's; other code can set any limit (qore#7567).  A limit that restricted code
         set applies to the reads that give the body in parts (with a callback or to an output stream) only: the
         reads that return the whole body (readHTTPChunkedBody(), readHTTPChunkedBodyBinary()), which hold it in
-        memory, keep at most the connection's limit, so that restricted code cannot lift the server's bound on the
-        memory of a body.  The connection's limit does not change
+        memory, keep at most the connection's limit, as do those that restricted code makes with a limit that other
+        code set, so that restricted code cannot lift the server's bound on the memory of a body.  The connection's
+        limit does not change
 
         @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
         @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), and the limit is neither of the
@@ -13226,7 +13227,8 @@ class Http1HandlerSocket inherits Qore::Socket {
         socket only after it ended
     */
     /** @param whole True for a read that returns the whole body, which holds it in memory: a limit that restricted
-        code set is then at most the connection's
+        code set, or any limit for a read that restricted code makes (also through code that is not restricted), is
+        then at most the connection's, whoever set it and whichever thread reads
     */
     private:internal *int applyChunkedLimit(*bool whole) {
         if (!exists max_chunked) {
@@ -13234,7 +13236,8 @@ class Http1HandlerSocket inherits Qore::Socket {
         }
         int conn_max = real.getMaxChunkedBodySize();
         int limit = max_chunked;
-        if (whole && max_chunked_restricted && conn_max && (!limit || limit > conn_max)) {
+        if (whole && conn_max && (!limit || limit > conn_max)
+                && (max_chunked_restricted || SandboxManager::isRestricted())) {
             # 0 is no limit
             limit = conn_max;
         }
