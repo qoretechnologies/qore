@@ -58,6 +58,18 @@ class LSub inherits Logger::LoggerWrapper {
         }
     }
 
+    #! gets the logger with the private accessor of LoggerWrapper with the reflection API: a method or its variant
+    static string reflectCall(Logger::LoggerWrapper w, bool variant) {
+        try {
+            Reflection::NormalMethod m = Reflection::Class::forName(\"Logger::LoggerWrapper\").getNormalMethod(
+                \"getLogger\");
+            auto v = variant ? m.getVariants()[0].call(w) : m.call(w);
+            return v ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     static string reflect(Logger::LoggerWrapper w) {
         try {
             auto v = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\").getValue(w);
@@ -70,6 +82,11 @@ class LSub inherits Logger::LoggerWrapper {
 
 string sub reflect(Logger::LoggerWrapper w) {
     return LSub::reflect(w);
+}
+
+#! calls the private accessor of the logger of a LoggerWrapper with the reflection API
+string sub reflect_call(Logger::LoggerWrapper w, bool variant) {
+    return LSub::reflectCall(w, variant);
 }
 
 #! writes the non-public logger member of a LoggerWrapper with the reflection API
@@ -95,6 +112,14 @@ class SandboxOwnerSettersTest inherits QUnit::Test {
     public {
         #! the exception of a refused change
         const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
     }
 
     private {
@@ -105,6 +130,9 @@ class SandboxOwnerSettersTest inherits QUnit::Test {
         addTestCase("tenants and the host", \ownerTest());
         addTestCase("code safety and trusted code", \trustedTest());
         addTestCase("reflection writes", \reflectionWriteTest());
+        foreach string mode in (keys ExecModes) {
+            addTestCase("reflection reads and calls in " + mode, getReflectionOwnerTest(mode));
+        }
         set_return_value(main());
     }
 
@@ -164,6 +192,40 @@ class SandboxOwnerSettersTest inherits QUnit::Test {
         # was declared before the sandbox was set (see reflectionWriteTest())
         assertEq("REFLECTION-ACCESS-ERROR", a.callFunction("reflect", a.callFunction("make_wrapper")),
             "A reads its own object with reflection");
+    }
+
+    #! returns the reflection owner test of the given execution mode
+    private code getReflectionOwnerTest(string mode) {
+        return sub () { reflectionOwnerTest(mode); };
+    }
+
+    #! the reflection API reads a non-public member and calls a non-public method or method variant of an object only
+    #! for code that owns the object
+    reflectionOwnerTest(string mode) {
+        # an object of the tenant's Program that it created before it was sandboxed: its sandbox did not create it;
+        # the class of the tenant's subclass was declared before the sandbox was set, so it may use the private
+        # declarations of the class (qore#6843)
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        LoggerWrapper pre = p.callFunction("make_wrapper");
+        p.setSandboxManager(new SandboxManager());
+        LoggerWrapper own = p.callFunction("make_wrapper");
+        # the results of a read, a method call and a variant call on the object
+        code results = hash<string, string> sub (LoggerWrapper w) {
+            return {
+                "read": p.callFunction("reflect", w),
+                "method": p.callFunction("reflect_call", w, False),
+                "variant": p.callFunction("reflect_call", w, True),
+            };
+        };
+        assertEq({"read": Err, "method": Err, "variant": Err}, results(pre),
+            mode + ": an object that the sandbox did not create");
+        assertEq({"read": "logger", "method": "logger", "variant": "logger"}, results(own),
+            mode + ": the tenant's own object");
     }
 
     #! the reflection API writes a non-public member of an object only for code that owns the object

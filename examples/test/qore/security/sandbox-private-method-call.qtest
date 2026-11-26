@@ -209,9 +209,6 @@ class SandboxPrivateMethodCallTest inherits QUnit::Test {
         #! the exception of a refused call
         const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
 
-        #! the routes to the logger of a LoggerWrapper
-        const LoggerRoutes = ("direct", "call-ref", "reflection-method", "reflection-variant");
-
         #! the results of every form on an object that the caller owns
         const Owned = {
             "instance": "secret",
