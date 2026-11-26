@@ -1124,8 +1124,11 @@ public:
         class's base classes creates the subclass, as with classes created lazily from another language); the
         ancestors that this class gets afterwards are added to the subclass when the ancestry of this class is
         complete: when this function has been called for the class and the ancestries of all of its parent
-        classes are complete.  Until then the subclass has only the ancestors that this class had when the
-        subclass inherited it.
+        classes are complete, where a build from scratch puts them.  Until then the subclass has only the ancestors
+        that this class had when the subclass inherited it.  The list of ancestors of the subclass can be read by
+        other threads while it is completed, but this class, whose base classes and methods are still being added,
+        is not safe to use from other threads before this call, nor is the subclass, whose lookups reach it: the
+        module that creates the classes must not let other threads use them before then.
 
         Safe to call multiple times; subsequent calls are no-ops.
 

@@ -2088,8 +2088,9 @@ struct ContextOverrideNode {
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
-    // the registry of ancestries must not refer to the class any more (qore#7614)
-    dropAncestryLinks();
+    // the registry of ancestries must not refer to the class any more (qore#7614); the class object can be gone, so
+    // the hierarchies of the subclasses are not walked
+    dropAncestryLinks(false);
     // the nodes of the cache of the members that a class context has a storage of (#7180)
     for (ContextStorageNode* n = context_storage_head.load(std::memory_order_relaxed); n;) {
         ContextStorageNode* next = n->next;
@@ -5937,11 +5938,13 @@ void BCList::setSmlComplete() {
         return;
     }
     for (auto& i : *this) {
-        // a builtin class's ancestors are added when it is registered; a user class whose base classes are not all
-        // complete yet, or that is still being initialized (when a class is initialized while one of its base classes
-        // is), must have its base classes walked
+        // a builtin class's ancestors are added when it is registered, unless its ancestry is not final yet (when a
+        // parent class of it is still getting base classes, qore#7614: the flags set here would be made from a list
+        // that gets more ancestors, and are never set again); a user class whose base classes are not all complete
+        // yet, or that is still being initialized (when a class is initialized while one of its base classes is), must
+        // have its base classes walked
         const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
-        if (!bc || (!bc->sys && bc->scl && !bc->scl->smlComplete())) {
+        if (!bc || (bc->sys ? !bc->ancestryFinal() : (bc->scl && !bc->scl->smlComplete()))) {
             return;
         }
     }
@@ -6263,14 +6266,13 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
     }
 }
 
-void BCList::resolveCopy() {
+void BCList::resolveCopy(std::vector<QoreClass*>& released) {
     for (auto& i : *this) {
         assert((*i).sclass->priv->new_copy);
         (*i).sclass = (*i).sclass->priv->new_copy;
-        (*i).sclass->priv->resolveCopy();
     }
 
-    sml.resolveCopy();
+    sml.resolveCopy(released);
 }
 
 const QoreClass* BCList::findInSml(const qore_class_private& qc) const {
@@ -7132,14 +7134,13 @@ int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, 
 }
 
 namespace {
-//! true while the thread appends to lists of ancestors that other threads can read (qore#7614)
+//! true while the thread changes lists of ancestors that other threads can read (qore#7614)
 /** Set while the ancestors of registered subclasses are added (AncestryRegistry::complete()) and while the parent
-    classes are rescanned (QoreClass::rescanParents()), which append to the lists of classes that are in use; other
-    appends are made by the thread that builds a class before it is in use
+    classes are rescanned (QoreClass::rescanParents()), which change the lists of classes that can be in use
 */
 thread_local bool sml_shared_append = false;
 
-//! marks the appends of the thread as made to lists that other threads can read
+//! marks the changes of the thread as made to lists that other threads can read
 class SharedSmlAppendHelper {
 public:
     SharedSmlAppendHelper() : old(sml_shared_append) {
@@ -7156,6 +7157,47 @@ public:
 private:
     bool old;
 };
+
+//! releases the references of the classes, which were taken out of lists of ancestors with the lock of the registry
+//! of ancestries held; called without that lock, as a release can destroy a class, which takes it (qore#7614)
+void release_ancestor_refs(std::vector<QoreClass*>& released) {
+    for (QoreClass* c : released) {
+        qore_class_private::derefClass(*c, false, false, false);
+    }
+    released.clear();
+}
+
+#ifdef DEBUG
+//! a test hook called by AncestryRegistry::complete() after the list of ancestors of a subclass is published, with
+//! the lock of the registry held (qore#7614); see qore_dbg_set_ancestry_publish_hook()
+std::atomic<void (*)(const QoreClass*)> ancestry_publish_hook{nullptr};
+#endif
+}
+
+#ifdef DEBUG
+//! sets the test hook called after the list of ancestors of a subclass is published by the completion of the ancestry
+//! of a parent class (qore#7614); debug builds only, looked up by test modules with dlsym()
+/** The hook is called with the lock of the registry of ancestries held: it must not add base classes, close classes
+    nor destroy classes, but it can wait for other threads that read lists of ancestors
+*/
+extern "C" DLLEXPORT void qore_dbg_set_ancestry_publish_hook(void (*hook)(const QoreClass*)) {
+    ancestry_publish_hook.store(hook, std::memory_order_release);
+}
+#endif
+
+void AncestryErrorCapture::report() {
+    if (!error) {
+        return;
+    }
+    if (invalid) {
+        qore_class_private* p = qore_class_private::get(*invalid);
+        if (p->scl) {
+            p->scl->valid = false;
+        }
+    }
+    if (loc) {
+        parse_error(*loc, "%s", msg.c_str());
+    }
 }
 
 namespace {
@@ -7171,17 +7213,18 @@ struct AncestryLink {
 /** A builtin class created at run time by a module gets the ancestors of each parent class when the parent class is
     added (qore_class_private::addBaseClass()).  A module that creates classes lazily (the jni module) can create a
     subclass of a class whose own base classes are still being added, when the creation of a base class of the class
-    creates the subclass; the subclass is registered here with the parent class, and the ancestors that the parent
-    class gets afterwards are added to the subclass when the ancestry of the parent class is final: when the parent
-    class is closed (qore_class_private::closeBuiltinAncestry()) and the ancestries of all its own parent classes are
-    final.
+    creates the subclass; the subclass is registered here with the parent class, and when the ancestry of the parent
+    class is final (it is closed with qore_class_private::closeBuiltinAncestry() and the ancestries of all its own
+    parent classes are final), the list of ancestors of the subclass is built again, as a build from scratch builds
+    it, and published.
 
-    The lock is held while the links are changed and while the ancestors are added to a registered subclass, whose
-    list of ancestors (BCSMList) can be read by other threads meanwhile: the list is append-only and its readers
-    take a snapshot (BCSMList::view()).  Under the lock, only the classes' lists of ancestors are read and appended to
-    and classes are referenced (qore_class_private::refClass(), whose data lock is a leaf lock); no other lock is
-    acquired and no other code is called, so that the lock is a leaf lock too, except for these.  It is never held
-    when a class is released.  The registry is never destroyed: classes can be destroyed after static destructors run.
+    The lock is held while the links are changed, while the base classes of a class that is not closed are added and
+    while the lists of ancestors of registered subclasses are changed; these lists can be read by other threads
+    meanwhile (BCSMList::view()).  Under the lock, only lists of base classes and of ancestors are read and changed and
+    classes are referenced (qore_class_private::refClass(), whose data lock is a leaf lock); no reference is released
+    (the classes are released afterwards, see release_ancestor_refs()), no parse error is raised
+    (AncestryErrorCapture), no other lock is acquired and no other code is called, so that it is a leaf lock but for
+    the data lock.  The registry is never destroyed: classes can be destroyed after static destructors run.
 */
 struct AncestryRegistry {
     std::mutex lck;
@@ -7243,12 +7286,13 @@ struct AncestryRegistry {
 
     //! makes the ancestry of \a p final, and those of its registered subclasses that are then final in turn; the lock
     //! is held
-    /** Each registered subclass gets the ancestors that the class got after the subclass inherited it: the hierarchy
-        of the class is walked again, and BCSMList::add() adds only the classes that the subclass does not have yet.
-        A worklist, not a recursion: a chain of subclasses can be long.
+    /** The list of ancestors of each registered subclass is built again as a build from scratch builds it (with the
+        ancestors that the class got after the subclass inherited it where a build from scratch puts them) and
+        published.  A worklist, not a recursion: a chain of subclasses can be long.  The classes of the replaced
+        entries are added to \a released, to be released by the caller without the lock.
     */
-    void complete(qore_class_private* p) {
-        // the subclasses can be in use
+    void complete(qore_class_private* p, std::vector<QoreClass*>& released) {
+        // the lists of the subclasses can be in use
         SharedSmlAppendHelper shared_append;
         std::vector<qore_class_private*> work;
         work.push_back(p);
@@ -7257,15 +7301,25 @@ struct AncestryRegistry {
             work.pop_back();
             assert(x->ancestry_closed.load(std::memory_order_relaxed));
             assert(!x->ancestry_linked.load(std::memory_order_relaxed));
+            // the hierarchy of the class may have been walked before all its base classes were added
+            x->spans_programs_cache.store(0, std::memory_order_relaxed);
             auto i = children.find(x);
             if (i != children.end()) {
                 std::vector<AncestryLink>& cl = i->second;
                 while (!cl.empty()) {
                     AncestryLink l = cl.back();
-                    // the ancestors that the class got after the subclass inherited it
-                    if (x->scl && x->scl->valid) {
-                        x->scl->addBaseClassesToSubclassIntern(x->cls, l.cls->cls, l.is_virtual);
+                    // a hierarchy that has become circular keeps the list it had: no parse error is raised here, as
+                    // the class is in use; the class that made it circular got a parse error when it was linked
+                    if (l.cls->rebuildAncestors(released)) {
+                        printd(0, "AncestryRegistry::complete() '%s': the hierarchy of the class is invalid; it keeps "
+                            "the ancestors that it had\n", l.cls->name.c_str());
                     }
+                    l.cls->spans_programs_cache.store(0, std::memory_order_relaxed);
+#ifdef DEBUG
+                    if (void (*hook)(const QoreClass*) = ancestry_publish_hook.load(std::memory_order_acquire)) {
+                        hook(l.cls->cls);
+                    }
+#endif
                     work.reserve(work.size() + 1);
                     cl.pop_back();
                     if (unlinkParent(l.cls, x) && l.cls->ancestry_closed.load(std::memory_order_relaxed)) {
@@ -7297,11 +7351,71 @@ std::unique_lock<std::mutex> qore_class_private::lockAncestryIfLinked(const qore
     return std::unique_lock<std::mutex>();
 }
 
+#ifdef DEBUG
+void qore_class_private::assertNoAncestryLinks() {
+    AncestryRegistry& r = ancestry_registry();
+    std::lock_guard<std::mutex> al(r.lck);
+    for (auto& i : r.children) {
+        printd(0, "qore_class_private::assertNoAncestryLinks() '%s' has %d registered subclass(es)\n",
+            i.first->name.c_str(), (int)i.second.size());
+    }
+    assert(r.children.empty());
+    assert(r.parents.empty());
+}
+#endif
+
+int qore_class_private::rebuildAncestors(std::vector<QoreClass*>& released) {
+    if (!scl) {
+        return 0;
+    }
+    // the list as a build from scratch builds it: for each base class in its order, the ancestors of the base class,
+    // then the base class (see linkBaseClass())
+    BCSMList tmp;
+    AncestryErrorCapture cap;
+    int rc = 0;
+    for (BCNode* n : *scl) {
+        if (!n->sclass) {
+            continue;
+        }
+        if (n->parent_only) {
+            if (tmp.add(cls, n->sclass, false, &cap)) {
+                rc = -1;
+                break;
+            }
+            continue;
+        }
+        qore_class_private* p = n->sclass->priv;
+        if (p->scl && p->scl->valid
+                && p->scl->addBaseClassesToSubclassIntern(n->sclass, cls, n->is_virtual, &tmp, &cap)) {
+            rc = -1;
+            break;
+        }
+        if (tmp.add(cls, n->sclass, n->is_virtual, &cap)) {
+            rc = -1;
+            break;
+        }
+    }
+    if (rc) {
+        // the references taken by the new list are released by the caller
+        BCSMList empty;
+        tmp.replace(empty, released);
+        return -1;
+    }
+    scl->sml.replace(tmp, released);
+    return 0;
+}
+
 int qore_class_private::linkBaseClass(QoreClass* qc, bool virt, AncestryLinkMode mode, BCNode* node) {
     std::unique_ptr<BCNode> node_holder(node);
+    // no base class may be added to a builtin class once its base classes are all added: it can be in use, and the
+    // ancestries of its subclasses are final (qore#7614; see QoreClass::initializeBuiltin())
+    assert(!node || !ancestry_opened || !ancestry_closed.load(std::memory_order_relaxed));
+    if (node && mode == AncestryLinkMode::ParentOnly) {
+        node->parent_only = true;
+    }
     qore_class_private* parent = qc->priv;
     // the registry is locked if the class is registered with a parent class (its list of ancestors can then be
-    // appended to by another thread), if it will be registered with this one, or if the class is not closed (another
+    // changed by another thread), if it will be registered with this one, or if the class is not closed (another
     // thread completing the ancestry of a parent class can walk the base classes of the class while they are added);
     // otherwise the class's lists are only changed by this thread, and the parent class's lists do not change any more
     std::unique_lock<std::mutex> al;
@@ -7313,6 +7427,9 @@ int qore_class_private::linkBaseClass(QoreClass* qc, bool virt, AncestryLinkMode
         reg = mode != AncestryLinkMode::ParentOnly && parent != this
             && !parent->ancestry_final.load(std::memory_order_relaxed);
     }
+    // with the lock held, errors are reported after it is released
+    AncestryErrorCapture cap;
+    AncestryErrorCapture* capp = al.owns_lock() ? &cap : nullptr;
     if (node) {
         if (!scl) {
             scl = new BCList;
@@ -7325,96 +7442,127 @@ int qore_class_private::linkBaseClass(QoreClass* qc, bool virt, AncestryLinkMode
     }
 
     assert(scl);
+    int rc = 0;
     switch (mode) {
         case AncestryLinkMode::Builtin:
             if (parent->scl && parent->scl->valid) {
-                parent->scl->addBaseClassesToSubclassIntern(qc, cls, virt);
+                parent->scl->addBaseClassesToSubclassIntern(qc, cls, virt, nullptr, capp);
             }
-            scl->sml.add(cls, qc, virt);
-            return 0;
+            scl->sml.add(cls, qc, virt, capp);
+            break;
 
         case AncestryLinkMode::ParentOnly:
-            scl->sml.add(cls, qc, false);
-            return 0;
+            scl->sml.add(cls, qc, false, capp);
+            break;
 
         case AncestryLinkMode::Parse:
-            if (parent->scl && parent->scl->addBaseClassesToSubclassIntern(qc, cls, virt)) {
-                return -1;
+            if (parent->scl && parent->scl->addBaseClassesToSubclassIntern(qc, cls, virt, nullptr, capp)) {
+                rc = -1;
+            } else {
+                rc = scl->sml.add(cls, qc, virt, capp);
             }
-            return scl->sml.add(cls, qc, virt);
+            break;
     }
-    assert(false);
-    return -1;
+    if (al.owns_lock()) {
+        al.unlock();
+        cap.report();
+    }
+    return rc;
 }
 
 void qore_class_private::closeBuiltinAncestry() {
+    // the class can be in use from now on: its list of ancestors keeps a replaced block (BCSMList::setShared())
+    if (scl) {
+        scl->sml.setShared();
+    }
     // only the thread that builds the class closes it
     if (ancestry_closed.load(std::memory_order_acquire)) {
         return;
     }
-    std::unique_lock<std::mutex> al = lockAncestry();
-    if (ancestry_closed.load(std::memory_order_relaxed)) {
-        return;
+    std::vector<QoreClass*> released;
+    {
+        std::unique_lock<std::mutex> al = lockAncestry();
+        if (ancestry_closed.load(std::memory_order_relaxed)) {
+            return;
+        }
+        ancestry_closed.store(true, std::memory_order_release);
+        if (!ancestry_linked.load(std::memory_order_relaxed)) {
+            ancestry_registry().complete(this, released);
+        }
     }
-    ancestry_closed.store(true, std::memory_order_release);
-    if (!ancestry_linked.load(std::memory_order_relaxed)) {
-        ancestry_registry().complete(this);
-    }
+    release_ancestor_refs(released);
 }
 
-void qore_class_private::dropAncestryLinks() {
+void qore_class_private::dropAncestryLinks(bool complete_subclasses) {
     if (!ancestry_linked.load(std::memory_order_acquire) && !ancestry_parent.load(std::memory_order_acquire)) {
         return;
     }
-    AncestryRegistry& r = ancestry_registry();
-    std::lock_guard<std::mutex> al(r.lck);
-    // the subclasses keep the ancestors that they have: the ancestry of this class is never completed
-    auto i = r.children.find(this);
-    if (i != r.children.end()) {
-        std::vector<AncestryLink> cl = std::move(i->second);
-        r.children.erase(i);
-        for (const AncestryLink& l : cl) {
-            r.unlinkParent(l.cls, this);
+    std::vector<QoreClass*> released;
+    {
+        AncestryRegistry& r = ancestry_registry();
+        std::lock_guard<std::mutex> al(r.lck);
+        // the subclasses keep the ancestors that they have: the ancestry of this class is never completed; a closed
+        // subclass with no other parent class whose ancestry is not final is final now, and its own registered
+        // subclasses get what it got from its other parent classes
+        auto i = r.children.find(this);
+        if (i != r.children.end()) {
+            std::vector<AncestryLink> cl = std::move(i->second);
+            r.children.erase(i);
+            for (const AncestryLink& l : cl) {
+                if (r.unlinkParent(l.cls, this) && complete_subclasses
+                        && l.cls->ancestry_closed.load(std::memory_order_relaxed)) {
+                    r.complete(l.cls, released);
+                }
+            }
         }
-    }
-    ancestry_parent.store(false, std::memory_order_release);
-    auto pi = r.parents.find(this);
-    if (pi != r.parents.end()) {
-        std::vector<qore_class_private*> pl = std::move(pi->second);
-        r.parents.erase(pi);
-        for (qore_class_private* p : pl) {
-            r.unlinkChild(p, this);
+        ancestry_parent.store(false, std::memory_order_release);
+        auto pi = r.parents.find(this);
+        if (pi != r.parents.end()) {
+            std::vector<qore_class_private*> pl = std::move(pi->second);
+            r.parents.erase(pi);
+            for (qore_class_private* p : pl) {
+                r.unlinkChild(p, this);
+            }
         }
+        ancestry_linked.store(false, std::memory_order_release);
     }
-    ancestry_linked.store(false, std::memory_order_release);
+    release_ancestor_refs(released);
 }
 
 void qore_class_private::relinkCopiedAncestry(const qore_class_private& old) {
-    AncestryRegistry& r = ancestry_registry();
-    std::lock_guard<std::mutex> al(r.lck);
-    bool closed = old.ancestry_closed.load(std::memory_order_relaxed);
-    ancestry_closed.store(closed, std::memory_order_relaxed);
-    ancestry_final.store(false, std::memory_order_relaxed);
-    bool linked = false;
-    if (scl) {
-        for (BCNode* n : *scl) {
-            if (!n->sclass) {
-                continue;
-            }
-            qore_class_private* p = n->sclass->priv;
-            // the ancestors that the parent class got after the list of the copied class was copied
-            if (p->scl && p->scl->valid) {
-                p->scl->addBaseClassesToSubclassIntern(p->cls, cls, n->is_virtual);
-            }
-            if (p != this && !p->ancestry_final.load(std::memory_order_relaxed)) {
-                r.link(p, this, n->is_virtual);
-                linked = true;
+    std::vector<QoreClass*> released;
+    {
+        AncestryRegistry& r = ancestry_registry();
+        std::lock_guard<std::mutex> al(r.lck);
+        bool closed = old.ancestry_closed.load(std::memory_order_relaxed);
+        ancestry_opened = old.ancestry_opened;
+        ancestry_closed.store(closed, std::memory_order_relaxed);
+        ancestry_final.store(false, std::memory_order_relaxed);
+        // the list of the copy is built again from the same parent classes as the copied class: the ancestors of an
+        // imported class are those of the source Program, also those that the parent classes got after the copied list
+        // was made
+        if (rebuildAncestors(released)) {
+            printd(0, "qore_class_private::relinkCopiedAncestry() '%s': the hierarchy of the class is invalid; the "
+                "copy keeps the ancestors that it had\n", name.c_str());
+        }
+        bool linked = false;
+        if (scl) {
+            for (BCNode* n : *scl) {
+                if (!n->sclass) {
+                    continue;
+                }
+                qore_class_private* p = n->sclass->priv;
+                if (p != this && !p->ancestry_final.load(std::memory_order_relaxed)) {
+                    r.link(p, this, n->is_virtual);
+                    linked = true;
+                }
             }
         }
+        if (!linked && closed) {
+            ancestry_final.store(true, std::memory_order_release);
+        }
     }
-    if (!linked && closed) {
-        ancestry_final.store(true, std::memory_order_release);
-    }
+    release_ancestor_refs(released);
 }
 
 void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
@@ -8250,19 +8398,31 @@ void QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess acce
     xsink.handleExceptions();
 }
 
+BCSMList::Block* BCSMList::Block::create(size_t capacity) {
+    void* p = ::operator new(sizeof(Block) + capacity * sizeof(class_virt_pair_t));
+    return new (p) Block(capacity);
+}
+
+void BCSMList::Block::destroy(Block* b) {
+    if (b) {
+        b->~Block();
+        ::operator delete(b);
+    }
+}
+
 BCSMList::BCSMList(const BCSMList& old) {
     View v = old.view();
     if (v.empty()) {
         return;
     }
-    std::unique_ptr<class_virt_pair_t[]> a(new class_virt_pair_t[v.size()]);
-    std::copy(v.begin(), v.end(), a.get());
-    for (auto& i : v) {
-        qore_class_private::refClass(*i.first);
+    Block* b = Block::create(v.size());
+    class_virt_pair_t* e = b->entries();
+    for (size_t i = 0, n = v.size(); i < n; ++i) {
+        new (&e[i]) class_virt_pair_t(v[i]);
+        qore_class_private::refClass(*v[i].first);
     }
-    capacity = v.size();
-    data.store(a.release(), std::memory_order_relaxed);
-    count.store(v.size(), std::memory_order_release);
+    b->count.store(v.size(), std::memory_order_relaxed);
+    block.store(b, std::memory_order_release);
 }
 
 BCSMList::~BCSMList() {
@@ -8271,35 +8431,68 @@ BCSMList::~BCSMList() {
     for (auto& i : view()) {
         qore_release_base_class(i.first);
     }
-    delete[] data.load(std::memory_order_relaxed);
-    for (class_virt_pair_t* a : retired) {
-        delete[] a;
+    Block::destroy(block.load(std::memory_order_relaxed));
+    for (Block* b : retired) {
+        Block::destroy(b);
+    }
+}
+
+void BCSMList::publish(Block* nb) {
+    Block* b = block.load(std::memory_order_relaxed);
+    // a block that another thread can read is kept until the list is destroyed (qore#7614)
+    bool retire = b && (sml_shared_append || shared.load(std::memory_order_relaxed));
+    if (retire) {
+        try {
+            retired.push_back(b);
+        } catch (...) {
+            Block::destroy(nb);
+            throw;
+        }
+    }
+    block.store(nb, std::memory_order_release);
+    if (!retire) {
+        Block::destroy(b);
     }
 }
 
 void BCSMList::push(const class_virt_pair_t& e) {
-    size_t n = count.load(std::memory_order_relaxed);
-    class_virt_pair_t* a = data.load(std::memory_order_relaxed);
-    if (n == capacity) {
-        // the entries are copied to a larger array, which is published before the new count; if another thread can
-        // read the list, the current array is kept until the list is destroyed (qore#7614)
-        size_t ncap = capacity ? capacity * 2 : 4;
-        std::unique_ptr<class_virt_pair_t[]> na(new class_virt_pair_t[ncap]);
-        std::copy(a, a + n, na.get());
-        na[n] = e;
-        bool retire = a && sml_shared_append;
-        if (retire) {
-            retired.push_back(a);
+    Block* b = block.load(std::memory_order_relaxed);
+    size_t n = b ? b->count.load(std::memory_order_relaxed) : 0;
+    if (!b || n == b->capacity) {
+        // the entries are copied to a larger block, which is published with its count
+        Block* nb = Block::create(b ? b->capacity * 2 : 4);
+        class_virt_pair_t* ne = nb->entries();
+        for (size_t i = 0; i < n; ++i) {
+            new (&ne[i]) class_virt_pair_t(b->entries()[i]);
         }
-        capacity = ncap;
-        data.store(na.release(), std::memory_order_release);
-        if (!retire) {
-            delete[] a;
-        }
-    } else {
-        a[n] = e;
+        new (&ne[n]) class_virt_pair_t(e);
+        nb->count.store(n + 1, std::memory_order_relaxed);
+        publish(nb);
+        return;
     }
-    count.store(n + 1, std::memory_order_release);
+    // the entry is written after the published ones, then the new count is published
+    new (&b->entries()[n]) class_virt_pair_t(e);
+    b->count.store(n + 1, std::memory_order_release);
+}
+
+void BCSMList::replace(BCSMList& from, std::vector<QoreClass*>& released) {
+    // the allocations are made first, so that nothing is changed if one fails, and publish() cannot fail
+    View old = view();
+    released.reserve(released.size() + old.size());
+    retired.reserve(retired.size() + 1);
+    Block* nb = from.block.load(std::memory_order_relaxed);
+    if (!nb) {
+        nb = Block::create(1);
+    }
+    from.block.store(nullptr, std::memory_order_relaxed);
+    from.id_index.clear();
+    // the references of the entries of the replaced block are released by the caller
+    for (auto& i : old) {
+        released.push_back(i.first);
+    }
+    publish(nb);
+    // the index refers to the classes of the replaced block
+    id_index.clear();
 }
 
 void BCSMList::processMemberInitializationList(const QoreMemberMap& members, member_init_list_t& member_init_list) {
@@ -8405,12 +8598,14 @@ void BCSMList::append(QoreClass* qc, bool is_virtual) {
     }
 }
 
-int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual) {
+int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual, BCSMList* target,
+        AncestryErrorCapture* cap) {
     //printd(5, "BCSMList::addBaseClassesToSubclass(this: %s, sc: %s)\n", thisclass->getName(), sc->getName());
+    BCSMList& t = target ? *target : sc->priv->scl->sml;
     View v = view();
     for (const_iterator i = v.begin(), e = v.end(); i != e; ++i) {
         //printd(5, "BCSMList::addBaseClassesToSubclass() %s sc: %s is_virt: %d\n", thisclass->getName(), sc->getName(), is_virtual);
-        if (sc->priv->scl->sml.add(thisclass, (*i).first, is_virtual || (*i).second)) {
+        if (t.add(thisclass, (*i).first, is_virtual || (*i).second, cap)) {
             //printd(5, "BCSMList::addBaseClassesToSubclass() %s sc: %s is_virt: %d FAILED\n", thisclass->getName(), sc->getName(), is_virtual);
             return -1;
         }
@@ -8418,8 +8613,13 @@ int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool
     return 0;
 }
 
-int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
+int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual, AncestryErrorCapture* cap) {
     if (thisclass->getID() == qc->getID()) {
+        if (cap) {
+            cap->set(thisclass, thisclass->priv->loc,
+                std::string("class '") + thisclass->getName() + "' cannot inherit itself");
+            return -1;
+        }
         thisclass->priv->scl->valid = false;
         if (thisclass->priv->loc) {
             parse_error(*thisclass->priv->loc, "class '%s' cannot inherit itself", thisclass->getName());
@@ -8456,6 +8656,11 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
                     thisclass->getName());
                 ++i;
                 continue;
+            }
+            if (cap) {
+                cap->set(thisclass, thisclass->priv->loc, std::string("circular reference in class hierarchy, '")
+                    + thisclass->getName() + "' is an ancestor of itself");
+                return -1;
             }
             thisclass->priv->scl->valid = false;
             if (thisclass->priv->loc) {
@@ -8530,20 +8735,27 @@ const QoreClass* BCSMList::getClass(qore_classid_t cid) const {
 std::atomic<int64> qore_class_hierarchy_steps{0};
 #endif
 
-void BCSMList::resolveCopy() {
+void BCSMList::resolveCopy(std::vector<QoreClass*>& released) {
+    View v = view();
+    if (v.empty()) {
+        return;
+    }
+    // a new block with the new copies is published, as the list can be read by other threads (qore#7614); the
+    // references of the replaced entries are released by the caller
+    released.reserve(released.size() + v.size());
+    retired.reserve(retired.size() + 1);
+    Block* nb = Block::create(v.size());
+    class_virt_pair_t* ne = nb->entries();
+    for (size_t i = 0, n = v.size(); i < n; ++i) {
+        assert(v[i].first->priv->new_copy);
+        new (&ne[i]) class_virt_pair_t(v[i].first->priv->new_copy, v[i].second);
+        qore_class_private::refClass(*ne[i].first);
+        released.push_back(v[i].first);
+    }
+    nb->count.store(v.size(), std::memory_order_relaxed);
+    publish(nb);
     // the index refers to the classes replaced here
     id_index.clear();
-    // the entries are changed in place: the copy of a class is not in use yet when its copied classes are resolved
-    // (the caller holds the lock of the registry of ancestries if the class can be appended to by another thread;
-    // see qore_class_private::resolveCopy())
-    class_virt_pair_t* a = data.load(std::memory_order_relaxed);
-    for (class_virt_pair_t* i = a, * e = a + count.load(std::memory_order_relaxed); i != e; ++i) {
-        assert(i->first->priv->new_copy);
-        QoreClass* old = i->first;
-        i->first = old->priv->new_copy;
-        qore_class_private::refClass(*i->first);
-        qore_class_private::derefClass(*old, false, false, false);
-    }
 }
 
 QoreClass::QoreClass() : priv(nullptr) {
@@ -8602,7 +8814,7 @@ QoreClass::~QoreClass() {
         // the registry of ancestries uses the class object of the private data: it must not refer to the class any
         // more when the class object is deleted (qore#7614)
         if (priv->cls == this) {
-            priv->dropAncestryLinks();
+            priv->dropAncestryLinks(true);
         }
         {
             // ensure atomicity when writing to qcrefs
@@ -10040,7 +10252,9 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     return addBaseClassesToSubclassIntern(thisparent, child, is_virtual);
 }
 
-int BCList::addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
+int BCList::addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* child, bool is_virtual,
+        BCSMList* target, AncestryErrorCapture* cap) {
+    BCSMList& t = target ? *target : child->priv->scl->sml;
     // the classes of the hierarchy, from thisparent to the class whose base classes are being added; each is added to
     // the subclass after its own base classes, in the order of the recursion that this replaces:
     // BCNode::addBaseClassesToSubclass() -> qore_class_private::addBaseClassesToSubclass() for each base class, then
@@ -10069,6 +10283,10 @@ int BCList::addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* chi
                 continue;
             }
             if (n.sclass->priv->scl && n.sclass->priv->scl->findInHierarchy(*child->priv)) {
+                if (cap) {
+                    cap->set(nullptr, n.loc, std::string("OOPS ") + child->getName());
+                    return -1;
+                }
                 parse_error(*n.loc, "OOPS %s", child->getName());
                 return -1;
             }
@@ -10078,7 +10296,7 @@ int BCList::addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* chi
         }
         // the base classes of the class have been added: the class list of the class, then the class itself, unless
         // it is thisparent, which the caller adds
-        if (l && l->sml.addBaseClassesToSubclass(f.cls, child, f.is_virtual)) {
+        if (l && l->sml.addBaseClassesToSubclass(f.cls, child, f.is_virtual, &t, cap)) {
             return -1;
         }
         QoreClass* cls = f.cls;
@@ -10086,7 +10304,7 @@ int BCList::addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* chi
         stack.pop();
         if (!stack.empty()) {
             assert(child->priv->scl);
-            if (child->priv->scl->sml.add(child, cls, virt)) {
+            if (t.add(child, cls, virt, cap)) {
                 return -1;
             }
         }
@@ -11451,9 +11669,22 @@ void qore_class_private::resolveCopy() {
         i->second->priv->func->resolveCopy();
 
     if (scl) {
-        // the list of ancestors is changed in place; see BCSMList::resolveCopy() (qore#7614)
-        std::unique_lock<std::mutex> al = lockAncestryIfLinked(*this);
-        scl->resolveCopy();
+        // the copies of the base classes are resolved first, without the lock of the registry of ancestries, which
+        // their own resolution can take (qore#7614)
+        for (auto& i : *scl) {
+            assert((*i).sclass->priv->new_copy);
+            (*i).sclass->priv->new_copy->priv->resolveCopy();
+        }
+        std::vector<QoreClass*> released;
+        {
+            // the base classes and the list of ancestors can be read by another thread completing an ancestry; the
+            // lock is held only while they are changed: the classes replaced are released without it
+            std::unique_lock<std::mutex> al = lockAncestryIfLinked(*this);
+            scl->resolveCopy(released);
+        }
+        for (QoreClass* c : released) {
+            qore_class_private::derefClass(*c, false, false, false);
+        }
     }
 }
 

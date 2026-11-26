@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - acquire/release publication of class ancestor lists (arm64)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -16,17 +17,22 @@
 /** The ancestryprobe module creates builtin classes at run time with the C++ API as the jni module does: class A is
     created; while its base classes are added, B is created with A as a parent class, initialized and registered;
     then A gets more base classes and is initialized and registered.  B (and C, a subclass of B created in the gap)
-    must then have the ancestors that A got afterwards: before qore#7614 was fixed, B had only the ancestors that A
-    had when B inherited it, so an object of B was not an instance of the later ones, and setting the private data
-    of a later ancestor failed an assertion of a debug build (qore_object_private::addVirtualPrivateData()).
+    must then have the ancestors that A got afterwards, in the order of a build from scratch: before qore#7614 was
+    fixed, B had only the ancestors that A had when B inherited it, so an object of B was not an instance of the later
+    ones, and setting the private data of a later ancestor failed an assertion of a debug build
+    (qore_object_private::addVirtualPrivateData()).
 */
 class BuiltinAncestryTest inherits QUnit::Test {
     constructor() : QUnit::Test("builtin class ancestry", "1.0", \ARGV) {
         addTestCase("virtual inheritance", \virtualTest());
         addTestCase("non-virtual inheritance", \nonVirtualTest());
+        addTestCase("order of the ancestors, destructors and copy methods", \orderTest());
+        addTestCase("a class inheriting two classes that get base classes", \twoOpenParentsTest());
+        addTestCase("rescanning the parent classes", \rescanTest());
         addTestCase("subclasses deleted before the parent class is complete", \deletedSubclassTest());
         addTestCase("a parent class that is never complete", \neverClosedTest());
         addTestCase("concurrent readers", \concurrentReadersTest());
+        addTestCase("import and subclass in another Program in the gap", \gapProgramTest());
         set_return_value(main());
     }
 
@@ -67,6 +73,32 @@ class BuiltinAncestryTest inherits QUnit::Test {
         assertEq(1, h.late_destructors);
     }
 
+    orderTest() {
+        # B created after A is complete: the reference
+        hash<auto> ref = AncestryProbe::order(False);
+        assertEq(("E0", "E1", "L0", "L1", "L2", "A", "B"), ref.ancestors);
+        assertEq(("A", "L2", "L1", "L0", "E1", "E0"), ref.destructors);
+        assertEq(("E0", "E1", "L0", "L1", "L2", "A"), ref.copies);
+        # B created in the gap has the same order
+        hash<auto> h = AncestryProbe::order(True);
+        assertEq(ref.ancestors, h.ancestors);
+        assertEq(ref.destructors, h.destructors);
+        assertEq(ref.copies, h.copies);
+    }
+
+    twoOpenParentsTest() {
+        hash<auto> h = AncestryProbe::twoOpenParents();
+        # A1 is complete: B has what A1 got; A2 is not complete yet
+        assertEq(("L1", "A1", "A2", "B"), h.after_a1);
+        assertEq(("L1", "A1", "L2", "A2", "B"), h.after_a2);
+    }
+
+    rescanTest() {
+        hash<auto> h = AncestryProbe::rescan();
+        assertTrue(h.b_early);
+        assertTrue(h.b_late);
+    }
+
     deletedSubclassTest() {
         hash<auto> h = AncestryProbe::deletedSubclass();
         assertTrue(h.a_late);
@@ -83,12 +115,40 @@ class BuiltinAncestryTest inherits QUnit::Test {
     }
 
     concurrentReadersTest() {
-        # enough later ancestors for several appends that need a larger array while the reader reads
+        # enough later ancestors for blocks that need more room
         int n = 200;
         hash<auto> h = AncestryProbe::concurrentReaders(n);
         assertEq(n, h.found);
-        # B, A and the later ancestors, then the later ones by their ID
-        assertEq(2 * n + 2, h.last_seen);
-        assertTrue(h.reads_positive);
+        if (!h.hook) {
+            # a release build has no test hook: the reader is not made to read while the list is replaced
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        # the reader read the snapshot taken before A was complete (B and A) while the completion held the new list
+        # published, and the new list (B, A and the later ancestors)
+        assertEq(2, h.old_seen);
+        assertEq(n + 2, h.new_seen);
+        assertEq(n, h.found_in_hook);
+    }
+
+    gapProgramTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> h = AncestryProbe::gapProgram(sub (string path) {
+            # in the gap: B is imported into another Program, and a subclass of it is parsed there
+            p.importClass(path, "GapB");
+            p.parse("class GapSub inherits GapB {}
+object sub make_b() { return new GapB(); }
+object sub make_sub() { return new GapSub(); }", "gap-program");
+        });
+        assertTrue(h.b_late);
+        foreach string f in ("make_b", "make_sub") {
+            object o = p.callFunction(f);
+            hash<auto> c = AncestryProbe::checkObject(o);
+            assertTrue(c.class_late, f);
+            assertTrue(c.class_late_parent, f);
+            assertTrue(c.instanceof_late, f);
+            assertEq(42, c.late_data, f);
+            assertEq(42, c.late_parent_data, f);
+            assertEq(42, c.late_value, f);
+        }
     }
 }

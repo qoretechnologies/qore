@@ -2731,18 +2731,49 @@ struct member_init_entry_t {
 // list of members in initialization order
 typedef std::vector<member_init_entry_t> member_init_list_t;
 
+//! An error found while the ancestors of a class are added with the lock of the registry of ancestries held
+/** Under that lock no parse error is raised and no class is marked invalid (see qore_class_private::linkBaseClass(),
+    qore#7614): the first error is recorded here and reported by report() once the lock is released
+*/
+struct AncestryErrorCapture {
+    //! the class whose hierarchy is invalid, if any
+    QoreClass* invalid = nullptr;
+    //! the location of the parse error, if any
+    const QoreProgramLocation* loc = nullptr;
+    //! the message of the parse error
+    std::string msg;
+    //! true if an error was recorded
+    bool error = false;
+
+    //! records the first error
+    DLLLOCAL void set(QoreClass* n_invalid, const QoreProgramLocation* n_loc, std::string&& n_msg) {
+        if (error) {
+            return;
+        }
+        error = true;
+        invalid = n_invalid;
+        loc = n_loc;
+        msg = std::move(n_msg);
+    }
+
+    //! marks the class invalid and raises the parse error; called without the lock of the registry
+    DLLLOCAL void report();
+};
+
 // BCSMList: Base Class Special Method List
 // unique list of base classes for a class hierarchy to ensure that "special" methods, constructor(), destructor(), copy() - are executed only once
 // this class also tracks virtual classes to ensure that they are not inserted into the list in a complex tree and executed here
-/** The list is append-only and can be read by other threads while it is appended to (qore#7614): the ancestors of a
-    builtin class that inherits a class whose own base classes were still being added are appended when the hierarchy
-    of the parent class is complete, which can be after the class is in use.  The entries are therefore stored in an
-    array that never moves once published: an append that needs more room copies the entries to a larger array,
-    publishes it and keeps the old one until the list is destroyed, and an entry is never changed once its count is
-    published.  A reader takes a view() of the list, a consistent snapshot of its published entries; a new view sees the
-    entries appended since.  Appends are serialized by the caller: by the thread building the class before it is in
-    use, and under the lock of the ancestry registry once it can be appended to by another thread (see
-    qore_class_private::linkBaseClass()).
+/** The list can be read by other threads while it is changed (qore#7614): the ancestors of a builtin class that
+    inherits a class whose own base classes were still being added are added when the hierarchy of the parent class
+    is complete, which can be after the class is in use.  The entries are therefore stored in a block (the entries and
+    their count) that never moves or changes in its published part while another thread can read it: an append writes
+    the entry after the published ones and then publishes the new count; an append that needs more room, and a
+    replacement of the list (replace(), which puts the added ancestors where a build from scratch puts them), publish
+    a new block and keep the old one until the list is destroyed when another thread can read the list (shared, or an
+    append made by AncestryRegistry::complete() or QoreClass::rescanParents()).  A reader takes a view() of the list, a
+    consistent snapshot of the entries of one block.  Changes are serialized by the caller: by the thread building the
+    class before it is in use, and under the lock of the registry of ancestries once it can be changed by another
+    thread (see qore_class_private::linkBaseClass()).
 */
 class BCSMList {
 public:
@@ -2799,29 +2830,45 @@ public:
 
     DLLLOCAL BCSMList& operator=(const BCSMList&) = delete;
 
-    //! Returns a consistent snapshot of the list; safe to call while another thread appends to the list
-    /** The count is loaded before the array: the array published with a count, or any later one, holds at least as
-        many entries, as an append publishes a larger array before its count
-    */
+    //! Returns a consistent snapshot of the list; safe to call while another thread changes the list
     DLLLOCAL View view() const {
-        size_t n = count.load(std::memory_order_acquire);
-        return View(data.load(std::memory_order_acquire), n);
+        const Block* b = block.load(std::memory_order_acquire);
+        if (!b) {
+            return View(nullptr, 0);
+        }
+        return View(b->entries(), b->count.load(std::memory_order_acquire));
     }
 
     //! Returns the number of entries; see view()
     DLLLOCAL size_t size() const {
-        return count.load(std::memory_order_acquire);
+        return view().size();
     }
 
     DLLLOCAL void processMemberInitializationList(const QoreMemberMap& members, member_init_list_t& member_init_list);
 
-    DLLLOCAL int add(QoreClass* thisclass, QoreClass* qc, bool is_virtual);
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual);
+    //! adds the class to the list if it is not in it
+    /** @param cap if not nullptr, an error is recorded there instead of being raised, and no class is marked invalid
+    */
+    DLLLOCAL int add(QoreClass* thisclass, QoreClass* qc, bool is_virtual, AncestryErrorCapture* cap = nullptr);
+    //! adds the classes of this list to the list of \a sc, or to \a target if not nullptr; see add()
+    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual,
+            BCSMList* target = nullptr, AncestryErrorCapture* cap = nullptr);
 
     DLLLOCAL void alignBaseClassesInSubclass(QoreClass* thisclass, QoreClass* child, bool is_virtual);
 
     // returns 0 = can add, non-0 = cannot add
     DLLLOCAL void align(QoreClass* thisclass, QoreClass* qc, bool is_virtual);
+
+    //! replaces the entries of the list with those of \a from, which is left empty (qore#7614)
+    /** The new entries are published at once; the classes of the replaced entries, whose references the caller takes
+        over, are added to \a released, to be released without the lock of the registry of ancestries
+    */
+    DLLLOCAL void replace(BCSMList& from, std::vector<QoreClass*>& released);
+
+    //! marks the list as one that other threads can read: a block that is replaced is kept until the list is destroyed
+    DLLLOCAL void setShared() {
+        shared.store(true, std::memory_order_relaxed);
+    }
 
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid) const;
     //DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, ExceptionSink* xsink) const;
@@ -2835,23 +2882,50 @@ public:
         RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // parseResolve classes to the new class pointer after all namespaces and classes have been copied
-    DLLLOCAL void resolveCopy();
+    /** The classes of the replaced entries, whose references the caller takes over, are added to \a released
+    */
+    DLLLOCAL void resolveCopy(std::vector<QoreClass*>& released);
 
 private:
-    //! the published array of entries; never moves or changes in the published prefix while the list exists
-    std::atomic<class_virt_pair_t*> data{nullptr};
-    //! the number of published entries
-    std::atomic<size_t> count{0};
-    //! the size of the array; only used by the thread that appends
-    size_t capacity = 0;
-    //! the arrays replaced by a larger one; freed with the list, as a reader can still read one
-    std::vector<class_virt_pair_t*> retired;
+    //! a block of entries: the count, then the entries
+    struct Block {
+        //! the number of published entries
+        std::atomic<size_t> count{0};
+        //! the number of entries that the block has room for
+        size_t capacity;
+
+        DLLLOCAL explicit Block(size_t capacity) : capacity(capacity) {
+        }
+
+        DLLLOCAL class_virt_pair_t* entries() {
+            return reinterpret_cast<class_virt_pair_t*>(this + 1);
+        }
+
+        DLLLOCAL const class_virt_pair_t* entries() const {
+            return reinterpret_cast<const class_virt_pair_t*>(this + 1);
+        }
+
+        //! allocates a block with room for \a capacity entries
+        DLLLOCAL static Block* create(size_t capacity);
+        //! frees a block (the entries have trivial destructors)
+        DLLLOCAL static void destroy(Block* b);
+    };
+    static_assert(sizeof(Block) % alignof(class_virt_pair_t) == 0, "the entries follow the block header");
+    static_assert(std::is_trivially_destructible<class_virt_pair_t>::value, "the entries are not destroyed");
+
+    //! the published block; never changes in its published part while another thread can read it
+    std::atomic<Block*> block{nullptr};
+    //! the blocks replaced while another thread could read them; freed with the list
+    std::vector<Block*> retired;
+    //! true once other threads can read the list (see setShared()); written by the thread that builds the class and
+    //! read by the thread that changes the list under the lock of the registry of ancestries
+    std::atomic<bool> shared{false};
 
     // the classes in a long list by ID, so that adding a class does not scan the list: a class in a deep
     // hierarchy has all of its ancestors in its list, and each is added once to the list of each subclass (issue
     // #6106); only used from SML_INDEX_MIN entries, and rebuilt when it does not have an entry for each element (the
     // list is also built by the copy constructor, and classes keep their IDs when copied); only used by the thread
-    // that appends
+    // that changes the list
     std::unordered_map<qore_classid_t, const QoreClass*> id_index;
 
     static constexpr size_t SML_INDEX_MIN = 16;
@@ -2864,6 +2938,9 @@ private:
 
     //! publishes an entry at the end of the list
     DLLLOCAL void push(const class_virt_pair_t& e);
+
+    //! publishes \a nb in place of the current block, which is kept or freed
+    DLLLOCAL void publish(Block* nb);
 };
 
 // set of private class pointers; used when checking for recursive class inheritance lists
@@ -2884,37 +2961,42 @@ public:
     ClassAccess access;
     bool is_virtual : 1;
     bool parameterized_parent_registered : 1;
+    //! the class was added with QoreClass::addBuiltinBaseClass(): its own ancestors are not in the list of ancestors
+    //! of the subclass (qore#7614)
+    bool parent_only : 1;
 
     DLLLOCAL BCNode(const QoreProgramLocation* loc, NamedScope* c, ClassAccess a) : loc(loc), cname(c), access(a),
-            is_virtual(false), parameterized_parent_registered(false) {
+            is_virtual(false), parameterized_parent_registered(false), parent_only(false) {
     }
 
     // this method takes ownership of *str
     DLLLOCAL BCNode(const QoreProgramLocation* loc, char* str, ClassAccess a) : loc(loc), cstr(str), access(a),
-            is_virtual(false), parameterized_parent_registered(false) {
+            is_virtual(false), parameterized_parent_registered(false), parent_only(false) {
     }
 
     // this method takes ownership of *type
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreParseTypeInfo* type, ClassAccess a) : loc(loc),
-            parsed_type(type), access(a), is_virtual(false), parameterized_parent_registered(false) {
+            parsed_type(type), access(a), is_virtual(false), parameterized_parent_registered(false),
+            parent_only(false) {
     }
 
     // for builtin base classes
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, bool n_virtual = false) : loc(loc),
-            access(Public), is_virtual(n_virtual), parameterized_parent_registered(false) {
+            access(Public), is_virtual(n_virtual), parameterized_parent_registered(false), parent_only(false) {
         setClassPointer(qc);
     }
 
     // for builtin base classes with explicit access level
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
-            : loc(loc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false) {
+            : loc(loc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false),
+            parent_only(false) {
         setClassPointer(qc);
     }
 
     // called at runtime with committed classes
     DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), type_info(old.type_info), sclass(old.sclass),
             access(old.access), is_virtual(old.is_virtual),
-            parameterized_parent_registered(old.parameterized_parent_registered) {
+            parameterized_parent_registered(old.parameterized_parent_registered), parent_only(old.parent_only) {
         assert(!old.cname);
         assert(!old.cstr);
         assert(!old.parsed_type);
@@ -3149,7 +3231,9 @@ public:
     DLLLOCAL QoreVarInfo* parseFindStaticVar(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check,
             bool toplevel) const;
 
-    DLLLOCAL void resolveCopy();
+    //! resolves the copies of the base classes; the classes of the replaced entries of the list of ancestors, whose
+    //! references the caller takes over, are added to \a released (see BCSMList::resolveCopy())
+    DLLLOCAL void resolveCopy(std::vector<QoreClass*>& released);
 
     //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
     //! substituted in \a v's signature (issue #5773)
@@ -3173,7 +3257,11 @@ public:
     //! as addBaseClassesToSubclass(), which locks the registry of ancestries if the list of ancestors of \a child
     //! can be appended to by another thread (see qore_class_private::lockAncestryIfLinked(), qore#7614); the caller
     //! holds the lock then
-    DLLLOCAL int addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* child, bool is_virtual);
+    /** @param target the list that the classes are added to, if not the list of ancestors of \a child
+        @param cap if not nullptr, errors are recorded there; see BCSMList::add()
+    */
+    DLLLOCAL int addBaseClassesToSubclassIntern(QoreClass* thisparent, QoreClass* child, bool is_virtual,
+            BCSMList* target = nullptr, AncestryErrorCapture* cap = nullptr);
 
     //! returns true if sml holds all ancestors of the class
     DLLLOCAL bool smlComplete() const {
@@ -3803,6 +3891,9 @@ public:
     std::atomic<bool> ancestry_linked{false};
     //! true while subclasses are registered with the class
     std::atomic<bool> ancestry_parent{false};
+    //! true for a builtin class whose base classes are added after it is created (QoreBuiltinClass); no base class may
+    //! be added to it once it is closed; written when the class is created
+    bool ancestry_opened = false;
 
     //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
     /** Set by markMultiPathAncestors() when the first object of such a class is created; the base classes of a class
@@ -3964,9 +4055,20 @@ public:
         closed by closeBuiltinAncestry()
     */
     DLLLOCAL void openBuiltinAncestry() {
+        ancestry_opened = true;
         ancestry_closed.store(false, std::memory_order_relaxed);
         ancestry_final.store(false, std::memory_order_relaxed);
     }
+
+    //! Marks the base classes of the class as all added; see closeBuiltinAncestry()
+    DLLLOCAL static void closeAncestry(QoreClass& qc) {
+        qc.priv->closeBuiltinAncestry();
+    }
+
+#ifdef DEBUG
+    //! Asserts that no class is registered in the registry of ancestries (after the static system namespace is set up)
+    DLLLOCAL static void assertNoAncestryLinks();
+#endif
 
     //! Marks the base classes of a builtin class as all added (qore#7614)
     /** Called by the public QoreClass::initializeBuiltin() and by finalizeBuiltin(), not by the recursion of
@@ -3978,7 +4080,17 @@ public:
     DLLLOCAL void closeBuiltinAncestry();
 
     //! Removes the class from the registry of ancestries; called when the class is destroyed (qore#7614)
-    DLLLOCAL void dropAncestryLinks();
+    /** @param complete_subclasses if true (the class object is still valid), a closed subclass that has no other
+        parent class whose ancestry is not final becomes final, and its own registered subclasses are completed
+    */
+    DLLLOCAL void dropAncestryLinks(bool complete_subclasses);
+
+    //! Builds the list of ancestors again as a build from scratch builds it, and publishes it (qore#7614)
+    /** Called with the lock of the registry of ancestries held, when parent classes got base classes after this class
+        inherited them; on an error the list is not changed (and -1 is returned).  The classes of the replaced entries,
+        whose references the caller takes over, are added to \a released, to be released without the lock
+    */
+    DLLLOCAL int rebuildAncestors(std::vector<QoreClass*>& released);
 
     //! Locks the registry of ancestries if the class's list of ancestors can be appended to by another thread
     /** The list of ancestors of a class inheriting a class whose ancestry is not final is appended to by the thread
