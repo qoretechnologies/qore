@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DpqlListFunctionsTest
+
+public class DpqlListFunctionsTest inherits QUnit::Test {
+    constructor() : Test("DPQL list functions", "1.0") {
+        addTestCase("design-mode registry signatures", \metadataTests());
+        addTestCase("parse, verify and serialize documented calls", \roundTripTests());
+        addTestCase("numeric types and exact aggregation", \numericTests());
+        addTestCase("extrema, paths and absent values", \pathTests());
+        addTestCase("incompatible inputs name the function and type", \errorTests());
+        addTestCase("list transformations and grouping", \listTests());
+        addTestCase("scalar extrema and median", \scalarTests());
+        addTestCase("list and scalar type errors", \listErrors());
+        addTestCase("flatten and distinct count across invoices", \invoiceTests());
+        addTestCase("original records with extreme keys", \keyedExtremaTests());
+        addTestCase("percentiles and median agreement", \percentileTests());
+        set_return_value(main());
+    }
+
+    auto evaluate(string src, auto rows) {
+        hash<DpqlParseResult> parsed = DataProvider::parseDpqlExpressionWithInfo(src);
+        assertTrue(parsed.success, sprintf("%s: %y", src, parsed.diagnostics));
+        return AbstractDataProvider::evalGenericExpressionValue({"rows": rows, "absent": NOTHING}, parsed.expression);
+    }
+
+    checkValue(auto expected, string src, auto rows) {
+        auto result = evaluate(src, rows);
+        assertEq(expected.typeCode(), result.typeCode(), src);
+        assertEq(expected, result, src);
+    }
+
+    metadataTests() {
+        foreach string name in ((DP_FUNC_SUM, DP_FUNC_AVG, DP_FUNC_MIN, DP_FUNC_MAX)) {
+            hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{name};
+            assertEq(DET_Function, info.type);
+            assertEq(1, AbstractDataProvider::getRequiredArgCount(info));
+            assertEq(2, info.args.size());
+            auto types = info.return_type.getReturnTypeHash(True);
+            assertTrue(types.hasKey("number"));
+            assertEq(name != DP_FUNC_SUM, types.hasKey("nothing"));
+            assertEq(name == DP_FUNC_MIN || name == DP_FUNC_MAX, types.hasKey("date"));
+        }
+    }
+
+    roundTripTests() {
+        foreach hash<auto> pair in ({
+            DP_FUNC_FLATTEN: (1, 1), DP_FUNC_MIN_BY: (2, 2), DP_FUNC_MAX_BY: (2, 2), DP_FUNC_PERCENTILE: (2, 3),
+        }.pairIterator()) {
+            hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{pair.key};
+            assertEq(DET_Function, info.type, pair.key);
+            assertEq(pair.value[0], AbstractDataProvider::getRequiredArgCount(info), pair.key);
+            assertEq(pair.value[1], info.args.size(), pair.key);
+        }
+        foreach string text in (("sum(@rows)", "avg(@rows, 'weight')", "min(@rows)", "max(@rows)",
+                "count_if(@rows, @active)", "distinct(@rows, 'carrier')", "sort(@rows, 'amount', 'desc')",
+                "group_by(@rows, 'postcode')", "join(@rows, ', ')", "greatest(@a, @b)", "least(@a, @b)",
+                "median(@rows, 'amount')", "percentile(@rows, 95, 'delay_minutes')", "flatten(@rows[*].lines)",
+                "min_by(@rows, 'price')", "max_by(@rows, 'dispute.amount')", "count distinct(@rows, 'carrier')")) {
+            auto parsed = DataProvider::parseDpqlExpression(text);
+            AbstractDataProvider::verifyGenericExpression(parsed);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            assertEq(parsed, DataProvider::parseDpqlExpression(serialized), serialized);
+        }
+    }
+
+    numericTests() {
+        checkValue(6, "sum(@rows)", (1, 2, 3));
+        checkValue(3, "avg(@rows)", (2, 4));
+        checkValue(1.5n, "avg(@rows)", (1, 2));
+        checkValue(2.5, "avg(@rows)", (2, 3.0));
+        checkValue(9007199254740994.375n, "sum(@rows)", (9007199254740993, 1.125, 0.25n));
+        checkValue(9007199254740994.375n, "sum(@rows)", (0.25n, 1.125, 9007199254740993));
+        checkValue(0.15n, "round(avg(@rows), 2)", (0.1n, 0.2));
+        checkValue(9223372036854775808n, "sum(@rows)", (MAXINT, 1));
+        checkValue(MAXINT, "avg(@rows)", (MAXINT, MAXINT));
+        checkValue(-1.0, "min(@rows)", (-1, 4.5));
+        checkValue(4n, "max(@rows)", (4, 0.5n));
+    }
+
+    pathTests() {
+        list<auto> rows = ({"line": {"amount": 1.1n}}, NOTHING, {}, {"line": {"amount": 2.2n}});
+        checkValue(3.3n, "round(sum(@rows, 'line.amount'), 2)", rows);
+        checkValue(1.65n, "round(avg(@rows, 'line.amount'), 2)", rows);
+        checkValue("a", "min(@rows)", ("b", NOTHING, "a"));
+        checkValue(2026-03-02, "max(@rows, 'dates[0]')",
+            ({"dates": (2026-03-01,)}, {"dates": (2026-03-02,)}));
+        foreach string name in ((DP_FUNC_SUM, DP_FUNC_AVG, DP_FUNC_MIN, DP_FUNC_MAX)) {
+            auto expected = name == DP_FUNC_SUM ? 0 : NOTHING;
+            checkValue(expected, name + "(@rows)", ());
+            checkValue(expected, name + "(@rows)", (NOTHING, NULL));
+            checkValue(expected, name + "(@rows, 'unknown')", rows);
+        }
+    }
+
+    listTests() {
+        list<auto> rows = ({"id": "b", "k": 1, "ok": True}, {"id": "c"}, {"id": "a", "k": 2.5n},
+            {"id": "d", "k": 1.0}, {"id": "e", "k": NULL}, {"id": "f", "k": 0, "ok": True});
+        checkValue(2, "count_if(@rows, exists @ok)", rows);
+        checkValue(1, "count_if(@rows, @value > 2)", (1, NOTHING, 3));
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        assertTrue(AbstractDataProvider::setTemplateCallbacks(auto sub (string ctx, string field, *hash<auto> tc) {
+            return tc{field};
+        }));
+        checkValue(1, "count_if(@rows, $local:index == 2)", rows);
+        checkValue(0, "count_if(@rows, true)", ());
+        auto predicate = DataProvider::parseDpqlExpression("count_if(@rows, exists @ok)");
+        assertTrue(DpqlParser::isItemScopedArg(predicate, 1));
+        assertFalse(DpqlParser::isItemScopedArg(predicate, 0));
+        checkValue((3, "3", 0), "distinct(@rows, 'key.v')",
+            ({"key": {"v": 3}}, {}, {"key": {"v": "3"}}, {"key": {"v": 3}}, {"key": {"v": 0}}));
+        checkValue((1.5n, 1.5, {"a": 1}), "distinct(@rows)",
+            (NOTHING, 1.5n, 1.5, {"a": 1}, NULL, 1.5n, {"a": 1}));
+        checkValue((rows[5], rows[0], rows[3], rows[2], rows[1], rows[4]), "sort(@rows, 'k')", rows);
+        checkValue((rows[2], rows[0], rows[3], rows[5], rows[1], rows[4]), "sort(@rows, 'k', 'desc')", rows);
+        checkValue(("b", "a", NOTHING), "sort(@rows, '', 'desc')", ("a", NOTHING, "b"));
+        checkValue((2026-01-01, 2026-01-02), "sort(@rows)", (2026-01-02, 2026-01-01));
+        checkValue((), "sort(@rows)", ());
+        checkValue((), "distinct(@rows)", ());
+        list<auto> groups = ({"key": 0}, {"key": ""}, {}, {"key": "0"}, {"key": NULL});
+        checkValue({"0": (groups[0], groups[3]), "": (groups[1],)}, "group_by(@rows, 'key')", groups);
+        checkValue({}, "group_by(@rows, 'key')", ());
+        checkValue(5, "sum(key(group_by(@rows, 'postcode'), '10001'), 'dispute.amount')",
+            ({"postcode": "10001", "dispute": {"amount": 3}}, {"postcode": "10001", "dispute": {"amount": 2}}));
+        checkValue("late, damaged", "join(@rows, ', ')", ("late", "damaged"));
+        checkValue("", "join(@rows, ', ')", ());
+        checkValue("1,,,2", "join(@rows, ',')", (1, NOTHING, NULL, 2));
+        assertEq(DP_OP_JOIN, DP_FUNC_JOIN);
+        foreach hash<auto> pair in ({
+            DP_FUNC_COUNT_IF: "int", DP_FUNC_SORT: "list", DP_FUNC_DISTINCT: "list", DP_FUNC_GROUP_BY: "hash",
+            DP_FUNC_JOIN: "string", DP_FUNC_GREATEST: "date", DP_FUNC_LEAST: "date", DP_FUNC_MEDIAN: "number",
+        }.pairIterator()) {
+            hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{pair.key};
+            assertTrue(info.return_type.getReturnTypeHash(True).hasKey(pair.value), pair.key);
+        }
+    }
+
+    invoiceTests() {
+        checkValue((1, 2, (3, 4), NULL, NOTHING, 5), "flatten(@rows)",
+            ((), (1, 2), ((3, 4),), NULL, NOTHING, 5));
+        checkValue((), "flatten(@rows)", ());
+        list<auto> invoices = ({"lines": ({"carrier": "A", "dispute": {"amount": 2.25n}},)},
+            {"lines": ()}, {"lines": ({"carrier": "B", "dispute": {"amount": 1.5n}}, {"carrier": "A"}, {})});
+        checkValue(3.75n, "sum(flatten(@rows[*].lines), 'dispute.amount')", invoices);
+        checkValue(2, "count distinct(flatten(@rows[*].lines), 'carrier')", invoices);
+        checkValue(0, "count distinct(@rows, 'carrier')", ({}, {"carrier": NULL}));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "flatten.*hash", \evaluate(), ("flatten(@rows)", {}));
+    }
+
+    keyedExtremaTests() {
+        list<auto> quotes = ({}, {"id": "A", "q": {"price": 2n}}, {"id": "B", "q": {"price": 2}},
+            {"id": "C", "q": {"price": 3.5}}, {"id": "D", "q": {"price": 3.5n}}, {"q": {"price": NULL}});
+        checkValue(quotes[1], "min_by(@rows, 'q.price')", quotes);
+        checkValue(quotes[3], "max_by(@rows, 'q.price')", quotes);
+        list<auto> big = ({"k": 9007199254740992.0}, {"k": 9007199254740993});
+        checkValue(big[0], "max_by(@rows, 'k')", big);
+        push big, {"k": -1n};
+        checkValue(big[1], "max_by(@rows, 'k')", big);
+        checkValue({"k": 1.19}, "min_by(@rows, 'k')", ({"k": 1.19}, {"k": 1.19n}));
+        checkValue({"date": 2026-01-01}, "min_by(@rows, 'date')", ({"date": 2026-01-02}, {"date": 2026-01-01}));
+        checkValue({"id": "c"}, "max_by(@rows, 'id')", ({"id": "b"}, {"id": "c"}));
+        foreach string name in ((DP_FUNC_MIN_BY, DP_FUNC_MAX_BY)) {
+            checkValue(NOTHING, name + "(@rows, 'k')", ());
+            checkValue(NOTHING, name + "(@rows, 'k')", ({}, {"k": NULL}, NOTHING));
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", name + ".*string", \evaluate(),
+                (name + "(@rows, 'k')", ({"k": 1}, {"k": "one"})));
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", name + ".*int", \evaluate(),
+                (name + "(@rows.data, @rows.path)", {"data": (), "path": 7}));
+        }
+    }
+
+    percentileTests() {
+        list<auto> delays = ({"delay": 50}, {"delay": 10}, {"delay": 30}, {}, {"delay": NULL}, {"delay": 20});
+        checkValue(47, "percentile(@rows, 95, 'delay')", delays);
+        checkValue(10, "percentile(@rows, 0, 'delay')", delays);
+        checkValue(50, "percentile(@rows, 100, 'delay')", delays);
+        checkValue(2.5n, "percentile(@rows, 12.5)", (2, 6));
+        checkValue(3.0, "percentile(@rows, 25)", (2, 6.0));
+        checkValue(3n, "percentile(@rows, 25)", (2.0, 6n));
+        checkValue(9007199254740993.25n, "percentile(@rows, 25)", (9007199254740993, 9007199254740994));
+        checkValue(4n, "percentile(@rows, 95)", (4n,));
+        checkValue(NOTHING, "percentile(@rows, 95)", (NOTHING, NULL));
+        foreach list<auto> values in (((), (3,), (1, 4), (1, 3, 5), (1.0, 3n, 4), (1.0e308, 1.0e308))) {
+            checkValue(evaluate("median(@rows)", values), "percentile(@rows, 50)", values);
+        }
+        foreach auto bad in ((-1, 100.1n, "95", NOTHING, NULL, @nan@, @inf@n)) {
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "percentile", \evaluate(),
+                ("percentile(@rows.values, @rows.p)", {"values": (), "p": bad}));
+        }
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "percentile.*string", \evaluate(),
+            ("percentile(@rows, 95)", (7, "8")));
+    }
+
+    scalarTests() {
+        checkValue(3.5n, "greatest(@rows[0], @rows[1], @rows[2])", (2n, 3.5, 1));
+        checkValue(-2.5, "least(@rows[0], @rows[1])", (-2.5, 3));
+        checkValue("a", "least(@rows[0], @absent, @rows[1])", ("z", "a"));
+        checkValue(2026-01-02, "greatest(@rows[0], @rows[1])", (2026-01-02, 2026-01-01));
+        checkValue(NOTHING, "greatest(@absent, @rows)", NULL);
+        checkValue(NOTHING, "least(@absent)", ());
+        checkValue(3, "median(@rows)", (3, 1, NOTHING, 5, NULL));
+        checkValue(2.5n, "median(@rows, 'x')", ({"x": 5}, {"x": 3}, {}, {"x": 2}, {"x": 1}));
+        checkValue(3, "median(@rows)", (1, 5));
+        checkValue(MAXINT, "median(@rows)", (MAXINT, MAXINT));
+        checkValue(1.5, "median(@rows)", (1, 2.0));
+        checkValue(1.5n, "median(@rows)", (2, 1.0, 0.5n, 4));
+        checkValue(1.0e308, "avg(@rows)", (1.0e308, 1.0e308));
+        checkValue(1.0e308, "median(@rows)", (1.0e308, 1.0e308));
+        checkValue(NOTHING, "median(@rows)", ());
+        checkValue(NOTHING, "median(@rows)", (NULL, NOTHING));
+    }
+
+    listErrors() {
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "join.*int", \evaluate(), ("join(@rows, @rows[0])", (1,)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "count_if.*hash", \evaluate(), ("count_if(@rows, true)", {}));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "distinct.*string", \evaluate(), ("distinct(@rows)", "oops"));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sort.*date", \evaluate(), ("sort(@rows)", (1, 2026-01-01)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sort.*direction", \evaluate(),
+            ("sort(@rows, '', 'sideways')", (1, 2)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "group_by.*list", \evaluate(),
+            ("group_by(@rows, 'key')", ({"key": (1, 2)},)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "median.*string", \evaluate(), ("median(@rows)", ("1",)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "least.*int", \evaluate(), ("least('a', @rows)", 1));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "greatest.*hash", \evaluate(), ("greatest(@rows)", {}));
+    }
+
+
+    errorTests() {
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*string", \evaluate(), ("sum(@rows)", ("5",)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "avg.*bool", \evaluate(), ("avg(@rows)", (True,)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "min.*date", \evaluate(), ("min(@rows)", ("a", 2026-03-02)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "max.*int", \evaluate(), ("max(@rows)", (2026-03-02, 1)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*hash", \evaluate(), ("sum(@rows)", {}));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*int", \evaluate(),
+            ("sum(@rows.values, @rows.path)", {"values": (1,), "path": 4}));
+    }
+}

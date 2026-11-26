@@ -3,20 +3,31 @@ stages:
   - test
 
 default:
-  # A Kubernetes job pod can time out waiting for CPU capacity before tests start.
+  # A Kubernetes job pod can time out waiting for CPU capacity before tests start.  run_tests.sh ends a run with the
+  # exit code 75 (EX_TEMPFAIL) when its comparison of the tree with the build did not finish in time (a slow or stalled
+  # host, qore#7615): that is retried as well, as it says nothing about the tests.
   retry:
     max: 2
     when: runner_system_failure
+    exit_codes: [75]
+  # The service containers run beside each job.  They come from this project's mirror in the qore-test-base registry, by
+  # digest, not from Docker Hub: an anonymous pull from Docker Hub is rate limited, and a job whose service image could
+  # not be pulled failed in "prepare environment" before any test ran (pipeline 70167 job 248434: `unexpected media type
+  # text/html` on mongo:6.0; qore#7615).  The copies are made by the manual job mirror-service-images of
+  # infrastructure/qore-test-base (service-images.txt there lists the upstream tags: mariadb:11.4, pgvector/pgvector:pg18,
+  # memcached:latest, redis:latest, mongo:6.0), keep the multi-arch index, and have the digest of the upstream image: to
+  # move a service, run that job and put the digests that it prints here (design/ci-service-images.md).  The runner pulls
+  # with the DOCKER_AUTH_CONFIG of this project, as for the qore-test-base images.
   services:
-    - name: mariadb:11.4
+    - name: $CI_REGISTRY/infrastructure/qore-test-base/service-mirror/mariadb@sha256:a8992b5e5404d11e03c54a31d0c1bdea3fd116d283aa6d1a627551f29045309b
       alias: mysql
-    - name: pgvector/pgvector:pg18
+    - name: $CI_REGISTRY/infrastructure/qore-test-base/service-mirror/pgvector@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782
       alias: pgsql
-    - name: memcached:latest
+    - name: $CI_REGISTRY/infrastructure/qore-test-base/service-mirror/memcached@sha256:6b0fd5e4e0d5cce66bb9262363324e35fa3873866aa6f6f8f31acb4a10934923
       alias: memcached
-    - name: redis:latest
+    - name: $CI_REGISTRY/infrastructure/qore-test-base/service-mirror/redis@sha256:ca1cb6df9313d0186b68f19b60fc2802e0c76e8542b2c05650b560e7bbb3cc8f
       alias: redis
-    - name: mongo:6.0
+    - name: $CI_REGISTRY/infrastructure/qore-test-base/service-mirror/mongo@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
       alias: mongodb
   # no job but pipeline-passed and github-status posts the required GitHub status "${REPO_NAME}" (see github-status)
   before_script:

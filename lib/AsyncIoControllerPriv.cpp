@@ -3613,6 +3613,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             // work item is fully processed or discarded.
         }
 
+        // a callback of the item can call fork(): the child leaves the worker at once, as the dispatcher's and the
+        // controller's locks and queues belong to the parent, whose threads that can hold them do not exist in the
+        // child (qore#7579)
+        const unsigned item_fork_gen = qore_fork_get_generation();
+        auto forked_here = [item_fork_gen]() -> bool { return qore_fork_get_generation() != item_fork_gen; };
+
         // Enter program context for the duration of dispatch + cleanup so the
         // worker contributes to the target program's thread_count.  Without
         // this, qore_program_private::waitForTerminationAndClear() can advance
@@ -3776,6 +3782,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         ValueHolder rv(async_item.spop_obj->evalMethod("abort", nullptr, &work_xsink),
                             &work_xsink);
                     }
+                    if (forked_here()) {
+                        return;
+                    }
                     // the result of the operation is delivered once abort() has returned; see
                     // AsyncIoControllerPriv::AbortThenDeliverTask
                     if (async_item.native_task) {
@@ -3881,6 +3890,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 #endif
                         ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                             &work_xsink);
+                        if (forked_here()) {
+                            return;
+                        }
                         if (work_xsink) {
                             QoreException* ex_obj = qore_exception_sink_ops(work_xsink).getException();
                             if (ex_obj) {
@@ -3911,6 +3923,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                             ExceptionSink stream_xsink;
                             ValueHolder streams_val(async_item.spop_obj->evalMethod(
                                 "getAndClearDataReadyStreams", nullptr, &stream_xsink), &stream_xsink);
+                            if (forked_here()) {
+                                return;
+                            }
                             if (!stream_xsink && streams_val->getType() == NT_LIST) {
                                 const QoreListNode* sl = streams_val->get<const QoreListNode>();
                                 if (sl && sl->size() > 0) {
@@ -3949,6 +3964,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                             ExceptionSink state_xsink;
                             ValueHolder state_val(async_item.spop_obj->evalMethod("getState", nullptr,
                                 &state_xsink), &state_xsink);
+                            if (forked_here()) {
+                                return;
+                            }
                             if (state_xsink) {
                                 if (!ex_hash) {
                                     QoreException* ex_obj = qore_exception_sink_ops(state_xsink).getException();
@@ -3999,6 +4017,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     step_class_name = async_item.spop_obj->getClassName();
                     async_item.spop_obj->deref(xsink);
                     async_item.spop_obj = nullptr;
+                    // the release can run a destructor that forks
+                    if (forked_here()) {
+                        return;
+                    }
 
 #ifdef DEBUG
                     // taken before the result is sent, so that a thread that receives the operation's result sees
@@ -4055,6 +4077,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     delete task;
                     break;
                 }
+            }
+            if (forked_here()) {
+                return;
             }
         }
 
@@ -4145,6 +4170,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // to reach zero.  If the worker's own count were still present, the
         // worker would wait for itself and deadlock.  Mirrors the per-program
         // ordering fix below.
+        // the logger, which runs Qore code, can fork too (qore#7579)
+        if (forked_here()) {
+            return;
+        }
         if (!async_item.owner.empty()) {
             AutoLocker al(m);
             auto it = active_per_owner.find(async_item.owner);
@@ -4187,6 +4216,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // NOTE: must be after all object derefs above, because destructors may run
         // Qore code that accesses thread-local data.
         clear_all_program_thread_local_data();
+        // the releases above can run destructors that fork: the child takes neither the lock nor another item
+        // (qore#7579)
+        if (forked_here()) {
+            return;
+        }
 
         // Decrement per-program and per-dispatcher counters BEFORE the final
         // program deref.  If this worker is holding the last reference to
@@ -12389,6 +12423,10 @@ void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete,
         args->push(dd.result, xsink);
         dd.result = nullptr;
         ValueHolder rv(dd.spop_obj->evalMethod("onComplete", *args, xsink), xsink);
+        // a child that onComplete() forked does not release the parent's operation (qore#7579)
+        if (ctrl->forked()) {
+            return;
+        }
     }
     // the remaining references; the last ones to the operation and everything it holds can be these (see
     // releaseOffIoThread())
