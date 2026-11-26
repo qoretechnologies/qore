@@ -155,6 +155,7 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-pseudo.q` | `pv` `pl` `pt` | pseudo-methods: without an intrinsic, `<string>::length()`, `<int>::typeCode()` |
 | `bench-member.q` | `mr` `mw` `pr` `pi` | a public member read and write, a private member read in the class's method, a base class's private member read on a subclass object (qore#6760) |
 | `bench-cf.q` | `cf` `cfa` | `call_function()` of a call reference, `call_function_args()` with one argument (qore#6052) |
+| `bench-funcref.q` | `fr` `fr0` | a call through a reference to a function of one int parameter, of no parameter, given to the loop's function as a typed parameter (qore#5578) |
 | `bench-instanceof.q` | `io` `iom` | two, six `instanceof` checks of objects of as many classes; in aot modes a hit of the type cache of the AOT runtime (qore#7416) |
 | `bench-enum.q` | `ok` `osz` `ofk` `oel` | an object's keys, `size()`, `firstKey()`, `elements` (qore#7048) |
 | `bench-lvalue.q` | `rl` `rh` `dh` `ri` `la` | `remove` of a list element, of a hash key, `delete` of a hash key, `remove` of a large int local, int assignment |
