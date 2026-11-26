@@ -198,6 +198,12 @@ public:
 class QoreGssCredential : public AbstractPrivateData {
 public:
     gss_cred_id_t cred = GSS_C_NO_CREDENTIAL;
+    //! the prefix of the isolation domain of the code that a sandbox governs that acquired the credential from a
+    //! keytab, naming the replay cache of the domain, or empty (qore#7756)
+    std::string accept_prefix;
+    //! the replay cache directory and file of a credential with \c accept_prefix (qore#7756)
+    std::string rcache_dir;
+    std::string rcache_path;
 
     DLLLOCAL QoreGssCredential(const QoreKrb5CredentialCache& cache, ExceptionSink* xsink);
     DLLLOCAL QoreGssCredential(const QoreKrb5Keytab& keytab, const QoreKrb5Principal* principal,
