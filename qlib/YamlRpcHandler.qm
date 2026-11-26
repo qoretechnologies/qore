@@ -103,7 +103,7 @@ http.waitStop();
       "YamlRpcHandlerContextKeys") and those that a subclass names with
       @ref YamlRpcHandler::YamlRpcHandler::getRpcContextKeys() "getRpcContextKeys()"; the method's function only as
       the name of an internal method (the callback, and its method hash, get no code), and its context marker only
-      when it holds no object (issues #7303, #7724, #7726)
+      when it holds no object or code (issues #7303, #7724, #7726)
     - the introspection methods \c help, \c system.listMethods and \c system.describe return the registered
       methods' help, names and service description (issue #7149)
     - the error of a method call and the response for a request body that cannot be parsed give the location of the
@@ -150,7 +150,7 @@ public namespace YamlRpcHandler {
 
             The log message callback of a restricted %Program gets the method's function only as the name of an
             internal method, never the code of a method, neither in the context nor in the method's hash that it
-            gets; it gets the context marker only when the marker holds no object (qore#7726)
+            gets; it gets the context marker only when the marker holds no object or code (qore#7726)
 
             @since YamlRpcHandler 1.5
         */
@@ -478,7 +478,7 @@ public namespace YamlRpcHandler {
         */
         /** The method's function is given only as the name of an internal method: the code of a method is not given
             to the code of a restricted %Program, which could call it outside the dispatch of the handler; the context
-            marker is given only when it holds no object (qore#7726)
+            marker is given only when it holds no object or code (qore#7726)
         */
         private hash<auto> getContextForCode(code c, hash<auto> cx) {
             if (!isRestrictedCode(c)) {
@@ -493,21 +493,50 @@ public namespace YamlRpcHandler {
                 if (key == "function" && cx.function.typeCode() != NT_STRING) {
                     continue;
                 }
-                if (key == "cmark" && AbstractStreamRequest::holdsObject(cx.cmark)) {
+                if (key == "cmark" && holdsObjectOrCode(cx.cmark)) {
                     continue;
                 }
                 rcx{key} = cx{key};
             }
             # the keys that a subclass adds: plain data only, never the request keys or the server's objects
             foreach string key in (getRpcContextKeys()) {
-                if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ContextKeys)
+                if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, YamlRpcHandlerContextKeys)
+                        && !inlist(key, AbstractStreamRequest::ContextKeys)
                         && !inlist(key, AbstractStreamRequest::ServerContextKeys)
-                        && !AbstractStreamRequest::holdsObject(cx{key})) {
+                        && !holdsObjectOrCode(cx{key})) {
                     rcx{key} = cx{key};
                 }
             }
             return rcx;
         }
+        #! Returns True if the value is an object or code (a closure or call reference), or a hash or list that
+        #! holds one at any depth: a value that the code of a restricted %Program does not get (qore#7726)
+        /** A call reference to a method also carries its object; AbstractStreamRequest::holdsObject() does not see
+            code
+        */
+        private:internal static bool holdsObjectOrCode(auto v) {
+            if (v.typeCode() == NT_OBJECT || v.callp()) {
+                return True;
+            }
+            switch (v.typeCode()) {
+                case NT_HASH:
+                    foreach string k in (keys v) {
+                        if (holdsObjectOrCode(v{k})) {
+                            return True;
+                        }
+                    }
+                    break;
+                case NT_LIST:
+                    foreach auto e in (v) {
+                        if (holdsObjectOrCode(e)) {
+                            return True;
+                        }
+                    }
+                    break;
+            }
+            return False;
+        }
+
         #! Returns True if the code is of a restricted %Program; fails closed
         private:internal static bool isRestrictedCode(code c) {
             try {
@@ -518,7 +547,8 @@ public namespace YamlRpcHandler {
         }
 
         #! Returns the method's hash that the log message callback gets: for the code of a restricted %Program, its
-        #! function only as the name of an internal method, and its values that hold an object not at all (qore#7726)
+        #! function only as the name of an internal method, and its values that hold an object or code not at all
+    #! (qore#7726)
         private:internal hash<auto> getMethodInfoForCode(code c, hash<auto> found) {
             hash<auto> info = found - "name_re";
             if (!isRestrictedCode(c)) {
@@ -528,7 +558,7 @@ public namespace YamlRpcHandler {
                 remove info.function;
             }
             foreach string key in (keys info) {
-                if (AbstractStreamRequest::holdsObject(info{key})) {
+                if (holdsObjectOrCode(info{key})) {
                     remove info{key};
                 }
             }
