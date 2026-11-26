@@ -970,7 +970,10 @@ DLLLOCAL int qore_check_thread_callable(const ResolvedCallReferenceNode* code, i
 DLLLOCAL int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed,
         ExceptionSink* xsink);
 //! qore_check_background_direct_entry() with the current thread's data (qore_get_thread_data())
-DLLLOCAL int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm,
+/** Not inlined: qore_check_background_direct_entry(), which calls it, is then inlined into its callers as a call, as it
+    was before this overload existed
+*/
+DLLLOCAL QORE_INTERN_NOINLINE int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm,
         bool callee_frame_pushed, ExceptionSink* xsink);
 
 //! Refuses a callable or object authored by code that may not control threads, called by the background expression
