@@ -405,9 +405,10 @@ authenticate();
       sandboxed code declared; in a builtin function or method, such as \c sprintf() or
       @ref Qore::Serializable::serialize() "Serializable::serialize()", the class of the code that called the builtin
       decides
-    - for any other declaration, the state is withheld if sandboxed code is in the chain of the callers, so that
-      trusted code that formats or serializes a value that a sandboxed caller gave it, for example in the description
-      of an exception, does not give the caller that state; trusted code that no sandboxed code calls gets all state
+    - for any other declaration, the state is withheld if sandboxed code is in the chain of the callers: trusted code
+      that serializes a value that a sandboxed caller gave it gets a \c SERIALIZATION-ERROR exception for a non-public
+      member or static variable with a value, and trusted code that formats such a value, for example in the
+      description of an exception, leaves those members out; trusted code that no sandboxed code calls gets all state
 
     A trusted host that needs the state of the objects of a sandboxed %Program's calls, for example to deliver the
     arguments of a call that the %Program makes through the host to another %Program, serializes them with

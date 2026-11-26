@@ -3396,8 +3396,8 @@ binary bin = pgm.serialize(val);
 
     The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
     for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
-    declared by trusted code, which @ref Qore::Serializable "Serializable" withholds when sandboxed code is in the
-    chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    declared by trusted code, for which @ref Qore::Serializable "Serializable" raises a \c SERIALIZATION-ERROR
+    exception when sandboxed code is in the chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
@@ -3431,8 +3431,8 @@ hash<SerializationInfo> h = pgm.serializeToData(val);
 
     The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
     for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
-    declared by trusted code, which @ref Qore::Serializable "Serializable" withholds when sandboxed code is in the
-    chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    declared by trusted code, for which @ref Qore::Serializable "Serializable" raises a \c SERIALIZATION-ERROR
+    exception when sandboxed code is in the chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
     for example the arguments of a call that the %Program makes through the host, that it delivers with
     @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
     code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
