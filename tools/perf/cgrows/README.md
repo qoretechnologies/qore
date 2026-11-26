@@ -163,6 +163,7 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-gen.q` | `gr` `gc` `cr` `cc` `gn` `gl` `gh` `gk` `gm` `gx` `gv` | generic code at runtime (qore#6126): generic locals, closures, calls, classes, casts, with concrete controls (`cr`, `cc`) |
 | `bench-weak-assignment.q` | `member` `hash` `list` `variable` | a weak assignment (`:=`) from a public member, a hash key, a list element and a local (qore#7301) |
 | `bench-ref.q` | `rf` `ru` `rw` `rh` `rm` `rs` | calls with reference parameters (qore#7271): a function with a `reference<int>` parameter, an untyped `reference` parameter, one that assigns through its `reference<int>` parameter, one with a `reference<hash<auto>>` parameter, a method and a static method with a `reference<int>` parameter |
+| `bench-floatacc.q` | `fl` `fi` `fd` `fs` `fr` | `+=` on a `float` local (qore#5578) with a `float` local, an `int`, a `float` function's call and a `float` static method's call as operand, which native code adds natively, and a `code<float()>` call reference's result, which takes the lvalue path |
 
 A new bench script follows the same form, which `examples/test/runner/test_cgrows_tool.py` checks: its first line is
 `%modern`; it defines `int sub f(int a)` (which the dead statements call); each loop function starts with

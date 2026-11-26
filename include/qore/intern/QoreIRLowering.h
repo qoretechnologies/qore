@@ -619,6 +619,16 @@ private:
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
+    /** Returns true if the value of the right operand of += on a float local is a float, an int or a bool whatever
+        the code executed (see design/qore-ir-spec.md, "Native float accumulation"): QoreValue::getAsFloat() then
+        converts it exactly as the AST operator converts the operand it adds (qore_plus_equals_float_operand(); the
+        two differ only for a char, which such a value never is), so a float add (AddAssignFloat) gives the AST
+        result.  The proof is the facts that the builder gave the lowered value (exactly float, int or bool, assigned
+        and never NOTHING: a constant, a typed arithmetic, comparison or conversion result, the read of a variable of
+        that type), or the call of a user function or static method of the same Program whose variant is fixed at
+        parse time and returns float, which the variant enforces on its return in every execution mode.
+    */
+    bool isExactFloatAddOperand(const QoreValue& expr, QoreIRValue value) const;
     bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;

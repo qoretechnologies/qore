@@ -9684,6 +9684,52 @@ bool QoreIRLowering::isNeverNothingFloat(const QoreParseAnalysis& analysis) cons
         && QoreTypeInfo::isType(analysis.known_type, NT_FLOAT);
 }
 
+// documented in QoreIRLowering.h
+bool QoreIRLowering::isExactFloatAddOperand(const QoreValue& expr, QoreIRValue value) const {
+    const QoreIRFunction* func = builder.getFunction();
+    assert(func);
+    if (const QoreIRValueFacts* facts = func->getValueFacts(value)) {
+        // exactly these types: a soft type, an or-nothing type or an enum type can hold another value
+        if ((facts->type_info == floatTypeInfo || facts->type_info == bigIntTypeInfo
+                    || facts->type_info == boolTypeInfo)
+                && facts->assigned_state == QoreIRAssignedState::Assigned && facts->never_nothing) {
+            return true;
+        }
+    }
+    if (!parse_context || !expr.hasNode()) {
+        return false;
+    }
+    // the variant that the call executes and its program; a call whose variant is chosen at runtime, a generic call
+    // and a call to a function of another program are not admitted
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+        const QoreFunction* qf = call->getFunction();
+        if (!qf || call->hasExplicitTypeArgs() || (call->getProgram() && call->getProgram() != parse_context->pgm)) {
+            return false;
+        }
+        variant = call->getVariant();
+        if (!variant || overloadedDirectCallNeedsRuntimeDispatch(qf, variant, call->getParseArgs(),
+                call->getArgs())) {
+            return false;
+        }
+    } else if (auto* call = qore_get_static_method_call_node(node)) {
+        const QoreMethod* method = call->getMethod();
+        if (!method || call->hasExplicitTypeArgs() || call->getReceiverTypeInfo()) {
+            return false;
+        }
+        variant = call->getVariant();
+        if (!variant || overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
+                variant, call->getParseArgs(), call->getArgs())) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    return uvb && uvb->pgm == parse_context->pgm && variant->getReturnTypeInfo() == floatTypeInfo;
+}
+
 bool QoreIRLowering::ensureBuilderContext(std::string& error) const {
     if (!builder.getFunction()) {
         error = "IR builder has no active function";
@@ -11463,6 +11509,14 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // a float local (exactly float: not *float, softfloat, an enum or a union) of this frame that no delete or
+    // remove leaves without a value: += adds to it natively (AddAssignFloat) when its right operand is proven to be a
+    // float, an int or a bool, see isExactFloatAddOperand() and design/qore-ir-spec.md, "Native float accumulation";
+    // any other float lvalue and operand take the lvalue path below
+    const VarRefNode* float_local = (!force_int && left_var && left_var->getTypeInfo() == floatTypeInfo
+            && isLocalNonClosureVar(left_var) && !left_var->ref.id->everDeleted()
+            && !QORE_ENV_IS_SET("QORE_DISABLE_IR_FLOAT_LOCAL_ADD"))
+        ? left_var : nullptr;
     // Force lvalue path for types where load-compute-store produces wrong types or O(n) copies:
     // - Objects: object + hash = hash (not object), needs in-place member merge
     // - Lists: list + element copies the entire list, making loops O(n^2)
@@ -11552,6 +11606,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    // the operand is lowered first, as the AST operator evaluates it before it reads the lvalue
+    if (float_local && isExactFloatAddOperand(right_expr, right)) {
+        left_var = float_local;
+    }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
@@ -11564,6 +11622,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (left_var && op->needsReturnValue() && assignmentValueMayBeReference(left_var, right_expr)) {
         left_var = nullptr;
     }
+    // the float local and its proven operand remain: the sum is the float add of the local's value (its type's
+    // default value 0.0 if it has none, as below) and the operand converted with getAsFloat()
+    const bool native_float_add = float_local && left_var == float_local;
     if (!left_var) {
         // Prefer true lvalue semantics for member/subscript compound assignments.
         // The hash/list load-compute-store fast paths cannot preserve hashdecl
@@ -11684,7 +11745,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AddAssignInt;
-    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+    } else if (native_float_add
+        || (isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
             && getAnalysis(right_expr, right_analysis)
             && isNeverNothingFloat(left_analysis)
