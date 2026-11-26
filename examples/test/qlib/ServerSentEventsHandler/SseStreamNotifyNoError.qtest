@@ -1,0 +1,392 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SSE over HTTP/2 and HTTP/3 client connections closed by the client and by the server
+
+/*  SseStreamNotifyNoError.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Reading a server-sent event stream over an HTTP/2 or HTTP/3 client connection of a connection manager reports
+    no error when the connection ends with the stream open (qoretechnologies/qore#7695): the poll operation of such a
+    connection has no stream listeners, so the controller must not dispatch onStreamData() to it for the streams
+    that the end of the connection fails.  The controller's logger records every error that a callback of the
+    controller raises; the test waits for the callbacks to be done before it checks the record.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+%exec-class SseStreamNotifyNoErrorTest
+
+#! The maximum time for a step of the test
+const SseTestTimeout = 30s;
+
+#! An SSE handler that records its connections so that the test can push events to them
+class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! Signalled when a connection registers
+        Counter registered(1);
+
+        #! The most recently registered connection
+        *ServerSentEventHandler::ServerSentEventConnection last_conn;
+    }
+
+    # "data": "none": the payloads are strings already
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        last_conn = conn;
+        registered.dec();
+    }
+}
+
+#! A log appender that records the messages logged (its logger logs only errors)
+class ErrorRecordingAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex mtx();
+        list<string> errors = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("sse-notify-errors", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type != LoggerAppender::EVENT_LOG) {
+            return;
+        }
+        string msg = params.toString();
+        AutoLock al(mtx);
+        errors += msg;
+    }
+
+    #! Returns the messages recorded and clears the record
+    list<string> takeErrors() {
+        AutoLock al(mtx);
+        list<string> rv = errors;
+        errors = ();
+        return rv;
+    }
+}
+
+class SseStreamNotifyNoErrorTest inherits QUnit::Test {
+    private {
+        ErrorRecordingAppender appender();
+        Logger::Logger controller_logger;
+
+        # a self-signed certificate and key for TLS on the loopback interface
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("SseStreamNotifyNoErrorTest", "1.0", ARGV) {
+        addTestCase("H2 SSE stream open when the client closes its connection", \testHttp2ClientClose());
+        addTestCase("H2 SSE stream open when the server stops", \testHttp2ServerStop());
+        addTestCase("H3 SSE stream open when the client closes its connection", \testHttp3ClientClose());
+        addTestCase("H3 SSE stream open when the server stops", \testHttp3ServerStop());
+        addTestCase("HTTPClient H2 SSE stream open when the client closes its connection",
+            \testHTTPClientHttp2ClientClose());
+        addTestCase("HTTPClient H2 SSE stream open when the server stops", \testHTTPClientHttp2ServerStop());
+        addTestCase("HTTPClient H3 SSE stream open when the client closes its connection",
+            \testHTTPClientHttp3ClientClose());
+        addTestCase("HTTPClient H3 SSE stream open when the server stops", \testHTTPClientHttp3ServerStop());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        controller_logger = new Logger::Logger("sse-notify-controller", LoggerLevel::getLevelError());
+        controller_logger.addAppender(appender);
+        AsyncIoController::setLogger(controller_logger);
+    }
+
+    globalTearDown() {
+        AsyncIoController::setLogger(NOTHING);
+    }
+
+    testHttp2ClientClose() {
+        runCase("H2", "h2", False);
+    }
+
+    testHttp2ServerStop() {
+        runCase("H2", "h2", True);
+    }
+
+    testHttp3ClientClose() {
+        runCase("H3", "h3", False);
+    }
+
+    testHttp3ServerStop() {
+        runCase("H3", "h3", True);
+    }
+
+    testHTTPClientHttp2ClientClose() {
+        runHTTPClientCase("HTTPClient H2", "h2", False);
+    }
+
+    testHTTPClientHttp2ServerStop() {
+        runHTTPClientCase("HTTPClient H2", "h2", True);
+    }
+
+    testHTTPClientHttp3ClientClose() {
+        runHTTPClientCase("HTTPClient H3", "h3", False);
+    }
+
+    testHTTPClientHttp3ServerStop() {
+        runHTTPClientCase("HTTPClient H3", "h3", True);
+    }
+
+    #! Starts a server with an SSE handler and a TLS listener for the protocol given
+    /** The server's logger is the test's logger: a running server sets its logger on the controller, which logs the
+        errors of its callbacks with it
+
+        @param handler the SSE handler
+        @param proto \c "h2" or \c "h3"
+        @param port the port of the listener
+
+        @return the server
+    */
+    private HttpServer::HttpServer startServer(RecordingSseHandler handler, string proto, reference<int> port) {
+        HttpServer::HttpServer server(<HttpServerOptionInfo>{
+            "logger": controller_logger,
+            "debug": True,
+        });
+        try {
+            server.setDefaultHandler("sse", handler);
+            hash<HttpListenerOptionInfo> listener_opts = <HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            };
+            if (proto == "h2") {
+                listener_opts.http_version = "2.0";
+            } else {
+                listener_opts.enable_h3 = True;
+            }
+            port = server.addListener(listener_opts).port;
+            server.waitForAsyncIo();
+        } catch (hash<ExceptionInfo> ex) {
+            server.stop();
+            delete server;
+            rethrow;
+        }
+        return server;
+    }
+
+    #! Checks that no callback of the controller reported an error
+    /** The notifications of a connection's failed streams are dispatched when the step of the connection that failed
+        them is done; the callbacks queued until then have run when flushCallbacks() returns
+    */
+    private checkNoCallbackError(string label) {
+        AsyncIoController::flushCallbacks();
+        assertEq((), appender.takeErrors(), label);
+    }
+
+    #! Reads an event of an SSE stream with HTTPClient, ends the connection with the stream open and checks the
+    #! controller's errors
+    /** HTTPClient's HTTP/2 and HTTP/3 connections are poll operations without stream listeners
+        (\c Http2ClientPollOperationBase, \c Http3ClientPollOperationBase)
+
+        @param label the label of the assertions
+        @param proto \c "h2" or \c "h3"
+        @param server_stop if @ref True, the server ends the connection; otherwise the client closes it
+    */
+    private runHTTPClientCase(string label, string proto, bool server_stop) {
+        RecordingSseHandler handler();
+        int port;
+        *HttpServer::HttpServer server = startServer(handler, proto, \port);
+        on_exit {
+            if (server) {
+                server.stop();
+                delete server;
+            }
+        }
+
+        *HTTPClient hc = new HTTPClient({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "http_version": proto == "h2" ? "2.0" : "3.0",
+            "error_passthru": True,
+        });
+        on_exit {
+            if (hc) {
+                delete hc;
+            }
+        }
+        hash<auto> info;
+        hash<auto> resp = hc.sendAndStream("GET", "/", NOTHING, {"Accept": "text/event-stream"}, \info);
+        assertEq(200, resp.status_code, label + ": stream status");
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout), label + ": the connection registers");
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "one",
+            "data": "hello",
+        });
+        *hash<SseMessageInfo> evt;
+        # comment events (the readiness of the stream) are skipped
+        while (True) {
+            evt = hc.readServerSentEvent(SseTestTimeout);
+            if (!evt || exists evt.event || exists evt.data) {
+                break;
+            }
+        }
+        assertEq("one", evt.event, label + ": event name");
+        assertEq("hello", evt.data, label + ": event data");
+
+        # the connection ends with the stream open
+        if (server_stop) {
+            server.stop();
+            delete server;
+            *hash<SseMessageInfo> last;
+            try {
+                last = hc.readServerSentEvent(SseTestTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the failure of the stream is raised to its reader
+                assertRegex("^HTTP[23]-", ex.err, label + ": stream failure");
+            }
+            assertNothing(last, label + ": no event after the end of the connection");
+            # checked while the client still exists: the close of a client discards the callbacks queued for it
+            checkNoCallbackError(label + ": no callback error after the server stops");
+        }
+        delete hc;
+        checkNoCallbackError(label + ": no callback error after the client is deleted");
+    }
+
+    #! Reads an event of an SSE stream, ends the connection with the stream open and checks the controller's errors
+    /** The connections of a connection manager are poll operations with stream listeners
+        (\c HttpClientIo::Http2ClientPollOperation, \c HttpClientIo::Http3ClientPollOperation)
+
+        @param label the label of the assertions
+        @param proto the protocol of the connection manager
+        @param server_stop if @ref True, the server ends the connection; otherwise the client closes it
+    */
+    private runCase(string label, string proto, bool server_stop) {
+        RecordingSseHandler handler();
+        int port;
+        *HttpServer::HttpServer server = startServer(handler, proto, \port);
+        on_exit {
+            if (server) {
+                server.stop();
+                delete server;
+            }
+        }
+
+        *HttpClientIo::HttpClientConnectionManager mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": proto,
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit {
+            if (mgr) {
+                delete mgr;
+            }
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("https://127.0.0.1:%d/", port), "GET", "/", {"Accept": "text/event-stream"});
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout), label + ": the connection registers");
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "one",
+            "data": "hello",
+        });
+        *hash<SseMessageInfo> evt = reader.readEvent(SseTestTimeout);
+        assertEq("one", evt.event, label + ": event name");
+        assertEq("hello", evt.data, label + ": event data");
+
+        # the connection ends with the stream open
+        if (server_stop) {
+            server.stop();
+            delete server;
+            # the stream ends for the client without another event: the end of the connection fails it
+            *hash<SseMessageInfo> last;
+            try {
+                last = reader.readEvent(SseTestTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the failure of the stream is raised to its reader
+                assertEq("SSE-STREAM-ERROR", ex.err, label + ": stream failure");
+            }
+            assertNothing(last, label + ": no event after the end of the connection");
+            checkNoCallbackError(label + ": no callback error after the server stops");
+        }
+        delete mgr;
+        checkNoCallbackError(label + ": no callback error after the client is deleted");
+    }
+}

@@ -587,7 +587,8 @@ private:
 
     //! Stream IDs registered for onStreamData() notifications
     /** Populated by registerStreamNotify(); checked in handleReading() to signal
-        data_ready_streams after ChannelAction dispatch.
+        data_ready_streams after ChannelAction dispatch, and in notifyPendingStreams(), which removes the streams that
+        the failure of the connection notifies (issue #7695).  Guarded by stream_lock.
     */
     std::unordered_set<int64_t> notify_streams;
 

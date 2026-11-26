@@ -681,7 +681,9 @@ authenticate();
       process-wide type cache of \c DataProvider, the default post-processing code of the connections of
       \c ConnectionProvider (\c AbstractConnection::getPostProcessing()), the locale data fallbacks of the \c i18n
       module, which record the locales of every caller (\c SANDBOX-REGISTRATION-ERROR), or the number of shared
-      clients of \c VoyageRestClient, whose clients it shares only with the code of its own %Program
+      clients of \c VoyageRestClient, whose clients it shares only with the code of its own %Program; the rate
+      limiters of \c EmbedderRateLimiter::getShared() are likewise shared only with the code of the same %Program
+      (qore#7686)
     - an object that a builtin constant of the library or of a binary module holds, such as
       @ref Qore::stdout "stdout", the type constants of the \c reflection module and the level objects of the
       \c logger_bin module (which \c LoggerLevel::getLevel() also returns), and the process-wide
@@ -836,7 +838,15 @@ authenticate();
     The REST and AsyncAPI schemas of the \c Swagger, \c OpenApi3 and \c AsyncApi modules and their schema objects
     are marked in this way when trusted code creates them, so that a tenant cannot change a schema that a module
     shares, such as the schema of a REST application, for every other tenant; a tenant can change the schemas that it
-    creates itself.
+    creates itself.  The other objects that the modules keep for every %Program are protected in the same way:
+    - the schemas of the process-wide HL7 v2 schema registry of the \c Hl7v2Util module, marked when trusted code
+      registers them or the registry caches them (qore#7683)
+    - the release schemas of the process-wide registry of the \c EdifactUtil module, marked when trusted code places
+      them in the registry (qore#7685)
+    - the process-wide async I/O controller wrapper of the \c AsyncSocketIo module, marked when the module creates it;
+      it has no logger for code that is sandboxed or acts for sandboxed code (qore#7666)
+    - the entries that the process-wide type cache of the \c DataProvider module creates for the fields of a
+      registered type, which sandboxed code cannot change, as it cannot change the cache's other entries (qore#7674)
 
     An object held in a member of a shared object is a separate object: it is protected only if it is marked itself
     (the schema objects of a shared schema are).  The mark is not copied with the object: a copy is marked only if its
