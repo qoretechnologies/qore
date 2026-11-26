@@ -211,7 +211,7 @@ public class TabularSheetProfileDataType inherits HashDataType {
             "hidden": {"display_name": "Hidden", "type": BoolType, "desc": "`True` if the sheet is hidden"},
             "row_count": {"display_name": "Row Count", "type": IntType, "desc": "The number of rows in the sheet"},
             "header_row": {"display_name": "Header Row", "type": IntOrNothingType,
-                "desc": "The 1-based header row, if one was found"},
+                "desc": "The 1-based header row: the one the caller gave, else the one found, if any"},
             "title_rows": {"display_name": "Title Rows", "type": AutoListType,
                 "desc": "The 1-based rows above the header that hold titles or banners"},
             "data_region": {"display_name": "Data Region", "type": AutoHashOrNothingType,

@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Das Anführungszeichen für Felder (Standard: `\"`); Felder werden damit gelesen, und Trennzeichen in Feldern in Anführungszeichen werden bei der Erkennung des Trennzeichens nicht gezählt"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Header-Zeile"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Die Zeile mit den Spaltennamen oder 0 für keine"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "Die 1-basierte Zeile mit den Spaltennamen oder `0`, wenn die Daten keine haben; ohne Angabe wird die Header-Zeile aus den Daten ermittelt. Verwenden Sie sie, wenn die Person, die die Datei kennt, sagt, wo die Spaltennamen stehen"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Maximale Zeilen"

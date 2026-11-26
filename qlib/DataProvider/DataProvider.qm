@@ -1833,6 +1833,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       from records that do not all have the same fields with columns of different lengths, misaligning the values
       of later records; a field that a record lacks is now @ref nothing in that record's row
       (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
+    - the spreadsheet \c profile actions and @ref DataProvider::TabularProfiler::profile() "TabularProfiler::profile()"
+      take a \c header_row option: the 1-based row holding the column names, or \c 0 if the sheets have none, for when
+      the person who knows the file says where the column names are
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and

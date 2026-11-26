@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "欄位引號字元（預設：`\"`）；欄位以此字元讀取，偵測分隔符號時不計算加引號欄位中的分隔符號"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標頭列"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "包含欄位名稱的列，若沒有則為 0"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "包含欄位名稱的列（從 1 起算），若資料沒有則為 `0`；未指定時，會從資料判斷標頭列。當熟悉檔案的人指出欄位名稱所在位置時使用"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "最大列數"

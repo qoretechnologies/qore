@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Znak cudzysłowu pól (domyślnie: `\"`); pola są odczytywane z jego użyciem, a separatory w polach ujętych w cudzysłowy nie są liczone przy wykrywaniu separatora"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Wiersz nagłówka"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Wiersz z nazwami kolumn lub 0, jeśli go nie ma"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "Wiersz z nazwami kolumn numerowany od 1 lub `0`, jeśli dane go nie mają; jeśli nie jest podany, wiersz nagłówka jest ustalany na podstawie danych. Użyj go, gdy osoba znająca plik wskaże, gdzie są nazwy kolumn"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Maksymalna liczba wierszy"

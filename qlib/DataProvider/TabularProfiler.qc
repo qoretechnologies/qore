@@ -116,6 +116,19 @@ public hashdecl TabularProfileOptions {
 
     #! The number of leading rows searched for the header row
     int header_search_rows = 20;
+
+    #! The 1-based row holding the column names, or 0 if the sheets have none
+    /** When not set, the header row of each sheet is found from its content: the first of the leading
+        @c header_search_rows rows that holds labels and has data under it (when every leading row holds labels, the
+        first label row as wide as the widest row); when set, it is used for every sheet,
+        as the user who knows the file says it: the rows with content above it are title rows, the data starts on
+        the next row, and the columns are named from it; a row below the last row with content gives no data region
+        and no column (the rows with content above it are still title rows); with 0, every row from the first row
+        with content is data, and no @c no_header_row finding is reported
+
+        @since %DataProvider 3.13
+    */
+    *int header_row;
 }
 
 #! A finding about a sheet: a structural feature or a problem that affects how the data is read
@@ -251,7 +264,7 @@ public hashdecl TabularSheetProfile {
     #! The number of rows in the sheet
     int row_count = 0;
 
-    #! The 1-based header row, if one was found
+    #! The 1-based header row: the one given in the @c header_row profile option, else the one found
     *int header_row;
 
     #! The 1-based rows above the header that hold titles or banners
@@ -554,9 +567,15 @@ public class TabularProfiler {
         @param opts profile options
 
         @return the profile
+
+        @throw TABULAR-PROFILE-ERROR the @c header_row option is negative
     */
     static hash<TabularWorkbookProfile> profile(hash<TabularWorkbookGrid> grid, *hash<TabularProfileOptions> opts) {
         hash<TabularProfileOptions> options = opts ?? <TabularProfileOptions>{};
+        if (options.header_row < 0) {
+            throw "TABULAR-PROFILE-ERROR", sprintf("header_row must be a 1-based row number or 0 for none; got %d",
+                options.header_row);
+        }
         hash<TabularWorkbookProfile> rv({
             "format": grid.format,
             "named_ranges": grid.named_ranges,
@@ -956,12 +975,23 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             return rv;
         }
 
-        *int header = findHeaderRow(types, last_row, options.header_search_rows);
+        # the header row the caller gave (0: none), else the one found
+        *int header;
+        if (exists options.header_row) {
+            if (options.header_row > 0) {
+                header = options.header_row - 1;
+            }
+        } else {
+            header = findHeaderRow(types, last_row, options.header_search_rows);
+        }
         int first_data;
         if (exists header) {
             rv.header_row = header + 1;
             first_data = header + 1;
-            for (int r = 0; r < header; ++r) {
+            # the rows with content above the header; a header row the caller gave below every row with content
+            # has every row with content above it
+            int title_end = min(header, last_row + 1);
+            for (int r = 0; r < title_end; ++r) {
                 if (nonEmptyCount(types[r])) {
                     rv.title_rows += r + 1;
                 }
@@ -972,8 +1002,15 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
                     "detail": rv.title_rows,
                 };
             }
+            # below every row with content: no data and no column
+            if (header > last_row) {
+                return rv;
+            }
         } else {
-            rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            # the caller said the sheet has none
+            if (!exists options.header_row) {
+                rv.findings += <TabularProfileFinding>{"code": "no_header_row"};
+            }
             first_data = 0;
             while (!nonEmptyCount(types[first_data])) {
                 ++first_data;

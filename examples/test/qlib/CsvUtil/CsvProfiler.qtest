@@ -27,6 +27,7 @@ public class CsvProfilerTest inherits QUnit::Test {
         addTestCase("profile action", \action());
         addTestCase("invalid requests", \invalidRequests());
         addTestCase("quote character", \quoteCharacter());
+        addTestCase("header row the caller gives", \headerRow());
         set_return_value(main());
     }
 
@@ -212,6 +213,21 @@ public class CsvProfilerTest inherits QUnit::Test {
         assertThrows("CSV-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
         assertThrows("CSV-PROFILE-ERROR", "exactly one", \prov.doRequest(), {"data": "a", "path": "x.csv"});
         assertThrows("CSV-PROFILE-ERROR", "max_rows", \CsvProfiler::readGrid(), (binary("a\n"), {"max_rows": 0}));
+    }
+
+    #! the header row the person who knows the file gives, or none, instead of the one found
+    private headerRow() {
+        CsvProfileDataProvider prov();
+        binary data = binary("Stock export\nSKU;Qty\nA;5\nB;6\n");
+        assertEq(2, prov.doRequest({"data": data}).sheets[0].header_row, "found");
+        hash<auto> profile = prov.doRequest({"data": data, "header_row": 3});
+        assertEq(3, profile.sheets[0].header_row);
+        assertEq(("A", "5"), (map $1.header, profile.sheets[0].columns));
+        profile = prov.doRequest({"data": data, "header_row": 0});
+        assertNothing(profile.sheets[0].header_row);
+        assertEq(1, profile.sheets[0].data_region.first_row);
+        assertTrue(prov.getRequestType().getFields().hasKey("header_row"));
+        assertThrows("TABULAR-PROFILE-ERROR", "header_row", \prov.doRequest(), {"data": data, "header_row": -1});
     }
 
     private hash<TabularTextFormat> sniff(string data) {

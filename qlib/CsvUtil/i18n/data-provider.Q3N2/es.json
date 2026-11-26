@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "El carácter de comillas de los campos (predeterminado: `\"`); los campos se leen con él, y los separadores dentro de campos entre comillas no se cuentan al detectar el separador"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Fila de encabezado"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "La fila con los nombres de las columnas, o 0 si no hay ninguna"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "La fila (contada desde 1) con los nombres de las columnas, o `0` si los datos no tienen ninguna; si no se indica, la fila de encabezado se determina a partir de los datos. Úsela cuando la persona que conoce el archivo indique dónde están los nombres de las columnas"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Número máximo de filas"
