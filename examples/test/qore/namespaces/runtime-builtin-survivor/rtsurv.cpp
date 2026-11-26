@@ -62,6 +62,23 @@ QoreValue rtsurv_add(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xs
     return QoreValue();
 }
 
+// adds a class one at a time (QoreNamespace::addSystemClass()) to a namespace that the calling Program already has;
+// a method of the class names the class of the module's namespace (qore#7649)
+QoreValue rtsurv_add_one(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xsink) {
+    QoreStringValueHelper name(get_hard_value_param(args, 0));
+    QoreNamespace* ns = getProgram()->findNamespace(*name);
+    if (!ns) {
+        xsink->raiseException("RTSURV-ERROR", "the Program has no namespace '%s'", name->c_str());
+        return QoreValue();
+    }
+    std::string path = std::string("::") + name->c_str() + "::RtSurvOne";
+    QoreClass* qc = new QoreClass("RtSurvOne", path.c_str());
+    qc->addMethod("take", surv_take, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        rtsurv_static->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "s");
+    ns->addSystemClass(qc);
+    return QoreValue();
+}
+
 QoreValue rtsurv_live(const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
     return static_cast<int64>(live_data.load());
 }
@@ -71,6 +88,8 @@ void init(QoreModuleInitContext&, ExceptionSink&) {
     rtsurv_static = new QoreClass("RtSurvStatic", "::RtSurv::RtSurvStatic");
     rtsurv_ns->addSystemClass(rtsurv_static);
     rtsurv_ns->addBuiltinVariant("rtsurv_add", rtsurv_add, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    rtsurv_ns->addBuiltinVariant("rtsurv_add_one", rtsurv_add_one, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     rtsurv_ns->addBuiltinVariant("rtsurv_live", rtsurv_live, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
 }

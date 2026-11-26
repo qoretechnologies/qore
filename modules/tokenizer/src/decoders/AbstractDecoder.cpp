@@ -20,6 +20,18 @@ using namespace QoreTokenizer;
 
 namespace QoreTokenizer {
 
+std::string AbstractDecoder::decode(std::vector<std::string> tokens) const {
+    auto parts = decodeChain(std::move(tokens));
+    if (parts.size() == 1) {
+        return std::move(parts.front());
+    }
+    std::string text;
+    for (const auto& part : parts) {
+        text += part;
+    }
+    return text;
+}
+
 std::unique_ptr<AbstractDecoder> AbstractDecoder::fromConfig(
         const QoreHashNode* config, ExceptionSink* xsink) {
     if (!config) {
@@ -43,15 +55,16 @@ std::unique_ptr<AbstractDecoder> AbstractDecoder::fromConfig(
     } else if (type == "Metaspace") {
         return std::make_unique<MetaspaceDecoder>(config, xsink);
     } else if (type == "BPEDecoder") {
-        // BPEDecoder is a sequence of Replace + ByteFallback + Fuse decoders,
-        // matching the HuggingFace tokenizers behavior for SentencePiece BPE
-        // models: first replace the SentencePiece space marker with a space,
-        // then convert <0xHH> byte-fallback tokens back to bytes, and finally
-        // fuse all token fragments into a single string.
+        if (config->existsKey("suffix")) {
+            return std::make_unique<BPESuffixDecoder>(configStringKey(config, "suffix", xsink));
+        }
+        // Older Qore configs used BPEDecoder as an alias for an optional Replace followed by byte fallback.
         std::vector<std::unique_ptr<AbstractDecoder>> steps;
-        steps.push_back(std::make_unique<ReplaceDecoder>(config, xsink));
-        if (*xsink) {
-            return nullptr;
+        if (config->existsKey("pattern")) {
+            steps.push_back(std::make_unique<ReplaceDecoder>(config, xsink));
+            if (*xsink) {
+                return nullptr;
+            }
         }
         steps.push_back(std::make_unique<ByteFallbackDecoder>(config, xsink));
         if (*xsink) {

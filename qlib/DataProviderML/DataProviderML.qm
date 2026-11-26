@@ -1340,7 +1340,7 @@ module DataProviderML {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreExtractionProcessor::ConstructorOptions{
-                    "schema_template", "llm_url", "llm_model", "llm_api_key",
+                    "schema_template", "custom_schema", "llm_url", "llm_model", "llm_api_key",
                     "temperature", "max_retries",
                 }, {
                     "loc": "constructor",

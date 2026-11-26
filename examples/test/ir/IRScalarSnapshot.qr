@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl NumericState {
+    int value;
+    float decimal;
+}
+
+int sub fixedList(int value) {
+    list<int> values = (value, 13);
+    return values[0];
+}
+int sub fixedHash(int value) {
+    hash<string, int> values = {"value": value, "other": 13};
+    return values.value;
+}
+int sub fixedDecl(int value) {
+    NumericState values(("value": value, "decimal": 1.5));
+    return values.value;
+}
+int sub nestedList(int value) {
+    list<list<int>> values = ((value, 13), (17, 19));
+    return values[0][0];
+}
+int sub changedSource(int value) {
+    list<int> values = (value, 13);
+    value = 7;
+    return values[0];
+}
+int sub branchList(int value, bool first) {
+    list<int> values = (value, 13);
+    if (first) {
+        return values[0];
+    }
+    return values[0] ^ values[1] ^ 13;
+}
+int sub mutationList(int value, bool first) {
+    list<int> values = (value, 13);
+    if (first) {
+        values[0] ^= 1;
+    } else {
+        values[0] = value ^ 1;
+    }
+    values[0] ^= 1;
+    return values[0];
+}
+int sub loopList(int value, int rounds) {
+    list<int> values = (value, 13);
+    for (int i = 0; i < rounds; ++i) {
+        values[0] ^= 1;
+    }
+    return values[0];
+}
+int sub loopConstruct(int value) {
+    int result = 0;
+    for (int i = 0; i < 17; ++i) {
+        list<int> values = (value ^ i, 13);
+        result ^= values[0];
+    }
+    return result;
+}
+float sub fixedFloat(float value) {
+    list<float> values = (value, 1.5);
+    return values[0];
+}
+float sub branchFloat(float value, bool first) {
+    list<float> values = (value, 1.5);
+    if (first) {
+        return values[0];
+    }
+    return values[0];
+}
+int sub caughtList(int value) {
+    try {
+        list<int> values = (value, 13);
+        if (values[0] == value) {
+            throw "EXPECTED", "snapshot unwind";
+        }
+        return 0;
+    } catch (hash<auto> ex) {
+        if (ex.err != "EXPECTED") {
+            rethrow;
+        }
+    }
+    return value;
+}
+sub serializedSnapshot() {
+    # The closure created by a deferred AOT scope handler executes deserialized IR.
+    on_exit defer_thread_cancel(nothing sub() {
+        list<int> values = (-9223372036854775807 - 1, 13);
+        equal(-9223372036854775807 - 1, values[0]);
+    });
+}
+sub equal(int expected, int actual) {
+    if (expected != actual) {
+        throw "MISMATCH", sprintf("expected %d, got %d", expected, actual);
+    }
+}
+foreach int value in ((-9223372036854775807 - 1, -140737488355329, -140737488355328,
+        -1, 0, 1, 140737488355327, 140737488355328, 9223372036854775807)) {
+    equal(value, fixedList(value));
+    equal(value, fixedHash(value));
+    equal(value, fixedDecl(value));
+    equal(value, nestedList(value));
+    equal(value, changedSource(value));
+    equal(value, branchList(value, True));
+    equal(value, branchList(value, False));
+    equal(value, mutationList(value, True));
+    equal(value, mutationList(value, False));
+    equal(value, loopList(value, 1000));
+    equal(value ^ 1, loopList(value, 1001));
+    equal(value ^ 16, loopConstruct(value));
+    equal(value, caughtList(value));
+}
+foreach float value in ((-1e200, -2.2471164185778949e307, -4.4942328371557898e307,
+        -0.0, 0.0, 1.5, 1e200, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach float actual in ((fixedFloat(value), branchFloat(value, True), branchFloat(value, False))) {
+        if (value.nanp() ? !actual.nanp() : actual !== value) {
+            throw "MISMATCH", "float snapshot";
+        }
+    }
+}
+serializedSnapshot();
+printf("scalar snapshot checks passed\n");

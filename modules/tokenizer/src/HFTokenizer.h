@@ -296,11 +296,14 @@ private:
     //! Internal: tokenize a single pre-token through the model
     std::vector<int> tokenizePreToken(const std::string& pre_token) const;
 
+    //! Decode tokens and translate component errors to Qore exceptions
+    QoreStringNode* decodeTokens(std::vector<std::string> tokens, ExceptionSink* xsink) const;
+
     //! Internal: encode a text segment through normalize + pre-tokenize + model
     InternalEncoding encodeSegment(const std::string& text) const;
 
     //! Internal: encode text with added token splitting
-    /** @throw PreTokenizerError the text cannot be pre-tokenized
+    /** @throw TokenizerError a component could not process the text
     */
     InternalEncoding encodeText(const std::string& text) const;
 
