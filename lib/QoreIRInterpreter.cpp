@@ -124,8 +124,11 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
 
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
-    // only the Qore builtins, never a user or module function with the same name
-    if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+    // only the Qore builtins, never a user or module function with the same name; a callee without builtin variants is
+    // rejected here, without the call to the full check: the interpreter checks every call with one argument, and
+    // almost no callee is a builtin (qore#7691)
+    const FunctionEntry* fe = call ? call->getFunctionEntry() : nullptr;
+    if (!fe || !fe->hasBuiltin() || !qore_rt_is_qore_builtin_function(fe)) {
         return false;
     }
     const char* name = call->getName();
