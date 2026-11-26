@@ -15619,6 +15619,89 @@ void QoreIRToLLVM::emitExceptionBranch(llvm::Module& module, llvm::Function* llv
     builder->SetInsertPoint(cont);
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm_func, const QoreIRInstruction* inst,
+        const char* operation) {
+    assert(llvm_func && inst && operation);
+    llvm::Value* label = builder->CreateGlobalString(operation, "loop_cancel_operation");
+    // the full check at every poll, as before: where the exception checks are deferred (an init function) or the
+    // next one is skipped (right after an invoke), whose exception check is not the test of the sink after the call
+    // only; and with QORE_DISABLE_LLVM_INLINE_CANCEL_POLL (for comparisons)
+    if (deferred_exception_checking || skip_next_exception_check
+            || q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
+        auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+        builder->CreateCall(check_cancel, {xsink_arg, label});
+        emitExceptionCheck(module, llvm_func, inst);
+        return;
+    }
+
+    auto* word_type = llvm::Type::getInt32Ty(ctx);
+    if (cancel_poll_func != llvm_func) {
+        // the slots of the function: the addresses of the words that its polls read, which start at a word that is
+        // never 0, so that the first poll of every invocation makes the full check, which resolves them
+        // (qore_rt_check_cancel_poll()); mem2reg makes the slots SSA values in optimized code
+        cancel_poll_func = llvm_func;
+        static constexpr const char* unresolved_name = "qore_cancel_poll_unresolved";
+        llvm::GlobalVariable* unresolved = module.getNamedGlobal(unresolved_name);
+        if (!unresolved) {
+            unresolved = new llvm::GlobalVariable(module, word_type, true, llvm::GlobalValue::PrivateLinkage,
+                llvm::ConstantInt::get(word_type, 0xffffffffu), unresolved_name);
+            unresolved->setAlignment(llvm::Align(4));
+        }
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> eb(&entry, entry.begin());
+        cancel_poll_bits_slot = eb.CreateAlloca(ptr_type, nullptr, "cancel_poll_bits_slot");
+        cancel_poll_count_slot = eb.CreateAlloca(ptr_type, nullptr, "cancel_poll_count_slot");
+        cancel_poll_words = eb.CreateAlloca(llvm::StructType::get(ctx, {ptr_type, ptr_type}), nullptr,
+            "cancel_poll_words");
+        eb.CreateStore(unresolved, cancel_poll_bits_slot);
+        eb.CreateStore(unresolved, cancel_poll_count_slot);
+    }
+
+    // the poll: two relaxed 32-bit atomic loads, as a set word is decided by the full check, which loads the words
+    // again with seq_cst; the call is made only while one of them is not 0 (see "Inline polls of native code" in
+    // design/cooperative-cancellation.md)
+    auto load_word = [&](llvm::AllocaInst* slot, const char* name) {
+        llvm::Value* addr = builder->CreateLoad(ptr_type, slot);
+        llvm::LoadInst* word = builder->CreateLoad(word_type, addr, name);
+        word->setAtomic(llvm::AtomicOrdering::Monotonic);
+        word->setAlignment(llvm::Align(4));
+        return word;
+    };
+    llvm::Value* bits = load_word(cancel_poll_bits_slot, "cancel_bits");
+    llvm::Value* count = load_word(cancel_poll_count_slot, "cancel_interrupts");
+    llvm::Value* set = builder->CreateICmpNE(builder->CreateOr(bits, count), llvm::ConstantInt::get(word_type, 0),
+        "cancel_poll_set");
+    llvm::BasicBlock* poll_block = builder->GetInsertBlock();
+    llvm::BasicBlock* check_block = llvm::BasicBlock::Create(ctx, "cancel_poll_check", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "cancel_poll_done", llvm_func);
+    builder->CreateCondBr(set, check_block, done_block, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
+
+    // the full check, which also gives the words for the following polls of the invocation
+    builder->SetInsertPoint(check_block);
+    auto check_poll = module.getOrInsertFunction("qore_rt_check_cancel_poll",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(check_poll, {xsink_arg, label, cancel_poll_words});
+    auto* words_type = cancel_poll_words->getAllocatedType();
+    builder->CreateStore(builder->CreateLoad(ptr_type, builder->CreateStructGEP(words_type, cancel_poll_words, 0)),
+        cancel_poll_bits_slot);
+    builder->CreateStore(builder->CreateLoad(ptr_type, builder->CreateStructGEP(words_type, cancel_poll_words, 1)),
+        cancel_poll_count_slot);
+    // the test of the sink after the call, as emitExceptionCheck() makes it after the full check of every poll;
+    // where no word is set, the sink is clear as it was before the poll: every instruction that can raise is
+    // followed by its own exception check (the deferred checks of init functions are handled above)
+    llvm::Value* raised = emitPendingExceptionTest();
+    llvm::BasicBlock* check_end = builder->GetInsertBlock();
+    builder->CreateBr(done_block);
+
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* pending = builder->CreatePHI(i1_type, 2, "cancel_poll_raised");
+    pending->addIncoming(builder->getFalse(), poll_block);
+    pending->addIncoming(raised, check_end);
+    emitExceptionBranch(module, llvm_func, inst, false, pending);
+}
+
 static const char* qoreIROpcodeDiagnosticName(QoreIROpcode op) {
     return getOpcodeName(static_cast<int>(op));
 }
@@ -17219,6 +17302,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_valid_epochs.clear();
     local_reload_boundary_cleanup_pending = false;
     error_return_block = nullptr;
+    cancel_poll_func = nullptr;
+    cancel_poll_bits_slot = nullptr;
+    cancel_poll_count_slot = nullptr;
+    cancel_poll_words = nullptr;
     exception_exit_tail = nullptr;
     return_tail = nullptr;
     return_tail_value = nullptr;
@@ -24219,12 +24306,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // a loop statement checks for cancellation at the start of every iteration with its own label, as the
             // AST interpreter does; the loops of expressions such as map do not (see QoreIRBasicBlock::loop_cancel)
             if (br->target && br->target->loop_cancel != QoreIRLoopCancel::None) {
-                auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                llvm::Value* operation = builder->CreateGlobalString(
-                    qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
-                builder->CreateCall(check_cancel, {xsink_arg, operation});
-                emitExceptionCheck(module, llvm_func, inst);
+                emitLoopCancelPoll(module, llvm_func, inst, qore_ir_loop_cancel_operation(br->target->loop_cancel));
             }
             builder->CreateBr(it->second);
             return true;

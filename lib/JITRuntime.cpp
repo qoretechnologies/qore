@@ -460,6 +460,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_set_scanned_type", reinterpret_cast<void*>(&qore_rt_list_set_scanned_type) },
     { "qore_rt_list_append_element", reinterpret_cast<void*>(&qore_rt_list_append_element) },
     { "qore_rt_check_cancel_every", reinterpret_cast<void*>(&qore_rt_check_cancel_every) },
+    { "qore_rt_check_cancel_poll", reinterpret_cast<void*>(&qore_rt_check_cancel_poll) },
     { "qore_rt_check_range_bound", reinterpret_cast<void*>(&qore_rt_check_range_bound) },
     { "qore_rt_list_selector_step", reinterpret_cast<void*>(&qore_rt_list_selector_step) },
     { "qore_rt_iterator_create_selectors", reinterpret_cast<void*>(&qore_rt_iterator_create_selectors) },

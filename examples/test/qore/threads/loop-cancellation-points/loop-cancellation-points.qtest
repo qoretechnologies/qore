@@ -244,6 +244,28 @@ req.push(NOTHING);
                 "foreach-map-select -> THREAD-CANCELLED: foreach loop n=202",
                 "foreach-drop -> THREAD-CANCELLED: drop operator expression n=100",
             ),
+            "poll-points": (
+                "while-0 -> THREAD-CANCELLED: while loop i=0 j=0 at 43 stack [\"while_at:207\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "while-1 -> THREAD-CANCELLED: while loop i=1 j=0 at 43 stack [\"while_at:208\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "while-5 -> THREAD-CANCELLED: while loop i=5 j=0 at 43 stack [\"while_at:209\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "do-while-0 -> THREAD-CANCELLED: do-while loop i=0 j=0 at 55 stack [\"do_while_at:210\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "do-while-1 -> THREAD-CANCELLED: do-while loop i=1 j=0 at 55 stack [\"do_while_at:211\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "do-while-5 -> THREAD-CANCELLED: do-while loop i=5 j=0 at 55 stack [\"do_while_at:212\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "for-0 -> THREAD-CANCELLED: for loop i=0 j=0 at 67 stack [\"for_at:213\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "for-1 -> THREAD-CANCELLED: for loop i=1 j=0 at 67 stack [\"for_at:214\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "for-5 -> THREAD-CANCELLED: for loop i=5 j=0 at 67 stack [\"for_at:215\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "foreach-0 -> THREAD-CANCELLED: foreach loop i=0 j=0 at 79 stack [\"foreach_at:216\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "foreach-1 -> THREAD-CANCELLED: foreach loop i=1 j=0 at 79 stack [\"foreach_at:217\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "foreach-5 -> THREAD-CANCELLED: foreach loop i=5 j=0 at 79 stack [\"foreach_at:218\", \"<anonymous closure>:241\", \"<anonymous closure>:238\"]",
+                "nested -> THREAD-CANCELLED: while loop i=3 j=2 at 92 stack [\"nested:241\", \"<anonymous closure>:238\"]",
+                "nested-outer -> THREAD-CANCELLED: for loop i=3 j=2 at 103 stack [\"nested_outer:241\", \"<anonymous closure>:238\"]",
+                "try -> THREAD-CANCELLED: while loop i=4 j=0 at 118 stack [\"in_try:241\", \"<anonymous closure>:238\"]",
+                "call -> THREAD-CANCELLED: while loop i=3 j=0 at 132 stack [\"callee_loop:143\", \"call_at:241\", \"<anonymous closure>:238\"]",
+                "callee -> THREAD-CANCELLED: for loop i=1 j=2 at 150 stack [\"callee_cancel:161\", \"call_in:241\", \"<anonymous closure>:238\"]",
+                "on-exit -> THREAD-CANCELLED: while loop i=3 j=1 at 168 stack [\"on_exit_loop:241\", \"<anonymous closure>:238\"]",
+                "deferred -> THREAD-CANCELLED: while loop i=2 j=50 at 180 stack [\"deferred:241\", \"<anonymous closure>:238\"]",
+                "cleared -> THREAD-CANCELLED: while loop i=6 j=0 at 195 stack [\"cleared:241\", \"<anonymous closure>:238\"]",
+            ),
             "fast-path": (
                 "cancel-while -> THREAD-CANCELLED: while loop",
                 "interrupt-while -> PROGRAM-INTERRUPTED: while loop",
@@ -316,7 +338,10 @@ req.push(NOTHING);
         addTestCase("a cancellation made pending in a pipeline",
             sub () { scriptTest("pipeline-midcancel", ResultLine); });
         addTestCase("every request reaches the check of a loop, which looks up no sandbox manager without one",
-            sub () { scriptTest("fast-path", ResultLine); });
+            sub () { scriptTest("fast-path", ResultLine, True); });
+        addTestCase("a request is seen at the same iteration with inline polls",
+            sub () { scriptTest("poll-points", ResultLine, True); });
+        addTestCase("inline polls make the full check once per invocation without a request", \inlinePollTest());
         set_return_value(main());
     }
 
@@ -428,8 +453,9 @@ req.push(NOTHING);
     #! that it gives the output of the AST interpreter
     /** @param pattern if given, only the lines of the output that match it are compared: the cancelled threads of a
         script report their unhandled exceptions on stderr, which follows the output
+        @param o0 if True, also as an executable that qcc -O0 compiles, whose code is not optimized
     */
-    private scriptTest(string name, *string pattern) {
+    private scriptTest(string name, *string pattern, *bool o0) {
         string path = get_script_dir() + "/" + name + ".q";
         string expected = (foldl $1 + "\n" + $2, ScriptResults{name}) + "\n";
         code filter = string sub (string out) { return pattern ? results(out, pattern) : out; };
@@ -444,8 +470,49 @@ req.push(NOTHING);
         }
         TmpDir dir("loop-cancellation-points-aot-");
         string exe = dir.path + "/" + name;
-        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, path));
-        assertTrue(is_file(exe), name + ": qcc compiles the script: " + out);
-        assertEq(expected, filter(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), name + ": AOT");
+        foreach string opt in (o0 ? ("-O3", "-O0") : ("-O3",)) {
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, path));
+            assertTrue(is_file(exe), sprintf("%s: qcc %s compiles the script: %s", name, opt, out));
+            assertEq(expected, filter(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), name + ": AOT " + opt);
+            unlink(exe);
+        }
+    }
+
+    #! the number of full cancellation checks that three invocations of a loop of 1000 iterations without a request
+    #! make (poll-points.q), in debug builds, which count them: one per iteration in the interpreters, one per
+    #! invocation in native code, whose other iterations poll inline (see "Inline polls of native code" in
+    #! design/cooperative-cancellation.md); QORE_DISABLE_LLVM_INLINE_CANCEL_POLL gives the full check at every
+    #! iteration in native code as well
+    inlinePollTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library does not count cancellation checks (not a debug build)");
+        }
+        string path = get_script_dir() + "/poll-points.q";
+        # the count of a run: the line "checks=<n>" on stderr
+        code checks = int sub (string out) {
+            *list<*string> l = out =~ x/checks=([0-9]+)/;
+            return l ? l[0].toInt() : -1;
+        };
+        foreach string mode in (("ast", "ir")) {
+            int n = checks(ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path),
+                NativeCheck::None));
+            assertGe(3000, n, mode);
+        }
+        int n = checks(ExecModeHarness::run(sprintf("%s %s --exec-mode=jit %s", env, qore_bin, path), NativeCheck::Jit));
+        assertEq(3, n, "jit");
+        n = checks(ExecModeHarness::run(sprintf("%s QORE_DISABLE_LLVM_INLINE_CANCEL_POLL=1 %s --exec-mode=jit %s", env,
+            qore_bin, path), NativeCheck::Jit));
+        assertGe(3000, n, "jit without inline polls");
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("loop-cancellation-points-aot-");
+        string exe = dir.path + "/poll-points";
+        foreach string opt in (("-O3", "-O0")) {
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, path));
+            assertTrue(is_file(exe), sprintf("qcc %s compiles the script: %s", opt, out));
+            assertEq(3, checks(ExecModeHarness::run_any(sprintf("%s %s", env, exe))), "AOT " + opt);
+            unlink(exe);
+        }
     }
 }
