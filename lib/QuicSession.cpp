@@ -7625,6 +7625,20 @@ void QuicSession::checkInputStreamSendBound() {
     bool waiting = false;
     // the streams whose bodies end, which are cancelled after the iterations
     std::vector<int64_t> ended;
+    // a pumped body whose client acknowledged all its data before its source ended gets no more acknowledgements:
+    // it is done (qore#7653)
+    for (auto i = bound_bodies_.begin(); i != bound_bodies_.end();) {
+        if (!i->second.buffered_size) {
+            auto sit = streaming_body_data_.find(i->first);
+            if (sit != streaming_body_data_.end() && sit->second.eof && sit->second.data.empty()
+                    && sit->second.sent_bufs.empty()) {
+                i = bound_bodies_.erase(i);
+                continue;
+            }
+        }
+        ++i;
+    }
+    updateActiveInputStreams();
     for (auto& [stream_id, b] : bound_bodies_) {
         if (!isBoundBodyWaiting(stream_id, b)) {
             b.bound_progress_ms = 0;

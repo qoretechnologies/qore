@@ -1279,6 +1279,9 @@ nothing Http3ServerPollOperation::startSendStreamingResponse(int status_code,
     accepted and accepts later, until the bounds of a connection are set with
     @ref Qore::Socket::setQuicInputStreamSendBound() "Socket::setQuicInputStreamSendBound()".
 
+    @note Call it before the operation is submitted to an I/O controller, like the options of the constructor: the
+    I/O thread that runs the operation does not synchronize with it
+
     @param min_rate the minimum rate in bytes per second; 0 disables the check
     @param window the window of the minimum rate
     @param stall_timeout the time without progress after which a body is ended; a value that is not positive keeps

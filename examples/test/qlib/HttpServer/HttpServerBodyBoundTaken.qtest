@@ -52,6 +52,8 @@ class BoundBodyHandler inherits AbstractHttpRequestHandler {
         int response_us;
         #! the large body, made in advance (making it in the handler is slow under valgrind)
         binary large_body = binary(strmul("x", LargeBodySize));
+        #! a body far larger than the socket buffers, for \c /huge-buffered, set by the test that uses it
+        *binary huge_body;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -85,6 +87,8 @@ class BoundBodyHandler inherits AbstractHttpRequestHandler {
                     {"Content-Type": "application/octet-stream"});
             case "/healthy-buffered":
                 return makeResponse(200, large_body, {"Content-Type": "application/octet-stream"});
+            case "/huge-buffered":
+                return makeResponse(200, huge_body, {"Content-Type": "application/octet-stream"});
         }
         return makeResponse(200, binary(strmul("x", SmallBodySize)), {"Content-Type": "application/octet-stream"});
     }
@@ -141,6 +145,7 @@ class HttpServerBodyBoundTakenTest inherits QUnit::Test {
         }
         addTestCase("HTTP/2: the connection of a body whose END_STREAM frame is never written is ended",
             \testTailNotWritten());
+        addTestCase("HTTP/2: a client that stops reading a buffered body has it ended", \testStopsReadingBuffered());
         set_return_value(main());
     }
 
@@ -277,11 +282,34 @@ class HttpServerBodyBoundTakenTest inherits QUnit::Test {
         }
         int ms = (clock_get_monotonic_us() - h.response_us) / 1000;
         assertEq(NOTHING, err, "the server ended the connection");
+        assertTrue(r.closed, "the connection was closed");
         assertFalse(r.ended, "the body did not end");
         assertEq(0, r.data_bytes, "no data of the body was written");
         assertGe(900, ms, "after a whole window");
 
         auto size = healthy.get(ClientTimeout);
         assertEq(LargeBodySize, size, "the other connection got its whole body");
+    }
+
+    #! a client that grants the largest windows and then does not read the connection: the RST_STREAM of the body
+    #! waits behind the data in the connection's send buffer, which the server collects no frames into until it is
+    #! written, so the connection is ended after the next window
+    testStopsReadingBuffered() {
+        BoundBodyHandler h();
+        # far larger than the socket buffers
+        h.huge_body = binary(strmul("x", 256 * 1024 * 1024));
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+        RawHttp2Client c(setup.port);
+        on_exit c.close();
+        int stream_id = c.get("/huge-buffered");
+        assertEq("/huge-buffered", h.received.get(30s), "the request was received");
+        # far longer than two windows at the minimum rate, with the largest step
+        usleep(8s);
+        hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
+        assertTrue(r.closed, sprintf("the connection was ended (%d bytes taken, ended: %y)", r.data_bytes, r.ended));
+        assertEq(NOTHING, r.reset_code, "no RST_STREAM was written");
+        assertFalse(r.ended, "the body did not end");
+        assertLt(h.huge_body.size(), r.data_bytes, "the client did not get the whole body");
     }
 }

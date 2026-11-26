@@ -1174,8 +1174,8 @@ int Http2Session::submitRstStream(int32_t stream_id, uint32_t error_code, Except
     if (stream) {
         stream->rst_submitted = true;
     }
-    // a reset body is not charged to its client any more (qore#7653)
-    eraseBoundBody(stream_id);
+    // a reset body is bounded until its RST_STREAM frame has been written (qore#7653)
+    resetBoundBody(stream_id);
 #ifdef DEBUG
     if (nghttp2_session_find_stream(session, stream_id)) {
         dbg_rst_unsent_streams.insert(stream_id);
@@ -1190,8 +1190,8 @@ void Http2Session::releaseResetStream(int32_t stream_id, uint32_t error_code) {
         return;
     }
     app_reset_unsent_streams[stream_id] = error_code;
-    // a reset body is not charged to its client any more (qore#7653)
-    eraseBoundBody(stream_id);
+    // a reset body is bounded until its RST_STREAM frame has been written (qore#7653)
+    resetBoundBody(stream_id);
     // the state that the data provider and the stream's sends use; the data provider's context is kept until the
     // stream closes, as nghttp2 refers to it until then, and it defers while the stream has no buffered data (no
     // DATA goes out before the RST_STREAM anyway, as nghttp2 sends its control frames first)
@@ -2382,6 +2382,10 @@ bool Http2Session::wantRead() const {
 bool Http2Session::wantWrite() const {
     std::lock_guard<std::recursive_mutex> lg(m);
 #ifdef DEBUG
+    // held output waits for no event (dbgHoldWrites(); qore#7653)
+    if (dbg_hold_writes.load(std::memory_order_acquire)) {
+        return false;
+    }
     // dbg_http2_hold_stream_reset(): sendPendingData() collects nothing from nghttp2 while the hold lasts, so the
     // frames that nghttp2 has do not make the I/O thread poll for a write in a loop
     if (dbgStreamResetHeld()) {
@@ -2393,6 +2397,12 @@ bool Http2Session::wantWrite() const {
 
 bool Http2Session::wantWriteNow() const {
     std::lock_guard<std::recursive_mutex> lg(m);
+#ifdef DEBUG
+    // held output waits for no event (dbgHoldWrites(); qore#7653)
+    if (dbg_hold_writes.load(std::memory_order_acquire)) {
+        return false;
+    }
+#endif
     return send_offset >= send_buffer.size() && nghttp2_session_want_write(session) != 0;
 }
 
@@ -2429,6 +2439,19 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
     } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
         printd(5, "onFrameSendCallback RST_STREAM: stream_id=%d error_code=%u\n",
             frame->hd.stream_id, frame->rst_stream.error_code);
+        // a reset bounded body is bounded until its RST_STREAM frame has been written (qore#7653)
+        if (h2) {
+            auto bi = h2->bound_bodies.find(frame->hd.stream_id);
+            if (bi != h2->bound_bodies.end() && !bi->second.end_serialized) {
+                // this callback is called from nghttp2's C code: no exception may leave it
+                try {
+                    h2->response_end_streams_serialized.push_back(frame->hd.stream_id);
+                } catch (const std::bad_alloc&) {
+                    return NGHTTP2_ERR_CALLBACK_FAILURE;
+                }
+                bi->second.end_serialized = true;
+            }
+        }
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: send RST_STREAM stream=%d error_code=%u\n",
                 frame->hd.stream_id, frame->rst_stream.error_code);
@@ -2466,7 +2489,12 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
             record = true;
         }
         if (record) {
-            h2->response_end_streams_serialized.push_back(frame->hd.stream_id);
+            // this callback is called from nghttp2's C code: no exception may leave it
+            try {
+                h2->response_end_streams_serialized.push_back(frame->hd.stream_id);
+            } catch (const std::bad_alloc&) {
+                return NGHTTP2_ERR_CALLBACK_FAILURE;
+            }
         }
         h2->stopRequestAfterResponse(frame->hd.stream_id);
     }
@@ -2935,11 +2963,12 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
             h2->failResponseSendWatch(stream_id);
         }
     }
-    // a bounded body whose stream closes before its END_STREAM frame was serialized, or with an error, is not sent
-    // any more; one whose END_STREAM frame was serialized stays bounded until the frame has been written (qore#7653)
+    // a bounded body whose stream closes before the frame that ends it was serialized is not sent any more; one whose
+    // END_STREAM or RST_STREAM frame was serialized stays bounded until the frame has been written, also when the
+    // client resets the stream then, as the frame is in the connection's send buffer (qore#7653)
     {
         auto bi = h2->bound_bodies.find(stream_id);
-        if (bi != h2->bound_bodies.end() && (error_code || !bi->second.end_serialized)) {
+        if (bi != h2->bound_bodies.end() && !bi->second.end_serialized) {
             h2->eraseBoundBody(stream_id);
         }
     }
@@ -4421,6 +4450,13 @@ void Http2Session::eraseBoundBody(int32_t stream_id) {
     }
 }
 
+void Http2Session::resetBoundBody(int32_t stream_id) {
+    auto i = bound_bodies.find(stream_id);
+    if (i != bound_bodies.end() && !i->second.end_serialized) {
+        i->second.reset_pending = true;
+    }
+}
+
 void Http2Session::updateBoundBodiesWritten() {
     if (bound_bodies.empty()) {
         return;
@@ -4487,27 +4523,38 @@ void Http2Session::endBoundBody(int32_t stream_id, const char* reason, Exception
     if (i == bound_bodies.end()) {
         return;
     }
-    bool end_pos_set = i->second.end_pos_set;
-    bound_bodies.erase(i);
-    updateActiveInputStreams();
-    if (!end_pos_set) {
-        // the rest of the body is in the stream's own buffer or still to be read: resetting the stream frees it
+    if (!i->second.end_pos_set && !i->second.reset_pending) {
+        // the rest of the body is in the stream's own buffer or still to be read: the stream is reset and its buffered
+        // data released; the body stays bounded until the RST_STREAM frame has been written, as a client that does
+        // not read the connection never gets it
         qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 response body on stream %d ended: %s", stream_id, reason);
         auto iit = stream_input_streams_.find(stream_id);
         if (iit != stream_input_streams_.end()) {
             iit->second.eof = true;
         }
         submitRstStream(stream_id, NGHTTP2_CANCEL, nullptr);
+        // no DATA of the stream goes out before its RST_STREAM, which nghttp2 sends first and which closes the stream;
+        // the data provider's context is kept until the stream closes, as in releaseResetStream()
+        pending_body_data.erase(stream_id);
+        pending_pongs.erase(stream_id);
+        i = bound_bodies.find(stream_id);
+        if (i != bound_bodies.end()) {
+            // a new measurement of the body on the connection's writes
+            i->second.bound_progress_ms = 0;
+        }
+        notifyStreamDrain();
         return;
     }
-    // the body's END_STREAM frame has been serialized: its stream is closed or holds nothing more, and the rest of
-    // the body is in the connection's send buffer, which only ending the connection frees; the client is not taking
-    // anything from the connection, as the progress of such a body is the connection's writes (qore#7653)
-    qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 connection ended: the client did not take the rest of the "
-        "response body of stream %d after its END_STREAM frame was sent: %s", stream_id, reason);
+    // the frame that ends the body (its END_STREAM, or the RST_STREAM of an earlier end) is in the connection's send
+    // buffer, which only ending the connection frees: the client takes nothing from the connection, as the progress
+    // of such a body is the connection's writes (qore#7653)
+    bound_bodies.erase(i);
+    updateActiveInputStreams();
+    qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 connection ended: the client did not take the end of the response "
+        "body of stream %d from the connection's send buffer: %s", stream_id, reason);
     if (!*xsink) {
-        xsink->raiseException("HTTP2-SEND-BOUND-ERROR", "the client did not take the rest of the response body of "
-            "stream %d after its END_STREAM frame was sent: %s", stream_id, reason);
+        xsink->raiseException("HTTP2-SEND-BOUND-ERROR", "the client did not take the end of the response body of "
+            "stream %d from the connection's send buffer: %s", stream_id, reason);
     }
 }
 
@@ -4537,16 +4584,18 @@ void Http2Session::checkInputStreamSendBound(ExceptionSink* xsink) {
             continue;
         }
         waiting = true;
+        // a body whose ending frame waits in the connection's output progresses with the connection's writes
+        bool by_written = b.end_pos_set || b.reset_pending;
         uint64_t progress;
-        if (b.end_pos_set) {
+        if (by_written) {
             progress = written;
         } else {
             auto tit = stream_taken_total.find(stream_id);
             progress = tit == stream_taken_total.end() ? 0 : tit->second;
         }
-        if (!b.bound_progress_ms || b.bound_written != b.end_pos_set || progress > b.bound_progress) {
+        if (!b.bound_progress_ms || b.bound_written != by_written || progress > b.bound_progress) {
             b.bound_progress = progress;
-            b.bound_written = b.end_pos_set;
+            b.bound_written = by_written;
             b.bound_progress_ms = now;
             continue;
         }

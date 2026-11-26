@@ -34526,7 +34526,6 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
     bool until_flush = get_param_value(params, 2).getAsBool();
-    dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     if (session_id <= 0 || stream_id < 0) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
@@ -34536,6 +34535,7 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
+    dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
     return QoreValue();
 }

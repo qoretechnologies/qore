@@ -1537,9 +1537,12 @@ private:
         uint64_t bound_progress = 0;
         int64_t bound_progress_ms = 0;
         bool bound_written = false;
-        //! true once the frame carrying the body's END_STREAM has been serialized; end_pos is then set by
-        //! sendPendingData()
+        //! true once the frame that ends the body (its END_STREAM, or the RST_STREAM of a reset) has been serialized;
+        //! end_pos is then set by sendPendingData()
         bool end_serialized = false;
+        //! true once the body's stream has been reset before its END_STREAM frame was serialized: it stays bounded on
+        //! the connection's writes until the RST_STREAM frame has been written
+        bool reset_pending = false;
         bool end_pos_set = false;
         //! the absolute position in the outgoing byte stream after the END_STREAM frame
         uint64_t end_pos = 0;
@@ -1556,13 +1559,17 @@ private:
     DLLLOCAL void addBoundBody(int32_t stream_id);
     //! Removes a body from the bounds (qore#7653)
     DLLLOCAL void eraseBoundBody(int32_t stream_id);
+    //! Marks a bounded body whose stream is reset: unless its END_STREAM frame has been serialized, it stays bounded
+    //! until its RST_STREAM frame has been written (qore#7653)
+    DLLLOCAL void resetBoundBody(int32_t stream_id);
     //! Removes the bodies whose END_STREAM frame has been written to the socket; called under m (qore#7653)
     DLLLOCAL void updateBoundBodiesWritten();
     //! Sets has_active_input_streams_ for the pumped and the bounded bodies; called under m
     DLLLOCAL void updateActiveInputStreams();
     //! Ends a body that a bound ended (qore#7653)
-    /** A body whose END_STREAM frame has not been serialized has its stream reset; the rest of a body whose
-        END_STREAM frame has been serialized is in the connection's send buffer, which only ending the connection
+    /** A body whose END_STREAM frame has not been serialized has its stream reset and its buffered data released; it
+        stays bounded until the RST_STREAM frame has been written.  The frame that ends a body whose END_STREAM or
+        RST_STREAM frame has been serialized is in the connection's send buffer, which only ending the connection
         frees: an HTTP2-SEND-BOUND-ERROR exception is raised, which ends the connection's operation
     */
     DLLLOCAL void endBoundBody(int32_t stream_id, const char* reason, ExceptionSink* xsink);
