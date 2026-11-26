@@ -15057,7 +15057,7 @@ enum class QoreCallRefOutcome {
     @param ret_kind set to the return kind of the entry, if it was called
 */
 template <typename KindsOk, typename Fill>
-static QORE_INTERN_NOINLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_bits, int nargs,
+static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_bits, int nargs,
         KindsOk&& kinds_ok, Fill&& fill, uint64_t& raw_result, uint8_t& ret_kind, ExceptionSink* xsink) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRIES");
     // the switch of every call through a reference without the generic call path disables these calls too
@@ -15157,8 +15157,9 @@ static QORE_INTERN_NOINLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_b
 }
 
 //! returns true if the value is a reference to a function held as an ordinary pointer: the only value whose call
-//! the call-reference helpers can make (a closure takes the generic call path at once, without the cost of the
-//! admission's frame, as qore_rt_call_ref_t() is not inlined into the helpers)
+//! the call-reference helpers can make (a closure takes the generic call path at once, without the frame of the
+//! admission, which the helpers make out of line: qore_rt_call_ref_native_impl(), qore_rt_call_ref_value_impl() and
+//! qore_rt_call_ref_boxed_impl())
 static QORE_INTERN_ALWAYS_INLINE bool qore_rt_call_ref_candidate(uint64_t ref_bits) {
     QoreValue ref_val = fromBits(ref_bits);
     return ref_val.isPlainPointer() && ref_val.get<const AbstractQoreNode>()->getType() == NT_FUNCREF;
@@ -15221,12 +15222,9 @@ uint64_t qore_rt_call_ref_box_raw(uint8_t ret_kind, uint64_t raw) {
 
 //! qore_rt_call_ref_t() with no argument or one native argument of kind \a A, giving a native result of kind \a R
 template <BatchCalleeParamKind R, BatchCalleeParamKind... A>
-static int qore_rt_call_ref_native_t(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a,
-        typename QoreCallRefNative<R>::type* result, ExceptionSink* xsink) {
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_native_impl(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, typename QoreCallRefNative<R>::type* result, ExceptionSink* xsink) {
     static_assert(sizeof...(A) <= 1);
-    if (!qore_rt_call_ref_candidate(ref_bits)) {
-        return 0;
-    }
     uint64_t raw;
     uint8_t ret_kind;
     QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, static_cast<int>(sizeof...(A)),
@@ -15260,14 +15258,19 @@ static int qore_rt_call_ref_native_t(uint64_t ref_bits, typename QoreCallRefNati
     return 1;
 }
 
+//! qore_rt_call_ref_native_impl() for a function reference only; any other value takes the generic call path at once
+template <BatchCalleeParamKind R, BatchCalleeParamKind... A>
+static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_native_t(uint64_t ref_bits,
+        typename QoreCallRefNative<A>::type... a, typename QoreCallRefNative<R>::type* result, ExceptionSink* xsink) {
+    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_native_impl<R, A...>(ref_bits, a..., result, xsink)
+        : 0;
+}
+
 //! qore_rt_call_ref_t() with no argument or one native argument of kind \a A, giving a NaN-boxed result
 template <BatchCalleeParamKind... A>
-static int qore_rt_call_ref_value_t(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a, uint64_t* result,
-        ExceptionSink* xsink) {
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_value_impl(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a,
+        uint64_t* result, ExceptionSink* xsink) {
     static_assert(sizeof...(A) <= 1);
-    if (!qore_rt_call_ref_candidate(ref_bits)) {
-        return 0;
-    }
     uint64_t raw;
     uint8_t ret_kind;
     QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, static_cast<int>(sizeof...(A)),
@@ -15290,6 +15293,13 @@ static int qore_rt_call_ref_value_t(uint64_t ref_bits, typename QoreCallRefNativ
     }
     *result = qore_rt_call_ref_box_raw(ret_kind, raw);
     return 1;
+}
+
+//! qore_rt_call_ref_value_impl() for a function reference only; any other value takes the generic call path at once
+template <BatchCalleeParamKind... A>
+static QORE_INTERN_ALWAYS_INLINE int qore_rt_call_ref_value_t(uint64_t ref_bits, typename QoreCallRefNative<A>::type... a,
+        uint64_t* result, ExceptionSink* xsink) {
+    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_value_impl<A...>(ref_bits, a..., result, xsink) : 0;
 }
 
 #define QORE_RT_CALL_REF_NATIVE_HELPERS(rname, R, rtype) \
@@ -15333,11 +15343,9 @@ extern "C" DLLEXPORT int qore_rt_call_ref_value_bool_v1(uint64_t ref_bits, int64
     return qore_rt_call_ref_value_t<BatchCalleeParamKind::NativeBool>(ref_bits, a0, result, xsink);
 }
 
-extern "C" DLLEXPORT int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs,
+//! qore_rt_call_ref_boxed_v1() for a function reference
+static QORE_INTERN_NOINLINE int qore_rt_call_ref_boxed_impl(uint64_t ref_bits, const uint64_t* args, int nargs,
         uint64_t* result, ExceptionSink* xsink) {
-    if (!qore_rt_call_ref_candidate(ref_bits)) {
-        return 0;
-    }
     uint64_t raw;
     uint8_t ret_kind;
     QoreCallRefOutcome rc = qore_rt_call_ref_t(ref_bits, nargs,
@@ -15403,6 +15411,12 @@ extern "C" DLLEXPORT int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint
     }
     *result = qore_rt_call_ref_box_raw(ret_kind, raw);
     return 1;
+}
+
+extern "C" DLLEXPORT int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs,
+        uint64_t* result, ExceptionSink* xsink) {
+    // any other value than a function reference takes the generic call path at once
+    return qore_rt_call_ref_candidate(ref_bits) ? qore_rt_call_ref_boxed_impl(ref_bits, args, nargs, result, xsink) : 0;
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 

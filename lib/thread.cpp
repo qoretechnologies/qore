@@ -10996,8 +10996,16 @@ static void raise_background_expression_call(ExceptionSink* xsink) {
         "by code that may not control threads (PO_NO_THREAD_CONTROL), so it cannot be run in another thread");
 }
 
+// a body of its own, not a call of the overload with the thread's data, so that its callers are compiled as before
 int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed, ExceptionSink* xsink) {
-    return qore_check_background_direct_entry(thread_data.get(), code_pgm, callee_frame_pushed, xsink);
+    const ThreadData* td = thread_data.get();
+    if (!td->bg_expr_frame
+            || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
+            || !qore_background_expression_call(td, callee_frame_pushed)) {
+        return 0;
+    }
+    raise_background_expression_call(xsink);
+    return -1;
 }
 
 int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm, bool callee_frame_pushed,
