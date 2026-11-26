@@ -735,26 +735,26 @@ public:
     }
 
     //! returns the member with the key \a key, or nullptr
-    /** A hash without buckets is not searched, so that its key is not hashed (qore#7194); neither is a hardened hash,
+    /** A hash without members is not searched, so that its key is not hashed (qore#7194); neither is a hardened hash,
         whose search gives the bucket of the key by its keyed hash (qore_hash_member_map::findSlow(), qore#7557)
     */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key) const {
-        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : hm.findSlow(key);
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : (hm.empty() ? nullptr : hm.findSlow(key));
     }
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key, size_t len) const {
-        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, len)) : hm.findSlow(key, len);
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, len)) : (hm.empty() ? nullptr : hm.findSlow(key, len));
     }
 
     //! returns the member with the key \a key, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
-        return hm.fastFind() ? hm.find(key) : hm.findSlow(key.str, key.len);
+        return hm.fastFind() ? hm.find(key) : (hm.empty() ? nullptr : hm.findSlow(key.str, key.len));
     }
 
     //! returns the member with the key \a key, whose hash is \a hash, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) const {
-        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, strlen(key), hash)) : hm.findSlow(key);
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, strlen(key), hash)) : (hm.empty() ? nullptr : hm.findSlow(key));
     }
 
     //! Returns true if each member of this hash has a member of \a other with the same key whose value is equal to
