@@ -1751,6 +1751,28 @@ private:
             const FastEntryTakeOver* take_over = nullptr,
             const AbstractQoreFunctionVariant* ref_fast_variant = nullptr);
 
+    //! Emits a call through a context-independent fast entry or its body summary that is made only while no debugger
+    //! is attached (qore#7676)
+    /** @a emit_fast emits the call without the runtime in the block that the check of the debugger leads to while no
+        debugger is attached, and returns its result in the return kind of @a callee_info's fast entry, or nullptr with
+        @a error set; it sets its argument to true if the call cannot raise an exception.  While a debugger is
+        attached, the call is made through @a fallback_name or, with @a has_arg_cleanups, through
+        @a fallback_consume_name, which reports it; if the fast call cannot raise, that call's exception is checked
+        right after it, as the code after the call checks none: by branching to the exception edge of
+        @a exception_target, the exception target of an Invoke, or else with emitExceptionCheck().
+
+        @param fast_nothrow [out] true if the call made without the runtime cannot raise an exception
+
+        @return the result in the return kind of the fast entry, or nullptr with @a error set
+    */
+    llvm::Value* emitAotDebuggerGuardedFastCall(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, int32_t slot, const BatchCalleeInfo& callee_info,
+            const std::vector<llvm::Value*>& raw_args, const std::vector<uint32_t>& raw_arg_ids,
+            const std::vector<llvm::Value*>& boxed_args, llvm::Value* arg_cleanups, int nargs,
+            bool has_arg_cleanups, const char* fallback_name, const char* fallback_consume_name,
+            llvm::BasicBlock* exception_target, const std::function<llvm::Value*(bool&)>& emit_fast,
+            bool& fast_nothrow, std::string& error);
+
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
         (qore_rt_call_direct_aot()); the insert point is then the block of the call.

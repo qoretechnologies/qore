@@ -21867,16 +21867,20 @@ struct AOTDirectCallTypeParams {
 
 // The low bit requests the cached environment override check. Each Program with a debugger
 // contributes two. The regular call needs just one load in place of checking the override.
-extern DLLLOCAL std::atomic<unsigned> qore_aot_direct_call_mode;
+// AOT code loads it before each call that it makes through a fast entry or a summary of the callee, which do not
+// report the call to a debugger: a value of 2 or more takes the call path, which does (qore#7676)
+extern "C" DLLEXPORT std::atomic<unsigned> qore_rt_aot_direct_call_mode;
+static_assert(sizeof(std::atomic<unsigned>) == sizeof(unsigned) && std::atomic<unsigned>::is_always_lock_free,
+    "AOT code loads qore_rt_aot_direct_call_mode as an unsigned int");
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
-constinit std::atomic<unsigned> qore_aot_direct_call_mode{1};
+constinit std::atomic<unsigned> qore_rt_aot_direct_call_mode{1};
 
 void qore_aot_debug_program_change(bool attached) {
     if (attached) {
-        qore_aot_direct_call_mode.fetch_add(2, std::memory_order_release);
+        qore_rt_aot_direct_call_mode.fetch_add(2, std::memory_order_release);
     } else {
-        assert(qore_aot_direct_call_mode.load(std::memory_order_relaxed) >= 2);
-        qore_aot_direct_call_mode.fetch_sub(2, std::memory_order_release);
+        assert(qore_rt_aot_direct_call_mode.load(std::memory_order_relaxed) >= 2);
+        qore_rt_aot_direct_call_mode.fetch_sub(2, std::memory_order_release);
     }
 }
 
@@ -21887,7 +21891,7 @@ DLLLOCAL QORE_INTERN_NOINLINE bool qore_aot_prelinked_override(unsigned mode) {
     if (qore_rt_aot_disable_prelinked_calls()) {
         return true;
     }
-    qore_aot_direct_call_mode.fetch_and(~1u, std::memory_order_relaxed);
+    qore_rt_aot_direct_call_mode.fetch_and(~1u, std::memory_order_relaxed);
     return false;
 }
 #else
@@ -21901,7 +21905,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
         return toBits(QoreValue());
     }
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    unsigned mode = qore_aot_direct_call_mode.load(std::memory_order_acquire);
+    unsigned mode = qore_rt_aot_direct_call_mode.load(std::memory_order_acquire);
     if (mode) [[unlikely]] {
         if (qore_aot_prelinked_override(mode)) {
             return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, arg_cleanups, nargs, xsink,
