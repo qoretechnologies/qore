@@ -2660,6 +2660,29 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
     }
 }
 
+//! list.string.join or list.string.join.identity-map: sets the result of the join of <list>::join(), or of join() if
+//! the instruction is a call of join(), in its slot; returns false for an exception (qore#7731)
+/** Out of line, so that the interpreter loop has only its call (see qore_ir_push_temp_mark_pair())
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_exec_list_join(const QoreIRInstruction* inst, IRValueSlots& values,
+        IRCleanupSlots& cleanup, ExceptionSink* xsink) {
+    if (inst->operands.size() < 2) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
+        }
+        return false;
+    }
+    QoreValue res = fromBits(qore_rt_list_string_join_inst(inst,
+        inst->opcode == QoreIROpcode::ListStringJoinIdentityMap, toBits(getIRValue(values, inst->operands[0])),
+        toBits(getIRValue(values, inst->operands[1])), xsink));
+    if (xsink && *xsink) {
+        res.discard(xsink);
+        return false;
+    }
+    setOwnedValueSlot(values, cleanup, inst->result.id, res, xsink);
+    return true;
+}
+
 //! Pushes the marks of the two nested temp scopes of a QoreIROpcode::PushTempMarkPair (qore#6444)
 /** Out of line, as only the return statements whose expression has a temp scope run it, and without
     std::vector::push_back() of the marks: GCC inlines the push of a mark into the interpreter loop only while the
@@ -20572,19 +20595,8 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::ListStringJoin:
-            case QoreIROpcode::ListStringJoinIdentityMap: {
-                if (inst->operands.size() < 2) {
-                    if (xsink) {
-                        xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
-                    }
-                    unwindForException();
-                    cleanupLocalCaches();
-                    return exitAfterUnwind();
-                }
-                QoreValue res = qore_ir_eval_list_join(inst, inst->opcode, getIRValue(values, inst->operands[0]),
-                    getIRValue(values, inst->operands[1]), xsink);
-                if (xsink && *xsink) {
-                    res.discard(xsink);
+            case QoreIROpcode::ListStringJoinIdentityMap:
+                if (!qore_ir_exec_list_join(inst, values, cleanup, xsink)) [[unlikely]] {
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
@@ -20592,13 +20604,8 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                setValueSlot(values, inst->result.id, res, xsink);
-                if (res.needsRef()) {
-                    cleanup.push_back(inst->result.id);
-                }
                 ++ip;
                 break;
-            }
             case QoreIROpcode::PluginUnary:
             case QoreIROpcode::PluginBinary:
             case QoreIROpcode::PluginSubscript:
