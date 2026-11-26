@@ -215,7 +215,7 @@ public class RestSchemaActionOperation {
     }
 
     #! Copies the operation
-    /** The copy has the types of the operation copied (qore#7714)
+    /** The copy shares the type objects of the operation copied, which are frozen if it is shared (qore#7714)
 
         @since RestSchemaActions 1.0
     */
@@ -308,7 +308,9 @@ public class RestSchemaActionOperation {
                     on_error rethrow $1.err, sprintf("%s (while building the output type of action %y from "
                         "\"%s %s\")", $1.desc, info.action, info.method.upr(), info.path);
                     built = buildResponseValues();
-                    if (DataProvider::mayRegisterShared()) {
+                    # a shared operation is changed only by code that may change shared state (qore#7714)
+                    if (DataProvider::mayRegisterShared() && (!SandboxManager::isSharedObject(self)
+                            || SandboxManager::isProcessWideRegistrationAllowed())) {
                         publishResponseValues(built);
                     }
                 }

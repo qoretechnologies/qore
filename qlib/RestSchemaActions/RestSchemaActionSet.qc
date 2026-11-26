@@ -296,6 +296,14 @@ public class RestSchemaActionSet {
         }
         checkReferenceData();
         checkHostSources();
+        # the output-type callbacks of the actions whose output types are built on first use are created here, by
+        # the code that builds the set, so that a callback that every caller uses carries no caller's sandbox
+        # (qore#7714)
+        foreach hash<auto> i in (opmap.pairIterator()) {
+            if (i.value.isResponseTypeDeferred()) {
+                output_type_callbacks{i.key} = RestSchemaActionSet::makeOutputTypeCallback(i.value);
+            }
+        }
         ++construction_count;
         # a set that trusted code builds, such as the process-wide set that a module builds from its vendored
         # schema, is shared by every Program of the process: sandboxed code cannot change or delete it, nor its
@@ -305,14 +313,13 @@ public class RestSchemaActionSet {
         }
     }
 
-    #! Copies the set without the output-type callbacks it created and with a lock of its own
-    /** The operations, the schema and the peers of the copy are those of the set copied
-        (qore#7714)
+    #! Copies the set with a lock of its own
+    /** The operations, the output-type callbacks, the schema and the peers of the copy are those of the set copied,
+        which the code that built the set created (qore#7714)
 
         @since RestSchemaActions 1.0
     */
     copy() {
-        output_type_callbacks = {};
         callback_lock = new Mutex();
     }
 
@@ -482,20 +489,10 @@ DataProviderActionCatalog::getActions("Stripe");
 
     #! Returns the callback building an action's output type, creating it on first use
     private code getOutputTypeCallback(string action, RestSchemaActionOperation op) {
+        # created when the set was built (qore#7714)
         AutoLock al(callback_lock);
-        if (*code c = output_type_callbacks{action}) {
-            return c;
-        }
-        # the callback is a cache of the set, built from its own operation: a set that is shared by every Program
-        # keeps it in an update scope, also for a sandboxed caller (qore#7714)
-        if (SandboxManager::isSharedObject(self)) {
-            SandboxManager::updateSharedObject(self, sub () {
-                output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(opmap{action});
-            });
-        } else {
-            output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op);
-        }
-        return output_type_callbacks{action};
+        return output_type_callbacks{action}
+            ?? (output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op));
     }
 
     #! Returns a new callback building an operation's output type

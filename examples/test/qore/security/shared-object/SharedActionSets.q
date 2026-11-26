@@ -47,6 +47,16 @@ string sub check_set(code get_set) {
         try_it(sub () { delete op; }), try_it(sub () { delete set; }));
 }
 
+# the tenant needs a deferred output type first: it is built for the tenant, and not kept in the shared operation
+string sub tenant_output_type(code get_output_type) {
+    object t = get_output_type();
+    return sprintf(\"type: %y\", t.className());
+}
+
+string sub change_type(object t) {
+    return try_it(sub () { t.addField(new QoreDataField(\"tenant\", NOTHING, StringType)); });
+}
+
 string sub together() {
     return check_set(object sub () { return TogetherDataProvider::TogetherSchema::getActionSet(); });
 }
@@ -63,6 +73,19 @@ tenant.parse(TenantCode, "tenant");
 
 printf("a lazy shared value (TogetherDataProvider): %s\n", tenant.callFunction("together"));
 printf("a lazy value of the action catalog (ExaDataProvider): %s\n", tenant.callFunction("exa"));
+# a deferred output type: the tenant needs it first, then trusted code, which keeps it in the shared operation
+{
+    RestSchemaActions::RestSchemaActionSet set = TogetherDataProvider::TogetherSchema::getActionSet();
+    hash<auto> info = (select set.getActionInfoList("Test"), $1.get_output_type
+        && set.getOperation($1.action).isResponseTypePending())[0];
+    RestSchemaActions::RestSchemaActionOperation op = set.getOperation(info.action);
+    printf("the tenant builds a deferred output type: %s, still pending: %y\n",
+        tenant.callFunction("tenant_output_type", info.get_output_type), op.isResponseTypePending());
+    object t = info.get_output_type();
+    printf("trusted code builds it: still pending: %y, the type is shared: %y; the tenant changes it: %s\n",
+        op.isResponseTypePending(), SandboxManager::isSharedObject(t), tenant.callFunction("change_type", t));
+}
+
 # the sets still work for every caller
 printf("trusted code uses the sets: %y, %y\n",
     TogetherDataProvider::TogetherSchema::getActionSet().getActionInfoList("Test").size() > 0,
