@@ -1248,11 +1248,9 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     ReferenceHolder<QoreHashNode> member_hash(xsink);
     if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
-        // the code member binds the names, as a named call through it does
-        if (const ResolvedCallReferenceNodeIntern* iref = qore_get_resolved_call_reference_intern(ref)) {
-            return iref->dispatchNamed(args, arg_names, policy, xsink);
-        }
-        return ResolvedCallReferenceNodeIntern::dispatchNamed(args, arg_names, policy, xsink);
+        // the code member binds the names as a named call through it does, also a closure, which is not an internal
+        // call reference (qore#7748)
+        return qore_call_ref_invoke_named(ref, args, arg_names, policy, xsink);
     }
     // the pseudo-method with its variants bound to the arguments by name, as a direct named call does
     // (MethodCallNode::execPseudoNamed())

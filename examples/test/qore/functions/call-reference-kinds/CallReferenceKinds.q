@@ -140,8 +140,8 @@ hash<string, code> refs = {
     # a reference to a pseudo-method of a value that is not an object, which calls the code member of the hash
     "pseudo-method, function member": \members.f(),
     "pseudo-method, method member": \members.m(),
-    # (not with a closure member: a named call through such a reference raises NAMED-CALL-NOT-SUPPORTED, where a
-    # named call through the closure binds the names)
+    # a named call through it binds the names as a named call through the closure does (qore#7748)
+    "pseudo-method, closure member": \members.cl(),
 };
 
 foreach hash<auto> i in (refs.pairIterator()) {
