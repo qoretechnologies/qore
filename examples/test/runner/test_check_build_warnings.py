@@ -300,6 +300,21 @@ class CiConfigTest(unittest.TestCase):
                 self.assertEqual("qore-ci-build-log source-dir=/src/qore", lines[0])
                 self.assertIn(command.split(";")[0].split()[1], lines[1])
 
+    def test_logged_build_status_under_errexit(self):
+        # the build scripts run with set -e (build.sh) and call the helper without a condition: it still returns the
+        # command's status, which ends the script with it
+        with tempfile.TemporaryDirectory(prefix="qore-cbw-log-") as tmp:
+            log = Path(tmp) / "build.log"
+            for shell in ("sh", "bash"):
+                result = subprocess.run(
+                    [shell, "-c", f'set -e; . "{ROOT}/test/docker_test/ci-build-log.sh"; '
+                     f'qore_ci_build_logged "{log}" sh -c "echo failing; exit 7"; echo not-reached'],
+                    capture_output=True, text=True, env={**os.environ, "QORE_SRC_DIR": "/src/qore"})
+                self.assertEqual(7, result.returncode, f"{shell}: {result.stdout}{result.stderr}")
+                self.assertIn("the build failed (exit code 7)", result.stdout, shell)
+                self.assertNotIn("not-reached", result.stdout, shell)
+                self.assertEqual("", result.stderr, shell)
+
     def test_job_allows_only_the_warning_exit_code(self):
         text = CI.read_text()
         m = re.search(r"^check-build-warnings:\n(?P<body>(?:[ \n].*\n)+)", text, re.M)
