@@ -23019,6 +23019,15 @@ int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     if (max_http2_body_size > 0) {
         h2_session->setMaxRequestBodySize(max_http2_body_size);
     }
+    // the bounds of the response bodies set on the socket before the session existed (qore#7653)
+    {
+        qore_socket_private* sp = sock->priv->socket->priv;
+        if (sp->h2_send_bound_set.load(std::memory_order_acquire)) {
+            h2_session->setInputStreamSendBound(sp->h2_send_bound_min_rate.load(std::memory_order_relaxed),
+                sp->h2_send_bound_window_ms.load(std::memory_order_relaxed),
+                sp->h2_send_bound_stall_ms.load(std::memory_order_relaxed));
+        }
+    }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
     return 0;

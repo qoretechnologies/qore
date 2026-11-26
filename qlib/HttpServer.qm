@@ -9799,6 +9799,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
                 io_wake();
             } else {
+                # the bounds of the connection's response bodies: a buffered body is charged to its client until the
+                # client has taken it, as one that the I/O thread sends (qore#7653)
+                s.setHttp2InputStreamSendBound(header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+                    header_info.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow,
+                    StreamStallTimeout);
                 s.submitHttp2Response(stream_id, response.code, hdr, response.body);
                 io_wake();
             }

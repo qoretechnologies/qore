@@ -24477,6 +24477,30 @@ static QoreValue f_dbg_socket_stream_records(const QoreListNode* params, Runtime
     return qore_socket_object_private(sock).dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
+//! holds or releases the writes of the HTTP/2 session of a socket, as when its client stops reading (qore#7653)
+/** The session's output stays in its send buffer, so that tests can keep the end of a response there.  DEBUG builds
+    only.
+
+    @param sock the socket of the connection
+    @param hold True to hold the writes, False to release them
+*/
+static QoreValue f_dbg_socket_hold_h2_writes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_socket_hold_h2_writes() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgHoldH2Writes(get_param_value(params, 1).getAsBool(), xsink);
+    return QoreValue();
+}
+
 //! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
 /** Puts the controller in the state that autostop leaves it in when an idle I/O thread has stopped before another
     one: a test then ends the process in that state, in which the cleanup at exit stopped the controller with an
@@ -34426,6 +34450,8 @@ std::atomic<int64_t> dbg_quic_hold_session{0};
 std::atomic<int64_t> dbg_quic_hold_stream{-1};
 //! true: the held stream is released by the next Socket::flushQuicPendingData() of its session
 std::atomic<bool> dbg_quic_hold_until_flush{false};
+//! true if the held stream is held also after its body has ended (qore#7653)
+std::atomic<bool> dbg_quic_hold_end{false};
 }
 
 std::atomic<int> qore_dbg_quic_idle_waiters{0};
@@ -34503,6 +34529,10 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
         && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
 }
 
+bool qore_dbg_quic_stream_end_held() {
+    return dbg_quic_hold_end.load(std::memory_order_acquire);
+}
+
 //! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
 //! flow-control credit
 /** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
@@ -34512,6 +34542,7 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
     @param stream_id the HTTP/3 stream ID of a streaming response
     @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
     thread of its socket before it writes, so that the flush writes the data held (qore#7414)
+    @param with_end if True, the data of a streamed body is held also after the body has ended (qore#7653)
 */
 static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
@@ -34526,6 +34557,7 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
+    dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
     return QoreValue();
 }
@@ -35277,6 +35309,7 @@ static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, Runt
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
     dbg_quic_hold_until_flush.store(false, std::memory_order_release);
+    dbg_quic_hold_end.store(false, std::memory_order_release);
     // a held stream is deferred until it is resumed: without this, its data stayed held after the release
     QuicSession::dbgResumeHeldStreams();
     return QoreValue();
@@ -38427,8 +38460,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
-        "stream_id", boolTypeInfo, QoreValue(false), "until_flush");
+        nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id", boolTypeInfo, QoreValue(false), "until_flush", boolTypeInfo, QoreValue(false), "with_end");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
@@ -38472,6 +38505,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_io_uring_defer_completions", f_dbg_io_uring_defer_completions, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_socket_hold_h2_writes", f_dbg_socket_hold_h2_writes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock", boolTypeInfo,
+        QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
