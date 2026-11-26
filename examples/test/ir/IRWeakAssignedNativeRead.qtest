@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc native code generation and the release of boxed values by native code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRWeakAssignedNativeReadTest
+
+#! Regression coverage for qore#7764: the read of a weak-assigned local whose value has a native representation
+/** A weak assignment (:=) holds an int or a float as a normal assignment does, so the read of a weak-assigned local int
+    or float has native facts, and the IR forwards its value to later statements (the fixed-aggregate scalar replacement
+    replaces the reads of a member with the value that built it).  Native code read such a local as the borrow of a
+    weak reference's target, a value of the local that a later write to the local released while a later statement
+    still used it: compiled code printed another value, a string from freed memory, or crashed.  A debug build asserts
+    that such a read is native (QoreIRToLLVM::lowerInstruction() and assertNativeLocalReadsUnboxed()), which the jit,
+    tiered and qcc compiles of the scenario failed without the fix.  The scenario runs in every tier, in the IR tier
+    alone and as a compiled executable, and must print what the AST tier prints.
+*/
+class IRWeakAssignedNativeReadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! the AST output of one run of the scenario, computed independently of Qore
+        const AstLines = (
+            "repro: 1",
+            "noTry: 1",
+            "bigInt: 1152921504606846979 1152921504606846980 3458764513820540937",
+            "bigIntList: -2305843009213693957 -4611686018427387914 7",
+            "floatTag: -4e+307 -8e+307 2.5",
+            "floatNan: .nan 1.5",
+            "boolValue: True False",
+            "stringValue: \"abcdef\" \"q\"",
+            "wrongType int: RUNTIME-TYPE-ERROR",
+            "wrongType float: RUNTIME-TYPE-ERROR",
+            "wrongType object: RUNTIME-TYPE-ERROR",
+            "destructor wrongType",
+            "loop: 20",
+            "nested inner: 9007199254740993 9007199254740995 4",
+            "nested outer: NESTED 9007199254740993",
+            "scopeEnd: 1152921504606846981",
+            "sourceChanges: 1152921504606846983 6 null",
+            "autoInt: 1152921504606846979 2",
+            "closureWrite: 1152921504606846979 2",
+            "param: 1152921504606846979 4",
+            "destructor replaced",
+            "objects: \"object\"",
+            "destructor object",
+            "objects after delete: null",
+            "objects auto: 1152921504606846979 \"auto\"",
+            "destructor auto",
+            "objects auto after delete: null null",
+        );
+    }
+
+    constructor() : QUnit::Test("IRWeakAssignedNativeReadTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        fixture = get_script_dir() + "/IRWeakAssignedNativeReadScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir tier", \testIrTier());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        # the scenario runs three times
+        list<string> expected = ();
+        for (int i = 0; i < 3; ++i) {
+            expected += AstLines;
+        }
+        assertEq(expected, astOutput().split("\n"));
+    }
+
+    testIrTier() {
+        string command = sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=tiered %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(fixture));
+        assertEq(astOutput(), ExecModeHarness::run_ir_tier(command), "IR tier output matches AST");
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-weak-assigned-native-read-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            # in a debug build, the compile asserts that every read of a local with native facts is native
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
+                shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(exe))), sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

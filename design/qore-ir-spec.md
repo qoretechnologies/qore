@@ -235,7 +235,10 @@ a local of the runtime stack) gives a read that is borrowed from the local, or
 a reference of its own released with the temporaries of the statement, which a
 later write to the local or the end of its statement releases.  The lowering
 (`QoreIRToLLVM::findNativeLocalReads()`) therefore unboxes every read of a local
-with native facts where it is read (qore#7372); in a debug build,
+with native facts where it is read (qore#7372), including the read of a
+weak-assigned local, which holds an int or a float as a normal assignment
+does and is read with a reference of its own instead of the borrow of a weak
+reference's target (qore#7764); in a debug build,
 `QoreIRToLLVM::assertNativeLocalReadsUnboxed()` asserts it after the function's
 blocks are lowered.  The facts must therefore be exact: the refinement takes a
 local whose type accepts NOTHING as assigned only after a store of a value that
@@ -245,3 +248,5 @@ members whose local is written after the aggregate is built (compound
 assignments, increments, assignments, writes through a reference and by a
 closure, writes in loops and branches, member and element stores) or goes out of
 scope, in every execution mode and compiled code.
+`IRWeakAssignedNativeRead.qtest` checks the reads of weak-assigned locals in
+the same way.
