@@ -1358,6 +1358,11 @@ struct qore_httpclient_priv {
         return q_get_monotonic_us() / 1000000;
     }
 
+    //! the connection managers that the client has replaced and retired, kept until their connections have closed
+    //! (qore#7741); protected by retired_lock
+    std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> retired_mgrs;
+    std::mutex retired_lock;
+
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
     // Thread safety: protected by alt_svc_lock, a leaf lock: the requests of the connection manager path read and
     // update it without msock->m, from all the threads that send requests on the client at once (qore#7720)
@@ -1585,13 +1590,76 @@ struct qore_httpclient_priv {
         }
     }
 
-    //! Detaches the connection manager and optionally closes its connections; must not be called with priv->m held
-    DLLLOCAL void dropConnMgr(bool close_old) {
-        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr = detachConnMgr();
-        if (close_old) {
-            closeDetachedConnMgr(old_mgr);
+    //! Retires a connection manager that the client has replaced, so that the requests in progress on it complete
+    /** It is kept until its connections have closed; the managers retired before are released when theirs have
+        (qore#7741).  Must not be called with priv->m held, nor on the async I/O thread.
+    */
+    DLLLOCAL void retireConnMgr(std::shared_ptr<HttpClientConnectionManagerBase> old_mgr) {
+        if (old_mgr) {
+            old_mgr->retire();
+        }
+        std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> retired;
+        {
+            std::lock_guard<std::mutex> lk(retired_lock);
+            retired.swap(retired_mgrs);
+            if (old_mgr) {
+                retired.push_back(std::move(old_mgr));
+            }
+        }
+        // a manager whose connections have closed is released outside the lock
+        std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> keep;
+        for (auto& mgr : retired) {
+            if (!mgr->reapRetired()) {
+                keep.push_back(std::move(mgr));
+            }
+        }
+        retired.clear();
+        std::lock_guard<std::mutex> lk(retired_lock);
+        for (auto& mgr : keep) {
+            retired_mgrs.push_back(std::move(mgr));
         }
     }
+
+    //! Closes the connection managers that the client has retired (a disconnect of the client)
+    DLLLOCAL void closeRetiredConnMgrs() {
+        std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> retired;
+        {
+            std::lock_guard<std::mutex> lk(retired_lock);
+            retired.swap(retired_mgrs);
+        }
+        for (auto& mgr : retired) {
+            closeDetachedConnMgr(mgr);
+        }
+    }
+
+    //! Replaces the connection manager for a change of protocol if it is still \a expected, the one that the request
+    //! that decides the change used; returns true if it was replaced (qore#7741)
+    /** The change is made as one decision with the protocol state, so that two requests that decide a change at the
+        same time make one; the old manager is retired, so that the requests of other threads in progress on it
+        complete.
+
+        @param expected the manager that the request used (nullptr if there was none)
+        @param h3 true for HTTP/3 (an upgrade), false for the HTTP/1.1 or HTTP/2 of the client (a fallback)
+    */
+    DLLLOCAL bool replaceConnMgrIf(const std::shared_ptr<HttpClientConnectionManagerBase>& expected, bool h3) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
+        {
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            if (conn_mgr != expected) {
+                return false;
+            }
+            old_mgr = std::move(conn_mgr);
+            conn_mgr.reset();
+            http3_active = h3;
+            if (h3) {
+                http2_active = false;
+                last_url_protocol = 0;
+            }
+        }
+        retireConnMgr(std::move(old_mgr));
+        return true;
+    }
+
 
     //! Returns the protocol a connection manager for this client is created with
     /** The protocol follows the client's configuration, so that one manager serves every request; a target that
@@ -1724,10 +1792,10 @@ struct qore_httpclient_priv {
             }
             rv = conn_mgr;
         }
+        // a manager replaced for a change of the client's settings or protocol is retired, so that the requests of
+        // other threads in progress on it complete (qore#7741)
         if (old_mgr) {
-            ExceptionSink close_xsink;
-            old_mgr->closeAll(&close_xsink);
-            close_xsink.clear();
+            retireConnMgr(std::move(old_mgr));
         }
         return rv;
     }
@@ -4893,18 +4961,22 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
 
     bool forced_h3 = !http_priv->http3_active.load(std::memory_order_acquire);
     std::shared_ptr<HttpClientConnectionManagerBase> existing_mgr = http_priv->getConnMgrIfPresent();
-    if (forced_h3 || (existing_mgr
-            && existing_mgr->getOptions().protocol != HttpClientProtocol::H3)) {
-        http_priv->dropConnMgr(true);
-        http_priv->http3_active = true;
-        http_priv->http2_active = false;
-        http_priv->last_url_protocol = 0;
+    // the manager is replaced by an HTTP/3 one as one decision, and the old one is retired, so that the requests of
+    // other threads in progress on it complete; when another thread's request changes the manager meanwhile, the
+    // change is made for the manager that it made (qore#7741)
+    for (int i = 0; i < 2 && (forced_h3 || (existing_mgr
+            && existing_mgr->getOptions().protocol != HttpClientProtocol::H3)); ++i) {
+        if (http_priv->replaceConnMgrIf(existing_mgr, true)) {
+            break;
+        }
+        existing_mgr = http_priv->getConnMgrIfPresent();
     }
 
+    // the HTTP/3 manager of a forced change, once made
+    std::shared_ptr<HttpClientConnectionManagerBase> forced_mgr;
     auto restore_forced_h3 = [&]() {
         if (forced_h3) {
-            http_priv->http3_active = false;
-            http_priv->dropConnMgr(true);
+            http_priv->replaceConnMgrIf(forced_mgr ? forced_mgr : http_priv->getConnMgrIfPresent(), false);
         }
     };
 
@@ -4913,6 +4985,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         restore_forced_h3();
         return nullptr;
     }
+    forced_mgr = mgr_holder;
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
     HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef("https", this_connection.host.c_str(),
@@ -5451,6 +5524,8 @@ int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  
         old_mgr = http_priv->resetConnMgr();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
+    // the managers that the client retired are closed with it (qore#7741)
+    http_priv->closeRetiredConnMgrs();
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     return rc;
 }
@@ -5494,6 +5569,8 @@ void QoreHttpClientObject::clearProxyURL() {
         old_mgr = http_priv->resetConnMgr();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
+    // the managers that the client retired are closed with it (qore#7741)
+    http_priv->closeRetiredConnMgrs();
     qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
@@ -5592,6 +5669,8 @@ void QoreHttpClientObject::disconnect() {
     }
     // the connections are closed after the lock is released; see qore_httpclient_priv::resetConnMgr()
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
+    // the managers that the client retired are closed with it (qore#7741)
+    http_priv->closeRetiredConnMgrs();
     qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
@@ -5938,6 +6017,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     bool stream_body = send_callback || is;
     // set once a request that an HTTP/3 connection did not deliver has been repeated on a new connection (qore#6930)
     bool undelivered_h3_retried = false;
+    // the repetitions of a request whose manager was retired before it got a connection, and the end of its timeout
+    // (qore#7741)
+    int shutdown_repeats = 0;
+    constexpr int MaxShutdownRepeats = 3;
+    int64 request_deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + (int64)timeout_ms * 1000 : 0;
     bool has_body = stream_body || body_len;
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
@@ -6011,15 +6095,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         bool attempted_h3_upgrade = false;
         if (!request_target && !persistent && !this_connection.is_unix && !http3_active
                 && http3_mode != HTTP3_MODE_DISABLED && this_connection.ssl) {
+            // the manager that the decision is made for: another thread's request can change it meanwhile
+            std::shared_ptr<HttpClientConnectionManagerBase> cur_mgr = getConnMgrIfPresent();
             auto alt = lookupAltSvc(this_connection.host.c_str(),
                 this_connection.port);
-            if (alt.has_value()) {
-                // Drop the existing (H1/H2/NEG) conn_mgr so getConnMgr()
-                // below allocates a fresh H3 conn_mgr.
-                dropConnMgr(true);
-                http3_active = true;
-                http2_active = false;
-                last_url_protocol = 0;
+            // the existing (H1/H2/NEG) conn_mgr is replaced and retired, so that getConnMgr() below allocates a fresh
+            // H3 conn_mgr and the requests in progress on the old one complete; a request of another thread that
+            // made the change first makes this one use its manager (qore#7741)
+            if (alt.has_value() && replaceConnMgrIf(cur_mgr, true)) {
                 attempted_h3_upgrade = true;
             }
         }
@@ -6030,6 +6113,29 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             return nullptr;
         }
         HttpClientConnectionManagerBase& mgr = *mgr_holder;
+        // a request that its manager refused (HTTPCLIENT-SHUTDOWN, raised only when a connection is acquired, before
+        // anything is sent) because another thread of the client replaced and retired it meanwhile is repeated on the
+        // client's current manager, within its timeout; not when the client is disconnected (qore#7741)
+        auto repeat_on_retired_mgr = [&]() -> bool {
+            if (!*xsink || shutdown_repeats >= MaxShutdownRepeats || user_disconnect_in_progress.load()
+                    || getConnMgrIfPresent() == mgr_holder) {
+                return false;
+            }
+            QoreStringValueHelper err(xsink->getExceptionErr());
+            if (strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN")) {
+                return false;
+            }
+            if (timeout_ms > 0) {
+                int64 left_ms = request_deadline_us ? (request_deadline_us - q_get_monotonic_us()) / 1000 : 0;
+                if (left_ms <= 0) {
+                    return false;
+                }
+                timeout_ms = (int)left_ms;
+            }
+            ++shutdown_repeats;
+            xsink->clear();
+            return true;
+        };
         if (!checkPersistentConnMgrConnection(this_connection, xsink)) {
             return nullptr;
         }
@@ -6055,6 +6161,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSendRef(scheme,
                 this_connection.host.c_str(), this_connection.port, xsink);
             if (!conn || *xsink) {
+                if (repeat_on_retired_mgr()) {
+                    continue;
+                }
                 return nullptr;
             }
             // The acquire returns a strong ref — the I/O thread may fire onConnectionClosed
@@ -6647,6 +6756,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // a request that could not be submitted because its reused connection was found closed has been
             // repeated on a new connection by the connection manager, which then reports no reused connection
             if (*xsink || stream_id < 0 || !channel_raw) {
+                if (repeat_on_retired_mgr()) {
+                    continue;
+                }
                 return nullptr;
             }
             // ReferenceHolder ensures deref on all exit paths
@@ -7127,6 +7239,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, nullptr, &stream_conn_raw);
             ReferenceHolder<HttpClientConnectionBase> stream_conn(stream_conn_raw, xsink);
             if (*xsink || stream_id < 0 || !channel_raw) {
+                if (repeat_on_retired_mgr()) {
+                    continue;
+                }
                 return nullptr;
             }
             ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
@@ -7262,6 +7377,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // this class documents SOCKET-TIMEOUT for a request that exceeds its "timeout" option; translate
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
+            if ((!raw_resp || *xsink) && repeat_on_retired_mgr()) {
+                continue;
+            }
             if (!raw_resp || *xsink) {
                 // A request on an HTTP/3 connection whose peer did not acknowledge it before the connection was
                 // closed, or that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for
@@ -7281,10 +7399,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
                         undelivered_h3_retried = true;
                         // a request that selects its own target (sendUrl()) is repeated on a new connection of the
-                        // client's connection manager, which it leaves as it is (qore#7720)
+                        // client's connection manager, which it leaves as it is (qore#7720); one of the client's own
+                        // replaces the manager that it used, unless another thread's request has done so (qore#7741)
                         if (!request_target) {
-                            http3_active = false;
-                            dropConnMgr(true);
+                            replaceConnMgrIf(mgr_holder, false);
                         }
                         xsink->clear();
                         continue;
@@ -7299,8 +7417,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         && !qore_http_manager_ops::isCancelPending()) {
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
-                    http3_active = false;
-                    dropConnMgr(true);
+                    // the HTTP/3 manager that the upgrade made is replaced and retired, unless another thread's
+                    // request has done so (qore#7741)
+                    replaceConnMgrIf(mgr_holder, false);
                     xsink->clear();
                     continue;
                 }
@@ -11010,6 +11129,8 @@ void qore_http_client_object_ops::cleanupImpl(QoreHttpClientObject* b, Exception
         b->priv->invalidate();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
+    // the managers that the client retired are closed with it (qore#7741)
+    b->http_priv->closeRetiredConnMgrs();
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     b->http_priv->getEventSink()->clear(xsink);
     b->priv->socket->cleanup(xsink);

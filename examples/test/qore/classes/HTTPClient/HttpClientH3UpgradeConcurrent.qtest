@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpClientH3UpgradeConcurrent.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 over QUIC connections of the HTTP client's connection manager
+# A request of one thread that changes the protocol of an HTTPClient's connections (the HTTP/3 upgrade after an Alt-Svc
+# advertisement, or its fallback when HTTP/3 fails) replaces the client's connection manager without ending the
+# requests that other threads have in progress on the old one: the old manager is retired, and its connections close
+# when their requests have ended; a request that its retired manager refused before it was sent is repeated on the
+# client's current manager (qoretechnologies/qore#7741).  The requests of the other threads are held in the server's
+# handler, and a request that is about to acquire its connection with the debug hold point "acquire-start".
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpClientH3UpgradeConcurrentTest
+
+#! a hang guard only
+const Timeout = 30s;
+
+#! holds the requests for /hold until released; records the client port of the connection of each
+class HoldingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the client port of each held request, pushed when it arrives
+        Queue arrived();
+        #! the held requests wait for it to reach zero
+        Counter release(1);
+        #! an Alt-Svc header to send, if set
+        *string alt_svc;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> h = {"Content-Type": "text/plain"};
+        if (alt_svc) {
+            h."Alt-Svc" = alt_svc;
+        }
+        if (cx.raw_path == "/hold") {
+            arrived.push(cx."peer-info".port);
+            release.waitForZero(Timeout);
+            return makeResponse(200, "held", h);
+        }
+        return makeResponse(200, "ok", h);
+    }
+}
+
+class HttpClientH3UpgradeConcurrentTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientH3UpgradeConcurrent", "1.0") {
+        addTestCase("the HTTP/3 upgrade of one request leaves the requests of other threads", \testUpgrade());
+        addTestCase("the HTTP/3 upgrade that falls back leaves the requests of other threads", \testFallback());
+        addTestCase("a request whose manager is retired before it acquires a connection is repeated",
+            \testRetiredBeforeAcquire());
+        set_return_value(main());
+    }
+
+    #! starts a TLS server; with \\a h3 it also listens for HTTP/3 and advertises it
+    private hash<auto> startServer(HoldingHandler h, bool h3) {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("hold", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": h3,
+        }).port;
+        hs.waitForAsyncIo();
+        return {"server": hs, "url": sprintf("https://127.0.0.1:%d", port)};
+    }
+
+    private HTTPClient getClient(string url) {
+        return new HTTPClient({"url": url, "ssl_verify_cert": False, "timeout": Timeout, "connect_timeout": 10s});
+    }
+
+    #! sends a request for /hold in a thread of its own; its result or error is pushed to \\a results
+    private startHeld(HTTPClient hc, Queue results, Counter done) {
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                hash<auto> r = hc.send(NOTHING, "GET", "/hold");
+                results.push(r.status_code == 200 ? r.body : sprintf("status %d", r.status_code));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+    }
+
+    #! releases the held requests and checks that each was answered
+    private checkHeld(HoldingHandler h, Queue results, Counter done, int count) {
+        h.release.dec();
+        assertEq(0, done.waitForZero(Timeout), "the held requests ended");
+        for (int i = 0; i < count; ++i) {
+            assertEq("held", results.get(Timeout), sprintf("held request %d was answered", i + 1));
+        }
+    }
+
+    testUpgrade() {
+        HoldingHandler h();
+        hash<auto> setup = startServer(h, True);
+        on_exit setup.server.stop();
+        HTTPClient hc = getClient(setup.url);
+        on_exit hc.disconnect();
+
+        # two requests of other threads in progress on the client's HTTP/2 connection, sent before the client knows of
+        # the server's HTTP/3 advertisement
+        Queue results();
+        Counter done();
+        on_exit {
+            # the held requests are released also when the test fails before it releases them
+            if (h.release.getCount()) {
+                h.release.dec();
+            }
+            done.waitForZero(Timeout);
+        }
+        startHeld(hc, results, done);
+        int port1 = h.arrived.get(Timeout);
+        startHeld(hc, results, done);
+        int port2 = h.arrived.get(Timeout);
+        assertEq(port1, port2, "the held requests are streams of one HTTP/2 connection");
+
+        # a request records the server's HTTP/3 advertisement; the next one takes the HTTP/3 upgrade, which replaces the
+        # client's connection manager under the held requests
+        assertEq("ok", hc.get("/"));
+        assertEq("HTTP/2", hc.getHttpVersion());
+        assertEq("ok", hc.get("/"));
+        assertEq("HTTP/3", hc.getHttpVersion(), "the request was sent with HTTP/3");
+
+        # the requests in progress on the old manager complete, each sent once: a request that was sent is not repeated
+        checkHeld(h, results, done, 2);
+        assertEq(0, h.arrived.size(), "the server received each held request once");
+    }
+
+    testFallback() {
+        # a UDP port that nothing listens on: the HTTP/3 upgrade fails there
+        int dead_port;
+        {
+            Socket udp();
+            udp.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            dead_port = udp.getSocketInfo(False).port;
+            udp.close();
+        }
+        HoldingHandler h();
+        h.alt_svc = sprintf("h3=\":%d\"; ma=60", dead_port);
+        hash<auto> setup = startServer(h, False);
+        on_exit setup.server.stop();
+        HTTPClient hc = getClient(setup.url);
+        hc.setConnectTimeout(3s);
+        on_exit hc.disconnect();
+
+        Queue results();
+        Counter done();
+        on_exit {
+            # the held requests are released also when the test fails before it releases them
+            if (h.release.getCount()) {
+                h.release.dec();
+            }
+            done.waitForZero(Timeout);
+        }
+        startHeld(hc, results, done);
+        h.arrived.get(Timeout);
+
+        # a request records the advertisement; the next one takes the upgrade, which fails and falls back to HTTP/1.1
+        # or HTTP/2 with a new manager
+        assertEq("ok", hc.get("/"));
+        assertEq("ok", hc.get("/"));
+        assertNeq("HTTP/3", hc.getHttpVersion(), "the request fell back from HTTP/3");
+
+        checkHeld(h, results, done, 1);
+        assertEq(0, h.arrived.size(), "the server received the held request once");
+    }
+
+    testRetiredBeforeAcquire() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_http_hold_at")) {
+            testSkip("requires a debug build");
+        }
+        HoldingHandler h();
+        hash<auto> setup = startServer(h, True);
+        on_exit setup.server.stop();
+        HTTPClient hc = getClient(setup.url);
+        on_exit hc.disconnect();
+
+        # a request of another thread that has taken the client's manager is held before it acquires a connection,
+        # before the client knows of the server's HTTP/3 advertisement
+        Counter reached(1);
+        Counter release(1);
+        call_function("dbg_http_hold_at", "acquire-start", reached, release);
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+            call_function("dbg_http_hold_clear");
+        }
+        Queue results();
+        Counter done();
+        on_exit done.waitForZero(Timeout);
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                results.push(hc.get("/"));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        assertEq(0, reached.waitForZero(Timeout), "the request was held before it acquired a connection");
+
+        # a request records the advertisement; the next one takes the HTTP/3 upgrade, which retires the manager of the
+        # held request
+        assertEq("ok", hc.get("/"));
+        assertEq("ok", hc.get("/"));
+        assertEq("HTTP/3", hc.getHttpVersion());
+
+        # the held request is refused by its retired manager before it is sent, and is repeated on the client's
+        # current one
+        release.dec();
+        assertEq("ok", results.get(Timeout), "the held request was repeated and answered");
+    }
+}
