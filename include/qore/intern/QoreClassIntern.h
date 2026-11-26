@@ -3654,7 +3654,8 @@ public:
         declaration referenced from outside the Program (QoreTypeOwnerBatch).  Set when the class is made: by the
         import constructor, whose class is new, so that no class reaches it; or by the AOT loader, which refuses a
         class that a class reaches through the classes that it references (the classes that they are injected in place
-        of, their base classes and import sources) once the base classes of all the blobs loaded together are attached
+        of, their base classes and import sources) once the base classes of all the blobs loaded together, and of the
+        source parsed with them, are attached, also if the load fails afterwards
         (QoreAOTBinaryDeserializer::checkClassInjectionCycles())
     */
     const qore_class_private* injectedClass = nullptr;

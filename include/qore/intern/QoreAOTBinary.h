@@ -4418,10 +4418,15 @@ public:
 
     //! Refuses a class injected in place of a class that reaches it through the classes that it references (the
     //! classes that they are injected in place of, their base classes and import sources; qore#7664)
-    /** Run after the base classes of every class that can be reached are attached: after resolveTypes() for a single
-        blob, and after the type resolution of all the sessions of a batch, as a class of one blob can reach the
-        class that it is injected in place of through the classes of another one.  Every class that leads back to
-        itself releases its reference before the image is refused, so that none of them keeps its classes alive.
+    /** Run once base classes are attached, whatever the result of the type resolution, which can fail after
+        attaching some of them: after resolveTypes() for a single blob (resolveTypesAndMembers()); after the type
+        resolution of all the sessions of a batch, as a class of one blob can reach the class that it is injected in
+        place of through the classes of another one; and, when a source is parsed with the blobs preloaded, again
+        after the source is committed, which attaches the base classes of the source's classes that an AOT class can
+        inherit (QoreAOTBinaryMultiDeserializer::finalizeAfterSourceParse()).  Every class that leads back to itself
+        releases its reference before the image is refused, so that none of them keeps its classes alive.  Classes
+        whose base classes are not attached yet, because the type resolution failed before reaching them, cannot close
+        a cycle through them.
     */
     bool checkClassInjectionCycles(std::string& error);
 
@@ -4847,6 +4852,23 @@ private:
         return ok;
     }
 
+    //! Runs the type resolution of every session, then checks the class injections of all of them (qore#7664)
+    /** The injections are checked also if the type resolution of a session failed, as the base classes that it and
+        the sessions before it attached can close a cycle; the error of the type resolution is reported then.
+    */
+    template <typename F>
+    bool resolveTypesAndCheckInjections(F& runSessionPhase, std::string& error) {
+        bool ok = runSessionPhase("AOT type resolution",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.resolveTypes(error);
+            });
+        std::string injection_error;
+        if (!checkClassInjectionCycles(ok ? error : injection_error)) {
+            ok = false;
+        }
+        return ok;
+    }
+
     bool addBlobIntern(QoreAOTBinaryReader&& reader, std::string& error, uint64_t t0) {
         // Apply this blob's %prepend-module-path / %append-module-path lists to
         // the target Program BEFORE shell deserialization runs — so any module
@@ -4961,11 +4983,7 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.registerConstantShellsPhase(error);
                     })) return false;
-            if (!runSessionPhase("AOT type resolution",
-                    [&error](QoreAOTBinaryDeserializer& sess) {
-                        return sess.resolveTypes(error);
-                    })) return false;
-            if (!checkClassInjectionCycles(error)) return false;
+            if (!resolveTypesAndCheckInjections(runSessionPhase, error)) return false;
             if (!runSessionPhase("AOT namespace constant resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveNamespaceConstantsPhase(error);
@@ -5136,13 +5154,7 @@ public:
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT type resolution",
-                [&error](QoreAOTBinaryDeserializer& sess) {
-                    return sess.resolveTypes(error);
-                })) {
-            return false;
-        }
-        if (!checkClassInjectionCycles(error)) {
+        if (!resolveTypesAndCheckInjections(runSessionPhase, error)) {
             return false;
         }
         if (!runSessionPhase("AOT namespace constant resolution",
@@ -5264,6 +5276,11 @@ public:
             }
         } batch_class_lookup_scope{sessions};
 
+        // an AOT class can have a base class of the source parsed, whose own base classes are attached when the
+        // source is committed: the class injections are checked again once it is (qore#7664)
+        if (!checkClassInjectionCycles(error)) {
+            return false;
+        }
         if (!runSessionPhase("AOT abstract import",
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesImportAbstract(error);

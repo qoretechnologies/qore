@@ -12210,7 +12210,18 @@ static void writeTypedefsSection(QoreAOTBinaryWriter& writer, const AOTSerialize
 
     for (auto& ti : state.typedefs) {
         writer.writeStringRef(ti.name.c_str());
+#ifdef DEBUG
+        // test hook: writes the typedef named with a type that no Program has, so that the type resolution of the
+        // image fails after its base classes are attached (qore#7664)
+        if (QoreEnvironmentValue unresolved_holder("QORE_AOT_TEST_UNRESOLVED_TYPEDEF");
+                unresolved_holder.c_str() && ti.name == unresolved_holder.c_str()) {
+            writer.writeStringRef("QoreAOTTestUnresolvedType");
+        } else {
+            writeTypePathRef(writer, ti.typeInfo);
+        }
+#else
         writeTypePathRef(writer, ti.typeInfo);
+#endif
         writer.writeU32(ti.ns_idx);
         writer.writeU8(ti.pub ? 1 : 0);
     }
@@ -17272,13 +17283,15 @@ bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhas
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
-    // the class injections are checked once the base classes are attached (a batch of blobs checks them once those
-    // of all of its blobs are; see QoreAOTBinaryMultiDeserializer)
-    if (!registerConstantShellsPhase(error)
-            || !resolveTypes(error)
-            || !checkClassInjectionCycles(error)
-            || !resolveConstants(error)
-            || !resolveStaticsAndConstants(error)) {
+    bool ok = registerConstantShellsPhase(error) && resolveTypes(error);
+    // the class injections are checked once the base classes are attached, also if the type resolution failed after
+    // attaching some of them, so that no refused class keeps its reference; the first error is reported (a batch of
+    // blobs checks them once the type resolution of all of its blobs is done; see QoreAOTBinaryMultiDeserializer)
+    std::string injection_error;
+    if (!checkClassInjectionCycles(ok ? error : injection_error)) {
+        ok = false;
+    }
+    if (!ok || !resolveConstants(error) || !resolveStaticsAndConstants(error)) {
         return false;
     }
     if (!rebuildRootIndexes(error, IndexPhase::TypeAndValue)) {
