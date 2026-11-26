@@ -5900,7 +5900,10 @@ inline bool isTerminator(QoreIROpcode op) {
 */
 template <typename Instruction>
 inline bool qore_ir_is_string_function_form(const Instruction& inst) {
-    if (!inst.pseudo || !inst.fallback_method_name || !inst.expr.hasNode()) {
+    // the functions that the lowering makes as calls of other pseudo-methods, such as strlen(), raise nothing
+    if (!inst.pseudo || !inst.fallback_method_name || !inst.expr.hasNode()
+            || (inst.intrinsic != QoreIRIntrinsic::StringFind && inst.intrinsic != QoreIRIntrinsic::StringRFind
+                && inst.intrinsic != QoreIRIntrinsic::StringSubstr)) {
         return false;
     }
     qore_type_t t = inst.expr.getInternalNode()->getType();
