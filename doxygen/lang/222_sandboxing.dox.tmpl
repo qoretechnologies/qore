@@ -839,8 +839,29 @@ authenticate();
     creates itself.
 
     An object held in a member of a shared object is a separate object: it is protected only if it is marked itself
-    (the schema objects of a shared schema are).  The mark is not copied with the object: a copy is marked only if its
-    class marks it again, as the schema classes do when trusted code makes the copy.  An object that
+    (the schema objects of a shared schema are).
+
+    A copy of a shared object is an ordinary object with copies of all of its members, also the private ones that the
+    object's classes guard while it is shared (with
+    @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), so code that is sandboxed or acts
+    for sandboxed code (as decided for a change of the object, see
+    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()", with no update
+    scope exemption) cannot copy a shared object: \c copy() raises \c SHARED-OBJECT-ERROR before anything is made, also
+    when called with Reflection or by the code of the object's class, unless the object's class, or one of its base
+    classes, declares a \c copy() method in %Qore code (a builtin copy method does not count); a copy with the copy
+    method of another class than the object's (a base class's, with Reflection) is refused, as it would not run the
+    \c copy() methods of the object's class.  Such a \c copy() method
+    takes responsibility for what the copy keeps: the members are copied before the copy methods run (those of the base
+    classes first), and the method resets the state that its class guards for a shared object, such as its caches and
+    the locks and records of its builds.  A base class's \c copy() method cannot know the members of a subclass, so a
+    class that guards members of its own with
+    @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()" declares its own \c copy() method
+    that resets them.  Trusted code copies shared objects as any other object.  The mark is not copied with the
+    object: a copy is marked only if its class marks it again, as the schema classes do when trusted code makes the
+    copy.  The copy rule follows the other shared-object checks: if they are narrowed to the code of sandboxes that do
+    not trust it, it is too.
+
+    An object that
     \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
     it: trusted code that shares a deserialized object marks it with
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that

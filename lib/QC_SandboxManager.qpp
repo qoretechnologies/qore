@@ -2441,6 +2441,11 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
       object raise a \c SHARED-OBJECT-ERROR exception before anything is changed; reading the members, also through a
       reference, is not affected
     - cannot delete the object with the \c delete operator (\c SHARED-OBJECT-ERROR)
+    - cannot copy the object (\c SHARED-OBJECT-ERROR), also not with Reflection, unless a class of the copy (the
+      object's class or one of its base classes) declares a \c copy() method in %Qore code, which resets what its
+      class guards for a shared object: the copy has copies of all members, also the private ones; a class that guards
+      members of its own with isSharedObject() therefore declares its own \c copy() method; a copy with the copy
+      method of a base class (with Reflection) is refused (see @ref sandbox_shared_objects)
 
     This applies to every code that runs for sandboxed code, also to the methods of the object's own class and to
     Reflection.  A class whose objects maintain state that they build from themselves, such as caches that they build
@@ -2459,7 +2464,7 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
     built.
 
     An object held in a member of a shared object is a separate object: it is shared only if it is marked itself.  A
-    copy of a shared object is not shared unless it is marked; an object that \c Serializable::deserialize() creates
+    copy of a shared object is not shared unless its class marks it; an object that \c Serializable::deserialize() creates
     runs no constructor, so it is not marked by one.
 
     @param obj the object to mark as shared
