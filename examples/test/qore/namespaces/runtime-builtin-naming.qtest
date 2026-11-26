@@ -50,6 +50,7 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
     }
 
     constructor() : QUnit::Test("runtime builtin naming", "1.0") {
+%ifdef QoreDebug
         addTestCase("the import copy of a class keeps its source", \importClassTest());
         addTestCase("the import copy of a class takes its references at once", \importRefsTest());
         addTestCase("a child's copy of an enum keeps its original", \enumCopyTest());
@@ -69,6 +70,13 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
         addTestCase("a variant added through a Program's copy of a shared function is the Program's",
             \copyOnWriteVariantTest());
         addTestCase("a refused variant of a binary module's namespace initialization", \moduleContextTest());
+%else
+        # the cases call debug functions, which a release build of the library does not have, so its parser
+        # does not see them
+        addTestCase("the declarations are added with debug functions", sub () {
+            testSkip("the library has no debugging");
+        });
+%endif
         set_return_value(main());
     }
 
@@ -78,6 +86,7 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
         }
     }
 
+%ifdef QoreDebug
     #! returns a Program in the current execution mode, not parsed yet: a Program in another mode than AST is parsed
     #! once, so the declarations that a case adds to it are added before
     private Program newp() {
@@ -433,4 +442,5 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
             }
         }, "module context");
     }
+%endif
 }
