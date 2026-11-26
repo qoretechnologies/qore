@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyValueAppCycleModule.qm - test module whose initialization runs the code that LazyValueAppCycle.qtest sets
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ./LazyAppActionsHooks.qm
+
+module LazyValueAppCycleModule {
+    version = "1.0";
+    desc = "test module whose initialization runs the code that the test sets, to register lazy values";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        LazyAppActionsHooks::Hooks::run("LazyValueAppCycleModule");
+    };
+}
