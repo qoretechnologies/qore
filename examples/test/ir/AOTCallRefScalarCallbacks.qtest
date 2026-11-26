@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - AOT code generation of call-reference entries and their calls
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+
+%exec-class CallRefScalarCallbacksTest
+
+#! Scalar callbacks called through call-reference entries in AOT code (qore#5578; ported from feature/performance)
+/** AOTIntScalarCallbacks.qr calls int callbacks of many shapes (arithmetic, comparisons, branches, full-width values,
+    exceptions, effects, two arguments) and AOTFunctionRefScalarABI.qr every zero and unary int, float and bool shape,
+    with callees whose returns are typed and auto, in loops with several call sites, caught exceptions and early exits.
+    Each must print its success line in every execution mode and compiled with qcc -O0 and -O3, also with C++ exception
+    handling, without debug information, with the call-reference entries or their calls disabled at compile time and
+    with the runtime's helpers disabled; the generated code must have the entries of the typed scalar targets and the
+    calls of the helpers.
+*/
+class CallRefScalarCallbacksTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = realpath(get_script_dir());
+
+        const Fixtures = {
+            "AOTIntScalarCallbacks.qr": "int-scalar-callbacks: ok\n",
+            "AOTFunctionRefScalarABI.qr": "scalar-abi: ok\n",
+        };
+
+        #! the functions of each fixture that must have a call-reference entry
+        const EntryFunctions = {
+            "AOTIntScalarCallbacks.qr": ("scalarAdd", "scalarSub", "scalarMul", "scalarAnd", "scalarOr", "scalarXor",
+                "scalarMin", "scalarMax", "scalarEq", "scalarNe", "scalarLt", "scalarLe", "scalarGt", "scalarGe",
+                "scalarRight", "scalarBranch", "scalarTwo"),
+            "AOTFunctionRefScalarABI.qr": ("target_int_zero", "target_int_int", "target_int_float", "target_int_bool",
+                "target_float_zero", "target_float_int", "target_float_float", "target_float_bool", "target_bool_zero",
+                "target_bool_int", "target_bool_float", "target_bool_bool", "plus_one", "plus_half"),
+        };
+
+        #! the compile-time environments
+        const CompileEnvs = ("", "QORE_AOT_EH=1", "QORE_AOT_NO_DEBUG_INFO=1",
+            "QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION=1", "QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1",
+            "QORE_DISABLE_AOT_CALLREF_NATIVE_STORE=1");
+    }
+
+    constructor() : QUnit::Test("scalar callbacks through call-reference entries", "1.0", \ARGV) {
+        foreach string fixture in (keys Fixtures) {
+            string f = fixture;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string m = mode;
+                addTestCase(f + " " + m, sub () {
+                    assertEq(Fixtures{f}, ExecModeHarness::run(sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin),
+                        m, shellQuote(dir + "/" + f))));
+                });
+            }
+            addTestCase(f + " qcc", sub () { checkQcc(f); });
+        }
+        set_return_value(main());
+    }
+
+    private checkQcc(string fixture) {
+        if (!qcc_bin) {
+            testSkip("qcc not found");
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string source = dir + "/" + fixture;
+        string program = tmp + "/fixture";
+        foreach string env in (CompileEnvs) {
+            foreach int opt in ((0, 3)) {
+                string label = sprintf("%s -O%d", env ?: "default", opt);
+                string ir = backquote(sprintf("cd %s && QORE_DUMP_LLVM_IR=1 %s %s -O%d -o %s %s 2>&1", shellQuote(tmp),
+                    env, shellQuote(qcc_bin), opt, shellQuote(program), shellQuote(source)));
+                assertTrue(is_file(program), label + ": compiled: " + ir.substr(-2000));
+                bool entries = env != "QORE_DISABLE_AOT_CALLREF_ENTRY_EMISSION=1";
+                foreach string name in (EntryFunctions{fixture}) {
+                    assertEq(entries, regex(ir, "define internal i64 @" + name + "_[^ ]*_cref\\(ptr"),
+                        label + ": entry of " + name);
+                }
+                assertEq(env != "QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS=1", ir =~ /call i32 @qore_rt_call_ref_/,
+                    label + ": helper calls");
+                assertEq(Fixtures{fixture}, backquote(sprintf("%s 2>&1", shellQuote(program))), label);
+                assertEq(Fixtures{fixture}, backquote(sprintf("QORE_DISABLE_AOT_CALLREF_ENTRIES=1 %s 2>&1",
+                    shellQuote(program))), label + ": helpers disabled");
+                unlink(program);
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

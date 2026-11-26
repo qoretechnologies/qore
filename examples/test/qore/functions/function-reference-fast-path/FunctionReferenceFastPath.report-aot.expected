@@ -1,11 +1,11 @@
-int: fast
-float: fast
+int: native
+float: native
 string: fast
-bool: fast
+bool: native
 list: generic
 hash, 2 args: fast
-no args: fast
-3 args: fast
+no args: native
+3 args: native
 auto param: generic
 given temporaries: fast
 given temporary, return type and destructor exception: fast
@@ -15,13 +15,13 @@ nested exception: fast
 exceptions in a loop: fast
 return type: fast
 named: generic
-positional after named: fast
+positional after named: native
 too few args: generic
 too many args: generic
 no arg for a parameter: generic
 wrong type: generic
 NOTHING arg: generic
-wrong type after warm-up: fast
+wrong type after warm-up: native
 default argument: generic
 overloaded: generic
 synchronized: generic
@@ -29,12 +29,12 @@ soft parameter: generic
 implicit arguments: fast
 reference argument: generic
 overload added later: fast
-concurrent first use: fast
-background: fast
+concurrent first use: native
+background: native
 module function: fast
 module function exception: fast
 module's reference: fast
-script reference called by the module: fast
+script reference called by the module: native
 deleted Program: generic
 thread entry handler: generic
 trusted self call: fast

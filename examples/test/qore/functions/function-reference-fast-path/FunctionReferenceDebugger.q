@@ -7,7 +7,8 @@
 # give the debugger the function's entry, as the AST interpreter does; the loop's frame keeps running.
 #
 # With the argument "report" (debug builds), it also prints how many calls took the fast path after the debugger
-# attached (dbg_function_reference_fast_calls()), which must be none.
+# attached (dbg_function_reference_fast_calls(), and dbg_function_reference_native_calls() for the call-reference
+# entries of AOT code), which must be none.
 
 %modern
 %allow-debugger
@@ -62,7 +63,9 @@ int sub run_loop(code f, int n, int k, *Queue ready, *Queue go) {
 }
 
 int sub fast_calls() {
-    return report ? call_function("dbg_function_reference_fast_calls") : 0;
+    # the calls through call-reference entries of AOT code (qore#5578) skip the generic call path too
+    return report ? call_function("dbg_function_reference_fast_calls")
+        + call_function("dbg_function_reference_native_calls") : 0;
 }
 
 # the warm-up compiles the code in the compiled execution modes and takes the facts of the fast path

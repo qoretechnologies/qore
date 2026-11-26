@@ -1,0 +1,7 @@
+module's own reference: native
+module's own float reference: native
+module's exception: fast
+module's reference given back: native
+script's reference called by the module: generic
+module's reference called by the script: generic
+another Program: native
