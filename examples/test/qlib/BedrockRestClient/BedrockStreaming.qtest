@@ -79,6 +79,7 @@ class BedrockStreamWireFixture {
 class BedrockStreamingTest inherits QUnit::Test {
     constructor() : Test("Bedrock native event streaming", "1.0", \ARGV) {
         addTestCase("fragmented frames, decoded bytes, and clean EOF", \fragmentedTest());
+        addTestCase("waitForResponse() checks the response without reading an event", \waitForResponseTest());
         addTestCase("text is delivered before response completion", \incrementalTest());
         addTestCase("streaming request signature matches the actual wire", \signatureTest());
         addTestCase("HTTP errors and non-event response bodies fail", \httpErrorTest());
@@ -124,6 +125,66 @@ class BedrockStreamingTest inherits QUnit::Test {
 
     private list<hash<ChatMessage>> messages() {
         return (<ChatMessage>{"role": "user", "content": "hi"},);
+    }
+
+    #! waitForResponse() checks the response as readEvent() does, and keeps the data that arrived with it (qore#7661)
+    private waitForResponseTest() {
+        # the first event arrives with the response headers: it is read after the wait
+        {
+            BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            on_exit stream.close();
+            hash<auto> info = stream.waitForResponse(5s);
+            assertEq(200, info.status_code);
+            assertEq("stream-fixture", info.headers."x-amzn-requestid");
+            # waiting again returns at once
+            assertEq(200, stream.waitForResponse(5s).status_code);
+            assertEq({"messageStop": {"stopReason": "end_turn"}}, stream.readEvent(5s));
+            assertNothing(stream.readEvent(5s), "clean EOF");
+        }
+        # an error status: the response is the argument, for the retry policy
+        {
+            BedrockStreamWireFixture server((binary("{}"),), -1, 429, "application/json");
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            on_exit stream.close();
+            try {
+                stream.waitForResponse(5s);
+                assertTrue(False, "an error status raises an exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("AWS-EVENT-STREAM-HTTP-ERROR", ex.err);
+                assertEq("AWS event stream returned HTTP 429", ex.desc);
+                assertEq(429, ex.arg.status_code);
+                assertEq("stream-fixture", ex.arg.headers."x-amzn-requestid");
+            }
+        }
+        # a successful response that is not an event stream
+        {
+            BedrockStreamWireFixture server((binary("{}"),), -1, 200, "application/json");
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            on_exit stream.close();
+            assertThrows("AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got application/json",
+                \stream.waitForResponse(), 5s);
+        }
+        # an empty event stream ends cleanly after the wait
+        {
+            BedrockStreamWireFixture server(());
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            on_exit stream.close();
+            assertEq(200, stream.waitForResponse(5s).status_code);
+            assertNothing(stream.readEvent(5s));
+        }
+        # a closed stream
+        {
+            BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"}),), 0);
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            stream.close();
+            assertThrows("AWS-EVENT-STREAM-CLOSED", \stream.waitForResponse(), 5s);
+        }
     }
 
     private fragmentedTest() {

@@ -85,6 +85,8 @@ public class I18nGeneratorRecordTest inherits QUnit::Test {
         addTestCase("a record that names no Qore is an error", \invalidRecordTest());
         addTestCase("--record-qore records this Qore for current catalogs only", \recordQoreTest());
         addTestCase("each catalog directory has its own record", \catalogDirectoryTest());
+        addTestCase("the Qore checkout is the one the tool is in, also through a relative path",
+            \checkoutFromToolPathTest());
         set_return_value(main());
     }
 
@@ -383,6 +385,42 @@ public class I18nGeneratorRecordTest inherits QUnit::Test {
         assertNRegex("OTHER-QORE", log, "a current directory of another Qore is not reported");
     }
 
+    #! Without QORE_SRC_DIR, the Qore checkout is the one the tool is in, whether it is run through a relative
+    #! path from the checkout, an absolute path or a symbolic link to it (qore#7689)
+    checkoutFromToolPathTest() {
+        if (!checkGit()) {
+            return;
+        }
+        # a copy of the tool in the fixture history, as the tool is in bin/ of a Qore checkout
+        string bin = history + DirSep + "bin";
+        if (!is_dir(bin)) {
+            mkdir(bin);
+        }
+        string tool = bin + DirSep + "qore-data-provider-i18n";
+        writeText(tool, ReadOnlyFile::readTextFile(root + DirSep + "bin/qore-data-provider-i18n"));
+        chmod(tool, 0755);
+        # a symbolic link to the tool outside the checkout
+        string link = work + DirSep + "qore-data-provider-i18n-link";
+        if (!is_file(link)) {
+            symlink(tool, link);
+        }
+        foreach string invocation in (("bin/qore-data-provider-i18n", tool, link)) {
+            string out = newOutput("checkout-" + $#);
+            string log;
+            assertEq(0, runTool(out, "", \log, "first", NOTHING, NOTHING, OwnerModule, invocation, history, False),
+                invocation + ": extraction succeeds: " + log);
+            # ordering the Qores needs the checkout
+            assertEq(0, runTool(out, "", \log, "second", NOTHING, NOTHING, OwnerModule, invocation, history, False),
+                invocation + ": a newer Qore is ordered with the checkout of the tool: " + log);
+            assertEq({"version": "3.0.0", "git_hash": commits.second}, readRecord(out){Generator},
+                invocation + ": the newer Qore is recorded");
+            # and an older one is refused, as with QORE_SRC_DIR
+            assertEq(1, runTool(out, "", \log, "first", NOTHING, NOTHING, OwnerModule, invocation, history, False),
+                invocation + ": an older Qore is refused: " + log);
+            assertRegex("generated with a newer Qore", log, invocation);
+        }
+    }
+
     #! Runs the tool on the catalogs of the fixture owner module
     /** @param output the output directory
         @param mode the mode options
@@ -392,12 +430,16 @@ public class I18nGeneratorRecordTest inherits QUnit::Test {
         @param extra more options
         @param qore_src the Qore checkout (QORE_SRC_DIR); the fixture history by default
         @param owner_module the owner module of the catalogs
+        @param tool the path to run the tool with; the tool of this checkout by default
+        @param cwd the directory to run the tool in; the current directory by default
+        @param qore_src_env if @ref False, the tool is run without QORE_SRC_DIR (also without one in the environment)
 
         @return the exit status of the tool
     */
     private int runTool(string output, string mode, reference<string> log, *string qore, *string extra,
-            *string qore_src, string owner_module = OwnerModule) {
-        list<string> module_path = (root + DirSep + "qlib", get_script_dir());
+            *string qore_src, string owner_module = OwnerModule, *string tool, *string cwd, bool qore_src_env = True) {
+        # absolute: the tool can run in another directory
+        list<string> module_path = (root + DirSep + "qlib", realpath(get_script_dir()));
         string real_qore = realQore();
         # the binary modules come from the build tree of the qore under test when it has one
         *string build = QoreBuildTree::build_dir();
@@ -405,22 +447,28 @@ public class I18nGeneratorRecordTest inherits QUnit::Test {
             module_path += (build + DirSep + "modules/i18n", build + DirSep + "modules/json");
         }
         if (exists ENV.QORE_MODULE_DIR) {
-            module_path += ENV.QORE_MODULE_DIR;
+            # absolute, as the tool can run in another directory
+            module_path += map (is_dir($1) ? realpath($1) : $1), ENV.QORE_MODULE_DIR.split(PathSep);
         }
         string env = "QORE_MODULE_DIR=" + shellQuote(module_path.join(PathSep));
         if (build) {
-            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? build);
+            string ld_path = ENV.LD_LIBRARY_PATH ?? build;
+            env += " LD_LIBRARY_PATH=" + shellQuote((map (is_dir($1) ? realpath($1) : $1),
+                ld_path.split(PathSep)).join(PathSep));
         }
-        if (qore_src || history) {
+        if (!qore_src_env) {
+            # an empty value is no checkout
+            env += " QORE_SRC_DIR=";
+        } else if (qore_src || history) {
             env += " QORE_SRC_DIR=" + shellQuote(qore_src ?? history);
         }
         string qore_bin = qore ? fakeQore(qore) : real_qore;
         int rc;
         # --check-tree loads no provider module
         string owner = mode =~ /^--check-tree/ ? "" : "--owner " + owner_module;
-        log = backquote(sprintf("%s %s %s -C %s -o %s %s %s 2>&1", env, shellQuote(qore_bin),
-            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), mode, shellQuote(output), owner,
-            extra ?? ""), \rc);
+        log = backquote(sprintf("%s%s %s %s -C %s -o %s %s %s 2>&1", cwd ? "cd " + shellQuote(cwd) + " && " : "",
+            env, shellQuote(qore_bin), shellQuote(tool ?? (root + DirSep + "bin/qore-data-provider-i18n")), mode,
+            shellQuote(output), owner, extra ?? ""), \rc);
         return rc;
     }
 
