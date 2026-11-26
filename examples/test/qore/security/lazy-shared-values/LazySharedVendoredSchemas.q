@@ -8,6 +8,9 @@
 %enable-all-warnings
 %no-child-restrictions
 
+# loaded before the provider modules, so that the AWS and Azure clients find no credentials of the host (the test
+# makes no call to a service)
+%requires ../../../LiveProviderTest.qm
 %requires AssemblyAiDataProvider
 %requires AzureOpenAiDataProvider
 %requires BedrockDataProvider
