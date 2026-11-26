@@ -69,6 +69,8 @@ struct QoreLazySharedEntry {
     bool built = false;
     //! the value once it is published
     QoreValue value;
+    //! the key of the entry of a LazySharedMap (UTF-8), for the removal of a failed build
+    std::string key;
 };
 
 //! The private data shared by LazySharedValue and LazySharedMap: the builder, its trusted build capability, the lock

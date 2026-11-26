@@ -385,6 +385,7 @@ QoreValue QoreLazySharedMap::get(const QoreStringNode* key, int64 timeout_ms, Ex
             }
             try {
                 entry = std::make_shared<QoreLazySharedEntry>();
+                entry->key = kstr;
                 entries[kstr] = entry;
             } catch (std::bad_alloc&) {
                 xsink->outOfMemory();
@@ -403,12 +404,11 @@ QoreValue QoreLazySharedMap::get(const QoreStringNode* key, int64 timeout_ms, Ex
 }
 
 void QoreLazySharedMap::buildFailed(const std::shared_ptr<QoreLazySharedEntry>& entry) {
-    // a key whose build fails leaves no entry, so that keys that callers give cannot make the map grow
-    for (auto i = entries.begin(), e = entries.end(); i != e; ++i) {
-        if (i->second == entry) {
-            entries.erase(i);
-            return;
-        }
+    // a key whose build fails leaves no entry, so that keys that callers give cannot make the map grow; removed by key,
+    // and only if the entry is still the one of the key
+    auto i = entries.find(entry->key);
+    if (i != entries.end() && i->second == entry) {
+        entries.erase(i);
     }
 }
 
