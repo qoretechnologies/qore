@@ -86,6 +86,7 @@
     |!Long Param|!Short|!Description
     |<tt>--compile</tt>|n/a|Compile the script to a standalone native executable
     |<tt>--compile-module</tt>|n/a|Compile a <tt>.qm</tt> module to a binary module (<tt>.qmod</tt>)
+    |<tt>--compile-debugging</tt>|n/a|Compile with debugging, as <tt>qcc -g</tt> (see @ref aot_debugging)
     |<tt>--output=</tt><em>path</em>|\c -o|Specify output path for compiled binary (default: script name without extension)
     |<tt>--strip-source</tt>|n/a|Remove source code from compiled binary (for IP protection)
     |<tt>--opt-level=</tt><em>N</em>|n/a|LLVM optimization level 0-3 (default: 2)
@@ -120,7 +121,7 @@
     |<tt>--include-source</tt>|Embed source text in the artifact
     |<tt>--strip-source</tt>|Omit source text; this is the \c qcc default
     |<tt>--strip-debug-info</tt>|Omit DWARF debug information
-    |<tt>-g</tt>|Emit DWARF debug information
+    |<tt>-g</tt>|Compile with debugging: calls report their entry and exit to a debugger attached at any time and every function can be stepped, at a cost in performance (see @ref aot_debugging); DWARF debug information is emitted without it too
     |<tt>--time-trace[=</tt><em>path</em><tt>]</tt>|Emit Chrome-format LLVM timing trace
     |<tt>--big-fn-threshold=</tt><em>N</em>|Compile very large functions with \c OptimizeNone, default 200
     |<tt>-e</tt>, <tt>--entry=</tt><em>fn</em>|Entry function for generated one-shot or link-mode \c main()

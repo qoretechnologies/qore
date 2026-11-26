@@ -1768,6 +1768,12 @@
     @ref aot_modules "AOT-compiled", and non-modern code keeps @ref exec_mode_ast "AST" execution.  LLVM 16 or later
     is required; see @ref execution_modes "Execution Modes".
 
+    @par Debug Support of AOT-Compiled Code Is Compiled with qcc -g
+    AOT-compiled code gets the debug support that costs performance (call events for a debugger attached at any time,
+    stepping of every function) only with @ref aot_debugging "qcc -g", which standard modules get only with
+    \c QORE_QMOD_DEBUGGING; a debugger attached while code compiled without it is loaded gets a warning once
+    (<a href="https://github.com/qoretechnologies/qore/issues/7676">issue 7676</a>).
+
     @par New Required Libraries and Async Networking Stack
     Building %Qore requires Brotli, Zstd, LZ4, Eigen3, ICU, libprotobuf, Kerberos 5 (GSSAPI) and LibYAML, and the
     async networking stack (nghttp2, ngtcp2, nghttp3 and c-ares for asynchronous DNS), which the build downloads

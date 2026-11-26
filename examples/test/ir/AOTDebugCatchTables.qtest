@@ -98,7 +98,7 @@ background sub () {
             testSkip("qcc is not available");
         }
         string exe = tmp.path + "/catch-scope-handlers-debug";
-        string out = run(sprintf("%s -O0 -o %s %s", qcc_bin, exe, script), True);
+        string out = run(sprintf("%s -O0 -g -o %s %s", qcc_bin, exe, script), True);
         assertTrue(is_file(exe), "qcc compiles the program: " + out);
         string expected = run(sprintf("%s --exec-mode=ast %s plain", qore_bin, script));
         assertEq(expected, run(exe + " debug"), "the debug IR of the executable");

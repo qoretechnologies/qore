@@ -66,7 +66,7 @@ class AOTDebugTemporaryExceptionTest inherits QUnit::Test {
         TmpDir tmp("qore-aot-debug-temporary-");
         foreach bool strip in ((False, True)) {
             string exe = tmp.path + "/worker" + (strip ? "-stripped" : "");
-            ExecModeHarness::run_any(prefix + shellQuote(qcc_bin) + " -O2"
+            ExecModeHarness::run_any(prefix + shellQuote(qcc_bin) + " -O2 -g"
                 + (strip ? " --strip-source" : "") + " -o " + shellQuote(exe) + " " + shellQuote(worker));
             assertEq(Result, ExecModeHarness::run_any(prefix + shellQuote(exe) + " -b --enable-debug native"), "native AOT");
             assertEq(ast, ExecModeHarness::run_any(prefix + shellQuote(exe) + " -b --enable-debug debug"),

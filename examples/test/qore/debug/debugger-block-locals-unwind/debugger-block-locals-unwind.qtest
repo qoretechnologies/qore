@@ -116,7 +116,7 @@ closure: [5]
     aotTest(int opt) {
         TmpDir tmp("qore-debugger-block-locals-unwind-");
         string exe = tmp.path + DirSep + "debugger-block-locals-unwind";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("DBG=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,

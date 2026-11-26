@@ -181,7 +181,7 @@ class TopLevelFrameTest inherits QUnit::Test {
         TmpDir tmp("qore-top-level-frame-");
         foreach int opt in (0, 3) {
             string exe = sprintf("%s%stop-level-frame-O%d", tmp.path, DirSep, opt);
-            string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
                 script));
             assertTrue(is_file(exe), "compiled the executable: " + out);
             assertEq(ExpectedAot, getLines(ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "

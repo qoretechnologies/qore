@@ -847,6 +847,8 @@ static bool apply_parse_option_flags(QoreParseOptions& po, std::string& error) {
 static bool show_targets = false;
 // Phase 1 compile-time opt:
 static bool strip_debug_info = false;
+//! -g: compile with debugging (qore#7676): the debug support that costs performance (see the help text)
+static bool compile_debugging = false;
 static const char* time_trace_path = nullptr;
 // Phase 5a: OptimizeNone+NoInline for functions exceeding this block count
 // (0 = disabled). Trades runtime optimization for dramatic compile-time
@@ -1430,7 +1432,11 @@ static void print_usage(const char* prog) {
            "                         Input files and depfiles keep physical paths. Not\n"
            "                         for incremental .qo or object-link modes.\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
-    printf("  -g                     Emit DWARF debug info (default)\n");
+    printf("  -g                     Compile with debugging: calls report their entry and exit\n"
+           "                         to a debugger attached at any time, every function can be\n"
+           "                         stepped, and -O0 keeps the calls to step into; costs\n"
+           "                         performance, so off by default (DWARF debug info is on\n"
+           "                         either way unless --strip-debug-info)\n");
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
     printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
@@ -1639,8 +1645,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 strip_debug_info = true;
                 break;
             case 'g':
-                // -g: explicitly request debug info (default, but overrides --strip-debug-info
-                // when both given)
+                // -g: compile with debugging (qore#7676), which includes the DWARF debug info (on by default; -g
+                // overrides an earlier --strip-debug-info)
+                compile_debugging = true;
                 strip_debug_info = false;
                 break;
             case 'Y':
@@ -1921,6 +1928,10 @@ struct AOTDumpMetadataBlob {
 static uint16_t read_u16_le(const uint8_t* p) {
     return static_cast<uint16_t>(p[0])
         | (static_cast<uint16_t>(p[1]) << 8);
+}
+
+static uint32_t read_u32_le(const uint8_t* p) {
+    return static_cast<uint32_t>(read_u16_le(p)) | (static_cast<uint32_t>(read_u16_le(p + 2)) << 16);
 }
 
 //! Returns the length of the encoded AOT metadata at \a data, with its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
@@ -4122,9 +4133,10 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     }
     printf("\n");
     printf("    label: %s\n", label ? label : "");
-    printf("    kind:%s%s\n",
+    printf("    kind:%s%s%s\n",
         (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",
-        (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "");
+        (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "",
+        (hdr.flags & QORE_AOT_FLAG_DEBUGGING) ? " debugging" : "");
     printf("    format: %u (current %u)%s%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
         hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH",
         (hdr.flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? ", checksum verified" : "");
@@ -5704,6 +5716,32 @@ static void collect_object_metadata_quiet(const char* path,
     }
 
     extract_aot_metadata_from_object(*obj, blobs, seen);
+}
+
+//! Returns true if every AOT binary in the objects was compiled with the debugging choice of this link (qore#7676)
+/** Linked code is code with debugging only if all of it was compiled with it, and a module linked from objects (-F, -a)
+    makes the debug IR and slot maps of its functions again with the choice of the link; an object compiled with
+    another choice is an error, which names it
+*/
+static bool check_link_inputs_debugging(const std::vector<std::string>& paths, const char* mode_label) {
+    for (const std::string& path : paths) {
+        std::vector<AOTDumpMetadataBlob> blobs;
+        std::set<std::string> seen;
+        collect_object_metadata_quiet(path.c_str(), blobs, seen);
+        for (const AOTDumpMetadataBlob& blob : blobs) {
+            if (blob.bytes.size() < 8 || read_u32_le(blob.bytes.data()) != QORE_AOT_BINARY_MAGIC) {
+                continue;
+            }
+            const bool debugging = (read_u16_le(blob.bytes.data() + 6) & QORE_AOT_FLAG_DEBUGGING) != 0;
+            if (debugging != compile_debugging) {
+                fprintf(stderr, "error: %s: '%s' was compiled %s debugging (qcc -g), but the link is %s it; compile "
+                    "and link all objects with the same -g choice\n", mode_label, path.c_str(),
+                    debugging ? "with" : "without", compile_debugging ? "with" : "without");
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static std::string hex64_string(uint64_t value) {
@@ -8214,6 +8252,7 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
     write_json_file_string_field(f, "target_triple", target_triple ? target_triple : "", 4);
     write_json_file_bool_field(f, "include_source", include_source, 4);
     write_json_file_bool_field(f, "strip_debug_info", strip_debug_info, 4);
+    write_json_file_bool_field(f, "debugging", compile_debugging, 4);
     write_json_file_bool_field(f, "warnings_are_errors", warnings_are_errors, 4);
     write_json_file_bool_field(f, "allow_unresolved_imports", allow_unresolved_qo_imports, 4);
     write_json_file_bool_field(f, "strict_call_relocations", strict_call_relocations, 4);
@@ -9923,6 +9962,9 @@ static int link_script_objects_to_executable(const std::string& output,
             mode_label, output.c_str());
         return 1;
     }
+    if (!check_link_inputs_debugging(object_paths, mode_label)) {
+        return 1;
+    }
     if (!validate_script_object_body_contracts(object_paths)) {
         return 1;
     }
@@ -10121,6 +10163,13 @@ int main(int argc, char** argv) {
     // (AOT layer already reads several QORE_AOT_* vars; this extends the set).
     if (strip_debug_info) {
         SystemEnvironment::set("QORE_AOT_NO_DEBUG_INFO", "1", 1);
+    }
+    // the compilation has debugging exactly when -g is given, whatever the environment says, as the manifest records
+    // the option (qore#7676)
+    if (compile_debugging) {
+        SystemEnvironment::set("QORE_AOT_DEBUGGING", "1", 1);
+    } else {
+        SystemEnvironment::unset("QORE_AOT_DEBUGGING");
     }
     if (time_trace_path) {
         SystemEnvironment::set("QORE_AOT_TIME_TRACE", time_trace_path, 1);
@@ -10395,6 +10444,12 @@ int main(int argc, char** argv) {
             return 0;
         }
 
+        {
+            std::vector<std::string> link_paths(argv + optind, argv + argc);
+            if (!check_link_inputs_debugging(link_paths, "--link-qo")) {
+                return 1;
+            }
+        }
         std::vector<QOLinkInputInfo> inputs;
         inputs.reserve(argc - optind);
         qcc_init_qore();
@@ -10762,6 +10817,9 @@ int main(int argc, char** argv) {
             output = basename + ".qoa";
         }
 
+        if (!check_link_inputs_debugging(object_paths, "archive")) {
+            return 1;
+        }
         qcc_init_qore();
         std::string error;
         bool ok = QoreAOT::archiveModuleFromObjects(
@@ -10834,6 +10892,9 @@ int main(int argc, char** argv) {
             output = basename + ".qmod";
         }
 
+        if (!check_link_inputs_debugging(object_paths, "--from-objects")) {
+            return 1;
+        }
         qcc_init_qore();
         std::string error;
         bool ok = QoreAOT::compileModuleFromObjects(

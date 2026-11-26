@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the entry of the executable that aot-debugging-option.qtest links from an object compiled with or without -g
+%modern
+
+int sub dbgOptEntry() {
+    printf("linked\n");
+    return 0;
+}

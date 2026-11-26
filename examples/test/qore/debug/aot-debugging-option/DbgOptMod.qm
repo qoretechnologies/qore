@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the module that aot-debugging-option.qtest compiles with qcc, with and without -g
+%modern
+
+module DbgOptMod {
+    version = "1.0";
+    desc = "a module compiled ahead of time for aot-debugging-option.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DbgOptMod {
+    public int sub dbgOptAdd(int a, int b) {
+        return a + b;
+    }
+}

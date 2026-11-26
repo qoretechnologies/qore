@@ -630,7 +630,11 @@ Why:
 - the paths of every step event cost about 15-19% of the JIT compile time of code with step events (all code that is
   not parsed with `%no-debugging`), and the continue edges into a loop changed the native code of the loop's hot path;
 - new calls of AOT code under a debugger run its debug IR in the IR interpreter
-  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v46).
+  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v46).  In code
+  compiled without debugging (no `qcc -g`, qore#7676), a function whose native code's IR was rewritten or has call
+  forms that the debug IR cannot express has no debug IR and runs its native code, and the native code makes its direct
+  calls without checking for a debugger (`AOTDebuggerChecks::None`); the binary has no `QORE_AOT_FLAG_DEBUGGING`, and a
+  debugger attached while it is loaded gets one warning (`qore_aot_note_code_without_debugging()`).
 
 A request at a step event of code without paths:
 | Code | Return | Break or continue |
