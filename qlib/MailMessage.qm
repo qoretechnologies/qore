@@ -76,6 +76,7 @@ msg.addTO("My Best Friend <you@friend.com>");
     @section mailmessage_relnotes MailMessage Release Notes
 
     @subsection mailmessage_v1_5_1 MailMessage 1.5.1
+    - @ref Message::addPlainAlternative() composes an HTML message with a plain-text alternative.
     - The multipart boundary of a message (@ref MailMessage::Message::mpboundary "Message::mpboundary") is random,
       and another one is used (and set in the member) when a part of the message contains it; it is also the
       boundary of a message with alternative parts and no attachments; it was made from the current time, so the
@@ -998,9 +999,9 @@ public class Message {
         if (parts) {
             rv.parts = map cast<hash<PartInfo>>($1.getInfo()), parts;
         }
-        rv.is_multipart = isMultipartMsg;
-        if (multipartType) {
-            rv.multipart_type = multipartType;
+        rv.is_multipart = isMultipart();
+        if (*string subtype = getMultipartType()) {
+            rv.multipart_type = subtype;
         }
         rv.is_signed = isSignedMsg;
         rv.is_encrypted = isEncryptedMsg;
@@ -1012,7 +1013,7 @@ public class Message {
     /** @return @ref True if the message has a multipart content type
     */
     bool isMultipart() {
-        return isMultipartMsg;
+        return isMultipartMsg || !parts.empty();
     }
 
     #! Returns the multipart subtype if this is a multipart message
@@ -1020,6 +1021,9 @@ public class Message {
         or @ref nothing if this is not a multipart message
     */
     *string getMultipartType() {
+        if (!isMultipartMsg && parts) {
+            return attachments ? "mixed" : "alternative";
+        }
         return multipartType;
     }
 
@@ -1073,6 +1077,8 @@ public class Message {
         \c "."; use this method for a message that is stored or uploaded as a whole, for example with the IMAP
         \c APPEND command or an API that takes a raw message, rather than sent with the SMTP \c DATA command.
 
+        @param include_bcc include blind-copy headers (omit them for SMTP envelope delivery)
+
         @return the message with its headers, ending with CRLF
 
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent
@@ -1085,7 +1091,7 @@ imap.append("Sent", msg.serializeRaw());
 
         @since MailMessage 1.5.1
     */
-    string serializeRaw() {
+    string serializeRaw(bool include_bcc = True) {
         # throws a MESSAGE-ERROR exception if the message cannot be sent
         checkSendPossible();
 
@@ -1093,7 +1099,7 @@ imap.append("Sent", msg.serializeRaw());
         # of the encoding that its Content-Type declares; it was converted to UTF-8 with the headers.  The headers
         # are ASCII once encoded, so they are the same bytes in any ASCII-compatible encoding.
         string enc = Message::getSerializationEncoding(body);
-        string str = convert_encoding(getHeaderString(), enc);
+        string str = convert_encoding(getHeaderString("\r\n", True, include_bcc), enc);
 
         # is this a multipart msg?
         if (attachments || parts) {
@@ -2688,6 +2694,28 @@ msg.addBCC(untrusted_name, "j@x.com");
         self.body = body;
     }
 
+    #! Adds a plain-text representation of the current HTML body
+    /** Set a string body of type \c text/html with @ref setBody() first. The plain text becomes the primary
+        body returned by @ref getBody(), followed by the original HTML in @ref getParts(). The HTML retains
+        its charset and transfer encoding. Attachments can be added before or after this call.
+
+        @param plain nonempty text to send to readers that display plain text
+
+        @throw BODY-ERROR the message already has alternative parts, the HTML body is missing or has
+        another content type, or the plain text is empty
+    */
+    addPlainAlternative(string plain) {
+        *string ct = getBodyContentTypeIntern();
+        if (parts || body.typeCode() != NT_STRING || !body || ct !~ /^\s*text\/html\s*(;|$)/i || !plain) {
+            throw "BODY-ERROR", "a plain-text alternative requires nonempty plain text and a single text/html "
+                "string body";
+        }
+        string enc = bodyEncoding == ContentEncoding::None ? Message::getRawTransferEncoding(body) : bodyEncoding;
+        Part html("", ct, body, enc);
+        setBody(plain, ContentEncoding::Default, MimeTypeText);
+        push parts, html;
+    }
+
     #! concatenates a string to the message body
     /** @param str the string to concatenate to the Message body
 
@@ -3009,7 +3037,9 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @param eol the End-Of-Line marker for the string, also used to fold long headers
         @param encode encode non-ASCII values with RFC 2047 encoded words (http://tools.ietf.org/html/rfc2047)
 
-        @return a string with all the message headers separated by the EOL marker
+        @param include_bcc include blind-copy headers
+
+        @return a string with the message headers separated by the EOL marker
 
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
         type of the body; the \c From header has the display name of the sender, and only the display name is
@@ -3017,7 +3047,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         folded with \a eol; the \c Subject and \c From headers of a parsed message that does not have them are not
         written: getting the headers raised \c RUNTIME-OVERLOAD-ERROR
     */
-    string getHeaderString(string eol = "\r\n", bool encode = True) {
+    string getHeaderString(string eol = "\r\n", bool encode = True, bool include_bcc = True) {
         # a parsed message can have no sender and no subject, and then these headers are not written (issue #6267)
         string hdr = exists from ? doSenderHeader("From", eol, encode) : "";
 
@@ -3030,8 +3060,11 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += Message::doAddressHeader("CC", l, cc_raw[$#], eol, encode);
 
         # BCC:
-        foreach string l in (bcc)
-            hdr += Message::doAddressHeader("BCC", l, bcc_raw[$#], eol, encode);
+        if (include_bcc) {
+            foreach string l in (bcc) {
+                hdr += Message::doAddressHeader("BCC", l, bcc_raw[$#], eol, encode);
+            }
+        }
 
         # add the subject - use "QP" encoding to ensure correct transmission & display of special characters through all SMTP servers
         if (exists subject) {
@@ -3057,7 +3090,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
 
         # additional headers
         foreach string k in (keys headers) {
-            if (mime && MimeHeaders{k.lwr()}) {
+            if ((mime && MimeHeaders{k.lwr()}) || (!include_bcc && k.lwr() == "bcc")) {
                 continue;
             }
             hdr += Message::doHeaderValue(k, headers{k}, eol, encode);

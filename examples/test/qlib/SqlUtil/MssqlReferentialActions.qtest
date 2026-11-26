@@ -44,6 +44,7 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         addTestCase("foreign constraint actions are given in the SQL", \actionSql());
         addTestCase("RESTRICT is refused", \restrictRefused());
         addTestCase("Sybase refuses referential actions", \sybaseRefused());
+        addTestCase("identity settings round trip from sys.identity_columns", \identityColumns());
         addTestCase("actions are described from the catalog", \actionDescription());
         addTestCase("sequences are created with their description", \sequenceCreateSql());
         addTestCase("sequence alignment alters the parameters that differ", \sequenceAlterSql());
@@ -158,6 +159,25 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
 
     #! The actions of foreign constraints in the catalog are those of the template: no SQL; another action drops the
     #! constraint and adds it again
+    identityColumns() {
+        CatalogDatasource ds = catalogDatasource();
+        ds.columns.mra_identity = {
+            "column_name": ("id",), "data_type": ("bigint",), "numeric_precision": (19,),
+            "numeric_scale": (0,), "is_nullable": ("NO",), "identity_start": (7,), "identity_increment": (4,),
+        };
+        MssqlTable live(ds, "mra_identity");
+        hash<auto> col = live.describe().id.getDescriptionHash();
+        assertTrue(col.identity);
+        assertEq(7, col.identity_start);
+        assertEq(4, col.identity_increment);
+        assertEq("bigint", col.driver.freetds.native_type);
+        assertTrue((select ds.sql, $1.sql =~ /sys\.identity_columns/).size() > 0);
+        MssqlTable target(ds, "mra_identity");
+        target.setupTable({"columns": {"id": col}});
+        assertEq("id bigint identity(7,4) not null", target.describe().id.getCreateSql(target));
+        assertEq((), live.describe().id.getModifySql(live, target.describe().id));
+    }
+
     actionDescription() {
         CatalogDatasource ds = catalogDatasource();
         # each table description records its foreign constraints in the tables it references, so each has its own

@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SQLite native driver, integer primary keys and schema catalog reads
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%exec-class PortableIdentityColumns
+
+class PortableIdentityColumns inherits QUnit::Test {
+    constructor() : Test("PortableIdentityColumns", "1.0", \ARGV) {
+        foreach string driver in ("sqlite3", "pgsql", "mysql", "oracle", "firebird", "freetds") {
+            addTestCase(driver + " identity round trip", \roundTrip(), (driver,));
+        }
+        addTestCase("PostgreSQL serial ownership distinguishes an ordinary nextval default", \serialDefaults());
+        addTestCase("SQLite rejects conflicting identity options and ignores quoted keywords", \sqliteOptions());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        FirebirdRunDatabase::teardown();
+        MssqlRunDatabase::teardown();
+    }
+
+    private Datasource connect(string driver) {
+        *string connstr;
+        switch (driver) {
+            case "sqlite3": connstr = "sqlite3:x@:memory:"; break;
+            case "pgsql": {
+                connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+                if (connstr) {
+                    PgsqlRunSchema::setup(connstr, "PortableIdentity");
+                }
+                break;
+            }
+            case "mysql": {
+                connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "PortableIdentity");
+                break;
+            }
+            case "oracle": {
+                connstr = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "PortableIdentity");
+                break;
+            }
+            case "firebird": {
+                connstr = FirebirdRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, "PortableIdentity");
+                break;
+            }
+            case "freetds": {
+                connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "PortableIdentity");
+                break;
+            }
+        }
+        if (!connstr) {
+            testSkip(driver + " connection is not configured");
+        }
+        return new Datasource(connstr);
+    }
+
+    private static create(AbstractTable t, Datasource ds) {
+        # Firebird prepares each DDL statement against the committed catalog.
+        foreach string stmt in (t.getCreateSql()) {
+            ds.execRaw(stmt);
+            ds.commit();
+        }
+    }
+
+    private roundTrip(string driver) {
+        Datasource ds = connect(driver);
+        on_exit ds.rollback();
+        Database db(ds);
+        string tn = "identity_" + string(getpid());
+        hash<auto> input = {"columns": {"id": {"qore_type": "integer", "identity": True}},
+            "primary_key": {"name": "pk_" + tn, "columns": ("id",)}};
+        AbstractTable declared = db.makeTable(tn, input);
+        create(declared, ds);
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + tn);
+            ds.commit();
+        }
+        string insert = inlist(driver, ("sqlite3", "freetds")) ? "insert into " + tn + " default values"
+            : "insert into " + tn + " (id) values (default)";
+        ds.execRaw(insert);
+        ds.execRaw(insert);
+        assertEq((1, 2), ds.select("select id from " + tn + " order by id").id);
+        ds.commit();
+
+        AbstractTable live = db.getTable(tn);
+        hash<auto> desc = live.getDescriptionHash();
+        assertTrue(desc.columns.id.identity);
+        assertEq("integer", desc.columns.id.qore_type);
+        assertFalse(exists desc.columns.id.default_value);
+        assertFalse(exists desc.columns.id.native_type);
+        assertEq((), live.getAlignSql(declared), "align original declaration");
+        assertEq((), live.getAlignSql(db.makeTable(tn, desc)), "align catalog description");
+
+        if (inlist(driver, ("pgsql", "oracle", "firebird", "freetds"))) {
+            string second = tn + "_step";
+            AbstractTable step = db.makeTable(second, {"columns": {"id": {"qore_type": "integer", "identity": True,
+                "identity_start": 7, "identity_increment": 4}}});
+            create(step, ds);
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop table " + second);
+                ds.commit();
+            }
+            string sql = driver == "freetds" ? "insert into " + second + " default values"
+                : "insert into " + second + " (id) values (default)";
+            ds.execRaw(sql);
+            ds.execRaw(sql);
+            assertEq((7, 11), ds.select("select id from " + second + " order by id").id);
+            ds.commit();
+            AbstractTable actual = db.getTable(second);
+            hash<auto> actual_col = actual.describe().id.getDescriptionHash();
+            assertEq(7, actual_col.identity_start);
+            assertEq(4, actual_col.identity_increment);
+            assertEq((), actual.getAlignSql(step));
+        }
+
+        # Different native types (e.g. Oracle NUMBER vs SQLite INTEGER PRIMARY KEY).
+        Datasource dst("sqlite3:x@:memory:");
+        on_exit dst.rollback();
+        Database target(dst);
+        AbstractTable copied = target.makeTable("identity_copy", desc);
+        create(copied, dst);
+        dst.execRaw("insert into identity_copy default values");
+        assertEq(1, dst.selectRow("select id from identity_copy").id);
+        hash<auto> sqlite_desc = target.getTable("identity_copy").getDescriptionHash();
+        assertTrue(sqlite_desc.columns.id.identity);
+        # Apply the SQLite description back on the source database with its own primary key name.
+        sqlite_desc.primary_key.name = desc.primary_key.name;
+        assertEq((), live.getAlignSql(db.makeTable(tn, sqlite_desc)), "align from the other database");
+    }
+
+    private serialDefaults() {
+        Datasource ds = connect("pgsql");
+        on_exit ds.rollback();
+        ds.execRaw("create sequence ordinary_identity_test");
+        ds.execRaw("create table serial_identity_test (id serial, "
+            "ordinary integer default nextval('ordinary_identity_test'), separate integer)");
+        # Merely owning a sequence does not make this other column an identity.
+        ds.execRaw("alter sequence ordinary_identity_test owned by serial_identity_test.separate");
+        Database db(ds);
+        hash<auto> columns = db.getTable("serial_identity_test").getDescriptionHash().columns;
+        assertTrue(columns.id.identity);
+        assertFalse(exists columns.id.default_value);
+        assertFalse(exists columns.ordinary.identity);
+        assertFalse(exists columns.separate.identity);
+        assertTrue(columns.ordinary.default_value =~ /nextval/);
+    }
+
+    private sqliteOptions() {
+        Datasource ds = connect("sqlite3");
+        on_exit ds.rollback();
+        ds.execRaw("create table wording (id integer primary key, msg text default 'AUTOINCREMENT')");
+        Database db(ds);
+        assertFalse(exists db.getTable("wording").getDescriptionHash().columns.id.identity);
+        hash<auto> column = {"qore_type": "integer", "identity": True, "identity_increment": 2};
+        assertThrows("UNSUPPORTED", sub () { db.makeTable("bad_step", {"columns": {"id": column}}); });
+        remove column.identity_increment;
+        column.default_value = 4;
+        assertThrows("COLUMN-ERROR", sub () { db.makeTable("bad_default", {"columns": {"id": column}}); });
+    }
+}
