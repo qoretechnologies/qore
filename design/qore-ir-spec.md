@@ -250,20 +250,23 @@ scope, in every execution mode and compiled code.
 
 `local += value` on a local declared exactly `float` (not `*float`,
 `softfloat`, an enum or a union type) of the current frame (not a closure
-variable, a shared variable, a foreach variable, a weakly assigned or weakly
-designated variable, and not one that `delete` or `remove` can leave without a
-value or whose reference is taken, `LocalVar::everDeleted()`) is lowered as a load of the local, `AddAssignFloat`
-and a store of the sum (`QoreIRLowering::lowerPlusEquals()`), instead of the
-generic `LValuePathCompound` (`qore_rt_lv_path_compound()`), when its right
-operand is proven to be a float, an int or a bool whatever the code executed
+variable, and not one that `delete` or `remove` can leave without a value or
+whose reference is taken, `LocalVar::everDeleted()`; nor a shared, foreach,
+weakly assigned or weakly designated variable, which
+`QoreIRLowering::changesThroughLValue()` sends to the lvalue path) is lowered
+as a load of the local, `AddAssignFloat` and a store of the sum
+(`QoreIRLowering::lowerPlusEquals()`), instead of the generic
+`LValuePathCompound` (`qore_rt_lv_path_compound()`), when its right operand is
+proven to be a float, an int or a bool whatever the code executed
 (`QoreIRLowering::isExactFloatAddOperand()`):
 
 - the facts that the builder gave the lowered operand say `float`, `int` or
   `bool` exactly, assigned and never `NOTHING`: a constant, the result of a
   typed arithmetic, comparison or conversion opcode, or the read of a variable
-  (local, global, thread-local or closure variable) of that type, which holds
-  no other value (a `float` or `int` variable refuses a char, and a `bool`
-  variable converts it);
+  of that type whose facts say so (a local that the parse knows to be
+  assigned; the read of a global or thread-local variable normally has no such
+  facts), which holds no other value (a `float` or `int` variable refuses a
+  char, and a `bool` variable converts it);
 - or the operand is the call of a user function or static method of the same
   Program whose variant is fixed at parse time (not chosen at runtime, not
   generic, no receiver type) and returns `float`: the variant converts or
