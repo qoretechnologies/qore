@@ -4534,6 +4534,22 @@ public:
     //! Resolve bases, types, and hashdecl defaults after constant-shell registration.
     bool resolveTypes(std::string& error);
 
+    //! Refuses a class injected in place of a class that reaches it through the classes that it references (the
+    //! classes that they are injected in place of, their base classes and import sources; qore#7664)
+    /** Run once base classes are attached, whatever the result of the type resolution, which can fail after
+        attaching some of them: after resolveTypes() for a single blob (resolveTypesAndMembers()); after the type
+        resolution of all the sessions of a batch, as a class of one blob can reach the class that it is injected in
+        place of through the classes of another one; and, when a source is parsed with the blobs preloaded, again
+        after the source is committed, which attaches the base classes of the source's classes that an AOT class can
+        inherit (QoreAOTBinaryMultiDeserializer::finalizeAfterSourceParse()).  Every class that leads back to itself
+        releases its reference before the image is refused, so that none of them keeps its classes alive.  The walk
+        follows the base classes attached so far: a class whose own base classes are not attached yet, because the
+        type resolution failed before reaching it, is still found as the end of a cycle that the base classes attached
+        before it form.  A compile that ends between the source-parse resolution and finalizeAfterSourceParse() checks
+        them with QoreAOTBinaryMultiDeserializer::checkSourceParseClassInjections().
+    */
+    bool checkClassInjectionCycles(std::string& error);
+
     //! Register constant names before resolving types and hashdecl defaults.
     /** Run across all sessions before resolveTypes(): defaults can refer to
         constants in sibling fragments. Constant types and values are resolved
@@ -5034,6 +5050,40 @@ public:
     }
 
 private:
+    //! Checks the class injections of every session once the base classes of all of them are attached (qore#7664)
+    /** A class of one blob can reach the class that it is injected in place of through the classes of another one,
+        whose base classes are attached by its own session's type resolution.  Every session is checked, also after
+        one has failed, so that each releases the references of its refused classes.
+    */
+    bool checkClassInjectionCycles(std::string& error) {
+        bool ok = true;
+        for (auto& sess : sessions) {
+            std::string sess_error;
+            if (!sess->checkClassInjectionCycles(sess_error) && ok) {
+                error = std::move(sess_error);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
+    //! Runs the type resolution of every session, then checks the class injections of all of them (qore#7664)
+    /** The injections are checked also if the type resolution of a session failed, as the base classes that it and
+        the sessions before it attached can close a cycle; the error of the type resolution is reported then.
+    */
+    template <typename F>
+    bool resolveTypesAndCheckInjections(F& runSessionPhase, std::string& error) {
+        bool ok = runSessionPhase("AOT type resolution",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.resolveTypes(error);
+            });
+        std::string injection_error;
+        if (!checkClassInjectionCycles(ok ? error : injection_error)) {
+            ok = false;
+        }
+        return ok;
+    }
+
     bool addBlobIntern(QoreAOTBinaryReader&& reader, std::string& error, uint64_t t0) {
         // Apply this blob's %prepend-module-path / %append-module-path lists to
         // the target Program BEFORE shell deserialization runs — so any module
@@ -5148,10 +5198,7 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.registerConstantShellsPhase(error);
                     })) return false;
-            if (!runSessionPhase("AOT type resolution",
-                    [&error](QoreAOTBinaryDeserializer& sess) {
-                        return sess.resolveTypes(error);
-                    })) return false;
+            if (!resolveTypesAndCheckInjections(runSessionPhase, error)) return false;
             if (!runSessionPhase("AOT namespace constant resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveNamespaceConstantsPhase(error);
@@ -5349,10 +5396,7 @@ public:
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT type resolution",
-                [&error](QoreAOTBinaryDeserializer& sess) {
-                    return sess.resolveTypes(error);
-                })) {
+        if (!resolveTypesAndCheckInjections(runSessionPhase, error)) {
             return false;
         }
         if (!runSessionPhase("AOT namespace constant resolution",
@@ -5457,8 +5501,23 @@ public:
             });
     }
 
+    //! Checks the class injections of every session after resolveForSourceParse() (qore#7664)
+    /** For a compile that ends before finalizeAfterSourceParse(), which checks them itself: the commit of the source
+        can have attached base classes that close a cycle.  A class whose reference was already released is skipped.
+    */
+    bool checkSourceParseClassInjections(std::string& error) {
+        return checkClassInjectionCycles(error);
+    }
+
     //! Finish AOT-only post-commit work after source parseCommit().
     bool finalizeAfterSourceParse(std::string& error) {
+        // an AOT class can have a base class of the source parsed, whose own base classes are attached when the
+        // source is committed: the class injections are checked again once it is, before anything else, so that
+        // nothing that can fail before skips the check (qore#7664)
+        if (!checkClassInjectionCycles(error)) {
+            return false;
+        }
+
         auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
             size_t i = 0;
             for (auto& sess : sessions) {

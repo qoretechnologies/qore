@@ -2266,6 +2266,12 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     if (!old.ancestryFinal()) {
         relinkCopiedAncestry(old);
     }
+    // the class that this class is injected in place of is kept as long as this class: its Program can be deleted
+    // first (qore#7664); taken last, as the destructor, which releases it, does not run if the constructor throws
+    if (injectedClass) {
+        assert(injectedClass != this);
+        injectedClass->ref();
+    }
 }
 
 bool qore_class_private::spansPrograms() const {
@@ -2403,6 +2409,12 @@ qore_class_private::~qore_class_private() {
     // the source of an imported class is released after its types are no longer used (issue #5790)
     if (import_source) {
         import_source->deref(false, false, false);
+    }
+
+    // the class that this class is injected in place of is released with this class, not when it is retired: the
+    // type checks of a retired class still compare it with that class (qore#7664)
+    if (injectedClass) {
+        const_cast<qore_class_private*>(injectedClass)->deref(false, false, false);
     }
 
     // the declarations named by this class's types are no longer kept for it

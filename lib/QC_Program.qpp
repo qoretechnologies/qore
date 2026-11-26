@@ -2664,7 +2664,10 @@ nothing Program::importGlobalVariable(
     the Program must have @ref Qore::PO_ALLOW_INJECTION set. When the injection relates two classes, a sandboxed
     caller or one restricted from a functional domain may only relate classes declared by its own Program.
     Rebuild older compiled programs with a current compiler so a restricted caller can establish ownership of
-    classes declared in those programs.
+    classes declared in those programs.  The injected class keeps the class that it is injected in place of, with
+    the declarations that that class names, for as long as the injected class exists, also when the
+    @ref Qore::Program "Program" that declares that class is deleted first: the type checks of the injected class's
+    objects still compare it with that class (since %Qore 3.0)
     @param module_visibility see @ref import_visibility_constants for valid values
 
     @par Example:
