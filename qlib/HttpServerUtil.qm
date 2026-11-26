@@ -241,6 +241,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only": a
+      listener that serves only its own handlers, never those of the server (issue #7690)
     - the methods of a handler of restricted code that the HTTP server calls for a request get the request without its
       credentials, and the handler's trusted authenticator authenticates the raw request first
       (@ref httpserverutil_request_credentials; issue #7303)
@@ -1189,6 +1191,20 @@ public hashdecl HttpListenerOptionInfo {
 
     #! handler info
     *hash<string, hash<HttpHandlerConfigInfo>> handler_info;
+
+    #! the listener serves only its own handlers (qore#7690)
+    /** When set, a request that the listener receives is served only by the handlers of the listener (\c handler_info
+        and those added with @ref HttpServer::HttpServer::addHandlerToListenerID() "HttpServer::addHandlerToListenerID()");
+        never by the handlers, the dynamic handlers, the default handler or the fast routes of the server: while the
+        listener has no handler
+        (before its first handler is added), a request gets a 503 response; a listener whose last handler is removed
+        with @ref HttpServer::HttpServer::removeHandlerFromListenerID() "HttpServer::removeHandlerFromListenerID()" is
+        stopped.  The QUIC listener that is paired with a TLS listener gets the same setting.  Set it for a listener
+        that is opened for the handlers of one client, such as a service or a tenant of an application.
+
+        @since HttpServerUtil 1.6
+    */
+    bool own_handlers_only = False;
 
     #! logger interface
     *LoggerInterface logger;

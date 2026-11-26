@@ -2338,6 +2338,10 @@
       - the \c http_fields_at_top_level option gives the fields of a request only under \c "headers" (see
         @ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "http_fields_at_top_level";
         <a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
+      - a listener with the new @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "own_handlers_only"
+        option serves only its own handlers, never those of the server, and the stop of a listener refuses new
+        connections before it waits for the requests in progress
+        (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
