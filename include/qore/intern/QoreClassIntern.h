@@ -4080,10 +4080,7 @@ public:
     DLLLOCAL void closeBuiltinAncestry();
 
     //! Removes the class from the registry of ancestries; called when the class is destroyed (qore#7614)
-    /** @param complete_subclasses if true (the class object is still valid), a closed subclass that has no other
-        parent class whose ancestry is not final becomes final, and its own registered subclasses are completed
-    */
-    DLLLOCAL void dropAncestryLinks(bool complete_subclasses);
+    DLLLOCAL void dropAncestryLinks();
 
     //! Builds the list of ancestors again as a build from scratch builds it, and publishes it (qore#7614)
     /** Called with the lock of the registry of ancestries held, when parent classes got base classes after this class

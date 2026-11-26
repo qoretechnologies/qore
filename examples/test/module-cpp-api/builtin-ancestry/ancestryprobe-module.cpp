@@ -18,7 +18,11 @@
     - <tt>AncestryProbe::twoOpenParents()</tt>: \c B inherits two classes that are both still getting base classes
     - <tt>AncestryProbe::rescan()</tt>: QoreClass::rescanParents() on \c B before and after \c A is complete
     - <tt>AncestryProbe::deletedSubclass()</tt>: \c B and \c C are deleted before \c A gets its later base classes
-    - <tt>AncestryProbe::neverClosed()</tt>: \c A is never initialized; \c B keeps the ancestors that \c A had
+    - <tt>AncestryProbe::neverClosed()</tt>: \c A is never initialized and its reference is released; \c B keeps the
+      ancestors that \c A had and stays registered with it, not final (debug builds:
+      \c qore_dbg_class_ancestry_final()), and a subclass of \c B made then is not final either
+    - <tt>AncestryProbe::rescanReaders(int n)</tt>: QoreClass::rescanParents() grows the list of a closed class while
+      another thread reads it (with the test hook, as for concurrentReaders())
     - <tt>AncestryProbe::concurrentReaders(int n)</tt>: \c A gets \a n later base classes while another thread reads
       the ancestors of \c B; in a debug build, the reader takes a snapshot of the ancestors before \c A is complete and
       reads it, and the new list, while the completion holds the new list published (the libqore test hook
@@ -57,6 +61,7 @@
 #include <atomic>
 #include <cassert>
 #include <condition_variable>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -493,6 +498,13 @@ QoreValue f_deleted_subclass(const QoreListNode*, RuntimeConfig&, ExceptionSink*
     return rv.release();
 }
 
+typedef bool (*final_query_t)(const QoreClass*);
+
+//! returns the libqore function that tells if the ancestry of a class is final (debug builds only), or nullptr
+final_query_t get_final_query() {
+    return reinterpret_cast<final_query_t>(dlsym(RTLD_DEFAULT, "qore_dbg_class_ancestry_final"));
+}
+
 //! AncestryProbe::neverClosed(): a parent class that is never initialized
 QoreValue f_never_closed(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
@@ -501,25 +513,44 @@ QoreValue f_never_closed(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsi
     s.add(early);
     QoreClass* late = s.createLate(nullptr);
 
-    QoreClassHolder a(s.create("A"));
-    static_cast<QoreClass*>(a)->addBaseClass(early, true);
-    QoreClass* b = s.create("B");
-    b->addBaseClass(a, true);
-    b->initializeBuiltin();
-    s.add(b);
-    QoreClass* c = s.create("C");
-    c->addBaseClass(b, true);
-    c->initializeBuiltin();
-    s.add(c);
-    // A gets a later base class but is never initialized nor registered: its ancestry is never final, so B and C
-    // keep the ancestors that A had
-    static_cast<QoreClass*>(a)->addBaseClass(late, true);
+    QoreClass* b;
+    QoreClass* c;
+    {
+        QoreClassHolder a(s.create("A"));
+        static_cast<QoreClass*>(a)->addBaseClass(early, true);
+        b = s.create("B");
+        b->addBaseClass(a, true);
+        b->initializeBuiltin();
+        s.add(b);
+        c = s.create("C");
+        c->addBaseClass(b, true);
+        c->initializeBuiltin();
+        s.add(c);
+        // A gets a later base class but is never initialized nor registered: its ancestry is never final, so B and C
+        // keep the ancestors that A had
+        static_cast<QoreClass*>(a)->addBaseClass(late, true);
+        // the reference to A is released here; B holds a reference to its private data in its list of ancestors, so
+        // A is not destroyed, and B stays registered with it
+    }
     rv->setKeyValue("b_early", has_ancestor(b, early), nullptr);
     rv->setKeyValue("b_late", has_ancestor(b, late), nullptr);
     rv->setKeyValue("c_early", has_ancestor(c, early), nullptr);
     rv->setKeyValue("c_late", has_ancestor(c, late), nullptr);
-    // A is deleted before B and C, which keep references to its private data; B is closed and has no other parent
-    // class, so its ancestry is final then, and C, registered with B, gets what B has
+    // a subclass of B made now is registered with B, which is not final; it walks the hierarchy of B through the
+    // current base classes of A, as the list of B is not complete, so it gets the later base class of A
+    QoreClass* d = s.create("D");
+    d->addBaseClass(b, true);
+    d->initializeBuiltin();
+    s.add(d);
+    rv->setKeyValue("d_early", has_ancestor(d, early), nullptr);
+    rv->setKeyValue("d_late", has_ancestor(d, late), nullptr);
+    if (final_query_t is_final = get_final_query()) {
+        rv->setKeyValue("b_final", is_final(b), nullptr);
+        rv->setKeyValue("c_final", is_final(c), nullptr);
+        rv->setKeyValue("d_final", is_final(d), nullptr);
+        rv->setKeyValue("early_final", is_final(early), nullptr);
+    }
+    // A is destroyed with its private data, after B, C and D are destroyed with the namespace of the scenario
     return rv.release();
 }
 
@@ -607,6 +638,64 @@ private:
     ReaderHandshake& h;
 };
 
+//! the results of a reader thread of read_while()
+struct ReaderResult {
+    //! the number of classes of the snapshot taken before the change, read after it
+    int64 old_seen = -1;
+    //! the number of classes of a snapshot taken after the change
+    int64 new_seen = -1;
+    //! the number of the classes of \a lates found by ID after the change
+    int64 found = -1;
+};
+
+//! runs \a change while a reader thread holds a snapshot of the ancestors of \a target taken before it; when the
+//! test hook of libqore is called for \a target (in a debug build), the reader reads that snapshot, a new one and the
+//! classes of \a lates by ID while the hook waits; returns true if the hook was available
+bool read_while(const QoreClass* target, const std::vector<QoreClass*>& lates, ReaderResult& r,
+        const std::function<void()>& change) {
+    hook_setter_t setter = get_hook_setter();
+    ReaderHandshake h;
+    h.target = target;
+    ReaderGuard g(setter, h);
+    g.reader = std::thread([&]() {
+        // a snapshot of the ancestors of the target before the change
+        QoreClassHierarchyIterator old_view(*target);
+        if (!setter) {
+            return;
+        }
+        h.set(ReaderState::HaveView);
+        if (!h.wait(ReaderState::Published)) {
+            return;
+        }
+        // the change is published and waits in the hook: the old snapshot is still readable, and a new one has the
+        // classes added
+        int64 seen = 0;
+        while (old_view.next()) {
+            ++seen;
+        }
+        r.old_seen = seen;
+        seen = 0;
+        QoreClassHierarchyIterator new_view(*target);
+        while (new_view.next()) {
+            ++seen;
+        }
+        r.new_seen = seen;
+        int64 found = 0;
+        for (QoreClass* qc : lates) {
+            if (target->getClass(qc->getID())) {
+                ++found;
+            }
+        }
+        r.found = found;
+        h.set(ReaderState::ReaderDone);
+    });
+    if (setter && !h.wait(ReaderState::HaveView)) {
+        return false;
+    }
+    change();
+    return setter != nullptr;
+}
+
 //! AncestryProbe::concurrentReaders(int n): later ancestors are added while another thread reads the ancestors
 QoreValue f_concurrent_readers(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xsink) {
     int64 n = HARD_QORE_VALUE_INT(args, 0);
@@ -625,56 +714,15 @@ QoreValue f_concurrent_readers(const QoreListNode* args, RuntimeConfig&, Excepti
     b->initializeBuiltin();
     s.add(b);
 
-    hook_setter_t setter = get_hook_setter();
-    ReaderHandshake h;
-    h.target = b;
-    int64 old_seen = -1;
-    int64 new_seen = -1;
-    int64 found_in_hook = -1;
-    {
-        ReaderGuard g(setter, h);
-        g.reader = std::thread([&]() {
-            // a snapshot of the ancestors of B before A is complete: B and A
-            QoreClassHierarchyIterator old_view(*b);
-            if (!setter) {
-                return;
-            }
-            h.set(ReaderState::HaveView);
-            if (!h.wait(ReaderState::Published)) {
-                return;
-            }
-            // the new list is published and the completion waits: the old snapshot is still readable, and a new
-            // one has the later ancestors
-            int64 seen = 0;
-            while (old_view.next()) {
-                ++seen;
-            }
-            old_seen = seen;
-            seen = 0;
-            QoreClassHierarchyIterator new_view(*b);
-            while (new_view.next()) {
-                ++seen;
-            }
-            new_seen = seen;
-            int64 found = 0;
-            for (QoreClass* qc : lates) {
-                if (b->getClass(qc->getID())) {
-                    ++found;
-                }
-            }
-            found_in_hook = found;
-            h.set(ReaderState::ReaderDone);
-        });
-        if (setter && !h.wait(ReaderState::HaveView)) {
-            return QoreValue();
-        }
-        // the writer: A gets its base classes after B inherited it, and is initialized, which completes B
+    ReaderResult r;
+    // the writer: A gets its base classes after B inherited it, and is initialized, which completes B
+    bool hook = read_while(b, lates, r, [&]() {
         for (QoreClass* qc : lates) {
             a->addBaseClass(qc, true);
         }
         a->initializeBuiltin();
         s.add(a);
-    }
+    });
 
     int64 found = 0;
     for (QoreClass* qc : lates) {
@@ -683,10 +731,58 @@ QoreValue f_concurrent_readers(const QoreListNode* args, RuntimeConfig&, Excepti
         }
     }
     rv->setKeyValue("found", found, nullptr);
-    rv->setKeyValue("hook", setter != nullptr, nullptr);
-    rv->setKeyValue("old_seen", old_seen, nullptr);
-    rv->setKeyValue("new_seen", new_seen, nullptr);
-    rv->setKeyValue("found_in_hook", found_in_hook, nullptr);
+    rv->setKeyValue("hook", hook, nullptr);
+    rv->setKeyValue("old_seen", r.old_seen, nullptr);
+    rv->setKeyValue("new_seen", r.new_seen, nullptr);
+    rv->setKeyValue("found_in_hook", r.found, nullptr);
+    return rv.release();
+}
+
+//! AncestryProbe::rescanReaders(int n): QoreClass::rescanParents() appends to the list of a closed class, growing it,
+//! while another thread reads it
+/** B is closed and registered; A, its virtual parent class, is never closed and gets \a n base classes afterwards,
+    which B does not get, as A never completes; rescanning the parent classes of B adds them to its list
+*/
+QoreValue f_rescan_readers(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xsink) {
+    int64 n = HARD_QORE_VALUE_INT(args, 0);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    Scenario s;
+    std::vector<QoreClass*> lates;
+    lates.reserve(n);
+    for (int64 i = 0; i < n; ++i) {
+        QoreClass* qc = s.create("L");
+        s.add(qc);
+        lates.push_back(qc);
+    }
+    QoreClass* early = s.create("Early");
+    s.add(early);
+    QoreClassHolder a(s.create("A"));
+    static_cast<QoreClass*>(a)->addBaseClass(early, true);
+    QoreClass* b = s.create("B");
+    b->addBaseClass(a, true);
+    b->initializeBuiltin();
+    s.add(b);
+    for (QoreClass* qc : lates) {
+        static_cast<QoreClass*>(a)->addBaseClass(qc, true);
+    }
+    rv->setKeyValue("before", (int64)(has_ancestor(b, lates[0]) ? 1 : 0), nullptr);
+
+    ReaderResult r;
+    bool hook = read_while(b, lates, r, [&]() {
+        b->rescanParents();
+    });
+
+    int64 found = 0;
+    for (QoreClass* qc : lates) {
+        if (has_ancestor(b, qc)) {
+            ++found;
+        }
+    }
+    rv->setKeyValue("found", found, nullptr);
+    rv->setKeyValue("hook", hook, nullptr);
+    rv->setKeyValue("old_seen", r.old_seen, nullptr);
+    rv->setKeyValue("new_seen", r.new_seen, nullptr);
+    rv->setKeyValue("found_in_hook", r.found, nullptr);
     return rv.release();
 }
 
@@ -780,6 +876,8 @@ static void ancestryprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink&
     module_ns->addBuiltinVariant("neverClosed", f_never_closed, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo);
     module_ns->addBuiltinVariant("concurrentReaders", f_concurrent_readers, QCF_NO_FLAGS, QDOM_DEFAULT,
         autoHashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
+    module_ns->addBuiltinVariant("rescanReaders", f_rescan_readers, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
     module_ns->addBuiltinVariant("gapProgram", f_gap_program, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
         codeTypeInfo, QORE_PARAM_NO_ARG, "cb");
     module_ns->addBuiltinVariant("checkObject", f_check_object, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,

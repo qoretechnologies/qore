@@ -32,6 +32,7 @@ class BuiltinAncestryTest inherits QUnit::Test {
         addTestCase("subclasses deleted before the parent class is complete", \deletedSubclassTest());
         addTestCase("a parent class that is never complete", \neverClosedTest());
         addTestCase("concurrent readers", \concurrentReadersTest());
+        addTestCase("rescanning the parent classes while another thread reads", \rescanReadersTest());
         addTestCase("import and subclass in another Program in the gap", \gapProgramTest());
         set_return_value(main());
     }
@@ -109,9 +110,22 @@ class BuiltinAncestryTest inherits QUnit::Test {
         hash<auto> h = AncestryProbe::neverClosed();
         assertTrue(h.b_early);
         assertTrue(h.c_early);
-        # A is never complete: its later base class is never added to its subclasses
+        assertTrue(h.d_early);
+        # A is never complete: its later base class is never added to the subclasses made before it
         assertFalse(h.b_late);
         assertFalse(h.c_late);
+        # a subclass of B made afterwards walks the hierarchy of B through the current base classes of A (the list of
+        # B is not complete), so it has the later base class of A, which B does not have
+        assertTrue(h.d_late);
+        if (!h.hasKey("b_final")) {
+            testSkip("the libqore test query is only available in debug builds");
+        }
+        # releasing the reference to A does not destroy it (B references it): B stays registered with A and is not
+        # final, and so are its subclasses, also one made afterwards
+        assertFalse(h.b_final);
+        assertFalse(h.c_final);
+        assertFalse(h.d_final);
+        assertTrue(h.early_final);
     }
 
     concurrentReadersTest() {
@@ -127,6 +141,22 @@ class BuiltinAncestryTest inherits QUnit::Test {
         # published, and the new list (B, A and the later ancestors)
         assertEq(2, h.old_seen);
         assertEq(n + 2, h.new_seen);
+        assertEq(n, h.found_in_hook);
+    }
+
+    rescanReadersTest() {
+        # enough added ancestors for blocks that need more room
+        int n = 20;
+        hash<auto> h = AncestryProbe::rescanReaders(n);
+        assertEq(0, h.before);
+        assertEq(n, h.found);
+        if (!h.hook) {
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        # the snapshot taken before the rescan (Early, A and B) was read after the list grew, and a new one has the
+        # added ancestors
+        assertEq(3, h.old_seen);
+        assertEq(n + 3, h.new_seen);
         assertEq(n, h.found_in_hook);
     }
 

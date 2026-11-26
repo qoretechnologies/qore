@@ -1121,14 +1121,38 @@ public:
         QoreNamespace::addSystemClass() marks it complete too.
 
         A subclass can be created and can inherit this class before this call (when the creation of one of this
-        class's base classes creates the subclass, as with classes created lazily from another language); the
-        ancestors that this class gets afterwards are added to the subclass when the ancestry of this class is
-        complete: when this function has been called for the class and the ancestries of all of its parent
-        classes are complete, where a build from scratch puts them.  Until then the subclass has only the ancestors
-        that this class had when the subclass inherited it.  The list of ancestors of the subclass can be read by
-        other threads while it is completed, but this class, whose base classes and methods are still being added,
-        is not safe to use from other threads before this call, nor is the subclass, whose lookups reach it: the
-        module that creates the classes must not let other threads use them before then.
+        class's base classes creates the subclass, as with classes created lazily from another language).  Such a
+        subclass is completed when the ancestry of this class is complete: when this function (or
+        QoreNamespace::addSystemClass()) has been called for the class and the ancestries of all of its parent
+        classes are complete.  Then the list of ancestors of the subclass is built again as a build from scratch
+        builds it, with the ancestors that this class got afterwards; until then the subclass has only the
+        ancestors that this class had when the subclass inherited it.
+
+        The completion fixes only the list of ancestors of the subclass: what is decided from it (instanceof and
+        QoreClass::getClass() with a class ID, the private data shared with virtual ancestors, and the base classes
+        whose destructors and copy methods run).  What was derived from the hierarchy when the subclass was
+        registered before this class was complete is not computed again: the member initialization list of the
+        subclass, the resolution of its abstract methods, and those of this class, which the initialization of the
+        subclass initializes early (its builtin parent classes are initialized with it), so the members with
+        initial values and the abstract methods of the ancestors that this class gets afterwards are not reflected
+        in them.
+
+        No object of the subclass may be created before the ancestry of this class is complete: the virtual flags
+        of the ancestors of the subclass can change when its list is built again (when an ancestor is reached
+        through a virtual and a non-virtual path), and the destructors that run for an object would then not match
+        the constructors that ran for it.  This class, whose base classes and methods are still being added, is not
+        safe to use from other threads before this call, nor is the subclass, whose lookups reach it; only the list
+        of ancestors of the subclass can be read by other threads while it is completed: the module that creates the
+        classes must not let other threads use them before then.
+
+        If this function is never called for this class (and it is never registered in a namespace), the ancestry of
+        this class and of its subclasses is never complete: the subclasses keep the ancestors that they have, and
+        the subclasses made of them later are registered with them as well (each base class added to such a
+        subclass takes a global lock, and a subclass parsed from Qore code inheriting one of them always uses the
+        slower lookup of its hierarchy).
+
+        Only classes created as QoreBuiltinClass take part in this: a class created as a QoreClass and made a
+        system class with setSystem() is considered to have all its base classes when it is created.
 
         Safe to call multiple times; subsequent calls are no-ops.
 
