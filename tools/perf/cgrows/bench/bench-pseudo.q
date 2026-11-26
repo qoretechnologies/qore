@@ -2,7 +2,8 @@
 # pseudo-method call loops: L=pv (a pseudo-method without an intrinsic: <string>::isEncodingValid()), L=pl (one with
 # an intrinsic: <string>::length()), L=pt (<int>::typeCode(), an intrinsic of every type), L=ps (<string>::split() of a
 # string local, qore#5578), L=tr (trim() of a string local), L=lw (<string>::lwr() of a string local, qore#7711),
-# L=ix (index() of a string local), L=il (index() of the lwr() of a string local); N iterations
+# L=ix (index() of a string local), L=il (index() of the lwr() of a string local), L=jl (<list>::join() of a
+# list<string> local, qore#7731), L=jf (join() of it), L=jm (<list>::join() of a map of it, a fused join); N iterations
 int sub f(int a) { return a; }
 int sub run_pv(int n) {
     string s = "abc";
@@ -69,6 +70,30 @@ int sub run_il(int n) {
     }
     return t;
 }
+int sub run_jl(int n) {
+    list<string> l = ("a", "bb", "ccc", "dd", "e");
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += l.join(",").size();
+    }
+    return t;
+}
+int sub run_jf(int n) {
+    list<string> l = ("a", "bb", "ccc", "dd", "e");
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += join(",", l).size();
+    }
+    return t;
+}
+int sub run_jm(int n) {
+    list<string> l = ("a", "bb", "ccc", "dd", "e");
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += (map $1 + "x", l).join(",").size();
+    }
+    return t;
+}
 int n = ENV.N.toInt();
 switch (ENV.L) {
     case "pv": run_pv(n); break;
@@ -79,4 +104,7 @@ switch (ENV.L) {
     case "lw": run_lw(n); break;
     case "ix": run_ix(n); break;
     case "il": run_il(n); break;
+    case "jl": run_jl(n); break;
+    case "jf": run_jf(n); break;
+    case "jm": run_jm(n); break;
 }
