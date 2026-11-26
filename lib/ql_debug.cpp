@@ -9949,6 +9949,137 @@ public:
     }
 
 #ifdef __linux__
+    //! The number of interrupted calls (EINTR) of the silent target helpers that were restarted (qore#7732)
+    static inline std::atomic<int> silent_target_restarts{0};
+
+    //! The number of signals that the handler of runSilentTargetInterrupted() received
+    static inline std::atomic<int> silent_target_signals{0};
+
+    static void silentTargetSignalHandler(int) {
+        silent_target_signals.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! The silent targets are made correctly when signals interrupt the calls of their helpers (qore#7732)
+    /** The tests run with signal handling on, so every interruptible call of a helper must be correct under EINTR: a
+        poll() is restarted with the time that is left, and the connect() of a connection that a signal interrupted goes
+        on in the background (it is not repeated): the socket is polled for writability and its SO_ERROR is read.  A
+        second thread sends a signal to the test thread without pause, whose handler is installed without SA_RESTART,
+        until the helpers have restarted a number of interrupted calls; every target made must still be silent.
+    */
+    static void runSilentTargetInterrupted(UnitTestCounters& c) {
+        const std::string when = " (interrupted by signals)";
+        struct sigaction act = {};
+        act.sa_handler = silentTargetSignalHandler;
+        sigemptyset(&act.sa_mask);
+        act.sa_flags = 0;
+        struct sigaction old_act = {};
+        bool installed = !::sigaction(SIGUSR2, &act, &old_act);
+        UT_ASSERT(c, installed, ("the handler of the signal is installed" + when).c_str());
+        if (!installed) {
+            return;
+        }
+        // the test thread takes the signal
+        sigset_t set, old_set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR2);
+        pthread_sigmask(SIG_UNBLOCK, &set, &old_set);
+        const int before = silent_target_restarts.load();
+        const int signals_before = silent_target_signals.load();
+        pthread_t target = pthread_self();
+        std::atomic<bool> stop{false};
+        std::thread storm([&stop, target]() {
+            while (!stop.load(std::memory_order_relaxed)) {
+                pthread_kill(target, SIGUSR2);
+                std::this_thread::yield();
+            }
+        });
+        int made = 0;
+        bool all_made = true;
+        auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (silent_target_restarts.load() - before < 10 && std::chrono::steady_clock::now() < limit) {
+            std::vector<int> fds;
+            struct sockaddr_in sa = {};
+            bool ok = makeSilentTarget(c, fds, sa, when) && makeSilentTarget6(c, fds, sa.sin_port, when);
+            for (int fd : fds) {
+                ::close(fd);
+            }
+            if (!ok) {
+                all_made = false;
+                break;
+            }
+            ++made;
+        }
+        stop.store(true);
+        storm.join();
+        pthread_sigmask(SIG_SETMASK, &old_set, nullptr);
+        ::sigaction(SIGUSR2, &old_act, nullptr);
+        UT_ASSERT(c, all_made, ("every silent target is made while signals interrupt the calls of its helpers" + when
+            + " (" + std::to_string(made) + " made)").c_str());
+        UT_ASSERT(c, silent_target_signals.load() > signals_before, ("the signals were delivered to the test thread"
+            + when).c_str());
+        UT_ASSERT(c, silent_target_restarts.load() - before >= 10, ("signals interrupted calls of the helpers, which "
+            "restarted them" + when + " (" + std::to_string(silent_target_restarts.load() - before) + " restarts)")
+            .c_str());
+    }
+
+    //! Waits for an event of a descriptor; a signal that interrupts the wait does not end it or lengthen it (qore#7732)
+    /** The wait is restarted with the time that is left of the limit given at the start, so that the limit does not grow
+        with the interruptions
+
+        @return the result of poll(): 1 if the event came, 0 if the limit passed, -1 with errno set on an error
+    */
+    static int silentTargetPoll(int fd, short events, int limit_ms) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(limit_ms);
+        struct pollfd pfd = {fd, events, 0};
+        int left_ms = limit_ms;
+        while (true) {
+            int rc = ::poll(&pfd, 1, left_ms);
+            if (rc >= 0 || errno != EINTR) {
+                return rc;
+            }
+            silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+            auto left = std::chrono::duration_cast<std::chrono::milliseconds>(end - std::chrono::steady_clock::now());
+            if (left.count() <= 0) {
+                return 0;
+            }
+            left_ms = static_cast<int>(left.count());
+        }
+    }
+
+    //! Connects a blocking socket, also when a signal interrupts the connect() (qore#7732)
+    /** The handshake of a connect() that a signal interrupts goes on in the background, and the call must not be made
+        again (it would fail with EALREADY, or with EISCONN once the handshake is done): the socket is polled for
+        writability, and the result of the connect is its SO_ERROR
+
+        @return 0 if the socket is connected, -1 with errno set otherwise
+    */
+    static int silentTargetConnect(int fd, const struct sockaddr* sa, socklen_t salen) {
+        if (!::connect(fd, sa, salen)) {
+            return 0;
+        }
+        if (errno != EINTR) {
+            return -1;
+        }
+        silent_target_restarts.fetch_add(1, std::memory_order_relaxed);
+        int rc = silentTargetPoll(fd, POLLOUT, 10000);
+        if (rc <= 0) {
+            if (!rc) {
+                errno = ETIMEDOUT;
+            }
+            return -1;
+        }
+        int so_err = 0;
+        socklen_t len = sizeof(so_err);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_err, &len)) {
+            return -1;
+        }
+        if (so_err) {
+            errno = so_err;
+            return -1;
+        }
+        return 0;
+    }
+
     //! Fills the accept queue of a listener whose backlog is 0, so that it drops the connection requests that follow
     /** A connection is made with a blocking connect(), which returns once the handshake is done; the listener is
         readable once the connection is in its accept queue, and the queue is full when its length (tcpi_unacked
@@ -9981,11 +10112,10 @@ public:
                 return fail("socket");
             }
             fds.push_back(cfd);
-            if (::connect(cfd, sa, salen)) {
+            if (silentTargetConnect(cfd, sa, salen)) {
                 return fail("connect");
             }
-            struct pollfd pfd = {lfd, POLLIN, 0};
-            int prc = ::poll(&pfd, 1, 10000);
+            int prc = silentTargetPoll(lfd, POLLIN, 10000);
             if (prc != 1) {
                 if (prc < 0) {
                     return fail("poll");
@@ -31327,6 +31457,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runConnectClosedSocketAttempt(c);
 #ifdef __linux__
+    AsyncIoDescriptorHoldTest::runSilentTargetInterrupted(c);
     AsyncIoDescriptorHoldTest::runConnectUnixClosedSocket(c);
 #endif
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
