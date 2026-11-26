@@ -42,6 +42,12 @@ enum class QoreIRIntrinsic : uint16_t {
     StringFind = 43,
     StringRFind = 44,
     StringSubstr = 45,
+    //! the functions substr(), index() and rindex() of a string, which the lowering makes as calls of the pseudo-methods
+    //! substr(), find() and rfind(): an exception has the frame of the function, so no analysis may take them for the
+    //! pseudo-methods (qore#7711); never resolved from a method
+    StringFunctionSubstr = 46,
+    StringFunctionIndex = 47,
+    StringFunctionRIndex = 48,
 };
 
 //! Resolve a pseudo-method to a stable intrinsic identity.

@@ -2577,6 +2577,16 @@ uint64_t qore_fast_toupper_string(uint64_t val_bits, ExceptionSink* xsink);
 //! not valid in its encoding, in the frame of <string>::length()
 uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_t val_bits, ExceptionSink* xsink);
 
+//! The fast path of substr() for a string argument proven to be assigned; an exception has the frame of substr()
+uint64_t qore_fast_substr_string(uint64_t val_bits, int64_t start, int64_t length, int32_t has_length,
+    ExceptionSink* xsink);
+
+//! The fast path of index() for assigned string arguments; an exception has the frame of index()
+uint64_t qore_fast_index_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset, ExceptionSink* xsink);
+
+//! The fast path of rindex() for assigned string arguments; an exception has the frame of rindex()
+uint64_t qore_fast_rindex_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset, ExceptionSink* xsink);
+
 //! Measure an assigned string after lower/upper-case conversion without retaining the result.
 int64_t qore_rt_pseudo_string_case_measure_native_noguard(uint64_t val_bits,
     int32_t upper, int32_t characters, ExceptionSink* xsink);

@@ -39,6 +39,27 @@ int sub f_cat_length(string a, string b) { return (a + b).length(); }
 bool sub f_upr_starts(string s, string p) { return s.upr().startsWith(p); }
 int sub f_lwr_find(string s, string p) { return s.lwr().find(p); }
 bool sub f_lwr_lt(string s, string p) { return s.lwr() < p; }
+# the functions that the lowering makes as calls of pseudo-methods, alone and with operands that a fusion could take
+string sub f_fsubstr(string s) { return substr(s, 1, 2); }
+int sub f_findex(string s, string p) { return index(s, p); }
+int sub f_frindex(string s, string p) { return rindex(s, p); }
+int sub f_findex_off(string s, string p, int o) { return index(s, p, o); }
+string sub f_fsubstr_cat(string a, string b) { return substr(a + b, 1, 2); }
+int sub f_findex_cat(string a, string b, string p) { return index(a + b, p); }
+int sub f_findex_lwr(string s, string p) { return index(tolower(s), p); }
+# integer arguments outside the inline range, explicit offsets, upr() consumers, the converted operand on the right
+string sub f_substr_big(string s) { return s.substr(1, 9223372036854775807); }
+int sub f_find_off(string s, string p, int o) { return s.find(p, o); }
+int sub f_rfind_off(string s, string p, int o) { return s.rfind(p, o); }
+int sub f_upr_rfind(string s, string p) { return s.upr().rfind(p); }
+bool sub f_ne_upr(string s, string p) { return p != s.upr(); }
+# an exception pending when the fast path runs
+string sub f_pending(string s) {
+    on_error {
+        string l = s.lwr();
+    }
+    throw "PENDING", "pending";
+}
 
 sub show(string name, code c) {
     try {
@@ -49,10 +70,17 @@ sub show(string name, code c) {
         # the exception without its call stack, then every frame of the call stack; an AOT executable records its
         # sources by their absolute paths and no columns, and the statement IDs are those of the AST interpreter's
         # statements only, so these are left out
-        printf("%s: %y\n", name, ex - "callstack" + {"file": basename(ex.file)});
-        foreach hash<CallStackInfo> frame in (ex.callstack) {
-            printf("  %d: %y\n", $#, frame - ("statementid", "start_column", "end_column")
-                + {"file": basename(frame.file)});
+        # a chained exception follows the exception
+        *hash<ExceptionInfo> e = ex;
+        string label = name;
+        while (e) {
+            printf("%s: %y\n", label, e - ("callstack", "next") + {"file": basename(e.file)});
+            foreach hash<CallStackInfo> frame in (e.callstack) {
+                printf("  %d: %y\n", $#, frame - ("statementid", "start_column", "end_column")
+                    + {"file": basename(frame.file)});
+            }
+            e = e.next;
+            label = "  next";
         }
     }
 }
@@ -94,3 +122,18 @@ show("cat-length", auto sub () { return f_cat_length(bad, "x"); });
 show("upr-starts", auto sub () { return f_upr_starts(ascii, "日"); });
 show("lwr-find", auto sub () { return f_lwr_find(ascii, "日"); });
 show("lwr-lt", auto sub () { return f_lwr_lt(bad, "x"); });
+show("fsubstr", auto sub () { return f_fsubstr(bad); });
+show("findex", auto sub () { return f_findex(ascii, "日"); });
+show("findex-bad", auto sub () { return f_findex(bad, "B"); });
+show("frindex", auto sub () { return f_frindex(ascii, "日"); });
+show("findex-off", auto sub () { return f_findex_off(ascii, "日", 1); });
+show("fsubstr-cat", auto sub () { return f_fsubstr_cat(bad, "x"); });
+show("findex-cat", auto sub () { return f_findex_cat(ascii, "x", "日"); });
+show("findex-lwr", auto sub () { return f_findex_lwr(bad, "b"); });
+show("findex-lwr-p", auto sub () { return f_findex_lwr(ascii, "日"); });
+show("substr-big", auto sub () { return f_substr_big(bad); });
+show("find-off", auto sub () { return f_find_off(ascii, "日", 1); });
+show("rfind-off", auto sub () { return f_rfind_off(bad, "B", 3); });
+show("upr-rfind", auto sub () { return f_upr_rfind(ascii, "日"); });
+show("ne-upr", auto sub () { return f_ne_upr(bad, "x"); });
+show("pending", auto sub () { return f_pending(bad); });

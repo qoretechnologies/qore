@@ -35,8 +35,17 @@ exception that the call would have raised.  The calls are in `lib/QoreAOTStringR
 tests the exception sink before and after its work and makes no call, so it costs what it cost before.
 
 The fast paths of the functions have runtime functions of their own (`qore_fast_tolower_string()`,
-`qore_fast_toupper_string()`, `qore_fast_length()`), as the frame of the function is not that of the pseudo-method;
-`<string>::length()` uses `qore_rt_pseudo_string_length_xsink_noguard()`.
+`qore_fast_toupper_string()`, `qore_fast_length()`, `qore_fast_substr_string()`, `qore_fast_index_string()`,
+`qore_fast_rindex_string()`), as the frame of the function is not that of the pseudo-method; `<string>::length()` uses
+`qore_rt_pseudo_string_length_xsink_noguard()`.
+
+The lowering makes `substr()`, `index()` and `rindex()` of strings as calls of the pseudo-methods `substr()`, `find()`
+and `rfind()` (with the function call as the instruction's expression).  Such an instruction has an intrinsic of its
+own (`StringFunctionSubstr`, `StringFunctionIndex`, `StringFunctionRIndex`), which no analysis takes for the
+pseudo-method's, so no fusion takes the call, and the code generator and the IR interpreter give it the fast path of
+the function.
+
+The fast paths of `<list>::join()` and `join()`, and the fused joins of folds, are not covered yet (qore#7731).
 
 `StringFastPathFrames.qtest` compares each exception and its whole call stack with the AST interpreter's in every
 execution mode, on the IR tier and in AOT executables, also without prelinked calls.

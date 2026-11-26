@@ -61,12 +61,17 @@ DLLLOCAL QoreValue qore_string_call_length(QoreValue str, bool function, Excepti
 //! makes the ordinary call of <string>::size()
 DLLLOCAL QoreValue qore_string_call_size(QoreValue str, ExceptionSink* xsink);
 
-//! makes the ordinary call of <string>::substr() with one argument, or with two (\a has_length)
-DLLLOCAL QoreValue qore_string_call_substr(QoreValue str, int64 start, int64 length, bool has_length,
+//! makes the ordinary call of <string>::substr() (\a function false), or of substr(), with one argument after the
+//! string, or with two (\a has_length)
+DLLLOCAL QoreValue qore_string_call_substr(QoreValue str, int64 start, int64 length, bool has_length, bool function,
         ExceptionSink* xsink);
 
 //! makes the ordinary call of a search pseudo-method of <string>; \a offset is given to find() and rfind() only
 DLLLOCAL QoreValue qore_string_call_search(QoreValue str, QoreValue pattern, QoreStringSearchCall call,
         int64 offset, ExceptionSink* xsink);
+
+//! makes the ordinary call of index() or rindex() (\a reverse)
+DLLLOCAL QoreValue qore_string_call_index(QoreValue str, QoreValue pattern, bool reverse, int64 offset,
+        ExceptionSink* xsink);
 
 #endif

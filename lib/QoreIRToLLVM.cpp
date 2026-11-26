@@ -422,13 +422,24 @@ static QoreIRStringFindPseudoInfo qore_ir_get_string_pseudo_find_info(QoreIRIntr
             return {"qore_rt_pseudo_string_find_noguard", 0};
         case QoreIRIntrinsic::StringRFind:
             return {"qore_rt_pseudo_string_rfind_noguard", -1};
+        // the functions, whose exceptions have their frames (qore#7711)
+        case QoreIRIntrinsic::StringFunctionIndex:
+            return {"qore_fast_index_string", 0};
+        case QoreIRIntrinsic::StringFunctionRIndex:
+            return {"qore_fast_rindex_string", -1};
         default:
             return {};
     }
 }
 
 static bool qore_ir_is_string_pseudo_substr(QoreIRIntrinsic intrinsic) {
-    return intrinsic == QoreIRIntrinsic::StringSubstr;
+    return intrinsic == QoreIRIntrinsic::StringSubstr || intrinsic == QoreIRIntrinsic::StringFunctionSubstr;
+}
+
+//! the runtime function of the fast path of <string>::substr() or of the function substr() (qore#7711)
+static const char* qore_ir_get_string_substr_symbol(QoreIRIntrinsic intrinsic) {
+    return intrinsic == QoreIRIntrinsic::StringFunctionSubstr
+        ? "qore_fast_substr_string" : "qore_rt_pseudo_string_substr_noguard";
 }
 
 static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(QoreIRIntrinsic intrinsic,
@@ -9964,7 +9975,7 @@ llvm::Value* QoreIRToLLVM::emitGuardedStringPseudoFastPath(
                 inst->operands[2].id);
         }
         auto helper = module.getOrInsertFunction(
-            "qore_rt_pseudo_string_substr_noguard",
+            qore_ir_get_string_substr_symbol(intrinsic),
             llvm::FunctionType::get(i64_type,
                 {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
         result = builder->CreateCall(helper,
@@ -31189,7 +31200,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!length_val) { return false; }
                     length = ensureIntTypeInline(length_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                auto helper = module.getOrInsertFunction(qore_ir_get_string_substr_symbol(direct_inst->intrinsic),
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, start, length,
                     llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});
@@ -32051,7 +32062,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!length_val) { return false; }
                     length = ensureIntTypeInline(length_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                auto helper = module.getOrInsertFunction(qore_ir_get_string_substr_symbol(invoke_inst->intrinsic),
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, start, length,
                     llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});

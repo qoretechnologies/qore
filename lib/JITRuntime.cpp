@@ -12976,7 +12976,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
             return 0;
         }
         if (has_substr) {
-            value = qore_string_call_substr(*value, start, length, has_length, xsink);
+            value = qore_string_call_substr(*value, start, length, has_length, false, xsink);
             if (*xsink) {
                 return 0;
             }
@@ -13003,7 +13003,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        return toBits(qore_string_call_substr(*concatenated, start, length, has_length, xsink));
+        return toBits(qore_string_call_substr(*concatenated, start, length, has_length, false, xsink));
     });
 }
 
@@ -26927,6 +26927,28 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_rfind_native_noguard(uint64_t
         val_bits, substring_bits, offset, xsink);
 }
 
+//! The fast path of index() for assigned string arguments; an exception has the frame of index()
+extern "C" DLLEXPORT uint64_t qore_fast_index_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+        ExceptionSink* xsink) {
+    return qore_rt_string_fast_path(xsink, [&]() {
+        int64_t result = qore_rt_pseudo_string_find_native_work(val_bits, substring_bits, offset, xsink);
+        return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
+    }, [&]() {
+        return toBits(qore_string_call_index(fromBits(val_bits), fromBits(substring_bits), false, offset, xsink));
+    });
+}
+
+//! The fast path of rindex() for assigned string arguments; an exception has the frame of rindex()
+extern "C" DLLEXPORT uint64_t qore_fast_rindex_string(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+        ExceptionSink* xsink) {
+    return qore_rt_string_fast_path(xsink, [&]() {
+        int64_t result = qore_rt_pseudo_string_rfind_native_work(val_bits, substring_bits, offset, xsink);
+        return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
+    }, [&]() {
+        return toBits(qore_string_call_index(fromBits(val_bits), fromBits(substring_bits), true, offset, xsink));
+    });
+}
+
 //! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits,
         uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
@@ -26936,8 +26958,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_b
 }
 
 //! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
-extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits,
-        int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
+//! <string>::substr(), or substr() (\a function), of a string
+static uint64_t qore_rt_string_substr_fast(uint64_t val_bits, int64_t start, int64_t length, int32_t has_length,
+        bool function, ExceptionSink* xsink) {
     return qore_rt_string_fast_path(xsink, [&]() {
         QoreValue v = fromBits(val_bits);
         QoreStringNodeValueHelper str(v);
@@ -26952,8 +26975,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_
         }
         return toBits(QoreValue(result));
     }, [&]() {
-        return toBits(qore_string_call_substr(fromBits(val_bits), start, length, has_length, xsink));
+        return toBits(qore_string_call_substr(fromBits(val_bits), start, length, has_length, function, xsink));
     });
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits,
+        int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
+    return qore_rt_string_substr_fast(val_bits, start, length, has_length, false, xsink);
+}
+
+//! The fast path of substr() for a string argument proven to be assigned; an exception has the frame of substr()
+extern "C" DLLEXPORT uint64_t qore_fast_substr_string(uint64_t val_bits,
+        int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
+    return qore_rt_string_substr_fast(val_bits, start, length, has_length, true, xsink);
 }
 
 //! <string>::lwr() or <string>::upr(), or tolower() or toupper() (\a function), of a string
@@ -27027,9 +27061,12 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
 }
 
 // the consumers are the search pseudo-methods in the same order
-static_assert(static_cast<int32_t>(QoreStringCaseConsumer::RFind) == static_cast<int32_t>(QoreStringSearchCall::RFind)
-    && static_cast<int32_t>(QoreStringCaseConsumer::StartsWith)
-        == static_cast<int32_t>(QoreStringSearchCall::StartsWith));
+static_assert(static_cast<int32_t>(QoreStringCaseConsumer::StartsWith)
+        == static_cast<int32_t>(QoreStringSearchCall::StartsWith)
+    && static_cast<int32_t>(QoreStringCaseConsumer::EndsWith) == static_cast<int32_t>(QoreStringSearchCall::EndsWith)
+    && static_cast<int32_t>(QoreStringCaseConsumer::Contains) == static_cast<int32_t>(QoreStringSearchCall::Contains)
+    && static_cast<int32_t>(QoreStringCaseConsumer::Find) == static_cast<int32_t>(QoreStringSearchCall::Find)
+    && static_cast<int32_t>(QoreStringCaseConsumer::RFind) == static_cast<int32_t>(QoreStringSearchCall::RFind));
 
 //! the work of qore_rt_pseudo_string_case_consume_native_noguard()
 static int64_t qore_rt_pseudo_string_case_consume_work(
@@ -27085,6 +27122,11 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
     return qore_rt_string_fast_path(xsink, [&]() {
         return qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
     }, [&]() -> int64_t {
+        if (static_cast<int32_t>(consumer) < static_cast<int32_t>(QoreStringCaseConsumer::StartsWith)
+                || static_cast<int32_t>(consumer) > static_cast<int32_t>(QoreStringCaseConsumer::RFind)) {
+            // the error of the work
+            return qore_rt_pseudo_string_case_consume_work(val_bits, arg_bits, offset, upper, consumer, xsink);
+        }
         // the calls that the fusion stands for: s.lwr().contains(p) and the like (or upr())
         ValueHolder transformed(qore_string_call_case(fromBits(val_bits), upper, false, xsink), xsink);
         if (*xsink) {

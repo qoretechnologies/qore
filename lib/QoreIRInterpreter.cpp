@@ -204,28 +204,35 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
         return true;
     }
 
-    if (intrinsic == QoreIRIntrinsic::StringFind && arg0_known_string
-            && fromBits(nanboxed_args[0]).getType() == NT_STRING
+    // the functions index(), rindex() and substr() have fast paths of their own, as their exceptions have their frames
+    // (qore#7711)
+    if ((intrinsic == QoreIRIntrinsic::StringFind || intrinsic == QoreIRIntrinsic::StringFunctionIndex)
+            && arg0_known_string && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
-        res = fromBits(qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink));
+        res = fromBits(intrinsic == QoreIRIntrinsic::StringFind
+            ? qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink)
+            : qore_fast_index_string(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 
-    if (intrinsic == QoreIRIntrinsic::StringRFind && arg0_known_string
-            && fromBits(nanboxed_args[0]).getType() == NT_STRING
+    if ((intrinsic == QoreIRIntrinsic::StringRFind || intrinsic == QoreIRIntrinsic::StringFunctionRIndex)
+            && arg0_known_string && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : -1;
-        res = fromBits(qore_rt_pseudo_string_rfind_noguard(toBits(base), nanboxed_args[0], offset, xsink));
+        res = fromBits(intrinsic == QoreIRIntrinsic::StringRFind
+            ? qore_rt_pseudo_string_rfind_noguard(toBits(base), nanboxed_args[0], offset, xsink)
+            : qore_fast_rindex_string(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 
-    if (intrinsic == QoreIRIntrinsic::StringSubstr && arg0_known_assigned_int
-            && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
+    if ((intrinsic == QoreIRIntrinsic::StringSubstr || intrinsic == QoreIRIntrinsic::StringFunctionSubstr)
+            && arg0_known_assigned_int && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t start = fromBits(nanboxed_args[0]).getAsBigInt();
         int64_t length = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
-        res = fromBits(qore_rt_pseudo_string_substr_noguard(toBits(base), start, length,
-            nargs == 2 ? 1 : 0, xsink));
+        res = fromBits(intrinsic == QoreIRIntrinsic::StringSubstr
+            ? qore_rt_pseudo_string_substr_noguard(toBits(base), start, length, nargs == 2 ? 1 : 0, xsink)
+            : qore_fast_substr_string(toBits(base), start, length, nargs == 2 ? 1 : 0, xsink));
         return true;
     }
 
