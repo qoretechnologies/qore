@@ -2666,10 +2666,11 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
 */
 static QORE_INTERN_NOINLINE bool qore_ir_exec_list_join(const QoreIRInstruction* inst, IRValueSlots& values,
         IRCleanupSlots& cleanup, ExceptionSink* xsink) {
+    // the interpreter always has a sink; an instruction without its operands, which the verifier rejects, raises its
+    // error as an exception of the instruction, which a handler in the frame catches
+    assert(xsink);
     if (inst->operands.size() < 2) {
-        if (xsink) {
-            xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
-        }
+        xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
         return false;
     }
     QoreValue res = fromBits(qore_rt_list_string_join_inst(inst,
