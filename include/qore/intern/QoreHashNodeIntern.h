@@ -748,7 +748,10 @@ public:
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key, size_t len) const {
-        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, len)) : (hm.empty() ? nullptr : hm.findSlow(key, len));
+        // the miss path is only the call of findSlow(), which returns nullptr for a map without members: a test of the
+        // member count here makes GCC keep the arguments on the stack across the hash call of the fast path, as this
+        // search is the one of object members (bench-member rows)
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, len)) : hm.findSlow(key, len);
     }
 
     //! returns the member with the key \a key, or nullptr
