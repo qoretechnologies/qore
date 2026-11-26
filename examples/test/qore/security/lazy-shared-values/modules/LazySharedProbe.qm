@@ -20,6 +20,12 @@ public class Built {
         string name;
     }
 
+    #! whether the code that calls the method is restricted from the file system: an object that is a capability
+    #! lends it to its caller (qore#7052)
+    bool callerRestricted() {
+        return SandboxManager::isCallerRestricted(DOM_FILESYSTEM);
+    }
+
     constructor(string name) {
         self.name = name;
         if (SandboxManager::createsSharedObjects()) {
@@ -31,8 +37,8 @@ public class Built {
 public class Probe {
     public {
         #! the keys that the builder knows
-        const Keys = ("tenant", "restricted", "trusted", "deputy", "hidden", "race", "fail-once", "self",
-            "tenant-object", "cycA", "cycB");
+        const Keys = ("tenant", "restricted", "trusted", "deputy", "hidden", "module-thread", "race", "fail-once",
+            "self", "tenant-object", "cycA", "cycB");
     }
 
     private:internal {
@@ -59,6 +65,17 @@ public class Probe {
     #! the value of a key, built once for every caller
     static hash<auto> get(string key, timeout timeout_ms = 0) {
         return values.get(key, timeout_ms);
+    }
+
+    #! the value of a key, first needed by a thread of the module's own code, with no code of a Program that is not a
+    #! module's on its stack: there the barrier of a trusted build would hide nothing
+    static hash<auto> getInModuleThread(string key) {
+        Queue q();
+        background q.push({
+            "hides_nothing": call_function("dbg_trusted_build_hides_nothing"),
+            "value": Probe::get(key),
+        });
+        return q.get();
     }
 
     #! the value of a key with the plain lazy pattern

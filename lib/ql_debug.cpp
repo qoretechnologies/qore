@@ -843,6 +843,16 @@ static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConf
 #endif
 }
 
+//! Returns qore_trusted_build_hides_nothing() for the calling code (qore#7684)
+static QoreValue f_dbg_trusted_build_hides_nothing(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef DEBUG
+    return qore_trusted_build_hides_nothing();
+#else
+    return false;
+#endif
+}
+
 //! Waits until a thread waits for a lazy shared value that another thread builds; returns false on timeout (qore#7684)
 static QoreValue f_dbg_lazy_shared_wait_waiting(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
 #ifdef DEBUG
@@ -37606,6 +37616,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_trusted_build_hides_nothing", f_dbg_trusted_build_hides_nothing, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_lazy_shared_wait_waiting", f_dbg_lazy_shared_wait_waiting, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "timeout_ms");

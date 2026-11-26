@@ -48,7 +48,8 @@ public hashdecl AssemblyAiSchemaProvenanceInfo {
 
 #! Shared API schemas, parsed and validated during action registration
 /** Only committed resources are loaded. The import specification records checked upstream repairs.
-    Construction publishes the complete set under a lock, so a failed import cannot expose partial state.
+    The set is built once, as trusted code, and published only when it is complete, so a failed import cannot
+    expose partial state.
 */
 public class AssemblyAiSchema {
     public {

@@ -39,6 +39,7 @@
 
 #include <map>
 #include <memory>
+#include <new>
 
 namespace {
 //! The waits of the threads for the values that other threads build, for the cycle check (qore#7684)
@@ -217,23 +218,31 @@ int QoreLazySharedBase::getIntern(SafeLocker& sl, const std::shared_ptr<QoreLazy
             return 1;
         }
         int builder_tid = entry->builder_tid.load(std::memory_order_relaxed);
-        // no build, or one of another process (a fork during a build): this thread builds the value
-        if (!builder_tid || entry->builder_pid != pid) {
-            break;
-        }
         if (builder_tid == tid) {
             xsink->raiseException("SHARED-INIT-ERROR", "%s is needed by its own builder", what);
             return -1;
         }
+        // no build, or one of another process (a fork during a build): this thread builds the value
+        if (!builder_tid || entry->builder_pid != pid) {
+            break;
+        }
         // the wait would close a cycle of waits: raised instead of a deadlock
-        if (lazy_shared_waits().add(tid, entry)) {
+        int wrc;
+        try {
+            wrc = lazy_shared_waits().add(tid, entry);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        if (wrc) {
             xsink->raiseException("SHARED-INIT-ERROR", "%s cannot be waited for: its builder waits, directly or "
                 "through other builders, for a value that this thread builds", what);
             return -1;
         }
         QoreLazySharedWaitHelper wh(tid);
         int rc;
-        if (!timeout_ms) {
+        // a timeout of 0 or less is no limit
+        if (!deadline.active()) {
             rc = cond.waitWithInterrupt(&l, xsink);
         } else {
             int64 wait_ms = deadline.remainingMs();
@@ -305,12 +314,19 @@ QoreValue QoreLazySharedMap::get(const QoreStringNode* key, int64 timeout_ms, Ex
     if (*xsink) {
         return QoreValue();
     }
-    std::string kstr(k->c_str(), k->size());
+    std::string kstr;
+    try {
+        kstr.assign(k->c_str(), k->size());
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return QoreValue();
+    }
     QoreString what;
     what.sprintf("the lazy shared value of key '%s'", kstr.c_str());
 
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-    args->push(key->refSelf(), xsink);
+    // the builder gets the key in UTF-8, as it is compared
+    args->push(new QoreStringNode(k->c_str(), k->size(), QCS_UTF8), xsink);
 
     SafeLocker sl(&l);
     while (true) {
@@ -324,8 +340,13 @@ QoreValue QoreLazySharedMap::get(const QoreStringNode* key, int64 timeout_ms, Ex
                     "%lld values", what.c_str(), max_size);
                 return QoreValue();
             }
-            entry = std::make_shared<QoreLazySharedEntry>();
-            entries[kstr] = entry;
+            try {
+                entry = std::make_shared<QoreLazySharedEntry>();
+                entries[kstr] = entry;
+            } catch (std::bad_alloc&) {
+                xsink->outOfMemory();
+                return QoreValue();
+            }
         }
         QoreValue rv;
         int rc = getIntern(sl, entry, *args, timeout_ms, what.c_str(), rv, xsink);

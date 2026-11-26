@@ -802,7 +802,8 @@ authenticate();
     first: their builder, which only trusted code can give, runs as a trusted build (see
     @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") unless the barrier
     of the build would hide nothing of the caller (no sandbox, no sandboxed caller that it acts for, no restrictions
-    that what it creates would record), and the value is published to every caller.  Other callers wait for a build in
+    that what it creates would record, and no code of a %Program that lends the objects that it creates, see
+    @ref sandbox_provenance), and the value is published to every caller.  Other callers wait for a build in
     progress; a build that fails publishes nothing (a key of a map whose build fails leaves no entry, so that callers
     cannot make the map grow with keys that its builder does not know).
 

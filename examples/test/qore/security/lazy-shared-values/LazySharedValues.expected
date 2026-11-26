@@ -8,10 +8,13 @@ tenant first caller of a LazySharedValue: obj shared: True, built as trusted: Tr
 restricted first caller: obj shared: True, built as trusted: True; plain lazy pattern: obj shared: True, built as trusted: True
 its closure for an unrestricted caller: restricted: False; plain lazy pattern: True
 the restricted caller is still restricted itself: True
-trusted first caller (no barrier): obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+trusted first caller: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+the file system for a restricted caller in a method of its object: "not lent"; plain lazy pattern: "lent"
+first caller with nothing for the barrier to hide (True): obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; its object for a restricted caller: "not lent"
 trusted deputy first caller for the tenant: "obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: False, built as trusted: False, its code restricted for an unrestricted caller: False"
 first caller with a hidden sandboxed caller record: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: False, built as trusted: False, its code restricted for an unrestricted caller: False
 the values for an unrestricted caller: tenant: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; restricted: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+the other first callers wait: [True, True]
 a caller with a timeout while another builds: SHARED-INIT-TIMEOUT
 race: builds: 1, results: ["\"race\"", "\"race\"", "\"race\""]
 a build that fails: BUILD-FAILED, new entries: 0; the next caller: "fail-once", new entries: 1

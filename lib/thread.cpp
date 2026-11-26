@@ -8806,24 +8806,6 @@ static QoreParseOptions qore_get_creation_origin_restrictions(ThreadData* td) {
     return qore_get_calling_code_restrictions(td);
 }
 
-bool qore_trusted_build_hides_nothing() {
-    ThreadData* td = thread_data.get();
-    if (!td) {
-        return true;
-    }
-    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
-    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
-    // acts for (fails closed: also if it cannot be resolved), and the restrictions of the calling code that what the
-    // code creates would record (see qore_get_creation_origin_restrictions())
-    if (td->sandboxed_caller) {
-        return false;
-    }
-    if (qore_caller_sandbox_state_intern(nullptr)) {
-        return false;
-    }
-    return qore_get_calling_code_restrictions(td).empty();
-}
-
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
 static qore_program_id_t qore_current_program_id(ThreadData* td) {
     QoreProgram* pgm = td->current_pgm ? td->current_pgm : td->call_program_context;
@@ -9552,6 +9534,31 @@ static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, 
         }
     }
     return td->call_program_context && !qore_program_is_module_inline(td->call_program_context);
+}
+
+bool qore_trusted_build_hides_nothing() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
+    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
+    // acts for (fails closed: also if it cannot be resolved), the restrictions of the calling code that what the code
+    // creates would record (see qore_get_creation_origin_restrictions()), also those that a lent method masks (see
+    // qore_get_lent_to_restrictions()), and the code that lends what it creates (see qore_creation_by_lending_code()):
+    // under the barrier nothing that the builder creates is a capability
+    if (td->sandboxed_caller) {
+        return false;
+    }
+    if (qore_caller_sandbox_state_intern(nullptr)) {
+        return false;
+    }
+    if (!qore_get_calling_code_restrictions(td).empty() || !qore_get_lent_to_restrictions(td).empty()) {
+        return false;
+    }
+    bool in_lent_method;
+    const QoreProgram* lent_pgm;
+    return !qore_creation_by_lending_code(td, in_lent_method, lent_pgm);
 }
 
 QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans, bool* capability) {

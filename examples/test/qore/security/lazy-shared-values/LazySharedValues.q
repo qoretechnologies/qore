@@ -73,6 +73,14 @@ string sub call_deputy(code deputy) {
     return try_it(deputy);
 }
 
+# whether the restricted code is restricted in a method of the object of a value: it is not if the object lends it
+string sub object_lends(string key, bool legacy) {
+    return try_it(auto sub () {
+        hash<auto> v = legacy ? LazySharedProbe::Probe::getLegacy(key) : LazySharedProbe::Probe::get(key);
+        return v.obj.callerRestricted() ? \"not lent\" : \"lent\";
+    });
+}
+
 bool sub restricted_self() {
     return SandboxManager::isCallerRestricted(DOM_FILESYSTEM);
 }
@@ -131,7 +139,16 @@ printf("restricted first caller: %s; plain lazy pattern: %s\n", restricted.callF
 printf("its closure for an unrestricted caller: restricted: %y; plain lazy pattern: %y\n",
     LazySharedProbe::Probe::get("restricted").closure(), LazySharedProbe::Probe::getLegacy("restricted").closure());
 printf("the restricted caller is still restricted itself: %y\n", restricted.callFunction("restricted_self"));
-printf("trusted first caller (no barrier): %s\n", describe(LazySharedProbe::Probe::get("trusted")));
+printf("trusted first caller: %s; plain lazy pattern: %s\n", describe(LazySharedProbe::Probe::get("trusted")),
+    describe(LazySharedProbe::Probe::getLegacy("trusted")));
+printf("the file system for a restricted caller in a method of its object: %s; plain lazy pattern: %s\n",
+    restricted.callFunction("object_lends", "trusted", False),
+    restricted.callFunction("object_lends", "trusted", True));
+{
+    hash<auto> r = LazySharedProbe::Probe::getInModuleThread("module-thread");
+    printf("first caller with nothing for the barrier to hide (%y): %s; its object for a restricted caller: %s\n",
+        r.hides_nothing, describe(r.value), restricted.callFunction("object_lends", "module-thread", False));
+}
 code deputy_get = string sub () {
     return describe(LazySharedProbe::Probe::get("deputy")) + "; plain lazy pattern: "
         + describe(LazySharedProbe::Probe::getLegacy("deputy"));
@@ -157,16 +174,20 @@ printf("the values for an unrestricted caller: tenant: %s; restricted: %s\n",
         lck.lock(); results += r; lck.unlock();
     })();
     LazySharedProbe::Probe::waitRaceStarted();
-    background (sub () {
+    int t2 = background (sub () {
         on_exit done.dec();
         string r = tenant.callFunction("get_key", "race");
         lck.lock(); results += r; lck.unlock();
     })();
-    background (sub () {
+    # a timeout of 0 or less is no limit
+    int t3 = background (sub () {
         on_exit done.dec();
-        string r = sprintf("%y", LazySharedProbe::Probe::get("race").obj.name);
+        string r = tenant.callFunction("get_key", "race", -1);
         lck.lock(); results += r; lck.unlock();
     })();
+    # both wait for the build before it ends
+    printf("the other first callers wait: %y\n", (call_function("dbg_lazy_shared_wait_waiting", t2, 30000),
+        call_function("dbg_lazy_shared_wait_waiting", t3, 30000)));
     # a caller with a timeout gives up while the build runs
     printf("a caller with a timeout while another builds: %s\n", tenant.callFunction("get_key", "race", 1ms));
     LazySharedProbe::Probe::releaseRace();

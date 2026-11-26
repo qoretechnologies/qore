@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_LazySharedValue.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/qore_thread_intern.h"
 
 //! Values that trusted code shares with every caller, by key, each built the first time that a caller needs it, as trusted code
 /** The values of a LazySharedMap are built as the value of a @ref Qore::Thread::LazySharedValue "LazySharedValue" is,
@@ -53,7 +55,7 @@ qclass LazySharedMap [arg=QoreLazySharedMap* m; ns=Qore::Thread];
 /** @param builder the code that builds the value of a key; it takes the key as a string argument and raises an
     exception for a key that it does not know; a plain callback (not a bound callback or a capability) of code that no
     sandbox governs
-    @param max_size the most entries (values built or being built); 0 (the default) for no limit; a key that would
+    @param max_size the most entries (values built or being built); 0 (the default) or less for no limit; a key that would
     exceed it is refused
 
     @throw SANDBOX-CAPABILITY-ERROR the creating code is sandboxed or acts for sandboxed code, or @p builder has
@@ -71,6 +73,10 @@ LazySharedMap::constructor(code builder, int max_size = 0) {
         return;
     }
     self->setPrivate(CID_LAZYSHAREDMAP, m.release());
+    // the object is shared state of trusted code: sandboxed code cannot delete it (see SandboxManager::shareObject())
+    if (qore_caller_creates_shared_objects()) {
+        qore_object_private::get(*self)->setShared();
+    }
 }
 
 //! Copying is not supported
@@ -82,7 +88,7 @@ LazySharedMap::copy() {
 
 //! Returns the value of a key, building it the first time
 /** @param key the key
-    @param timeout_ms the most to wait for another thread that builds the value; 0 (the default) for no limit
+    @param timeout_ms the most to wait for another thread that builds the value; 0 (the default) or less for no limit
 
     @return the value
 
