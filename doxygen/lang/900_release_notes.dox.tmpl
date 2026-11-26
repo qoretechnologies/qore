@@ -2992,6 +2992,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
+      thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
+      running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
