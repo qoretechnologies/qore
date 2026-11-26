@@ -33,7 +33,10 @@ module TestCpuTime {
 }
 
 /** A test that checks that a server waits without running continuously measures the CPU time that its own process
-    uses over the wait.
+    uses over the wait, without the compiles of the JIT's background compile thread (named @c qore-jit-bg): tiered
+    execution compiles a function in the background once it is called often enough, which can happen during the wait
+    (a client thread of the test that runs Qore code), and a compile can take tenths of a second; it is not the
+    server's work (qoretechnologies/qore#7654).
 
     @par Example:
     @code{.py}
@@ -48,8 +51,9 @@ public namespace TestCpuTime {
 #! Returns a snapshot of the CPU time that the threads of the process have used, for cpuTimeSince()
 /** On Linux, the CPU time of each thread in nanoseconds, from the first field of its
     @c /proc/self/task/<tid>/schedstat, or, on a kernel without it, from the @c utime and @c stime fields of its
-    @c /proc/self/task/<tid>/stat (in clock ticks of 10 ms); elsewhere the CPU time of the process from ps(1)
-    (hundredths of a second on macOS), under the key @c "ps"
+    @c /proc/self/task/<tid>/stat (in clock ticks of 10 ms), without the JIT's background compile thread (named
+    @c qore-jit-bg); elsewhere the CPU time of the process from ps(1) (hundredths of a second on macOS), under
+    the key @c "ps", which includes the compiles
 
     @throw CPU-TIME-ERROR the CPU time cannot be read
 */
@@ -57,6 +61,9 @@ public hash<string, int> sub cpuSnapshot() {
     hash<string, int> rv();
     if (is_readable("/proc/self/task")) {
         foreach string path in (glob("/proc/self/task/*/schedstat")) {
+            if (isJitCompileThread(path)) {
+                continue;
+            }
             string str;
             try {
                 str = (new ReadOnlyFile(path)).read(-1);
@@ -73,6 +80,9 @@ public hash<string, int> sub cpuSnapshot() {
             return rv;
         }
         foreach string path in (glob("/proc/self/task/*/stat")) {
+            if (isJitCompileThread(path)) {
+                continue;
+            }
             string str;
             try {
                 str = (new ReadOnlyFile(path)).read(-1);
@@ -111,6 +121,18 @@ public float sub cpuTimeSince(hash<string, int> start) {
         ns += i.value - (start{i.key} ?? 0);
     }
     return ns / 1000000000.0;
+}
+
+#! Returns @ref True if the thread of a task file is the JIT background compile thread
+/** Returns @ref True if the thread of the @c /proc/self/task/<tid>/ file @p path is the JIT's background compile
+    thread, which libqore names @c qore-jit-bg (a thread that ended or cannot be read is not)
+*/
+bool sub isJitCompileThread(string path) {
+    try {
+        return trim((new ReadOnlyFile(dirname(path) + "/comm")).read(-1)) == "qore-jit-bg";
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
 }
 
 #! Returns the CPU time of the process from ps(1), which prints it as [[dd-]hh:]mm:ss[.ss], in nanoseconds
