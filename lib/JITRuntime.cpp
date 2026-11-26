@@ -14872,35 +14872,15 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
         result = toBits(QoreValue());
         return true;
     }
-    std::optional<ProgramThreadCountContextHelper> ptcch;
-    if (cross_pgm || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
-        ptcch.emplace(xsink, exec_pgm, true);
-        // the Program is entered unless an exception was raised, as the generic call path enters it
-        if (!ptcch->entered() && *xsink) {
-            clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
-            result = toBits(QoreValue());
-            return true;
-        }
-        // the thread now holds a count of the module's Program, whose deletion only starts once no other code runs:
-        // if it has started, the call is refused as the generic call path refuses it
-        if (cross_pgm && uvb->pgm_deleted.load(std::memory_order_acquire)) {
-            ptcch.reset();
-            clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
-            xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
-                "cannot be accessed at runtime");
-            result = toBits(QoreValue());
-            return true;
-        }
-    }
-
 #ifdef DEBUG
     qore_dbg_function_reference_fast_calls.fetch_add(1, std::memory_order_relaxed);
 #endif
     // none is recorded for the reference (creatorContextIsCurrent()), so this applies nothing; kept as for every call
     // through a reference
     QoreSandboxProvenanceHelper provenance(ref);
-    // the call is made by the code of the runtime's fast call of a function, out of line: its checks pass, as the ones
-    // above include them, and it enters a module's Program as checked above; its explicit Program is the reference's
+    // the call is made by the code of the runtime's fast call of a function, out of line, from the caller's Program:
+    // its checks pass, as the ones above include them, and it enters a module's Program itself (or the caller's, for
+    // thread entry handlers that must run); its explicit Program is the reference's
     if constexpr (CONSUME) {
         result = qore_rt_call_fast_consume_impl(func, variant, ref_pgm, args, arg_cleanups, nargs, xsink);
     } else {
