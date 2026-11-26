@@ -1818,6 +1818,12 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_13 DataProvider v3.13
+    - @ref DataProvider::TabularProfiler "TabularProfiler" reports a header of two rows, a row of group names over
+      the row of the column names
+      (@ref DataProvider::TabularSheetProfile::header_rows "TabularSheetProfile::header_rows", with the merged
+      ranges of the header in @ref DataProvider::TabularSheetProfile::header_merged "header_merged"), and names each
+      column by its cells of both rows
+      (<a href="https://github.com/qoretechnologies/qore/issues/7751">issue 7751</a>)
     - added @ref dpql_list_functions "DPQL list functions" for grouping, sorting, selecting distinct values,
       flattening nested lists, counting matches, selecting records by extreme keys, and computing percentiles
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
