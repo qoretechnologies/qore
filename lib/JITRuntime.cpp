@@ -3249,11 +3249,15 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_is_exact_int_list(QoreValue val, c
     return priv->complexTypeInfo == ti;
 }
 
+// The helpers of the in-place integer list work below (qore#5578) are called only by native code, so they are never
+// inlined into C++ callers (QORE_INTERN_NOINLINE): copies of them would only enlarge the single compilation unit,
+// whose size GCC's inlining limits depend on, and change its inlining decisions elsewhere.
+
 //! The coercion of the value that the paired store of a push to a list<int> local stores (qore#5578)
 /** As qore_rt_coerce_value(): a list of the local's type is kept as it is, with a reference for \a cleanup_ptr, without
     the generic conversion
 */
-extern "C" DLLEXPORT uint64_t qore_rt_coerce_int_list_value(const QoreTypeInfo* ti, uint64_t value,
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE uint64_t qore_rt_coerce_int_list_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     QoreValue val = fromBits(value);
     if (qore_rt_is_exact_int_list(val, ti)) {
@@ -3276,7 +3280,10 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_local_holds_int_list(const LocalVa
     if (!var || qore_rt_store_takes_value || var->closureUse()) {
         return false;
     }
-    const QoreTypeInfo* ti = var->getTypeInfoForLValue();
+    // the declared type: list<int> is never a no-narrow type, which getTypeInfoForLValue() would give; that function
+    // is not called here, as its calls from more places change GCC's inlining of the single compilation unit
+    // (instantiateFastCallParams())
+    const QoreTypeInfo* ti = var->getTypeInfo();
     if (ti != qore_get_complex_list_type(bigIntTypeInfo) || !qore_rt_is_exact_int_list(val, ti)
             || qore_weak_designated_container(val.getPtr())) {
         return false;
@@ -3290,7 +3297,7 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_local_holds_int_list(const LocalVa
 /** Nothing is done if the local holds the list already (see qore_rt_local_holds_int_list()); otherwise as
     qore_rt_assign_local_no_coerce_eval_weak()
 */
-extern "C" DLLEXPORT void qore_rt_assign_int_list_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE void qore_rt_assign_int_list_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
     if (!*xsink && qore_rt_local_holds_int_list(var, fromBits(value))) {
         return;
     }
@@ -17605,7 +17612,7 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTCo
 }
 
 //! As qore_rt_assign_int_list_local() for the local with the given AOT slot
-extern "C" DLLEXPORT void qore_rt_assign_int_list_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE void qore_rt_assign_int_list_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_int_list_local(ctx->locals[idx], val, xsink);
@@ -17624,10 +17631,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int3
 }
 
 //! As qore_rt_coerce_int_list_value() for the local with the given AOT slot
-extern "C" DLLEXPORT uint64_t qore_rt_coerce_int_list_value_aot(QoreAOTContext* ctx, int32_t local_idx,
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE uint64_t qore_rt_coerce_int_list_value_aot(QoreAOTContext* ctx, int32_t local_idx,
         uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
-    return qore_rt_coerce_int_list_value(ctx->locals[local_idx]->getTypeInfoForLValue(), value, cleanup_ptr, xsink);
+    // the type that getTypeInfoForLValue() gives for a local without a no-narrow type, which is not called here: its
+    // calls from more places change GCC's inlining of the single compilation unit (instantiateFastCallParams())
+    const LocalVar* var = ctx->locals[local_idx];
+    if (var->isNoNarrowing()) {
+        return qore_rt_coerce_value_aot(ctx, local_idx, value, cleanup_ptr, xsink);
+    }
+    return qore_rt_coerce_int_list_value(var->getTypeInfo(), value, cleanup_ptr, xsink);
 }
 
 //! As qore_rt_coerce_value_weak() for the local with the given AOT slot
@@ -19528,7 +19541,7 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_int_list_compound_in_place(const Q
     as the dynamic operand of the path if it has one (a constant index is in the path).  The reference to the operand
     passes to this function in every case if \a consume_rhs is set (see qore_rt_lv_path_compound_consume()).
 */
-static uint64_t qore_rt_lv_path_int_list_compound_impl(QoreIRLValuePathInstruction* inst, int64_t index,
+static QORE_INTERN_NOINLINE uint64_t qore_rt_lv_path_int_list_compound_impl(QoreIRLValuePathInstruction* inst, int64_t index,
         uint64_t rhs_bits, int32_t consume_rhs, ExceptionSink* xsink) {
     assert(inst->path[1].operand_idx != UINT32_MAX || index == inst->path[1].index);
     QoreValue rhs = fromBits(rhs_bits);
@@ -19553,7 +19566,7 @@ static uint64_t qore_rt_lv_path_int_list_compound_impl(QoreIRLValuePathInstructi
     return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_int_list_compound(QoreIRLValuePathInstruction* inst, int64_t index,
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE uint64_t qore_rt_lv_path_int_list_compound(QoreIRLValuePathInstruction* inst, int64_t index,
         uint64_t rhs_bits, int32_t consume_rhs, ExceptionSink* xsink) {
     return qore_rt_lv_path_int_list_compound_impl(inst, index, rhs_bits, consume_rhs, xsink);
 }
@@ -21152,7 +21165,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_consume_aot(
 }
 
 //! The AOT counterpart of qore_rt_lv_path_int_list_compound()
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_int_list_compound_aot(QoreAOTContext* ctx, int32_t slot,
+extern "C" DLLEXPORT QORE_INTERN_NOINLINE uint64_t qore_rt_lv_path_int_list_compound_aot(QoreAOTContext* ctx, int32_t slot,
         int64_t index, uint64_t rhs_bits, int32_t consume_rhs, ExceptionSink* xsink) {
     if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
         if (consume_rhs) {
