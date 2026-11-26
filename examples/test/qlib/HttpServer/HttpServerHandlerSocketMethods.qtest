@@ -1,0 +1,588 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 connections and the sockets of their requests
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires reflection
+
+%exec-class HttpServerHandlerSocketMethodsTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! the maximum header size of the server's connections, which no socket has by default
+const MaxHeaderSize = 12345;
+
+#! the maximum size of a request body of the server's listener
+const MaxBodySize = 4 * 1024 * 1024;
+
+#! the source of the restricted Program of a handler
+const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+string sub tenant_try(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+class TenantLimitHandler inherits AbstractHttpRequestHandler {
+    private {
+        int listener_limit;
+    }
+
+    constructor(int listener_limit) {
+        self.listener_limit = listener_limit;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        # a limit of its own, and the listener's
+        string own = tenant_try(sub () { s.setMaxChunkedBodySize(7); });
+        string max_own = string(s.getMaxChunkedBodySize());
+        string listener_set = tenant_try(sub () { s.setMaxChunkedBodySize(listener_limit); });
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"body\": sprintf(\"class=%s\\nown=%s\\nmax_own=%s\\nlistener=%s\\nmax=%d\", s.className(), own,
+                max_own, listener_set, s.getMaxChunkedBodySize()),
+        };
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler(int listener_limit) {
+    return new TenantLimitHandler(listener_limit);
+}
+
+# sets the listener's limit of a body read as a stream (0: none) for a read of the whole chunked body
+class TenantWholeReadHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string set = tenant_try(sub () { s.setMaxChunkedBodySize(0); });
+        string read = tenant_try(sub () { s.readHTTPChunkedBody(20s); });
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"body\": sprintf(\"set=%s\\nread=%s\", set, read),
+            \"close\": True,
+        };
+    }
+}
+
+AbstractHttpRequestHandler sub get_whole_read_handler() {
+    return new TenantWholeReadHandler();
+}
+
+# reads the whole chunked body of the socket of a request that trusted code gives it
+string sub tenant_whole_read(Socket s) {
+    return tenant_try(sub () { s.readHTTPChunkedBody(20s); });
+}
+";
+
+#! Returns "ok" or the error of the call
+string sub try_it(code c) {
+    try {
+        c();
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! Returns the response body of a probe: one "key=value" line for each result
+hash<HttpResponseInfo> sub probe_response(hash<string, string> r) {
+    return <HttpResponseInfo>{
+        "code": 200,
+        "body": (map sprintf("%s=%s", $1.key, $1.value), r.pairIterator()).join("\n"),
+    };
+}
+
+#! The methods of Socket that run on the object's own socket, which is not connected, refused for the socket of a
+#! request, each with its call
+const Refused = {
+    "acceptAllCertificates": sub (Socket s) { s.acceptAllCertificates(); },
+    "captureRemoteCertificates": sub (Socket s) { s.captureRemoteCertificates(); },
+    "checkIdleDataForAsyncPoll": sub (Socket s) { s.checkIdleDataForAsyncPoll(); },
+    "clearStats": sub (Socket s) { s.clearStats(); },
+    "clearWarningQueue": sub (Socket s) { s.clearWarningQueue(); },
+    "drainHttpConnection": sub (Socket s) { s.drainHttpConnection(); },
+    "getHttp2MaxRequestBodySize": sub (Socket s) { s.getHttp2MaxRequestBodySize(); },
+    "getServerAlias": sub (Socket s) { s.getServerAlias(); },
+    "getUsageInfo": sub (Socket s) { s.getUsageInfo(); },
+    "isServerOwned": sub (Socket s) { s.isServerOwned(); },
+    "readServerSentEvent": sub (Socket s) { s.readServerSentEvent(1s); },
+    "setCertificate": sub (Socket s) { s.setCertificate("x"); },
+    "setEventQueue": sub (Socket s) { s.setEventQueue(); },
+    "setMaxHeaderSize": sub (Socket s) { s.setMaxHeaderSize(100); },
+    "setMaxLineSize": sub (Socket s) { s.setMaxLineSize(100); },
+    "setServerOwned": sub (Socket s) { s.setServerOwned(); },
+    "setSslVerifyMode": sub (Socket s) { s.setSslVerifyMode(SSL_VERIFY_NONE); },
+    "startPollRecvData": sub (Socket s) { s.startPollRecvData(); },
+    "startPollSend": sub (Socket s) { s.startPollSend("x"); },
+    "startPollSendHttpResponse": sub (Socket s) { s.startPollSendHttpResponse(200, "OK", "1.1", NOTHING, "x"); },
+    "submitHttp2Response": sub (Socket s) { s.submitHttp2Response(1, 200); },
+    "submitQuicResponse": sub (Socket s) { s.submitQuicResponse(1, 1, 200); },
+};
+
+#! Tries the socket of its request in the way that its path names
+class MethodsHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the class of the socket of a request
+        Queue classes();
+        #! the socket of a request that the "keep" path keeps
+        Queue kept();
+    }
+
+    constructor() {
+        setHandlerSocketView();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        hash<string, string> r;
+        switch (hdr.path) {
+            case "class":
+                classes.push(Class::getClass(s));
+                r.class = s.className();
+                break;
+
+            case "avail":
+                # the server read the request's body; the data on the connection is the next request's
+                r.avail = try_it(sub () { r.value = sprintf("%y", s.isDataAvailable(0)); });
+                r.body = sprintf("%y", body);
+                break;
+
+            case "chunked":
+                # the request's chunked body is the data on the connection until it is read
+                r.before = sprintf("%y", s.isDataAvailable(HangGuard));
+                r.unfinished_before = sprintf("%y", s.unfinishedHttpChunkedBody());
+                r.body = s.readHTTPChunkedBody(HangGuard).body;
+                r.after = sprintf("%y", s.isDataAvailable(0));
+                r.unfinished_after = sprintf("%y", s.unfinishedHttpChunkedBody());
+                break;
+
+            case "write":
+                r.finished = try_it(sub () { r.value = sprintf("%y", s.isWriteFinished(HangGuard)); });
+                break;
+
+            case "charset":
+                # the aliases of the socket's own encoding
+                s.setCharset("ISO-8859-2");
+                r.encoding = s.getEncoding();
+                r.charset = s.getCharset();
+                break;
+
+            case "getters":
+                r.port = string(s.getPort());
+                r.local_port = string(s.getSocketInfo(False).port);
+                r.max_header_size = string(s.getMaxHeaderSize());
+                r.max_line_size = string(s.getMaxLineSize());
+                r.max_chunked = string(s.getMaxChunkedBodySize());
+                r.no_delay = try_it(sub () { s.getNoDelay(); });
+                r.user_timeout = try_it(sub () { s.getUserTimeout(); });
+                r.connection_id = try_it(sub () { s.getConnectionId(); });
+                r.verify_mode = string(s.getSslVerifyMode());
+                r.accept_all = sprintf("%y", s.getAcceptAllCertificates());
+                break;
+
+            case "refused":
+                foreach hash<auto> i in (Refused.pairIterator()) {
+                    r{i.key} = try_it(sub () { i.value(s); });
+                }
+                break;
+
+            case "limit-small":
+                # the socket's own limit applies to its read of the request's chunked body
+                r.before = string(s.getMaxChunkedBodySize());
+                s.setMaxChunkedBodySize(3);
+                r.own = string(s.getMaxChunkedBodySize());
+                r.read = try_it(sub () { s.readHTTPChunkedBody(HangGuard); });
+                break;
+
+            case "limit-ok":
+                s.setMaxChunkedBodySize(100);
+                r.body = s.readHTTPChunkedBody(HangGuard).body;
+                break;
+
+            case "conn-limit":
+                r.limit = string(s.getMaxChunkedBodySize());
+                break;
+
+            case "keep":
+                kept.push(s);
+                r.kept = "yes";
+                break;
+
+            case "stale": {
+                # the socket of an earlier request on the connection
+                Socket old = kept.get(HangGuard);
+                r.avail = try_it(sub () { old.isDataAvailable(0); });
+                r.finished = try_it(sub () { old.isWriteFinished(0); });
+                r.unfinished = sprintf("%y", old.unfinishedHttpChunkedBody());
+                break;
+            }
+
+            default:
+                r.served = hdr.path;
+                break;
+        }
+        return probe_response(r);
+    }
+}
+
+#! A trusted handler that lifts the socket's limit of a chunked body and gives the socket to restricted code to read
+class TrustedLiftHandler inherits AbstractHttpRequestHandler {
+    private {
+        Program tenant;
+    }
+
+    constructor(Program tenant) {
+        self.tenant = tenant;
+        setHandlerSocketView();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        s.setMaxChunkedBodySize(0);
+        hash<HttpResponseInfo> rv = probe_response({"read": tenant.callFunction("tenant_whole_read", s)});
+        rv.close = True;
+        return rv;
+    }
+}
+
+#! Reports what the socket of its request gives for the rest of its body, which the server did not read
+class RestRequest inherits AbstractStreamRequest {
+    private {
+        hash<string, string> r;
+        int bytes;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.data) {
+            if (!r) {
+                # the client sent the whole body: its rest is the data on the connection
+                r.before = sprintf("%y", s.isDataAvailable(HangGuard));
+            }
+            bytes += v.data.size();
+        }
+    }
+
+    private auto sendImpl() {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        # the server gave the whole body to the handler: the data on the connection is the next request's
+        r.bytes = string(bytes);
+        r.after = sprintf("%y", s.isDataAvailable(0));
+        return probe_response(r);
+    }
+}
+
+#! A stream handler that wants a body with a Content-Length as a stream
+class RestBodyHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+        setHandlerSocketView();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new RestRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! The methods of the socket of an HTTP/1.x request that Socket has: each acts for the request or is refused
+/** The socket of an HTTP/1.x request that a handler gets is a Socket that is not connected; the methods that it did
+    not override ran on that socket: isDataAvailable() raised SOCKET-NOT-OPEN, getCharset() did not give the
+    socket's own encoding, and the others gave the values of a socket that is not connected or changed its settings
+    (qoretechnologies/qore#7567)
+*/
+class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        MethodsHandler handler();
+        RestBodyHandler rest_handler();
+        #! the restricted Program of a handler, which lives as long as the server
+        Program tenant;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerHandlerSocketMethods", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "max_header_size": MaxHeaderSize,
+            "max_request_body_size": MaxBodySize,
+        });
+        server.setHandler("rest", "^rest", NOTHING, rest_handler);
+        tenant = getTenantProgram();
+        server.setHandler("tenant", "^tenant", NOTHING, tenant.callFunction("get_handler", MaxBodySize));
+        server.setDefaultHandler("methods", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        addTestCase("every method of Socket is one of the socket of a request", \methodsTest());
+        addTestCase("data of the request's body with a Content-Length", \availTest());
+        addTestCase("data of the rest of a body that the server did not read", \restTest());
+        addTestCase("data of the request's chunked body", \chunkedTest());
+        addTestCase("the response is written", \writeTest());
+        addTestCase("the aliases of the socket's own encoding", \charsetTest());
+        addTestCase("the values of the connection", \gettersTest());
+        addTestCase("the methods of a socket that is not connected are refused", \refusedTest());
+        addTestCase("the socket ends with its request", \staleTest());
+        addTestCase("the socket's own maximum size of a chunked body", \chunkedLimitTest());
+        addTestCase("restricted code sets only the server's limits of a chunked body", \tenantLimitTest());
+        addTestCase("a limit that restricted code set does not lift the bound of a read of the whole body",
+            \tenantWholeReadTest());
+        addTestCase("a read of the whole body that restricted code makes keeps the bound of the connection",
+            \tenantWholeReadTest(), True);
+        set_return_value(main());
+        delete server;
+    }
+
+    methodsTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        readResponse(c);
+        Class cls = handler.classes.get(HangGuard);
+
+        # the parameter types of the variants of each method of the socket's class
+        hash<string, list<list<string>>> own;
+        foreach AbstractMethodVariant v in (cls.getVariants()) {
+            own{v.getMethod().getName()} += ((map $1.getName(), v.getParamTypes()),);
+        }
+        # each public method of Socket that is called on an object has a variant with the same parameters in it
+        list<string> missing = ();
+        foreach AbstractMethodVariant v in (Class::forName("Socket").getVariants()) {
+            AbstractMethod m = v.getMethod();
+            if (m.getMethodTypeName() != "normal" || v.getAccessModifierString() != "public") {
+                continue;
+            }
+            list<string> types = map $1.getName(), v.getParamTypes();
+            if (!inlist(types, own{m.getName()} ?? ())) {
+                missing += sprintf("%s(%s)", m.getName(), types.join(", "));
+            }
+        }
+        assertEq((), missing, "the methods of Socket that run on the object's own socket");
+    }
+
+    availTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /avail HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\nbody"
+            "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("ok", r.avail);
+        assertEq("False", r.value, "no data of the request: the next request is not the handler's");
+        assertEq("served=next", readResponse(c), "the next request is served");
+    }
+
+    restTest() {
+        Socket c = connect();
+        on_exit c.close();
+        int size = DefaultBodyStreamThreshold * 2;
+        c.send(sprintf("POST /rest HTTP/1.1\r\nHost: localhost\r\nContent-Length: %d\r\n\r\n", size));
+        c.send(strmul("x", size));
+        c.send("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("True", r.before, "the rest of the body is the data on the connection");
+        assertEq(string(size), r.bytes, "the handler got the whole body");
+        assertEq("False", r.after, "no data once the body is read: the next request is not the handler's");
+        assertEq("served=next", readResponse(c), "the next request is served");
+    }
+
+    chunkedTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /chunked HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "4\r\nbody\r\n0\r\n\r\n"
+            "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("True", r.before, "the chunked body is the data on the connection");
+        assertEq("False", r.unfinished_before, "the read of the body did not start");
+        assertEq("body", r.body);
+        assertEq("False", r.after, "no data once the body is read: the next request is not the handler's");
+        assertEq("False", r.unfinished_after, "the body was read to its end");
+        assertEq("served=next", readResponse(c), "the next request is served");
+    }
+
+    writeTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /write HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("ok", r.finished);
+        assertEq("True", r.value, "nothing is waiting to be sent on the connection");
+    }
+
+    charsetTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /charset HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("ISO-8859-2", r.encoding, "setCharset() sets the socket's own encoding");
+        assertEq("ISO-8859-2", r.charset, "getCharset() gives the socket's own encoding");
+    }
+
+    gettersTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /getters HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq(string(MaxHeaderSize), r.max_header_size, "the connection's maximum header size");
+        assertEq(r.local_port, r.port, "the connection's port");
+        assertGt(0, r.max_line_size.toInt());
+        assertGt(0, r.max_chunked.toInt());
+        assertEq("ok", r.no_delay);
+        assertEq("ok", r.user_timeout);
+        assertEq("False", r.accept_all);
+        assertEq("ok", r.connection_id);
+    }
+
+    refusedTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /refused HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string m in (keys Refused) {
+            assertEq("HTTP-HANDLER-SOCKET-ERROR", r{m}, m);
+        }
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served=after", readResponse(c), "the connection serves the next request");
+    }
+
+    staleTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /keep HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        readResponse(c);
+        c.send("GET /stale HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.avail, "isDataAvailable() of an ended request");
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.finished, "isWriteFinished() of an ended request");
+        assertEq("False", r.unfinished, "unfinishedHttpChunkedBody() of an ended request");
+    }
+
+    chunkedLimitTest() {
+        {
+            Socket c = connect();
+            on_exit c.close();
+            c.send("POST /limit-small HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                "4\r\nbody\r\n0\r\n\r\n");
+            hash<auto> r = parse(readResponse(c));
+            assertEq(string(MaxBodySize), r.before, "the connection's limit until the socket's own is set");
+            assertEq("3", r.own, "the socket's own limit");
+            assertEq("HTTP-BODY-TOO-LARGE", r.read, "a chunked body larger than the socket's own limit is not read");
+        }
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /limit-ok HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "4\r\nbody\r\n0\r\n\r\n"
+            "GET /conn-limit HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("body", parse(readResponse(c)).body, "a chunked body within the socket's own limit is read");
+        assertEq(string(MaxBodySize), parse(readResponse(c)).limit, "the socket of the next request has the "
+            "connection's limit");
+    }
+
+    tenantLimitTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /tenant HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("Http1HandlerSocket", r.class, "the restricted handler gets the socket of its request");
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.own, "restricted code cannot choose a limit of its own");
+        assertEq(string(MaxBodySize), r.max_own, "the limit did not change");
+        assertEq("ok", r.listener, "restricted code can set the listener's limit");
+        assertEq(string(MaxBodySize), r.max);
+    }
+
+    #! with \a trusted_lift, a trusted handler sets the limit and restricted code reads the body; otherwise restricted
+    #! code does both
+    tenantWholeReadTest(*bool trusted_lift) {
+        # a server without a limit of the request body: the listener's limit of a body read as a stream is 0 (none),
+        # and the server reads at most DefaultMaxRequestBodySize into memory
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setDefaultHandler("tenant", trusted_lift
+            ? new TrustedLiftHandler(tenant)
+            : tenant.callFunction("get_whole_read_handler"));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("POST /whole HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n");
+        # chunks of 1 MiB: one more than the server reads into memory, then the end of the body
+        binary chunk = binary("100000\r\n" + strmul("x", 1024 * 1024) + "\r\n");
+        int chunks = DefaultMaxRequestBodySize / (1024 * 1024) + 1;
+        bool sent_all = True;
+        for (int i = 0; i < chunks; ++i) {
+            try {
+                c.send(chunk, HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                # the server stopped reading the body and closed the connection
+                sent_all = False;
+                break;
+            }
+        }
+        if (sent_all) {
+            c.send("0\r\n\r\n", HangGuard);
+        }
+        hash<auto> r = parse(readResponse(c));
+        if (!trusted_lift) {
+            assertEq("ok", r.set, "restricted code can set the listener's limit");
+        }
+        assertEq("HTTP-BODY-TOO-LARGE", r.read, "the whole body is read with at most the connection's limit");
+    }
+
+    #! Returns a Program whose code a sandbox restricts
+    private Program getTenantProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        return c;
+    }
+
+    #! reads a response with a Content-Length and returns its body
+    private static string readResponse(Socket c) {
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        int len = h."content-length".toInt();
+        return len ? c.recv(len, HangGuard) : "";
+    }
+
+    #! parses the "key=value" lines of a probe's response
+    private static hash<auto> parse(string body) {
+        hash<auto> r = {};
+        foreach string line in (body.split("\n")) {
+            (*string k, *string v) = (line =~ x/^([^=]+)=(.*)$/s);
+            if (exists k) {
+                r{k} = v ?? "";
+            }
+        }
+        return r;
+    }
+}
