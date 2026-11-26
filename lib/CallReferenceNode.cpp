@@ -508,6 +508,10 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
     qore_capture_call_reference_origin(this, getOriginCodeProgram());
 }
 
+// the predicate of the call paths that apply nothing of the reference's creator (qore#5578): a rule that makes the
+// generic call path apply more of the creator's context, or of the calling code's, to the callee (such as the fixes of
+// qore#7678, functions reached through a lent Program, and qore#7302, the immediate calling code) must be added here
+// too, or the fast call through the reference would skip it
 bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(const QoreProgram* pgm) const {
     assert(pgm == ::getProgram());
     // a reference that its own code calls in place applies no creator context

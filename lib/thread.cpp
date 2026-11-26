@@ -10615,6 +10615,12 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
     return po & ~td->runtime_po_state.caller_restrictions;
 }
 
+bool runtime_call_context_is_plain(const QoreProgram* pgm) {
+    const ThreadData* td = thread_data.get();
+    return (!td->call_program_context || td->call_program_context == pgm)
+        && !(td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm);
+}
+
 const QoreProgram* runtime_get_module_call_program() {
     return thread_data.get()->runtime_po_state.module_pgm;
 }

@@ -10155,7 +10155,8 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
 
 // defined below
 static bool qore_rt_try_call_function_reference(const AbstractQoreNode* node, uint64_t* args,
-        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result,
+        std::optional<QoreSourceProgramHolder>& exec_pgm_holder);
 
 // Fast-path helper for closure calls with no arguments — avoids QoreListNode allocation
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink) {
@@ -10203,9 +10204,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
 
     // For function references (NT_FUNCREF) and other types: use type check + static_cast
     if (ntype == NT_FUNCREF) {
-        // a reference to a user function, without the generic call path if it allows it (qore#5578)
+        // a reference to a user function, without the generic call path if it allows it (qore#5578); the holder keeps
+        // the Program that it took through the generic call
+        std::optional<QoreSourceProgramHolder> exec_pgm_holder;
         uint64_t fast_result;
-        if (qore_rt_try_call_function_reference(node, nullptr, nullptr, 0, xsink, fast_result)) {
+        if (qore_rt_try_call_function_reference(node, nullptr, nullptr, 0, xsink, fast_result, exec_pgm_holder)) {
             return fast_result;
         }
         ResolvedCallReferenceNode* callref = static_cast<ResolvedCallReferenceNode*>(
@@ -10233,6 +10236,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
 
     const AbstractQoreNode* node = ref_val.getInternalNode();
     qore_type_t ntype = node->getType();
+    // keeps the Program that the fast call through a function reference took through the generic call, if that one
+    // was not made (see qore_rt_try_call_function_reference())
+    std::optional<QoreSourceProgramHolder> exec_pgm_holder;
 
     // Fast path for closures: bypass QoreListNode + dynamic_cast
     if (ntype == NT_RUNTIME_CLOSURE) {
@@ -10261,7 +10267,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     } else if (ntype == NT_FUNCREF) {
         // a reference to a user function, without the generic call path if it allows it (qore#5578)
         uint64_t fast_result;
-        if (qore_rt_try_call_function_reference(node, &arg0_bits, nullptr, 1, xsink, fast_result)) {
+        if (qore_rt_try_call_function_reference(node, &arg0_bits, nullptr, 1, xsink, fast_result,
+                exec_pgm_holder)) {
             return fast_result;
         }
     }
@@ -10303,6 +10310,9 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
 
     const AbstractQoreNode* node = ref_val.getInternalNode();
     qore_type_t ntype = node->getType();
+    // keeps the Program that the fast call through a function reference took through the generic call, if that one
+    // was not made (see qore_rt_try_call_function_reference())
+    std::optional<QoreSourceProgramHolder> exec_pgm_holder;
 
     // Fast path for closures: bypass QoreListNode + dynamic_cast
     if (ntype == NT_RUNTIME_CLOSURE) {
@@ -10332,7 +10342,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     } else if (ntype == NT_FUNCREF) {
         // a reference to a user function, without the generic call path if it allows it (qore#5578)
         uint64_t fast_result;
-        if (qore_rt_try_call_function_reference(node, args, arg_cleanups, nargs, xsink, fast_result)) {
+        if (qore_rt_try_call_function_reference(node, args, arg_cleanups, nargs, xsink, fast_result,
+                exec_pgm_holder)) {
             return fast_result;
         }
     }
@@ -14757,35 +14768,44 @@ static __attribute__((noinline, cold)) uint64_t qore_rt_function_reference_misma
     - the facts taken for the reference (LocalFunctionCallReferenceNode::takeFastCallInfo()) allow it: no explicit
       type arguments, a single variant, a user variant that needs nothing of the generic call path
       (UserVariantBase::isStaticallyFastCallEligible(): no default arguments, no type parameters, no declared
-      functional domain, not synchronized, no implicit arguments read), and the function still has that variant only,
-      which is checked on every call, as a later parse commit can add variants;
-    - the call gives an argument for each parameter, which the parameter accepts as it is
-      (closureDirectArgsNeedNoBinding());
-    - no debugger is attached to the callee's Program: the global count of the Programs with a debugger
-      (qore_aot_direct_call_mode) first, then the callee's Program;
+      functional domain, not synchronized), and the function still has that variant only, which is checked on every
+      call;
+    - the variant has native code or IR, and the call gives an argument for each parameter, which the parameter
+      accepts as it is (closureDirectArgsNeedNoBinding());
     - the reference's Program, the explicit Program of its call (FunctionCallReferenceNode::dispatchValue()), is the
-      thread's current Program, so the call needs no call Program (qore_rt_call_needs_call_program()), and the
-      reference's creator context is the current one (ResolvedCallReferenceNodeIntern::creatorContextIsCurrent()):
-      the generic call path would apply nothing of it (no creator restrictions, no sandbox provenance);
-    - the callee's Program is not being deleted, which is tested once the thread holds a count of it: the running
-      Program's for a call within it, otherwise the one that entering the Program takes.
+      thread's current Program, so the call needs no call Program (qore_rt_call_needs_call_program()); the reference's
+      creator context is the current one (ResolvedCallReferenceNodeIntern::creatorContextIsCurrent()), so that the
+      generic call path would apply nothing of it (no creator restrictions, no sandbox provenance); and the thread's
+      call Program context is that Program or none, with no call on behalf of another Program pending
+      (runtime_call_context_is_plain()), so that the generic path's ProgramCallContextHelper would change nothing;
+    - the function runs in the caller's Program, or in a module's Program (module lifetime), so that the checks, which
+      read the variant's signature, are all made before any Program is entered and a miss leaves no trace (entering a
+      Program runs its thread entry handlers and charges a sandbox's budgets): a function of another Program, which
+      can be deleted, takes the generic call path;
+    - the callee's Program is not being deleted (also tested once a module's Program has been entered) and no
+      debugger is attached to it: the global count of the Programs with a debugger (qore_aot_direct_call_mode) first.
 
-    The refusal of a call of a reference created by code that may not control threads from the expression of the
-    background operator (checkBackgroundCreator()) and the reference's sandbox provenance
-    (QoreSandboxProvenanceHelper) are applied as by the generic call path.  The callee's Program is entered as
-    qore_rt_call_fast_t() enters it: with ProgramThreadCountContextHelper only for another Program (or for thread entry
-    handlers that must run), whose call Program context the body then gets (QoreFunctionCallProgramContextHelper in
-    execJITWithDeopt(), qore#7394); the frame, exceptions and the promotion of the callee are those of that call.
+    The refusals of a call made by the expression of the background operator (qore#7087) are those of the generic
+    call path: of a reference created by code that may not control threads (checkBackgroundCreator()), and of the code
+    of a Program that may not control threads (qore_check_background_direct_entry(), as
+    UserVariantExecHelper::getCheckedExecutionProgram()); the reference's sandbox provenance, of which there is none,
+    is applied (QoreSandboxProvenanceHelper).  A module's Program is entered as qore_rt_call_fast_t() enters it, with
+    ProgramThreadCountContextHelper (or the caller's Program, for thread entry handlers that must run), and its body
+    gets that Program's call Program context (QoreFunctionCallProgramContextHelper in execJITWithDeopt(), qore#7394);
+    the frame, exceptions and the promotion of the callee are those of that call.
 
     @param arg_cleanups (CONSUME) the caller's cleanup slots of the arguments whose references it gives to the call, as
     for qore_rt_call_fast_t(); nothing is done with them if the call is not made
+    @param exec_pgm_holder the caller's holder of the callee's Program: declared before the generic call that the
+    caller makes if this returns false, so that a reference to the Program taken here is not released before it
 
     @return true if the call was made (or refused with an exception, as the generic call path refuses it), with its
     value in \a result; false if nothing was done, and the caller makes the call through the generic call path
 */
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(const AbstractQoreNode* node,
-        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result,
+        std::optional<QoreSourceProgramHolder>& exec_pgm_holder) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS");
     QoreProgram* ref_pgm;
     const LocalFunctionCallReferenceNode* ref = qore_get_exact_function_call_reference(node, ref_pgm);
@@ -14811,11 +14831,13 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
         }
     }
     const UserVariantBase* uvb = variant->getUserVariantBase();
-    if (!uvb || !uvb->pgm) {
+    // a callee that has neither native code nor IR (yet) is called through the generic call path, which runs it
+    if (!uvb || !uvb->pgm || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         return false;
     }
     QoreProgram* caller_pgm = getProgram();
-    if (!caller_pgm || (ref_pgm && ref_pgm != caller_pgm) || !ref->creatorContextIsCurrent(caller_pgm)) {
+    if (!caller_pgm || (ref_pgm && ref_pgm != caller_pgm) || !ref->creatorContextIsCurrent(caller_pgm)
+            || !runtime_call_context_is_plain(caller_pgm)) {
         return false;
     }
     assert(!qore_rt_call_needs_call_program(ref_pgm, uvb));
@@ -14828,31 +14850,29 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
     }
 
     // the Program that the function runs in, as qore_rt_function_execution_program() determines it: the reference
-    // holds the function, not its Program, which can be deleted
-    QoreSourceProgramHolder exec_pgm_holder(xsink);
-    exec_pgm_holder.setVariant(uvb, caller_pgm);
-    QoreProgram* exec_pgm = exec_pgm_holder.get();
+    // holds the function, not its Program, which can be deleted; the caller's holder keeps it through the generic call
+    // if this one is not made, so that a reference released here does not delete the Program before it
+    assert(!exec_pgm_holder);
+    exec_pgm_holder.emplace(xsink);
+    exec_pgm_holder->setVariant(uvb, caller_pgm);
+    QoreProgram* exec_pgm = exec_pgm_holder->get();
     if (!exec_pgm) {
         // the Program has been deleted: the generic call path refuses the call
         return false;
     }
-    std::optional<ProgramThreadCountContextHelper> ptcch;
-    if (exec_pgm != caller_pgm
-            || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
-        ptcch.emplace(xsink, exec_pgm, true);
-        // the Program is entered unless an exception was raised, as the generic call path enters it
-        if (!ptcch->entered() && *xsink) {
-            clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
-            result = toBits(QoreValue());
-            return true;
-        }
+    // nothing that the generic call path would not do may happen before a miss: so every check is made before a
+    // Program is entered (entering a Program runs its thread entry handlers and charges a sandbox's budgets).  The
+    // checks read the variant's signature, whose types can be those of the Program's classes, which its deletion frees
+    // (qore#5822): they are made only where the Program's code cannot be freed meanwhile: the caller's Program, which
+    // the running thread holds a count of, or a module's Program, which stays while any code can run (module
+    // lifetime); a function of another Program, which can be deleted, is called through the generic call path
+    const bool cross_pgm = exec_pgm != caller_pgm;
+    if (cross_pgm && !qore_program_has_module_lifetime(exec_pgm)) {
+        return false;
     }
-    // the thread now holds a count of the Program (the running Program's within it): its deletion cannot start
-    // unseen; the signature, whose types can be those of the Program's classes, is read only after this (qore#5822)
     // a debugger: the global count of the Programs with a debugger attached (one load), then the callee's Program
     if (uvb->pgm_deleted.load(std::memory_order_acquire)
-            || ((qore_aot_direct_call_mode.load(std::memory_order_acquire) & ~1u) && qore_rt_debugger_attached(uvb))
-            || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
+            || ((qore_aot_direct_call_mode.load(std::memory_order_acquire) & ~1u) && qore_rt_debugger_attached(uvb))) {
         return false;
     }
     const LocalFunctionCallReferenceNode::FastCallInfo* info = state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE
@@ -14861,6 +14881,30 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
         return false;
     }
     assert(info->uvb == uvb && static_cast<int>(info->num_params) == nargs);
+    // a call that the expression of the background operator makes itself, of code of a Program that may not control
+    // threads, is refused before the Program is entered, as the generic call path refuses it (qore#7087; see
+    // UserVariantExecHelper::getCheckedExecutionProgram()); the call's frame is not pushed yet
+    if (qore_check_background_direct_entry(uvb->pgm, false, xsink)) {
+        clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
+        result = toBits(QoreValue());
+        return true;
+    }
+    std::optional<ProgramThreadCountContextHelper> ptcch;
+    if (cross_pgm || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
+        ptcch.emplace(xsink, exec_pgm, true);
+        // the Program is entered unless an exception was raised, as the generic call path enters it
+        if (!ptcch->entered() && *xsink) {
+            clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
+            result = toBits(QoreValue());
+            return true;
+        }
+        // the thread now holds a count of the module's Program: the deletion of its code cannot have started unseen
+        // (the deletion of a module's Program, which only happens once no other code runs, is the only miss after an
+        // entry)
+        if (cross_pgm && uvb->pgm_deleted.load(std::memory_order_acquire)) {
+            return false;
+        }
+    }
 
 #ifdef DEBUG
     qore_dbg_function_reference_fast_calls.fetch_add(1, std::memory_order_relaxed);
@@ -14870,6 +14914,9 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
     QoreSandboxProvenanceHelper provenance(ref);
     result = qore_rt_call_fast_entered_t<CONSUME>(func, uvb, caller_pgm, exec_pgm, args, arg_cleanups, nargs, xsink,
         [node, args, arg_cleanups, nargs, xsink]() {
+            // not reached: a parameter accepts the argument as it is (closureDirectArgsNeedNoBinding()); a release
+            // build makes the call through the generic call path
+            assert(false);
             return qore_rt_function_reference_mismatch(node, args, CONSUME ? arg_cleanups : nullptr, nargs, xsink);
         });
     return true;
@@ -14879,12 +14926,15 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
 //! qore_rt_try_call_function_reference_t() for a call that gives the references of its temporary arguments to the
 //! callee; compiled in JITRuntimeGivenArgs.cpp, as qore_rt_call_fast_consume_impl()
 DLLLOCAL bool qore_rt_try_call_function_reference_consume(const AbstractQoreNode* node, uint64_t* args,
-        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
-    return qore_rt_try_call_function_reference_t<true>(node, args, arg_cleanups, nargs, xsink, result);
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result,
+        std::optional<QoreSourceProgramHolder>& exec_pgm_holder) {
+    return qore_rt_try_call_function_reference_t<true>(node, args, arg_cleanups, nargs, xsink, result,
+        exec_pgm_holder);
 }
 #else
 DLLLOCAL bool qore_rt_try_call_function_reference_consume(const AbstractQoreNode* node, uint64_t* args,
-        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result,
+        std::optional<QoreSourceProgramHolder>& exec_pgm_holder);
 #endif
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14893,13 +14943,16 @@ DLLLOCAL std::atomic<int64_t> qore_dbg_function_reference_fast_calls{0};
 #endif
 
 //! qore_rt_try_call_function_reference_t() for a call that gives nothing, or that gives the references of its
-//! temporary arguments (\a arg_cleanups)
+//! temporary arguments (\a arg_cleanups); \a exec_pgm_holder must be declared before the generic call that the caller
+//! makes if this returns false
 static bool qore_rt_try_call_function_reference(const AbstractQoreNode* node, uint64_t* args,
-        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result,
+        std::optional<QoreSourceProgramHolder>& exec_pgm_holder) {
     if (arg_cleanups) {
-        return qore_rt_try_call_function_reference_consume(node, args, arg_cleanups, nargs, xsink, result);
+        return qore_rt_try_call_function_reference_consume(node, args, arg_cleanups, nargs, xsink, result,
+            exec_pgm_holder);
     }
-    return qore_rt_try_call_function_reference_t<false>(node, args, nullptr, nargs, xsink, result);
+    return qore_rt_try_call_function_reference_t<false>(node, args, nullptr, nargs, xsink, result, exec_pgm_holder);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 

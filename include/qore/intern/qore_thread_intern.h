@@ -388,6 +388,16 @@ DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
 //! returns the module Program whose code runs with the restrictions of a sandboxed caller on this thread, if any
 DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 
+//! returns true if the thread's call Program context is \a pgm or none, and no call made on behalf of another Program
+//! is pending (QoreCallbackCallerHelper)
+/** A call of a reference whose explicit Program is \a pgm, the thread's current Program, sets that Program as the call
+    Program context of the call (ProgramCallContextHelper in QoreFunction::evalFunction()), and the first user call of a
+    callback that the runtime makes for another Program takes that Program's options as its caller's
+    (runtime_take_call_caller_parse_options()); a call path that does neither may only be taken when both would change
+    nothing (qore#5578)
+*/
+DLLLOCAL bool runtime_call_context_is_plain(const QoreProgram* pgm);
+
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
     code raised a cancellation, which it may have handled (see QoreDebugProgramWithQoreObject)

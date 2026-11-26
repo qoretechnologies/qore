@@ -113,33 +113,48 @@ does nothing and leaves the call to the generic path:
   `UserVariantBase::isStaticallyFastCallEligible()` holds (no default arguments, no type
   parameters, no declared functional domain, not synchronized); every call checks that the
   function still has that single variant;
-- an argument for each parameter, which it accepts as it is
-  (`closureDirectArgsNeedNoBinding()`, as for a closure);
-- no debugger attached to the callee's Program (the global count of Programs with a
-  debugger, `qore_aot_direct_call_mode`, first);
+- the variant has native code or IR, and the call gives an argument for each parameter,
+  which it accepts as it is (`closureDirectArgsNeedNoBinding()`, as for a closure: an
+  argument of exactly the parameter's type; an `auto` parameter takes the generic path);
 - the reference's Program, the explicit Program of its generic call, is the caller's
   current Program, and its creator context is the current one
   (`ResolvedCallReferenceNodeIntern::creatorContextIsCurrent()`: the same effective parse
   options as the creator recorded, the same kind of Program, and no sandbox provenance or
   origin restrictions recorded for the reference), so that the generic path would apply
   nothing of the creator (`QoreCallReferenceCallHelper`, `QoreSandboxProvenanceHelper`);
-  a reference made by sandboxed code, one called by code other than its creator's
-  Program's (a Program lent to sandboxed code, a module calling the script's
-  reference), and one that is bound to the sandbox therefore take the generic path;
-- the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`), which is
-  tested once the thread holds a count of it: the running Program's for a call within it,
-  or the one that `ProgramThreadCountContextHelper` takes for a module's or another
-  Program's function (the variant's signature is read only after this, qore#5822).
+  the thread's call Program context is that Program or none, with no call on behalf of
+  another Program pending (`runtime_call_context_is_plain()`). A reference made by
+  sandboxed code, one called by code other than its creator's Program's (a Program lent
+  to sandboxed code, a module calling the script's reference), and one that is bound to
+  the sandbox therefore take the generic path. A fix of the generic path that applies
+  more of the creator's or the calling code's context (qore#7678, qore#7302) must extend
+  `creatorContextIsCurrent()`;
+- the function runs in the caller's Program or in a module's Program (module lifetime):
+  every check, some of which read the variant's signature, is made before any Program is
+  entered, as entering one runs its thread entry handlers and charges a sandbox's
+  budgets, and only there can the signature not be freed meanwhile (qore#5822); a
+  function of another Program, which can be deleted, takes the generic path;
+- the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`, also tested
+  once a module's Program has been entered) and has no debugger attached (the global
+  count of Programs with a debugger, `qore_aot_direct_call_mode`, first).
 
-The refusal of a reference created by code that may not control threads, called by the
-expression of the background operator (`checkBackgroundCreator()`, qore#7087), and the
-reference's (empty) provenance are applied as by the generic path. The frame, the
-exceptions, the callee's Program entry and call Program context (qore#7394) and its
-promotion are those of `qore_rt_call_fast()`. `QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS`
-disables it (testing only); debug builds count its calls
-(`dbg_function_reference_fast_calls()`). `function-reference-fast-path.qtest` compares
-the results, exceptions and call stacks with the AST interpreter in every execution mode,
-on the IR tier and in AOT code, and checks which cases take it.
+The refusals of a call made by the expression of the background operator (qore#7087)
+are those of the generic path: of a reference created by code that may not control
+threads (`checkBackgroundCreator()`) and of the code of a Program that may not
+(`qore_check_background_direct_entry()`). The frame, the exceptions, the module
+Program's entry and call Program context (qore#7394) and the callee's promotion are those
+of `qore_rt_call_fast()`. `QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS` disables it
+(testing only); debug builds count its calls (`dbg_function_reference_fast_calls()`).
+`function-reference-fast-path.qtest` compares the results, exceptions and call stacks
+with the AST interpreter in every execution mode, on the IR tier and in AOT code, and
+checks which cases take it.
+
+The runtime's fast calls of a user function (`qore_rt_call_fast()`,
+`qore_rt_call_fast_with_target()` and the call through a function reference) keep the
+function on the stack through the check of its return value and make the check before
+they release its parameters, also for a call that gives the references of its arguments
+(`qore_rt_check_function_return_value()`), as the AST interpreter checks the value in the
+return statement (`fast-call-return-check.qtest`).
 
 ## Tiered Execution
 
