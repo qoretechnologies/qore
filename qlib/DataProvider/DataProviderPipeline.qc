@@ -342,12 +342,6 @@ class PipelineSharedState {
         return queues.size();
     }
 
-    #! Reports a fatal error of a queue thread while the pipeline is being destroyed: logs it and records it
-    reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
-        logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
-        recordError(ex);
-    }
-
     #! Records a fatal error of a queue thread, and aborts the pipeline's queues
     recordError(hash<ExceptionInfo> ex) {
         bool lock = !lck.lockOwner();
@@ -518,6 +512,15 @@ class PipelineQueue {
         PipelineSharedState shared;
     }
 
+    private:internal {
+        #! The queue thread's reference to the pipeline for its calls of the pipeline (see getPipeline())
+        /** Released only when the queue thread does not hold the pipeline's lock (see releasePipeline()): a release
+            that destroys the pipeline runs its destructor, which takes the lock and waits for the other queue threads,
+            which need the lock to end (qore#7509)
+        */
+        *DataProviderPipeline thread_hold;
+    }
+
     #! Creates the object
     constructor(DataProviderPipeline parent, PipelineSharedState shared, Mutex lck, WaitGroup cnt, int id, int size,
             bool start_thread = True) {
@@ -684,17 +687,78 @@ class PipelineQueue {
         this thread, and reads the error from the shared state
     */
     private reportErrorToPipeline(hash<ExceptionInfo> ex) {
+        # the error is recorded, and the pipeline aborted, first: logging it runs code that can raise an error, which
+        # is logged here and does not end the error path
+        shared.recordError(ex);
+        string exstr = get_exception_string(ex);
+        string msg = sprintf("pipeline %d: %s", id, exstr);
         try {
-            if (parent) {
-                parent.reportError(self, ex);
-                return;
+            *DataProviderPipeline p = getPipeline();
+            if (p) {
+                try {
+                    p.logError("pipeline %d: %s", id, exstr);
+                    return;
+                } catch (hash<ExceptionInfo> ex1) {
+                    if (!PipelineQueue::refusedCall(ex1, "logError")) {
+                        rethrow;
+                    }
+                }
             }
+            shared.logError("%s", msg);
         } catch (hash<ExceptionInfo> ex1) {
-            if (ex1.err != "OBJECT-ALREADY-DELETED") {
-                rethrow;
+            try {
+                shared.logError("%s; the error could not be logged: %s", msg, get_exception_string(ex1));
+            } catch () {
+                # the error has been recorded; the shared state's log raised an error as well
             }
         }
-        shared.reportError(self, ex);
+    }
+
+    #! Returns True if the exception was raised by the call of the given method of a pipeline that is being destroyed
+    #! in another thread, which refuses the call (qore#7509), and not by the method's code
+    private static bool refusedCall(hash<ExceptionInfo> ex, string method) {
+        if (ex.err != "OBJECT-ALREADY-DELETED") {
+            return False;
+        }
+        # the refusal is raised at the call: the innermost frame is the method's, and the message is the refusal's for
+        # the method; an error that the method's code raises has the frames of its code
+        *hash<auto> frame = ex.callstack[0];
+        return frame && regex(frame.function ?? "", "::" + method + "$")
+            && regex(ex.desc ?? "", "^cannot call [^ ]*::" + method + "\\(\\) on an object that has already been "
+                "deleted$");
+    }
+
+    #! Returns the pipeline for a call, or @ref nothing if it is gone
+    /** In the queue thread, the reference is kept in \c thread_hold until the thread no longer holds the pipeline's
+        lock (see releasePipeline())
+    */
+    private *DataProviderPipeline getPipeline() {
+        *DataProviderPipeline p = parent;
+        if (p && tid == gettid() && !thread_hold) {
+            thread_hold = p;
+        }
+        return p;
+    }
+
+    #! Releases the queue thread's reference to the pipeline (see getPipeline()); called with the pipeline's lock held
+    /** The lock is released while the reference is: a release that destroys the pipeline runs its destructor in this
+        thread, which takes the lock and waits for the other queue threads, which need the lock to end; an error of the
+        destructor is logged here, as no caller gets it
+    */
+    private releasePipeline() {
+        if (!thread_hold) {
+            return;
+        }
+        lck.unlock();
+        on_exit lck.lock();
+        try {
+            remove thread_hold;
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                shared.logError("error destroying the pipeline in queue %d: %s", id, get_exception_string(ex));
+            } catch () {
+            }
+        }
     }
 
     #! Logs a debug message with the pipeline's DataProviderPipeline::logDebug(), or with the shared state if the
@@ -704,14 +768,15 @@ class PipelineQueue {
         if (argv) {
             args += argv;
         }
-        try {
-            if (parent) {
-                call_object_method_args(parent, "logDebug", args);
+        *DataProviderPipeline p = getPipeline();
+        if (p) {
+            try {
+                call_object_method_args(p, "logDebug", args);
                 return;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "OBJECT-ALREADY-DELETED") {
-                rethrow;
+            } catch (hash<ExceptionInfo> ex) {
+                if (!PipelineQueue::refusedCall(ex, "logDebug")) {
+                    rethrow;
+                }
             }
         }
         call_object_method_args(shared, "logDebug", args);
@@ -746,6 +811,8 @@ class PipelineQueue {
 
         lck.lock();
         on_exit lck.unlock();
+        # the thread's reference to the pipeline is released when the thread ends, without the lock
+        on_exit releasePipeline();
 
         runIntern();
     }
@@ -958,6 +1025,12 @@ class PipelineQueue {
                     }
                 }
 
+                # the thread does not hold the pipeline while it waits (see releasePipeline()); the release can
+                # destroy it, which stops the queue
+                if (thread_hold) {
+                    releasePipeline();
+                    continue;
+                }
                 ++data_waiting;
                 cond.wait(lck);
                 --data_waiting;
@@ -2597,8 +2670,18 @@ public class DataProviderPipeline {
 
     #! Called from a pipeline queue object to report a fatal error durring processing
     reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
-        logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
+        # the error is recorded, and the pipeline aborted, before it is logged, whose code can raise an error
         shared.recordError(ex);
+        string exstr = get_exception_string(ex);
+        string msg = sprintf("pipeline %d: %s", queue.getId(), exstr);
+        try {
+            logError("pipeline %d: %s", queue.getId(), exstr);
+        } catch (hash<ExceptionInfo> ex1) {
+            try {
+                shared.logError("%s; the error could not be logged: %s", msg, get_exception_string(ex1));
+            } catch () {
+            }
+        }
     }
 
     #! Logs to the info log, if set
