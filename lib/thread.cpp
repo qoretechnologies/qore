@@ -10616,13 +10616,27 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
 }
 
 bool runtime_call_context_is_plain(const QoreProgram* pgm) {
-    const ThreadData* td = thread_data.get();
+    return runtime_call_context_is_plain(thread_data.get(), pgm);
+}
+
+bool runtime_call_context_is_plain(const ThreadData* td, const QoreProgram* pgm) {
+    assert(td == thread_data.get());
     return (!td->call_program_context || td->call_program_context == pgm)
         && !(td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm);
 }
 
+QoreProgram* runtime_get_program(const ThreadData* td) {
+    assert(td == thread_data.get());
+    return td->current_pgm;
+}
+
 const QoreProgram* runtime_get_module_call_program() {
     return thread_data.get()->runtime_po_state.module_pgm;
+}
+
+const QoreProgram* runtime_get_module_call_program(const ThreadData* td) {
+    assert(td == thread_data.get());
+    return td->runtime_po_state.module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {
@@ -10983,7 +10997,12 @@ static void raise_background_expression_call(ExceptionSink* xsink) {
 }
 
 int qore_check_background_direct_entry(const QoreProgram* code_pgm, bool callee_frame_pushed, ExceptionSink* xsink) {
-    const ThreadData* td = thread_data.get();
+    return qore_check_background_direct_entry(thread_data.get(), code_pgm, callee_frame_pushed, xsink);
+}
+
+int qore_check_background_direct_entry(const ThreadData* td, const QoreProgram* code_pgm, bool callee_frame_pushed,
+        ExceptionSink* xsink) {
+    assert(td == thread_data.get());
     if (!td->bg_expr_frame
             || !(qore_program_authored_restrictions_po(code_pgm) & QoreParseOptions(QDOM_THREAD_CONTROL))
             || !qore_background_expression_call(td, callee_frame_pushed)) {

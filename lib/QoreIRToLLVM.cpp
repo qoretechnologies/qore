@@ -9606,6 +9606,383 @@ bool QoreIRToLLVM::buildArgsArray(const QoreIRInstruction* inst, int arg_start,
     return true;
 }
 
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::callRefEntryCallEligible(const QoreIRInstruction* inst) const {
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRY_CALLS");
+    // a call whose arguments can be references (has_ref_args, which the lowering sets conservatively) is admitted
+    // too: a native argument is never one, and the helper of NaN-boxed arguments refuses a reference
+    // (closureDirectArgsNeedNoBinding()), which the generic call path then binds; the caller reloads its locals after
+    // the call in either case
+    return aot_mode && !inst->operands.empty()
+        && inst->operands.size() - 1 <= QORE_AOT_CALLREF_MAX_PARAMS && !disabled_env.get();
+}
+
+// documented in QoreIRToLLVM.h
+llvm::AllocaInst* QoreIRToLLVM::getCallRefEntryResultSlot(llvm::Function* llvm_func) {
+    if (!callref_entry_result_slot) {
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        callref_entry_result_slot = ab.CreateAlloca(i64_type, nullptr, "callref_entry_result");
+    }
+    return callref_entry_result_slot;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llvm::Value* ref_boxed,
+        llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error) {
+    result = nullptr;
+    const int nargs = static_cast<int>(inst->operands.size()) - 1;
+    if (nargs > 1) {
+        return true;
+    }
+    llvm::Value* arg = nullptr;
+    const char* helper_name = "qore_rt_call_ref_value_0_v1";
+    if (nargs == 1) {
+        const uint32_t id = inst->operands[1].id;
+        // a NaN-boxed argument (and one that has a cleanup slot) takes the boxed form
+        if (nanboxed_values.count(id) || native_boxed_sources.count(id) || invoke_alloca_map.count(id)) {
+            return true;
+        }
+        arg = getVal(id, error);
+        if (!arg) {
+            return false;
+        }
+        if (arg->getType() == i64_type) {
+            helper_name = "qore_rt_call_ref_value_int_v1";
+        } else if (arg->getType() == double_type) {
+            helper_name = "qore_rt_call_ref_value_float_v1";
+        } else if (arg->getType() == i1_type) {
+            helper_name = "qore_rt_call_ref_value_bool_v1";
+        } else {
+            return true;
+        }
+    }
+    llvm::AllocaInst* slot = getCallRefEntryResultSlot(llvm_func);
+    std::vector<llvm::Type*> param_types{i64_type};
+    std::vector<llvm::Value*> args{ref_boxed};
+    if (arg) {
+        // a bool is passed as 0 or 1
+        param_types.push_back(arg->getType() == i1_type ? i64_type : arg->getType());
+        args.push_back(arg->getType() == i1_type ? builder->CreateZExt(arg, i64_type) : arg);
+    }
+    param_types.push_back(ptr_type);
+    param_types.push_back(ptr_type);
+    args.push_back(slot);
+    args.push_back(xsink_arg);
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
+        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
+
+    llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
+    llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpNE(called, llvm::ConstantInt::get(i32_type, 0)), entry_bb, generic_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+
+    builder->SetInsertPoint(entry_bb);
+    llvm::Value* entry_result = builder->CreateLoad(i64_type, slot, "callref_entry_value");
+    builder->CreateBr(merge_bb);
+    entry_bb = builder->GetInsertBlock();
+
+    // the generic call path, with the argument boxed here (an owned value for an int or a float that needs a node),
+    // and released here once the call returns
+    builder->SetInsertPoint(generic_bb);
+    llvm::Value* args_array;
+    llvm::Value* boxed_arg = nullptr;
+    if (arg) {
+        args_array = allocCallArray(llvm_func, 1);
+        if (arg->getType() == i64_type) {
+            boxed_arg = boxIntInline(arg);
+        } else if (arg->getType() == double_type) {
+            boxed_arg = boxFloat(arg, true);
+        } else {
+            boxed_arg = boxBool(arg);
+        }
+        builder->CreateStore(boxed_arg, args_array);
+    } else {
+        args_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    }
+    llvm::Value* generic_result = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
+        {ref_boxed, args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg}, "callref_generic_value");
+    if (boxed_arg && arg->getType() != i1_type) {
+        builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed_arg, xsink_arg});
+    }
+    builder->CreateBr(merge_bb);
+    generic_bb = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "callref_value");
+    phi->addIncoming(entry_result, entry_bb);
+    phi->addIncoming(generic_result, generic_bb);
+    result = phi;
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst, const QoreIRInstruction* next,
+        llvm::Value* ref_boxed, llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result,
+        BatchCalleeReturnKind& kind, std::string& error) {
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_NATIVE_STORE");
+    result = nullptr;
+    const int nargs = static_cast<int>(inst->operands.size()) - 1;
+    if (nargs > 1 || !next || next->opcode != QoreIROpcode::StoreLocal || next->operands.empty()
+            || next->operands[0].id != inst->result.id || !inst->result.isValid() || disabled_env.get()) {
+        return true;
+    }
+    // the store is the only use of the value
+    auto uses_it = operand_remaining_uses.find(inst->result.id);
+    if (uses_it == operand_remaining_uses.end() || uses_it->second != 1) {
+        return true;
+    }
+    const auto* linst = static_cast<const QoreIRLocalInstruction*>(next);
+    if (!linst->local || linst->mode != AssignmentMode::Normal || linst->foreach_assignment
+            || next->redundant_store || next->string_append_local_cow || next->list_push_local_cow
+            || elided_closure_local_accesses.count(next)) {
+        return true;
+    }
+    const void* key = reinterpret_cast<const void*>(linst->local);
+    const QoreTypeInfo* local_type = specializeType(linst->local->getTypeInfoForLValue());
+    const char* rname;
+    if (native_int_locals.count(key) && QoreTypeInfo::isPlainType(local_type, NT_INT)
+            && !QoreTypeInfo::equal(local_type, timeoutTypeInfo)) {
+        kind = BatchCalleeReturnKind::NativeInt;
+        rname = "int";
+    } else if (native_float_locals.count(key) && QoreTypeInfo::isPlainType(local_type, NT_FLOAT)) {
+        kind = BatchCalleeReturnKind::NativeFloat;
+        rname = "float";
+    } else if (native_bool_locals.count(key) && QoreTypeInfo::isPlainType(local_type, NT_BOOLEAN)) {
+        kind = BatchCalleeReturnKind::NativeBool;
+        rname = "bool";
+    } else {
+        return true;
+    }
+    llvm::Value* arg = nullptr;
+    const char* aname = "0";
+    if (nargs == 1) {
+        const uint32_t id = inst->operands[1].id;
+        if (nanboxed_values.count(id) || native_boxed_sources.count(id) || invoke_alloca_map.count(id)) {
+            return true;
+        }
+        arg = getVal(id, error);
+        if (!arg) {
+            return false;
+        }
+        if (arg->getType() == i64_type) {
+            aname = "int";
+        } else if (arg->getType() == double_type) {
+            aname = "float";
+        } else if (arg->getType() == i1_type) {
+            aname = "bool";
+        } else {
+            return true;
+        }
+    }
+    llvm::Type* native_type = kind == BatchCalleeReturnKind::NativeFloat ? double_type : i64_type;
+    llvm::AllocaInst* slot = getCallRefEntryResultSlot(llvm_func);
+    std::vector<llvm::Type*> param_types{i64_type};
+    std::vector<llvm::Value*> args{ref_boxed};
+    if (arg) {
+        // a bool is passed as 0 or 1
+        param_types.push_back(arg->getType() == i1_type ? i64_type : arg->getType());
+        args.push_back(arg->getType() == i1_type ? builder->CreateZExt(arg, i64_type) : arg);
+    }
+    param_types.push_back(ptr_type);
+    param_types.push_back(ptr_type);
+    args.push_back(slot);
+    args.push_back(xsink_arg);
+    std::string helper_name = std::string("qore_rt_call_ref_") + rname + "_" + aname + "_v1";
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction(helper_name,
+        llvm::FunctionType::get(i32_type, param_types, false)), args, "callref_entry_called");
+
+    llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
+    llvm::BasicBlock* entry_boxed_bb = llvm::BasicBlock::Create(ctx, "callref_entry_boxed", llvm_func);
+    llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
+    llvm::BasicBlock* check_bb = llvm::BasicBlock::Create(ctx, "callref_check", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
+    // 1: the native value; 2: an entry's NaN-boxed value, converted as the generic call path's; 0: no call
+    llvm::SwitchInst* sw = builder->CreateSwitch(called, generic_bb, 2,
+        llvm::MDBuilder(ctx).createBranchWeights({1, 999, 1}));
+    sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 1), entry_bb);
+    sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type), 2), entry_boxed_bb);
+
+    std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> incoming;
+    builder->SetInsertPoint(entry_bb);
+    incoming.emplace_back(builder->CreateLoad(native_type, slot, "callref_entry_value"), builder->GetInsertBlock());
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(entry_boxed_bb);
+    llvm::Value* entry_boxed = builder->CreateLoad(i64_type, slot, "callref_entry_boxed_value");
+    builder->CreateBr(check_bb);
+
+    // the generic call path, with the argument boxed and released here; its value, and an entry's NaN-boxed value, are
+    // checked and converted as the store would check and convert them
+    builder->SetInsertPoint(generic_bb);
+    llvm::Value* args_array;
+    llvm::Value* boxed_arg = nullptr;
+    if (arg) {
+        args_array = allocCallArray(llvm_func, 1);
+        if (arg->getType() == i64_type) {
+            boxed_arg = boxIntInline(arg);
+        } else if (arg->getType() == double_type) {
+            boxed_arg = boxFloat(arg, true);
+        } else {
+            boxed_arg = boxBool(arg);
+        }
+        builder->CreateStore(boxed_arg, args_array);
+    } else {
+        args_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    }
+    auto decref = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* generic_boxed = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
+        {ref_boxed, args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg}, "callref_generic_value");
+    if (boxed_arg && arg->getType() != i1_type) {
+        builder->CreateCall(decref, {boxed_arg, xsink_arg});
+    }
+    llvm::BasicBlock* generic_end = builder->GetInsertBlock();
+    builder->CreateBr(check_bb);
+
+    builder->SetInsertPoint(check_bb);
+    llvm::PHINode* boxed = builder->CreatePHI(i64_type, 2, "callref_boxed_value");
+    boxed->addIncoming(entry_boxed, entry_boxed_bb);
+    boxed->addIncoming(generic_boxed, generic_end);
+    llvm::Value* zero = kind == BatchCalleeReturnKind::NativeFloat
+        ? static_cast<llvm::Value*>(llvm::ConstantFP::get(double_type, 0.0))
+        : static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, 0));
+    // the value of a call that raised an exception is not converted: it is released, and the exception is taken after
+    // the join
+    llvm::BasicBlock* raised_bb = llvm::BasicBlock::Create(ctx, "callref_generic_raised", llvm_func);
+    llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "callref_generic_value", llvm_func);
+    builder->CreateCondBr(emitPendingExceptionTest(), raised_bb, value_bb, llvm::MDBuilder(ctx).createBranchWeights(1,
+        999));
+    builder->SetInsertPoint(raised_bb);
+    builder->CreateCall(decref, {boxed, xsink_arg});
+    incoming.emplace_back(zero, builder->GetInsertBlock());
+    builder->CreateBr(merge_bb);
+
+    // a value of the local's kind is taken as it is, as the store takes it
+    builder->SetInsertPoint(value_bb);
+    llvm::Value* is_kind;
+    if (kind == BatchCalleeReturnKind::NativeInt) {
+        is_kind = builder->CreateICmpEQ(builder->CreateAnd(boxed, llvm::ConstantInt::get(i64_type, TAG_MASK)),
+            llvm::ConstantInt::get(i64_type, TAG_INT48));
+    } else if (kind == BatchCalleeReturnKind::NativeFloat) {
+        is_kind = emitIsBoxedFloat(boxed);
+    } else {
+        is_kind = builder->CreateOr(builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_TRUE)),
+            builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_FALSE)));
+    }
+    llvm::BasicBlock* kind_bb = llvm::BasicBlock::Create(ctx, "callref_generic_kind", llvm_func);
+    llvm::BasicBlock* coerce_bb = llvm::BasicBlock::Create(ctx, "callref_generic_coerce", llvm_func);
+    builder->CreateCondBr(is_kind, kind_bb, coerce_bb, llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+    builder->SetInsertPoint(kind_bb);
+    llvm::Value* native;
+    if (kind == BatchCalleeReturnKind::NativeInt) {
+        native = builder->CreateAShr(builder->CreateShl(boxed, 16), llvm::ConstantInt::get(i64_type, 16));
+    } else if (kind == BatchCalleeReturnKind::NativeFloat) {
+        native = unboxFloat(boxed);
+    } else {
+        native = builder->CreateZExt(builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_TRUE)),
+            i64_type);
+    }
+    incoming.emplace_back(native, builder->GetInsertBlock());
+    builder->CreateBr(merge_bb);
+
+    // any other value is checked and converted with the local's type, as the store checks and converts it
+    builder->SetInsertPoint(coerce_bb);
+    llvm::Value* cleanup = getCallRefEntryCoerceCleanupSlot(llvm_func);
+    llvm::Value* checked = builder->CreateCall(module.getOrInsertFunction("qore_rt_coerce_value_by_type_path_aot",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, i64_type, ptr_type, ptr_type}, false)),
+        {aot_ctx_arg, getTypePathArg(local_type), boxed, cleanup, xsink_arg});
+    llvm::Value* converted;
+    if (kind == BatchCalleeReturnKind::NativeInt) {
+        converted = builder->CreateCall(module.getOrInsertFunction("qore_rt_to_int",
+            llvm::FunctionType::get(i64_type, {i64_type}, false)), {checked});
+    } else if (kind == BatchCalleeReturnKind::NativeFloat) {
+        converted = builder->CreateCall(module.getOrInsertFunction("qore_rt_to_float",
+            llvm::FunctionType::get(double_type, {i64_type}, false)), {checked});
+    } else {
+        converted = builder->CreateZExt(builder->CreateICmpNE(builder->CreateCall(
+            module.getOrInsertFunction("qore_rt_to_bool", llvm::FunctionType::get(i64_type, {i64_type}, false)),
+            {checked}), llvm::ConstantInt::get(i64_type, 0)), i64_type);
+    }
+    // the converted value (owned by the cleanup slot) and the call's value are released: the native value is kept
+    llvm::Value* owned = builder->CreateLoad(i64_type, cleanup);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+    builder->CreateCall(decref, {owned, xsink_arg});
+    builder->CreateCall(decref, {boxed, xsink_arg});
+    incoming.emplace_back(converted, builder->GetInsertBlock());
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(native_type, incoming.size(), "callref_native_value");
+    for (auto& [value, block] : incoming) {
+        phi->addIncoming(value, block);
+    }
+    result = phi;
+    if (kind == BatchCalleeReturnKind::NativeBool) {
+        result = builder->CreateICmpNE(phi, llvm::ConstantInt::get(i64_type, 0));
+    }
+    return true;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::AllocaInst* QoreIRToLLVM::getCallRefEntryCoerceCleanupSlot(llvm::Function* llvm_func) {
+    if (!callref_entry_coerce_cleanup_slot) {
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        callref_entry_coerce_cleanup_slot = ab.CreateAlloca(i64_type, nullptr, "callref_coerce_cleanup");
+        ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), callref_entry_coerce_cleanup_slot);
+    }
+    return callref_entry_coerce_cleanup_slot;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitBoxedCallRefEntryCall(llvm::Value* ref_boxed, llvm::Value* args_array, int nargs,
+        llvm::Value* arg_cleanups, llvm::Module& module, llvm::Function* llvm_func) {
+    if (arg_cleanups) {
+        // the slots of reads through references, which the call gives only when one holds its value: then the
+        // generic call path takes them, and otherwise the call gives nothing (emitGivenOrPlainCall())
+        assert(nullable_arg_cleanups.count(arg_cleanups));
+        return emitGivenOrPlainCall(arg_cleanups, [&]() -> llvm::Value* {
+            return builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast_consume_args",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false)),
+                {ref_boxed, args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }, [&]() -> llvm::Value* {
+            return emitBoxedCallRefEntryCall(ref_boxed, args_array, nargs, nullptr, module, llvm_func);
+        });
+    }
+    llvm::AllocaInst* slot = getCallRefEntryResultSlot(llvm_func);
+    llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
+    llvm::Value* called = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_ref_boxed_v1",
+            llvm::FunctionType::get(i32_type, {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false)),
+        {ref_boxed, args_array, nargs_val, slot, xsink_arg}, "callref_entry_called");
+
+    llvm::BasicBlock* entry_bb = llvm::BasicBlock::Create(ctx, "callref_entry", llvm_func);
+    llvm::BasicBlock* generic_bb = llvm::BasicBlock::Create(ctx, "callref_generic", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "callref_merge", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpNE(called, llvm::ConstantInt::get(i32_type, 0)), entry_bb, generic_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+
+    builder->SetInsertPoint(entry_bb);
+    llvm::Value* entry_result = builder->CreateLoad(i64_type, slot, "callref_entry_value");
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(generic_bb);
+    llvm::Value* generic_result = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
+        {ref_boxed, args_array, nargs_val, xsink_arg}, "callref_generic_value");
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "callref_value");
+    phi->addIncoming(entry_result, entry_bb);
+    phi->addIncoming(generic_result, generic_bb);
+    return phi;
+}
+
 llvm::Value* QoreIRToLLVM::emitGuardedStringPseudoFastPath(
         const QoreIRInstruction* inst, QoreIRIntrinsic intrinsic, bool pseudo,
         bool base_known_string, bool base_assigned_string,
@@ -15988,6 +16365,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
     open_native_call_frames = 0;
+    callref_entry_result_slot = nullptr;
+    callref_entry_coerce_cleanup_slot = nullptr;
     bg_helper_count = 0;
     obe_handler_count = 0;
     obe_handler_fns.clear();
@@ -24055,7 +24434,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Invoke (expression call with exception edges) ===
         case QoreIROpcode::Invoke: {
             const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
-            llvm::Value* result;
+            llvm::Value* result = nullptr;
             bool result_proven_nothrow = false;
             // true if the result is a value that a local keeps, which is not released (see emitStringAppendCow())
             bool result_borrowed = false;
@@ -25103,8 +25482,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     bool has_closure_arg_cleanups = false;
                     llvm::Value* closure_arg_cleanups = buildArgCleanupArray(inst, 1,
                             llvm_func, closure_nargs, has_closure_arg_cleanups);
+                    // AOT code calls the call-reference entry of the reference's function, if it has one and the
+                    // call allows it, and the generic call path otherwise (qore#5578)
+                    const bool callref_entry = (!has_closure_arg_cleanups
+                            || nullable_arg_cleanups.count(closure_arg_cleanups))
+                        && callRefEntryCallEligible(inst);
+                    if (callref_entry && !has_closure_arg_cleanups
+                            && !emitScalarCallRefEntryCall(inst, ref_boxed, module, llvm_func, result, error)) {
+                        return false;
+                    }
 
-                    if (closure_nargs == 0) {
+                    if (result) {
+                        // made with no argument or one native argument (emitScalarCallRefEntryCall())
+                    } else if (callref_entry) {
+                        llvm::Value* closure_args_array;
+                        if (!buildArgsArray(inst, 1, llvm_func, closure_args_array, closure_nargs, error)) {
+                            return false;
+                        }
+                        result = emitBoxedCallRefEntryCall(ref_boxed, closure_args_array, closure_nargs,
+                            has_closure_arg_cleanups ? closure_arg_cleanups : nullptr, module, llvm_func);
+                    } else if (closure_nargs == 0) {
                         // Fast path for 0-argument closure calls (no QoreListNode allocation)
                         auto helper = module.getOrInsertFunction("qore_rt_call_closure_0",
                                 llvm::FunctionType::get(i64_type,
@@ -34254,19 +34651,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ref_boxed = boxValue(ref, inst->operands[0].id);
             }
 
-            // Build args array from operands[1..]
-            llvm::Value* args_array;
-            int nargs;
-            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+            // a call through a reference whose target is not known here: AOT code calls the call-reference entry of
+            // the reference's function, if it has one and the call allows it, and the generic call path otherwise
+            // (qore#5578)
+            const bool callref_entry = !immediate_closure && !guarded_stored_closure
+                && callRefEntryCallEligible(inst);
+            llvm::Value* result = nullptr;
+            // a value stored into a native local only is given as a native value
+            BatchCalleeReturnKind native_result_kind = BatchCalleeReturnKind::Boxed;
+            if (callref_entry && !emitNativeStoreCallRefEntryCall(inst, next, ref_boxed, module, llvm_func, result,
+                    native_result_kind, error)) {
                 return false;
             }
-            bool has_arg_cleanups = false;
-            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func,
-                    nargs, has_arg_cleanups);
+            const bool native_result = result != nullptr;
+            if (callref_entry && !result
+                    && !emitScalarCallRefEntryCall(inst, ref_boxed, module, llvm_func, result, error)) {
+                return false;
+            }
 
-            llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
-            llvm::Value* result;
-            if (immediate_closure) {
+            // Build args array from operands[1..]
+            llvm::Value* args_array = nullptr;
+            int nargs = 0;
+            bool has_arg_cleanups = false;
+            llvm::Value* arg_cleanups = nullptr;
+            llvm::Value* nargs_val = nullptr;
+            if (!result) {
+                if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs, has_arg_cleanups);
+                nargs_val = llvm::ConstantInt::get(i32_type, nargs);
+            }
+            if (result) {
+                // made with no argument or one native argument (emitScalarCallRefEntryCall())
+            } else if (immediate_closure) {
                 const QoreIRCreateClosureInstruction* create = immediate_it->second;
                 if (aot_mode) {
                     QoreValue expr_val = create->expr;
@@ -34348,6 +34766,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             module, llvm_func, inst);
                     }
                 }
+            } else if (callref_entry && (!has_arg_cleanups || nullable_arg_cleanups.count(arg_cleanups))) {
+                result = emitBoxedCallRefEntryCall(ref_boxed, args_array, nargs, has_arg_cleanups ? arg_cleanups
+                    : nullptr, module, llvm_func);
             } else if (has_arg_cleanups) {
                 auto ft = llvm::FunctionType::get(i64_type,
                         {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
@@ -34378,6 +34799,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     module, llvm_func, true);
             }
             values[inst->result.id] = result;
+            if (native_result) {
+                native_call_result_kinds.emplace(inst->result.id, native_result_kind);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
             if (!guarded_stored_closure && immediate_closure_summary

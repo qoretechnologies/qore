@@ -484,23 +484,24 @@ static int check_background_creator(const ResolvedCallReferenceNodeIntern* r, Ex
 
 //! returns the effective parse options that a reference created now by the code of \a pgm, the thread's current
 //! Program, records as its creator's (see ResolvedCallReferenceNodeIntern::captureCreatorParseOptions())
-static QoreParseOptions qore_current_creator_parse_options(const QoreProgram* pgm) {
-    QoreParseOptions po = runtime_get_effective_program_parse_options();
+static QoreParseOptions qore_current_creator_parse_options(ThreadData* td, const QoreProgram* pgm) {
+    QoreParseOptions po = runtime_get_effective_parse_options_for(td, pgm);
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
     // permissions of that code, which uses the domains that its module declares (see
     // qore_relieve_module_declared_domains()); only module code runs with the module's override, so a reference that
     // the caller's code creates to the module's code is not relieved (the caller's code clears the module's
     // override); the Program running the code is tested, not the Program of the reference, which is the object's for
     // a method reference
-    if (pgm && runtime_get_module_call_program() == pgm) {
+    if (pgm && runtime_get_module_call_program(td) == pgm) {
         po = qore_relieve_module_declared_domains(po, pgm);
     }
     return po;
 }
 
 void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
-    const QoreProgram* pgm = ::getProgram();
-    creator_po = qore_current_creator_parse_options(pgm);
+    ThreadData* td = qore_get_thread_data();
+    const QoreProgram* pgm = runtime_get_program(td);
+    creator_po = qore_current_creator_parse_options(td, pgm);
     has_creator_po = true;
     creator_non_module = pgm && !qore_program_is_module_inline(pgm);
     // the run-time call reference classes call this from their constructors, when the reference is complete: a
@@ -513,13 +514,17 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
 // qore#7678, functions reached through a lent Program, and qore#7302, the immediate calling code) must be added here
 // too, or the fast call through the reference would skip it
 bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(const QoreProgram* pgm) const {
-    assert(pgm == ::getProgram());
+    return creatorContextIsCurrent(qore_get_thread_data(), pgm);
+}
+
+bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(ThreadData* td, const QoreProgram* pgm) const {
+    assert(td == qore_get_thread_data() && pgm == runtime_get_program(td));
     // a reference that its own code calls in place applies no creator context
     if (!has_creator_po) {
         return true;
     }
     if (creator_non_module != (pgm && !qore_program_is_module_inline(pgm))
-            || creator_po != qore_current_creator_parse_options(pgm)) {
+            || creator_po != qore_current_creator_parse_options(td, pgm)) {
         return false;
     }
     // the sandbox provenance and the origin restrictions recorded for the reference, which a call applies

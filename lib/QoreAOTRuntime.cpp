@@ -15259,6 +15259,91 @@ void qore_aot_discard_pending_fast_entries(size_t mark) {
     aot_pending_fast_entries.resize(mark);
 }
 
+namespace {
+//! The registry of the call-reference entries of the loaded AOT images (qore#5578)
+/** Created by the first use, so that an image loaded before the library's other static objects are constructed (an
+    executable linked statically with it, whose constructor functions can run first) finds it constructed; its lock is
+    a leaf lock (no other lock is taken while it is held) with a fork handler.  Entries are keyed by the standard
+    native entry of their function, whose address is unique while its image is loaded; an image unregisters its
+    entries before it is unloaded, so a later image at the same addresses does not find them.
+*/
+struct QoreAOTCallRefRegistry {
+    QoreRWLock lock;
+    QoreForkRWLock fork_handler{lock, QFLR_LEAF, "aot_callref_entry_registry"};
+    std::unordered_map<AotFunctionPtr, const QoreAOTCallRefEntry*> entries;
+    //! incremented by every registration; starts at 1, so that 0 means "never looked up" for a variant
+    std::atomic<uint32_t> generation{1};
+
+    //! never destroyed: the destructor functions of the images, which unregister their entries, can run after the
+    //! static objects of the library are destroyed at exit
+    static QoreAOTCallRefRegistry& get() {
+        static QoreAOTCallRefRegistry* registry = new QoreAOTCallRefRegistry;
+        return *registry;
+    }
+};
+
+//! returns true if the entry is well formed: a function, an entry and parameter and return kinds that exist
+bool qore_aot_callref_entry_valid(const QoreAOTCallRefEntry& e) {
+    if (!e.fn || !e.cref_fn || e.nparams > QORE_AOT_CALLREF_MAX_PARAMS) {
+        return false;
+    }
+    for (unsigned i = 0; i < e.nparams; ++i) {
+        if (e.kinds[i] > static_cast<uint8_t>(BatchCalleeParamKind::NativeBool)) {
+            return false;
+        }
+    }
+    // the kinds are given twice: in the signature code too
+    return e.sig_code == qore_aot_callref_sig_code(e.retKind(), e.kinds, e.nparams)
+        && (e.nparams == QORE_AOT_CALLREF_MAX_PARAMS || !(e.sig_code >> (2 + 2 * e.nparams)));
+}
+}
+
+extern "C" DLLEXPORT void qore_aot_register_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+        int32_t num_entries) {
+    if (!entries || num_entries <= 0) {
+        return;
+    }
+    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+    QoreAutoRWWriteLocker al(reg.lock);
+    for (int32_t i = 0; i < num_entries; ++i) {
+        const QoreAOTCallRefEntry& e = entries[i];
+        if (qore_aot_callref_entry_valid(e)) {
+            reg.entries[e.fn] = &e;
+        }
+    }
+    // a variant whose lookup found nothing looks again
+    reg.generation.fetch_add(1, std::memory_order_acq_rel);
+}
+
+extern "C" DLLEXPORT void qore_aot_unregister_callref_entries_v1(const QoreAOTCallRefEntry* entries,
+        int32_t num_entries) {
+    if (!entries || num_entries <= 0) {
+        return;
+    }
+    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+    QoreAutoRWWriteLocker al(reg.lock);
+    for (int32_t i = 0; i < num_entries; ++i) {
+        auto it = reg.entries.find(entries[i].fn);
+        // only this image's own entry is removed
+        if (it != reg.entries.end() && it->second == &entries[i]) {
+            reg.entries.erase(it);
+        }
+    }
+}
+
+const QoreAOTCallRefEntry* qore_aot_find_callref_entry(AotFunctionPtr fn, uint32_t& generation) {
+    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    // read under the lock, so that a registration made after it increments it again
+    generation = reg.generation.load(std::memory_order_acquire);
+    auto it = reg.entries.find(fn);
+    return it == reg.entries.end() ? nullptr : it->second;
+}
+
+uint32_t qore_aot_callref_registration_generation() {
+    return QoreAOTCallRefRegistry::get().generation.load(std::memory_order_acquire);
+}
+
 const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol) {
     if (!fn || !fast_symbol) {
         return nullptr;

@@ -2261,6 +2261,45 @@ constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN = 16;
 QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(QoreAOTContext* ctx, int32_t slot,
     const char* fast_symbol, const void** fast_fn);
 
+//! Calls a reference to an AOT function through the function's call-reference entry (qore#5578)
+/** The helpers qore_rt_call_ref_<r>_<a>_v1() take no argument (\c 0) or one argument of a native kind (\c int,
+    \c float or \c bool, the latter as 0 or 1) and give a native value (\c int, \c float, \c bool as 0 or 1) or a
+    NaN-boxed value (\c value, which the caller owns).  qore_rt_call_ref_boxed_v1() takes NaN-boxed arguments, which
+    stay the caller's, and gives a NaN-boxed value.
+
+    The call is made only if the reference is a plain reference to a user function whose variant has a call-reference
+    entry (UserVariantBase::getAOTCallRefEntry()) taking parameters of the kinds of the arguments and returning a value
+    of the kind of the result (any kind for a NaN-boxed result), and the checks of every call through a reference
+    without the generic call path pass (qore_rt_admit_function_reference()), the function running in the caller's
+    Program; the helper then pushes the frame of the call, calls the entry with the AOT context of the variant in the
+    callee's Program, pops the frame and returns 1, with an exception in \a xsink if the callee raised one.
+
+    @return 1 if the call was made (or refused with an exception, as the generic call path refuses it), with its value
+    in \a result; 0 if nothing was done (\a result is not written), and the caller makes the call through the generic
+    call path (qore_rt_call_closure_fast()); 2 (the helpers with a native result only) if the call was made through an
+    entry that returns a NaN-boxed value, which the caller owns and converts, in the bits of \a result (NOTHING if the
+    callee raised an exception)
+*/
+int qore_rt_call_ref_int_0_v1(uint64_t ref_bits, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_int_int_v1(uint64_t ref_bits, int64_t a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_int_float_v1(uint64_t ref_bits, double a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_int_bool_v1(uint64_t ref_bits, int64_t a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_float_0_v1(uint64_t ref_bits, double* result, ExceptionSink* xsink);
+int qore_rt_call_ref_float_int_v1(uint64_t ref_bits, int64_t a0, double* result, ExceptionSink* xsink);
+int qore_rt_call_ref_float_float_v1(uint64_t ref_bits, double a0, double* result, ExceptionSink* xsink);
+int qore_rt_call_ref_float_bool_v1(uint64_t ref_bits, int64_t a0, double* result, ExceptionSink* xsink);
+int qore_rt_call_ref_bool_0_v1(uint64_t ref_bits, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_bool_int_v1(uint64_t ref_bits, int64_t a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_bool_float_v1(uint64_t ref_bits, double a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_bool_bool_v1(uint64_t ref_bits, int64_t a0, int64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_value_0_v1(uint64_t ref_bits, uint64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_value_int_v1(uint64_t ref_bits, int64_t a0, uint64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_value_float_v1(uint64_t ref_bits, double a0, uint64_t* result, ExceptionSink* xsink);
+int qore_rt_call_ref_value_bool_v1(uint64_t ref_bits, int64_t a0, uint64_t* result, ExceptionSink* xsink);
+//! qore_rt_call_ref_<r>_<a>_v1() for NaN-boxed arguments and result
+int qore_rt_call_ref_boxed_v1(uint64_t ref_bits, const uint64_t* args, int nargs, uint64_t* result,
+    ExceptionSink* xsink);
+
 //! Enters the Program of the callee of a native call of another module's function (qore#6035)
 /** Builds the call's state in \a state_buf (QORE_RT_CROSS_MODULE_CALL_STATE_SIZE bytes): the Program that runs the
     function, its entry, and the runtime parse options of its module's code, as qore_rt_call_direct_aot() sets them;
