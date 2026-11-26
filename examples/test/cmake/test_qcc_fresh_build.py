@@ -47,6 +47,16 @@ class QccFreshBuildTest(unittest.TestCase):
         self.qore = find_tool("QORE_BINARY", "qore")
         if not self.qcc or not self.qore:
             self.skipTest("qcc and qore are required")
+        # qore runs qore-qo-source-order at configure time, which loads binary modules (json): those of the build that
+        # qore belongs to, as test_user_module_resources does, and only then the ones in QORE_MODULE_DIR.  A build
+        # configured without an install prefix (the macOS CI job) has no module directory of its own, and the modules
+        # installed in a prefix belong to another libqore
+        self.env = os.environ.copy()
+        build_dir = Path(self.env.get("QORE_TEST_BUILD_DIR", Path(self.qore).resolve().parent))
+        module_dirs = [ROOT / "qlib", *sorted((build_dir / "modules").glob("*/"))]
+        if self.env.get("QORE_MODULE_DIR"):
+            module_dirs.extend(self.env["QORE_MODULE_DIR"].split(os.pathsep))
+        self.env["QORE_MODULE_DIR"] = os.pathsep.join(map(str, module_dirs))
         directory = tempfile.TemporaryDirectory(prefix="qore-qcc-fresh-build-")
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -73,11 +83,11 @@ add_dependencies(objects ${{order_targets}})
         """Configures and builds the group twice in an empty build directory with the given generator."""
         build = self.root / ("build-" + generator.split()[0].lower())
         configure = subprocess.run([CMAKE, "-S", str(self.source), "-B", str(build), "-G", generator],
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True, env=self.env)
         self.assertEqual(0, configure.returncode, configure.stdout + configure.stderr)
         output = ""
         for attempt in ("first", "second"):
-            result = subprocess.run([CMAKE, "--build", str(build)], capture_output=True, text=True)
+            result = subprocess.run([CMAKE, "--build", str(build)], capture_output=True, text=True, env=self.env)
             output += result.stdout + result.stderr
             self.assertEqual(0, result.returncode, f"{generator}, {attempt} build:\n{output}")
         self.assertIn("batch bootstrap failed; falling back to per-source compilation", output,
