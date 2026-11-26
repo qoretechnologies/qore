@@ -198,6 +198,21 @@ class ThrowingLogPipeline inherits DataProvider::DataProviderPipeline {
     }
 }
 
+#! reports its destruction
+class ReportingPipeline inherits DataProvider::DataProviderPipeline {
+    public {
+        Queue events;
+    }
+
+    constructor(hash<PipelineOptionInfo> opts, Queue events) : DataProviderPipeline(opts) {
+        self.events = events;
+    }
+
+    destructor() {
+        events.push({"event": "destroyed", "tid": gettid()});
+    }
+}
+
 class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
     constructor() : QUnit::Test("PipelineDestroyedWhileProcessing", "1.0") {
         addTestCase("a record in progress completes while the pipeline is destroyed", \completesTest());
@@ -212,6 +227,8 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
             "thread", \destroyedInQueueTest(), True);
         addTestCase("an error of a record is reported when the pipeline's logError() raises an error",
             \throwingLogErrorTest());
+        addTestCase("a pipeline whose last reference a fan-out queue thread's call of a child queue holds is destroyed "
+            "in that thread", \fanOutDestroyedTest());
         set_return_value(main());
     }
 
@@ -320,6 +337,52 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         } else {
             assertEq(tid, proc2.tids.get(HangTimeout), "the record completes");
         }
+    }
+
+    #! The program releases the pipeline while queue 0's thread logs its submission of a record to a child queue
+    #! (qore#7509)
+    /** Queue 0's thread calls the pipeline through the child queue (with the pipeline's lock held), and that call
+        holds the last reference: the pipeline is destroyed in queue 0's thread, once the thread has released the lock
+    */
+    fanOutDestroyedTest() {
+        Queue events();
+        ShutdownCollector collector(events);
+        ThreadProcessor proc(False);
+        Counter in_log(1);
+        Counter go(1);
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
+        bool armed = True;
+        int main_tid = gettid();
+        Queue log_tid();
+        {
+            ReportingPipeline pipe(<PipelineOptionInfo>{
+                "name": "destroyed-in-fan-out",
+                "metrics_collector": collector,
+                "debug_log": sub (string fmt, ...) {
+                    # the log of the submission to the child queue in queue 0's thread
+                    if (armed && gettid() != main_tid && fmt =~ /data submission/) {
+                        armed = False;
+                        log_tid.push(gettid());
+                        in_log.dec();
+                        go.waitForZero(HangTimeout);
+                    }
+                },
+            }, events);
+            int id = pipe.appendQueue(0);
+            pipe.append(id, proc);
+            pipe.submit({"a": 1});
+            assertEq(0, in_log.waitForZero(HangTimeout), "queue 0's thread logs the submission to the child queue");
+        }
+        # the program has released the pipeline: the call of queue 0's thread holds it
+        int tid = log_tid.get();
+        go.dec();
+        hash<auto> ev = events.get(HangTimeout);
+        assertEq("destroyed", ev.event, "the pipeline is destroyed");
+        assertEq(tid, ev.tid, "queue 0's thread destroys the pipeline");
+        assertEq("collector shut down", events.get(HangTimeout).event,
+            "the destructor does not wait for the queue thread that runs it");
     }
 
     #! The pipeline's logError() raises an error while the error of a record is reported (qore#7509)
