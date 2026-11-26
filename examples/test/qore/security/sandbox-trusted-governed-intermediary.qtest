@@ -80,6 +80,39 @@ string sub run_bg_closure_ops() {
     return q.get();
 }
 
+#! the host starts a thread for its caller in which the governed code starts a nested thread
+string sub run_bg_nested() {
+    Queue q();
+    background q.push(governed.callFunction("g_nested_thread"));
+    return q.get();
+}
+
+#! host code that the governed code calls starts a nested thread that calls the governed code
+string sub host_nested() {
+    Queue q();
+    background bg_ops(q);
+    return q.get();
+}
+
+#! the host starts a thread for its caller in which the governed code calls host code that starts a nested thread
+string sub run_bg_host_nested() {
+    Queue q();
+    background q.push(governed.callFunction("g_host_nested"));
+    return q.get();
+}
+
+#! the governed code returns a closure to the host for its caller
+our code g_closure;
+
+sub make_g_closure() {
+    g_closure = governed.callFunction("g_closure");
+}
+
+#! the governed code submits an async task for its caller
+string sub direct_task() {
+    return governed.callFunction("g_task");
+}
+
 #! the host calls the governed code directly for its caller
 string sub direct_ops() {
     return governed.callFunction("g_ops");
@@ -181,6 +214,22 @@ string sub g_ops() {
     }
     return r.join(',');
 }
+string sub g_nested_thread() {
+    Queue q();
+    background q.push(g_ops());
+    return q.get();
+}
+string sub g_host_nested() {
+    return host_nested();
+}
+code sub g_closure() {
+    return string sub () { return g_ops(); };
+}
+string sub g_task() {
+    Queue q();
+    AsyncIoController::submitTask(sub () { q.push(g_ops()); });
+    return q.get();
+}
 code sub g_wrap(code cb) {
     return sub () { return cb(); };
 }
@@ -232,6 +281,30 @@ string sub bg() {
 string sub bg_closure() {
     try {
         return run_bg_closure_ops();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+string sub bg_nested() {
+    try {
+        return run_bg_nested();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+string sub bg_host_nested() {
+    try {
+        return run_bg_host_nested();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+sub g_closure_for_host() {
+    make_g_closure();
+}
+string sub task() {
+    try {
+        return direct_task();
     } catch (hash<ExceptionInfo> ex) {
         return 'error: ' + ex.err;
     }
@@ -292,6 +365,12 @@ TenantBox sub tenant_box() {
         addTestCase("a thread that the host starts with a host function for the caller", \threadTest());
         addTestCase("a thread that the host starts with an existing host closure", \threadClosureTest());
         addTestCase("the governed code called directly for the caller", \directTest());
+        addTestCase("a nested thread that the governed code starts in a thread for the caller", \nestedThreadTest());
+        addTestCase("a nested thread that host code called by the governed code starts", \hostNestedThreadTest());
+        addTestCase("a closure of the governed code that the host runs later in a thread of its own",
+            \closureLaterTest());
+        addTestCase("an async task that the governed code submits for the caller", \taskTest());
+        addTestCase("a thread that the host starts for no restricted code", \hostThreadTest());
         addTestCase("callbacks and call references that the governed code creates for the caller", \wrapperTest());
         addTestCase("a module loaded by the governed code in place of a module of the module path", \shadowingTest());
         addTestCase("a failed parse of restricted code does not mark a Program restricted", \failedParseTest());
@@ -313,6 +392,7 @@ TenantBox sub tenant_box() {
         governed = new Program(PO_NEW_STYLE);
         governed.importFunction("get_shared_box");
         governed.importFunction("build_host_program");
+        governed.importFunction("host_nested");
         governed.setSandboxManager(gsm);
         governed.parse(GovernedSource, "governed");
     }
@@ -332,7 +412,8 @@ TenantBox sub tenant_box() {
 
     private static Program tenant(*SandboxManager sm) {
         Program p(PO_NEW_STYLE);
-        foreach string f in (("run_bg_ops", "run_bg_closure_ops", "direct_ops", "make_wrappers", "governed_parse",
+        foreach string f in (("run_bg_ops", "run_bg_closure_ops", "run_bg_nested", "run_bg_host_nested",
+                "make_g_closure", "direct_task", "direct_ops", "make_wrappers", "governed_parse",
                 "governed_defer", "interrupt_me", "fail_closed_ops", "get_shared_box")) {
             p.importFunction(f);
         }
@@ -370,6 +451,40 @@ TenantBox sub tenant_box() {
 
     threadClosureTest() {
         check("bg_closure", Trusted, Restricted);
+    }
+
+    nestedThreadTest() {
+        check("bg_nested", Trusted, Restricted);
+    }
+
+    hostNestedThreadTest() {
+        check("bg_host_nested", Trusted, Restricted);
+    }
+
+    #! the closure records that it was created for restricted code: a thread of the host that runs it later, with no
+    #! restricted code on its stack, is restricted while it runs
+    closureLaterTest() {
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            p.callFunction("g_closure_for_host");
+            Queue q();
+            background q.push(g_closure());
+            assertEq(mode == "restricting" ? Restricted : Trusted, q.get(), mode);
+            remove g_closure;
+            remove current_sm;
+        }
+    }
+
+    taskTest() {
+        check("task", Trusted, Restricted);
+    }
+
+    #! a thread that the host starts with no restricted code on its stack runs the governed code as trusted code
+    hostThreadTest() {
+        Queue q();
+        background bg_ops(q);
+        assertEq(Trusted, q.get());
     }
 
     directTest() {

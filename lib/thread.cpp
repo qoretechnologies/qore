@@ -9699,7 +9699,17 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     // tell it (the code of a trusted, governed, sandbox that runs for restricted code is restricted); looked up only
     // where a sandbox or a sandboxed Program is involved, as code that neither governs is not restricted; fails closed
     if (td && (current || policy || provenance || provenance_policy || td->sandboxed_caller
-            || thread_stack_has_sandboxed_program(td))) {
+            || thread_stack_has_sandboxed_program(td)
+            || (td->sandbox_context && td->sandbox_context->restricted)
+            || (td->inherited_sandbox_context && td->inherited_sandbox_context->restricted)
+            || [td]() -> bool {
+                for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+                    if (frame->getContext()->restricted) {
+                        return true;
+                    }
+                }
+                return false;
+            }())) {
         restricted = qore_caller_is_restricted();
     }
     manager = current.release();
@@ -10070,7 +10080,9 @@ QoreSandboxContextHelper::~QoreSandboxContextHelper() {
 int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInheritedSandbox>& rv) {
     assert(xsink);
     std::unique_ptr<QoreInheritedSandbox> sbx(new QoreInheritedSandbox);
-    if (!sbx->ctx.manager && !sbx->ctx.policy_manager) {
+    // a context that records restricted code (QoreSandboxContext::restricted) is kept also without a manager, so that
+    // the thread stays restricted (qore#7737)
+    if (!sbx->ctx.manager && !sbx->ctx.policy_manager && !sbx->ctx.restricted) {
         // no sandbox governs the starting code; a thread that a trusted build entered by a tenant starts keeps the
         // isolation of the build, so the code of other tenants does not run in it (qore#6536)
         if (sbx->ctx.isolation) {
@@ -10113,7 +10125,7 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
         old_start_ctx = td->thread_start_sandbox_context;
         // a context that only keeps the isolation of a trusted build (see QoreInheritedSandbox::capture()) governs
         // nothing
-        if (ctx->manager || ctx->policy_manager) {
+        if (ctx->manager || ctx->policy_manager || ctx->restricted) {
             td->inherited_sandbox_context = ctx;
             td->thread_start_sandbox_context = ctx;
         }
@@ -10160,7 +10172,8 @@ QoreSandboxManager* QoreSandboxCapture::getPolicyManagerRef() const {
 }
 
 bool QoreSandboxCapture::isSandboxed() const {
-    return ctx->manager || ctx->policy_manager;
+    // also a capture of restricted code that records no manager (qore#7737)
+    return ctx->manager || ctx->policy_manager || ctx->restricted;
 }
 
 bool QoreSandboxCapture::sameSandbox(const QoreSandboxCapture& other) const {
