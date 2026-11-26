@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AggregateProjectionCancellationTest
+
+#! an aggregate-return projection pass stopped at any of its checks leaves the function valid (#7426 review)
+/** The aggregate-return projections (qore_ir_fuse_aggregate_return_projections(), run on the JIT batch of a function
+    and in AOT compilation) first remove the capture of the value of a call to a producer of a fresh list or hash
+    literal (CopyCallArg and its ReleaseCallArgSource), then choose the projections, prepare them (setting the facts
+    of the consumers' results) and rewrite the producer calls and their consumers.  A cancellation stops the pass: it
+    must leave the function as it was or with a complete rewrite, never with a producer call that reads the source of
+    a capture that is kept, nor with the facts of a consumer's result changed for a projection that is not made.
+
+    A debug build of libqore stops the analysis operation named in \c QORE_DEBUG_IR_ANALYSIS_CANCEL at its n-th check
+    in the process (\c "<operation>:<n>").  The test stops each operation of the pass at its checks in turn (each of
+    its first checks, which cover every check of the operations that run once the rewrite is prepared, and then a
+    sample), with JIT execution and in a qcc executable, and requires the program's output.  It is skipped with a
+    release build, which has no such setting.
+*/
+class AggregateProjectionCancellationTest inherits QUnit::Test {
+    public {
+        #! the program: nested producers of fresh hashes, consumers, a stored and a chosen aggregate, an index
+        const Script = "%modern
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {\"left\": left, \"middle\": middle, \"right\": right};
+}
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+hash<string, hash<string, int>> sub wrapRow(hash<string, int> row, hash<string, int> unused) {
+    return {\"row\": row, \"unused\": unused};
+}
+hash<string, hash<string, hash<string, int>>> sub wrapRows(hash<string, hash<string, int>> rows,
+        hash<string, hash<string, int>> unused) {
+    return {\"rows\": rows, \"unused\": unused};
+}
+int sub consume(hash<string, int> row) {
+    return row.right;
+}
+int sub deep() {
+    return wrapRows(wrapRow(makeRow(7, 8, 9), makeRow(10, 11, 12)),
+        wrapRow(makeRow(13, 14, 15), makeRow(16, 17, 18))).rows.row.middle;
+}
+int sub consumer() {
+    return consume(makeRow(1, 2, 3));
+}
+int sub nested() {
+    return wrapRow(makeRow(4, 5, 6), makeRow(1, 1, 1)).row.left + consume(makeRow(0, 0, 3));
+}
+int sub stored() {
+    hash<string, int> row = makeRow(20, 21, 22);
+    return row.left + row.right;
+}
+int sub chosen(bool left) {
+    hash<string, int> row = left ? makeRow(30, 31, 32) : makeRow(40, 41, 42);
+    return row.middle;
+}
+int sub indexed(int i) {
+    return makeValues(50, 51, 52)[i];
+}
+int sub discarded() {
+    makeRow(1, 2, 3);
+    return 60;
+}
+printf(\"%d %d %d %d %d %d %d %d\\n\", deep(), consumer(), nested(), stored(), chosen(True), chosen(False),
+    indexed(2), discarded());
+";
+
+        #! the program's output
+        const Expected = "8 3 7 42 31 41 52 60\n";
+
+        #! the operations of the pass that JIT execution reaches with the program
+        const JitOperations = (
+            "IR fresh aggregate argument copy elision",
+            "IR fresh aggregate argument copy selection",
+            "IR aggregate-return projection candidate analysis",
+            "IR aggregate-return defined value analysis",
+        );
+
+        #! the operations of the pass that AOT compilation reaches with the program
+        const AotOperations = JitOperations + (
+            "IR aggregate virtualization rewrite preparation",
+            "IR aggregate phi rewrite preparation",
+            "IR dead aggregate-return call analysis",
+            "IR guarded aggregate projection rewrite preparation",
+        );
+
+        #! the most checks of one operation that the test stops
+        const MaxChecks = 1000;
+        #! the number of the first checks of an operation that are all stopped
+        const DenseChecks = 24;
+        #! the distance between the later checks that are stopped
+        const Stride = 13;
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string qcc_bin;
+        string dir;
+        string script_path;
+    }
+
+    constructor() : QUnit::Test("AggregateProjectionCancellation", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        addTestCase("JIT: a projection pass stopped at any check leaves the function valid", \testJit());
+        addTestCase("AOT: a projection pass stopped at any check leaves the function valid", \testAot());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir();
+        script_path = dir + "/aggregate-projection-cancellation.q";
+        File f();
+        f.open2(script_path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Script);
+        f.close();
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    #! returns the environment setting that stops the operation at check n, if an operation is given
+    private static string cancelEnv(*string operation, *int n) {
+        return operation ? sprintf("QORE_DEBUG_IR_ANALYSIS_CANCEL='%s:%d' ", operation, n) : "";
+    }
+
+    #! runs the program with JIT execution; returns the stderr of the run
+    private string runJit(*string operation, *int n) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s -b --exec-mode=jit %s",
+            cancelEnv(operation, n), qore_bin, script_path));
+        string what = operation ? sprintf("%s stopped at check %d", operation, n) : "not stopped";
+        assertEq(0, r.rc, what + ": the program runs: " + r.out);
+        assertEq(Expected, r.stdout, what + ": the program's output");
+        return r.stderr;
+    }
+
+    #! compiles the program with qcc and runs the executable; returns the output of qcc
+    private string runAot(*string operation, *int n) {
+        string exe = dir + "/aggregate-projection-cancellation";
+        int rc;
+        string out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1", cancelEnv(operation, n),
+            libqore_dir, qcc_bin, exe, script_path), \rc);
+        string what = operation ? sprintf("%s stopped at check %d", operation, n) : "not stopped";
+        assertEq(0, rc, what + ": qcc compiles the program: " + out);
+        int run_rc;
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe), \run_rc);
+        assertEq(0, run_rc, what + ": the executable runs: " + run_out);
+        assertEq(Expected, run_out, what + ": the executable's output");
+        return out;
+    }
+
+    #! stops the operation at its checks in turn until it has no more: each of the first DenseChecks, then every
+    #! Stride-th; the operations that run once the rewrite is prepared have fewer checks than DenseChecks
+    private sweep(string operation, code run) {
+        int n;
+        for (n = 1; n <= MaxChecks; n += (n < DenseChecks ? 1 : Stride)) {
+            if (run(operation, n) !~ /QORE_DEBUG_IR_ANALYSIS_CANCEL: /) {
+                break;
+            }
+        }
+        # the operation is reached, and it has fewer checks than the test stops
+        assertGt(1, n, operation + ": the operation is checked");
+        assertLe(MaxChecks, n, operation + ": the checks of the operation are stopped up to its last");
+    }
+
+    testJit() {
+        runJit();
+        if (runJit(JitOperations[0], 1) !~ /QORE_DEBUG_IR_ANALYSIS_CANCEL: /) {
+            testSkip("libqore is not a debug build: QORE_DEBUG_IR_ANALYSIS_CANCEL is not available");
+        }
+        foreach string operation in (JitOperations) {
+            sweep(operation, \runJit());
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available");
+        }
+        runAot();
+        if (runAot(AotOperations[0], 1) !~ /QORE_DEBUG_IR_ANALYSIS_CANCEL: /) {
+            testSkip("libqore is not a debug build: QORE_DEBUG_IR_ANALYSIS_CANCEL is not available");
+        }
+        foreach string operation in (AotOperations) {
+            sweep(operation, \runAot());
+        }
+    }
+}
