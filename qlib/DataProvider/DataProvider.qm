@@ -1823,6 +1823,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
+    - fixed a bug where @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface" built a block
+      from records that do not all have the same fields with columns of different lengths, misaligning the values
+      of later records; a field that a record lacks is now @ref nothing in that record's row
+      (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
