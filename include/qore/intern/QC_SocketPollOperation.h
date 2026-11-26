@@ -1779,8 +1779,10 @@ private:
     std::atomic<int> h2_state{H2C_NONE};
 
     //! Changes the state from \a from to \a to, unless it changed meanwhile (an abort() closed the operation)
-    DLLLOCAL void advanceState(int from, int to) {
-        h2_state.compare_exchange_strong(from, to, std::memory_order_acq_rel, std::memory_order_acquire);
+    /** @return true if the state was changed, false if it was not \a from
+    */
+    DLLLOCAL bool advanceState(int from, int to) {
+        return h2_state.compare_exchange_strong(from, to, std::memory_order_acq_rel, std::memory_order_acquire);
     }
     bool peer_closed = false;
 

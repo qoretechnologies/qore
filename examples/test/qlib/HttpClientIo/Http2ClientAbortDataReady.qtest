@@ -154,7 +154,7 @@ class Http2ClientAbortDataReadyTest inherits QUnit::Test {
         on_exit {
             # the sender ends when the abort ends the connection; this ends it if an assertion failed first
             conn.getPollOperation().abort();
-            sender_done.waitForZero(HangGuard);
+            assertEq(0, sender_done.waitForZero(HangGuard), label + ": the sender ends with the connection");
         }
 
         # the listener's queue has data: the I/O thread reads the stream for it
