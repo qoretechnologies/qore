@@ -144,6 +144,12 @@
     when its handler opts in; an unfiltered stream request of such code is refused (see
     @ref httpserverutil_request_credentials and @ref rest_request_credentials).
 
+    @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
+    A stream request is served only in the dispatch of an @ref HttpServer::HttpServer "HttpServer" or of a host with
+    @ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()", and the code that serves it
+    for restricted code gets a placeholder in place of the socket of an HTTP/1.x connection (see
+    @ref httpserverutil_request_credentials).
+
     @par A Weak Assignment That Would Reference a Converted Copy Is an Error
     A @ref weak_assignment_operator "weak assignment (:=)" of a hash or a list to an lvalue whose type converts it to a
     copy (ex: a <tt>hash&lt;string, int&gt;</tt> to a \c hash lvalue) is refused (see @ref weak_assignment_conversion;
@@ -351,10 +357,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
 
     @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
-    An HTTP/1.x handler declared by restricted code (code that a sandbox refusing uncontrolled APIs governs), or that
-    asks for it, gets a socket for its own request only, and aborts the connection with
-    @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's socket that other handlers
-    get is refused to restricted code (see @ref httpserver_handler_socket; issues
+    An HTTP/1.x handler declared by restricted code (code that a sandbox refusing uncontrolled APIs governs), that
+    asks for it, or that serves a listener that restricted code added gets a socket for its own request only; the
+    connection's socket is refused to restricted code (see @ref httpserver_handler_socket and
+    @ref HttpServer::http_abort_connection() "http_abort_connection()"; issues
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>,
     <a href="https://github.com/qoretechnologies/qore/issues/7577">7577</a>).
 
@@ -406,8 +412,9 @@
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
     A class declared by code that its sandbox restricts cannot use the private declarations of a class declared by
-    trusted code but can override them and call an overridden method's base version; library classes give their
-    subclasses final public methods, so a subclass method with one of their names and signatures must be renamed
+    trusted code, its private constructors included, but can override them and call an overridden method's base
+    version; library classes give their subclasses final public methods, so a subclass method with one of their
+    names and signatures must be renamed
     (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses

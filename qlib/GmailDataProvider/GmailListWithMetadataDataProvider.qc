@@ -70,11 +70,14 @@ public class GmailListWithMetadataDataProvider inherits GmailApiDataProviderBase
         const MessagesUri = "gmail/v1/users/me/messages";
     }
 
-    private {
+    private:internal {
         #! The ID of the lazy value of the response type, which is built from the Discovery API document on first use
         #! (qore#6843); see getResponseType()
         static int response_type_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
             \GmailListWithMetadataDataProvider::buildResponseType());
+    }
+
+    private {
 
         #! The type of each retrieved message
         AbstractDataProviderType message_type;

@@ -35,6 +35,7 @@
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CallReferenceNode.h"
 
 #include <atomic>

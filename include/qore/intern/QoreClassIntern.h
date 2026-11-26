@@ -609,8 +609,8 @@ public:
         MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
 
         signature.resolve();
-        // parseResolve and push current return type on stack
-        ParseCodeInfoHelper rtih(mf->getName(), signature.getReturnTypeInfo());
+        // parseResolve and push current return type on stack; the variant is the code being parsed (qore#6843)
+        ParseCodeInfoHelper rtih(mf->getName(), signature.getReturnTypeInfo(), this);
 
         // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
         // them is noted (qore#5805)
@@ -3588,6 +3588,40 @@ DLLLOCAL inline std::mutex& qore_class_data_lock(const void* p) {
     return qore_class_data_locks[(reinterpret_cast<uintptr_t>(p) >> 6) % QoreClassDataLockCount].m;
 }
 
+//! True if the class's own call of the constructor of its base class (its base class constructor initializer) may
+//! select a private constructor of a class that trusted code declared in a class that sandboxed code declared
+/** False: such a constructor is \c private:internal for the class as every other private declaration of the trusted
+    class is; the variant search selects the constructor that it selects for any subclass, and a private one is
+    refused with a parse error that tells the host to give the trusted class a constructor that is not private
+    (qore_class_private::parseCheckSandboxBaseConstructor(); qore#6843)
+*/
+constexpr bool QoreSandboxBaseInitializerPrivateCtor = false;
+
+//! The private variants of a class that trusted code declared that a variant search may select in a class context
+//! that sandboxed code declared (qore#6843)
+/** Only the call of the base class's version of a method by its override can select such a variant, and only the
+    variant that the override overrides, on its own object (with QoreSandboxBaseInitializerPrivateCtor, also the
+    class's own call of the constructor of its base class, which may then select any constructor of the base class, as
+    it constructs its own object).  The setting is made for the variant search of such a call only: not for the parse
+    or the evaluation of its arguments, nor for the code that the call runs.
+*/
+struct QoreSandboxSuperCall {
+    //! the one variant of the base class's method that the override overrides
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    //! the constructor of the base class whose variants the class's own base class constructor call may select
+    const QoreMethod* constructor = nullptr;
+    //! at run time: the object of the call, which must be the object of the override
+    const QoreObject* self = nullptr;
+};
+
+//! The private variants that the variant search of a call being parsed may select (see QoreSandboxSuperCall)
+struct QoreSandboxSuperCallPending {
+    //! the call node whose variant search may select them
+    const void* node = nullptr;
+    //! the private variants that it may select
+    QoreSandboxSuperCall sc;
+};
+
 class qore_class_private {
     template <class> friend class QoreTypeOwnerOf;
 public:
@@ -5895,6 +5929,56 @@ public:
     DLLLOCAL static int parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
             const qore_class_private* class_ctx, const char* kind, const char* what);
 
+    //! Returns the variant of \a m that the method variant parsed now overrides, if the call of \a m being parsed is
+    //! the call of the base class's version of the method by its override in the class context (qore#6843)
+    /** The variant is the one of \a m with the parameter types of the variant whose code is parsed, which must be a
+        variant of the method of the class context of the same name; it is the only variant of \a m that the call
+        can select if it is private for a class context that sandboxed code declared.  Returns nullptr if the call is
+        not such a call.
+    */
+    DLLLOCAL static const AbstractQoreFunctionVariant* parseGetSandboxSuperVariant(const QoreMethod* m,
+            const qore_class_private* class_ctx);
+
+    //! Returns how this class reaches \a target: 0 not at all, 1 only through the private inheritance of a class that
+    //! trusted code declared, 2 otherwise (qore#6843)
+    /** A method of \a target that this class reaches only through the private inheritance of a class that trusted
+        code declared is private for the code of a class that sandboxed code declared
+
+        @param target the class to reach
+        @param restricted true if the path to this class already went through such an inheritance
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int sandboxPathAccess(const qore_class_private& target, bool restricted) const;
+
+    //! Returns true if the variant search made now in this thread may select the private variant \a v in a class
+    //! context that sandboxed code declared (see QoreSandboxSuperCall)
+    DLLLOCAL static bool isSandboxSuperCallVariant(const AbstractQoreFunctionVariant* v);
+
+    //! Returns true if the call made now in this thread on \a self may call the private variant \a v that its run
+    //! time variant search selected in a class context that sandboxed code declared; the permission is then used up
+    //! (see QoreSandboxSuperCall)
+    DLLLOCAL static bool runtimeTakeSandboxSuperCall(const AbstractQoreFunctionVariant* v, const QoreObject* self);
+
+    //! Sets the private variants that the variant search made now in this thread may select; returns the previous
+    //! setting
+    DLLLOCAL static QoreSandboxSuperCall setSandboxSuperCall(const QoreSandboxSuperCall& sc);
+
+    //! Sets the private variants that the variant search of the call \a node, parsed now, may select; returns the
+    //! previous setting (see QoreSandboxSuperCallParseHelper)
+    DLLLOCAL static QoreSandboxSuperCallPending setSandboxSuperCallPending(const QoreSandboxSuperCallPending& p);
+
+    //! Returns the private variants that the variant search of the call \a node may select (see
+    //! QoreSandboxSuperCallParseHelper), or no variant if \a node is not the call that set them
+    DLLLOCAL static QoreSandboxSuperCall getSandboxSuperCallPending(const void* node);
+
+    //! Raises a parse error if \a v, the constructor variant that the base class constructor call of the class
+    //! context selected, is a private constructor of a class that trusted code declared and the class context was
+    //! declared by sandboxed code (qore#6843); returns -1 if an error was raised, 0 if not
+    /** The error tells the host to give the base class a constructor that is not private; see
+        QoreSandboxBaseInitializerPrivateCtor
+    */
+    DLLLOCAL static int parseCheckSandboxBaseConstructor(const QoreProgramLocation* loc,
+            const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx);
+
     //! Raises a parse error if the parse class context cannot call the private method \a m that a parse-time lookup
     //! found (qore#6843); returns -1 if an error was raised, 0 if not
     /** An abstract method is looked up at run time, which checks the implementation called.
@@ -5903,10 +5987,12 @@ public:
         @param m the method found
         @param class_ctx the class context of the call
         @param base_call true if \a m is called on the object of the code (a call of a method of the class or of a
-        base class); then a normal method that the class context declares itself, which overrides \a m, can call it
+        base class); then the override of \a m can call it (see parseGetSandboxSuperVariant())
+        @param objclass the class of the object of the call, if not the class context: a public method that it reaches
+        only through the private inheritance of a class that trusted code declared cannot be called either
     */
     DLLLOCAL static int parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
-            const qore_class_private* class_ctx, bool base_call);
+            const qore_class_private* class_ctx, bool base_call, const qore_class_private* objclass = nullptr);
 
     //! Sets sandbox_serial_state and sandbox_deserial_refused when the class is committed (qore#7146)
     DLLLOCAL void initSandboxSerialization();
@@ -8320,6 +8406,37 @@ public:
 private:
     std::vector<qore_class_private*> classes;
     std::vector<qore_class_private*>* prev;
+};
+
+//! Sets the private variants that the variant search made in its scope may select (see QoreSandboxSuperCall)
+class QoreSandboxSuperCallHelper {
+public:
+    DLLLOCAL QoreSandboxSuperCallHelper(const QoreSandboxSuperCall& sc)
+            : old(qore_class_private::setSandboxSuperCall(sc)) {
+    }
+
+    DLLLOCAL ~QoreSandboxSuperCallHelper() {
+        qore_class_private::setSandboxSuperCall(old);
+    }
+
+private:
+    QoreSandboxSuperCall old;
+};
+
+//! Sets the private variants that the variant search of a call being parsed may select: only the search of that call
+//! (FunctionCallBase::parseArgsVariant()), after its arguments are parsed, uses them (qore#6843)
+class QoreSandboxSuperCallParseHelper {
+public:
+    DLLLOCAL QoreSandboxSuperCallParseHelper(const void* node, const QoreSandboxSuperCall& sc)
+            : old(qore_class_private::setSandboxSuperCallPending({node, sc})) {
+    }
+
+    DLLLOCAL ~QoreSandboxSuperCallParseHelper() {
+        qore_class_private::setSandboxSuperCallPending(old);
+    }
+
+private:
+    QoreSandboxSuperCallPending old;
 };
 
 #endif

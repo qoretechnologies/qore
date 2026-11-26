@@ -195,9 +195,11 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
     registered, or when it runs the code of objects of classes of a restricted Program
     (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
-    request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
-    gets a socket of its request when one of its REST classes is of a class of a restricted Program, whoever made the
-    handler and whenever the class was added, when it is declared by restricted code, or when it asked for it, and
+    request), or when the request arrives on a listener that restricted code added, whose threads the sandbox governs
+    (decided for each request); another handler gets the connection's socket.  A
+    @ref RestHandler::RestHandler "RestHandler" object gets a socket of its request when one of its REST classes is
+    of a class of a restricted Program, whoever made the handler and whenever the class was added, when it is declared
+    by restricted code, or when it asked for it, and
     gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
     @ref RestHandler::RestHandler "RestHandler" that has the connection's socket refuses a request (\c 500, and the
     connection is closed) whose dispatch path has a REST class or a stream handler of a restricted Program that its
@@ -414,10 +416,13 @@ log("started listener on %s", lh.desc);
     - the connection of an HTTP/1.x request whose chunked body a handler stopped reading before its end is closed
       after the response, so that the rest of the body cannot be taken for another request
       (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
-    - the handler of an HTTP/1.x request that is declared by sandboxed code, or that asks for it
-      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), gets a socket that
-      acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does, and code
-      that is not sandboxed aborts the connection with
+    - the handler of an HTTP/1.x request that is declared by restricted code (code that a sandbox refusing
+      uncontrolled APIs governs; issue #7577), or that asks for it
+      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), or that serves a
+      request on a listener that restricted code added (whose threads its sandbox governs; issue #6843), gets a socket
+      that acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does (so a
+      socket handler's WebSocket upgrade there is served only through a WebSocketHandler with asynchronous I/O), and code
+      that is not restricted aborts the connection with
       @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
       <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>); each send and read of that
       socket has a timeout of at most the new \c handler_socket_max_timeout option (30 seconds by default)
@@ -1263,6 +1268,16 @@ public hashdecl HttpServerOptionInfo {
     @see HttpServerAsyncIo::HttpAsyncSocketIoController for callback-based async I/O
 */
 public class HttpServer inherits HttpServer::AbstractLogger {
+    #! Returns the capability of the server's dispatch, claimed by the initialization of the module, or @ref nothing
+    /** Fails closed: without the capability no raw request is current, and stream requests are refused (qore#6843)
+    */
+    private:internal static *object claimDispatchCapability() {
+        try {
+            return AbstractHttpRequestHandler::claimServerDispatch();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
     public {
         #! version of the HttpServer's implementation
         const Version = HttpServer::HttpServerVersion;
@@ -1563,6 +1578,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     private:internal {
+        #! The capability of the server's dispatch to make the raw request of a request current (qore#6843)
+        /** Claimed by the initialization of the module; without it, no raw request is current, and stream requests are
+            refused (see AbstractHttpRequestHandler::claimServerDispatch())
+        */
+        static *object dispatch_capability = HttpServer::claimDispatchCapability();
+
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -5602,7 +5623,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # of the handler for one that runs the code of other objects
             # a request that is served for sandboxed code (of a server that sandboxed code runs, or of a listener
             # that was added for it) gets a socket of its own as well: the connection's socket is refused to code
-            # that runs for sandboxed code (qore#7338)
+            # that runs for sandboxed code (qore#7338, qore#6843)
             # restricted code only: code that a sandbox governs only for its resource limits, interrupts or I/O policy,
             # and that may use uncontrolled APIs, is trusted and gets the connection's socket (qore#7577)
             if (!handler_socket_view && handler && !is_multiplexed) {
@@ -5840,22 +5861,38 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
-                    # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
-                    # the request without its credentials (fails closed); the rest of its context is its own, as
-                    # before.  The code of the handler's base class filters what it dispatches to restricted code in
-                    # the other cases: a trusted handler that asks for it, and a request that is served for restricted
-                    # code (of a server that restricted code runs, or of a listener that was added for it), which is
-                    # that code's own (qore#7303)
+                    Socket hsock = request_helper.handler_sock ?? http_handler_connection_socket(s);
                     hash<auto!> hrv;
-                    if (restricted_handler) {
-                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
-                            platform_changes);
-                        hrv = handler.handleRequest(hview,
-                            request_helper.handler_sock ?? http_handler_connection_socket(s), filtered.cx,
-                            filtered.hdr, body);
-                    } else {
-                        hrv = handler.handleRequest(hview,
-                            request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    {
+                        # the raw request is current on the thread while the handler serves it, and only then (not
+                        # in the calls of the handler that follow, such as isPersistent()): only this dispatch makes
+                        # it current, with the request as the server made it; without the capability no request is
+                        # current, and a stream request is refused (qore#6843)
+                        *object raw_scope = dispatch_capability
+                            ? dispatch_capability.enter(cx, hdr, hsock, handler)
+                            : NOTHING;
+                        on_exit delete raw_scope;
+                        # the capability reports once why it makes no request current
+                        if (!raw_scope && dispatch_capability) {
+                            *string warning = dispatch_capability.takeWarning();
+                            if (warning) {
+                                listener.logError("cid %d: %s", cx.id, warning);
+                            }
+                        }
+                        # a handler whose class is of a restricted Program, which trusted code serves the request to,
+                        # gets the request without its credentials (fails closed); the rest of its context is its
+                        # own, as before.  The code of the handler's base class filters what it dispatches to
+                        # restricted code in the other cases: a trusted handler that asks for it, and a request that
+                        # is served for restricted code (of a server that restricted code runs, or of a listener that
+                        # was added for it), which is that code's own (qore#7303); a stream request that the handler
+                        # creates serves the request with the raw request of the scope
+                        if (restricted_handler) {
+                            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                                platform_changes);
+                            hrv = handler.handleRequest(hview, hsock, filtered.cx, filtered.hdr, body);
+                        } else {
+                            hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
+                        }
                     }
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";

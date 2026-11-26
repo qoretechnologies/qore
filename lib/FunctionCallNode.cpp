@@ -1013,7 +1013,9 @@ int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreP
             }
         }
 
-        // find variant
+        // find variant: the private variants that a class that sandboxed code declared may select in the variant
+        // search of this call only, which the call set before its arguments were parsed (qore#6843)
+        QoreSandboxSuperCallHelper super_call(qore_class_private::getSandboxSuperCallPending(this));
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
         // the return type of a call whose variant is resolved at run time only because another variant could match
@@ -1257,6 +1259,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
 
+    // an override's call of the version of its base class can select the variant that it overrides also if it is
+    // private for a class that sandboxed code declared (qore#6843); out of line, as only such a call needs it
+    if (sandbox_super_variant) {
+        return evalSandboxSuperCall<Lexical>(policy, self, rc, xsink);
+    }
+
     // the explicit type arguments of the call (qore#5818)
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
 
@@ -1272,6 +1280,27 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
             nullptr, nullptr, explicit_inst);
     }
     return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+template <bool Lexical>
+QoreValue SelfFunctionCallNode::evalSandboxSuperCall(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    // only the call of this variant on the object of the override, once (see QoreSandboxSuperCall)
+    QoreSandboxSuperCall sc;
+    sc.variant = sandbox_super_variant;
+    sc.self = self;
+    QoreSandboxSuperCallHelper super_call(sc);
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (runtime_arg_names) {
+        return execNamed(policy, self, method, method->getName(), nullptr, rc, xsink);
+    }
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, self,
+            getEvalTmpArgs(args_copy), nullptr, nullptr, nullptr, explicit_inst);
+    }
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, self, args, nullptr, nullptr,
+        nullptr, explicit_inst);
 }
 
 QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
@@ -1574,7 +1603,13 @@ int SelfFunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         return -1;
     }
 
-    // by here, if there are no errors, the class has been initialized
+    // by here, if there are no errors, the class has been initialized; an override's call of the version of a base
+    // class can select the variant that it overrides also if it is private, in the variant search of this call only
+    // (qore#6843)
+    sandbox_super_variant = method ? qore_class_private::parseGetSandboxSuperVariant(method, class_ctx) : nullptr;
+    QoreSandboxSuperCall sc;
+    sc.variant = sandbox_super_variant;
+    QoreSandboxSuperCallParseHelper super_call(static_cast<FunctionCallBase*>(this), sc);
     if (parseInitCall(val, parse_context) && !err) {
         err = -1;
     }
@@ -2242,6 +2277,12 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 err = -1;
             }
         }
+    } else if (variant && CONMV_const(variant)->isPrivate()
+            && qore_class_private::parseCheckSandboxPrivateAccess(loc, qore_class_private::get(*oc),
+                parse_get_class_priv(), "constructor", "constructor") && !err) {
+        // a class that sandboxed code declared cannot create an object with a private constructor of a class that
+        // trusted code declared (qore#6843)
+        err = -1;
     }
 
     //printd(5, "ScopedObjectCallNode::parseInitImpl() this: %p class: %s (%p) constructor: %p function: %p "

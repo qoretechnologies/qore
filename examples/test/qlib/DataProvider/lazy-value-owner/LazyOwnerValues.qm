@@ -1,0 +1,48 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyOwnerValues.qm - test module: a lazy value that only the module's own code reads (qore#6843)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyOwnerValues {
+    version = "1.0";
+    desc = "test module with a lazy value";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace LazyOwnerValues {
+public class LazyOwnerValues {
+    private:internal {
+        #! the ID of the value
+        static int id = DataProviderActionCatalog::registerLazyValue(\LazyOwnerValues::build());
+    }
+
+    #! the module's getter, which its callers use
+    static string getValue() {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
+    #! a closure of the module that reads the value, which its callers can run
+    static code getReader() {
+        return string sub () { return DataProviderActionCatalog::getLazyValue(id); };
+    }
+
+    #! runs the code of a caller: the module's code calls it, as a module that takes a callback does
+    static auto callBack(code c) {
+        return c();
+    }
+
+    #! the ID, for the tests of the refusals only
+    static int getIdForTest() {
+        return id;
+    }
+
+    static string build() {
+        return "owned";
+    }
+}
+}
