@@ -9,6 +9,11 @@
 %requires QUnit
 %requires Util
 %requires ../../TestInterpreter.qm
+
+%try-module process
+%define NoProcess
+%endtry
+
 %exec-class HashKeyHardeningTest
 
 #! The key map of a hash hardens itself against keys that share their hash (qore#7557)
@@ -25,6 +30,8 @@ class HashKeyHardeningTest inherits QUnit::Test {
         const MaxChain = 16;
         #! the key whose hash the inserted keys share
         const SharedKey = "shared";
+        #! the time limit of a child process
+        const ChildTimeout = 120s;
     }
 
     constructor() : QUnit::Test("hash key hardening", "1.0", \ARGV) {
@@ -33,6 +40,7 @@ class HashKeyHardeningTest inherits QUnit::Test {
         addTestCase("equality of hardened and other hashes", \equalityTest());
         addTestCase("keys that do not share hashes do not harden the key map", \normalKeysTest());
         addTestCase("hashes that are emptied and filled again", \emptiedTest());
+        addTestCase("the debug functions reject bad arguments", \debugFunctionArgumentTest());
         addTestCase("a hardening that cannot allocate changes nothing", \allocFailureTest());
         addTestCase("the keyed hash differs between processes", \processLayoutTest());
         addTestCase("threads harden their first hashes at once", \concurrentFirstHardeningTest());
@@ -133,7 +141,7 @@ class HashKeyHardeningTest inherits QUnit::Test {
         small.extra = 1;
         hash<auto> small_info = mapInfo(small);
         assertTrue(small_info.hardened, "a smaller copy of a hardened hash is hardened");
-        assertLt(mapInfo(h).buckets, small_info.buckets + 1, "the copy has no more buckets than the hash");
+        assertLt(mapInfo(h).buckets, small_info.buckets, "the copy has fewer buckets than the hash");
         assertLe(MaxChain, small_info.max_chain);
         for (int i = 3; i < N; i += 2) {
             assertEq(i, small{"k" + i}, "k" + i);
@@ -291,6 +299,25 @@ class HashKeyHardeningTest inherits QUnit::Test {
         assertEq(hh, hc);
     }
 
+    debugFunctionArgumentTest() {
+        requireDebug();
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_key_map_info", (1, 2)));
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_insert_with_hash_of", "x", "k", SharedKey,
+            1));
+        hash<auto> h = newHash();
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_insert_with_hash_of", h, "a\0b", SharedKey,
+            1));
+        insertShared(h, "k0", 0);
+        # a key that the hash has, found by its own hash or by the hash it was inserted with
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_insert_with_hash_of", h, "k0", SharedKey, 1));
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_insert_with_hash_of", h, "k0", "other", 1));
+        h.real = 1;
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_hash_insert_with_hash_of", h, "real", SharedKey,
+            1));
+        assertEq({"k0": 0, "real": 1}, h, "a rejected insert changes nothing");
+        assertEq(2, mapInfo(h).member_buckets.size());
+    }
+
     allocFailureTest() {
         requireDebug();
         hash<auto> h = newHash();
@@ -382,23 +409,43 @@ class HashKeyHardeningTest inherits QUnit::Test {
     }
 
     #! runs the Qore source \a src in a child process and returns its output; with the secret key \a key if given
+    #! runs \a src in a child interpreter, with QORE_DBG_HASH_KEY set to \a key if given, and returns its output
+    /** the child is ended if it does not finish within the time limit; its output goes to a file, which is complete
+        when the child has ended; the test is skipped without the process module, which bounds the run
+    */
     private string runChild(string src, *string key) {
-        string file = tmp_location() + DirSep + sprintf("hash-key-hardening-%d-%d.q", getpid(), ++child_count);
+%ifdef NoProcess
+        testSkip("the process module is required to run bounded child processes");
+        return "";
+%else
+        string base = tmp_location() + DirSep + sprintf("hash-key-hardening-%d-%d", getpid(), ++child_count);
+        string file = base + ".q";
+        string out_file = base + ".out";
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(src);
         f.close();
-        on_exit unlink(file);
-        string qore = TestInterpreter::qore_interpreter();
-        string env = "unset QORE_DBG_HASH_KEY; ";
-        if (key) {
-            env += sprintf("QORE_DBG_HASH_KEY=%s ", key);
+        on_exit {
+            unlink(file);
+            unlink(out_file);
         }
-        int rc;
-        string out = backquote(sprintf("%s'%s' '%s' 2>&1", env, replace(qore, "'", "'\\''"),
-            replace(file, "'", "'\\''")), \rc);
-        assertEq(0, rc, out);
+        hash<auto> env = ENV - "QORE_DBG_HASH_KEY";
+        if (key) {
+            env.QORE_DBG_HASH_KEY = key;
+        }
+        # the shell is replaced by the interpreter (exec), so that ending the process ends the interpreter
+        Process p("/bin/sh", ("-c", "exec \"$0\" \"$1\" > \"$2\" 2>&1", TestInterpreter::qore_interpreter(), file,
+            out_file), {"env": env});
+        bool done = p.wait(ChildTimeout);
+        if (!done) {
+            p.terminate();
+            p.wait();
+        }
+        string out = ReadOnlyFile::readTextFile(out_file) ?? "";
+        assertTrue(done, "the child process finished within the time limit");
+        assertEq(0, p.exitCode(), out);
         return out;
+%endif
     }
 
     #! returns a new hash made at run time, which has no other reference

@@ -32036,6 +32036,29 @@ static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, Runt
     @param hash_key the key whose hash value the member gets
     @param value the value of the new member
 */
+//! true while this thread's dbg_hash_insert_with_hash_of() inserts its member
+static thread_local bool dbg_hash_foreign_member_hash = false;
+
+bool qore_dbg_hash_foreign_member_hash() {
+    return dbg_hash_foreign_member_hash;
+}
+
+//! sets dbg_hash_foreign_member_hash for its scope, also when an exception leaves it
+class DbgForeignMemberHashHelper {
+public:
+    DLLLOCAL DbgForeignMemberHashHelper() {
+        assert(!dbg_hash_foreign_member_hash);
+        dbg_hash_foreign_member_hash = true;
+    }
+
+    DLLLOCAL ~DbgForeignMemberHashHelper() {
+        dbg_hash_foreign_member_hash = false;
+    }
+
+    DbgForeignMemberHashHelper(const DbgForeignMemberHashHelper&) = delete;
+    DbgForeignMemberHashHelper& operator=(const DbgForeignMemberHashHelper&) = delete;
+};
+
 static QoreValue f_dbg_hash_insert_with_hash_of(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     QoreHashNode* h = const_cast<QoreHashNode*>(dbg_hash_param(params, xsink));
@@ -32052,13 +32075,20 @@ static QoreValue f_dbg_hash_insert_with_hash_of(const QoreListNode* params, Runt
     }
     qore_hash_private* hp = qore_hash_private::get(*h);
     size_t hash = qore_hash_lookup_key::hashBytes(hash_key->c_str(), hash_key->size());
-    if (hp->findMember(qore_hash_lookup_key(key->c_str(), key->size()))
-            || hp->findMember(qore_hash_lookup_key(key->c_str(), key->size(), hash,
-                qore_hash_lookup_key::stored_hash_t()))) {
-        xsink->raiseException("DBG-ARGUMENT-ERROR", "the hash already has key '%s'", key->c_str());
-        return QoreValue();
+    // the members of the hash may have been inserted with the hashes of other keys, so that a search by a hash
+    // could miss one; the keys are compared one by one
+    for (const HashMember* om : hp->member_list) {
+        if (om->key.size() == key->size() && !memcmp(om->key.data(), key->c_str(), key->size())) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the hash already has key '%s'", key->c_str());
+            return QoreValue();
+        }
     }
-    HashMember* m = hp->addMemberKnownAbsent(new HashMember(std::string(key->c_str(), key->size()), hash));
+    HashMember* m;
+    {
+        // the member is inserted with the hash of another key, which addMemberKnownAbsent() asserts otherwise
+        DbgForeignMemberHashHelper foreign_hash;
+        m = hp->addMemberKnownAbsent(new HashMember(std::string(key->c_str(), key->size()), hash));
+    }
     hp->setNewMemberValue(m, get_param_value(params, 3).refSelf());
     return QoreValue();
 }

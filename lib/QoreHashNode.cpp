@@ -238,6 +238,12 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
     assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+#ifdef DEBUG
+    // a member stores the unseeded hash of its key (qore#7557), also when it is created with a hash computed before
+    // the run (JIT and AOT keys); only the test function dbg_hash_insert_with_hash_of() stores another
+    assert(m->hash == qore_hash_member_map::hashOf(m->key.data(), m->key.size())
+        || qore_dbg_hash_foreign_member_hash());
+#endif
     // only the key map can fail to take the member (when its buckets grow); the member is deleted then
     std::unique_ptr<HashMember> holder(m);
     hm.insert(m);
@@ -253,6 +259,10 @@ HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
 static_assert(sizeof(void*) != 8 || sizeof(qore_hash_member_map) == 24, "the key map of a hash must stay 24 bytes");
 
 void qore_hash_member_map::reserve(size_t n) {
+    // a map has at most MaxBuckets buckets and members; tested first, so that bucketsFor() is never given more
+    if (n > MaxBuckets) {
+        throw std::bad_alloc();
+    }
     if (n > bucket_count()) {
         size_t b = bucketsFor(n);
         if (!buckets) {
@@ -284,7 +294,8 @@ std::atomic<bool> qore_hash_process_key_ready{false};
 //! serializes the creation of the key
 std::mutex qore_hash_process_key_lock;
 
-//! fills \a buf with \a len random bytes from the operating system, or from OpenSSL's generator if that fails
+//! fills \a buf with \a len random bytes from the operating system, or from OpenSSL's generator if that fails or
+//! (Linux) the kernel's pool is not ready yet
 /** @throw std::runtime_error if no source of random bytes works; the key is then not created, and a later
     hardening tries again
 */
@@ -297,7 +308,8 @@ void qore_hash_random_bytes(unsigned char* buf, size_t len) {
 #if defined(__linux__)
     size_t done = 0;
     while (done < len) {
-        ssize_t rc = getrandom(buf + done, len - done, 0);
+        // not blocking: before the kernel's pool is ready (early in a boot), OpenSSL's generator gives the bytes
+        ssize_t rc = getrandom(buf + done, len - done, GRND_NONBLOCK);
         if (rc < 0) {
             if (errno == EINTR) {
                 continue;

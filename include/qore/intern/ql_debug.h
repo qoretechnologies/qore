@@ -348,6 +348,10 @@ DLLLOCAL bool qore_dbg_binary_reserve_must_fail(size_t size);
 //! fail (qore#7557); armed by dbg_fail_hash_harden_alloc()
 DLLLOCAL bool qore_dbg_hash_harden_alloc_must_fail();
 
+//! returns true while dbg_hash_insert_with_hash_of() inserts a member whose stored hash is not the hash of its key
+//! (qore#7557), so that qore_hash_private::addMemberKnownAbsent() does not assert that it is
+DLLLOCAL bool qore_dbg_hash_foreign_member_hash();
+
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);
 

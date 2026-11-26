@@ -371,11 +371,15 @@ public:
                 insertSlow(m);
                 return;
             }
-            if (buckets && count <= mask) {
+            if (buckets && !count) {
+                // a map that had its members removed: all its chains are empty
                 limit = mask + 1;
-            } else {
-                grow();
+                m->bucket_next = nullptr;
+                buckets[m->hash & mask] = m;
+                count = 1;
+                return;
             }
+            grow();
         }
         HashMember*& b = buckets[m->hash & mask];
         HashMember* first = b;
@@ -395,8 +399,8 @@ public:
     //! the member in that map (qore#7557); throws std::bad_alloc, with nothing changed, if the bucket array cannot
     //! grow
     DLLLOCAL void insertCopy(HashMember* m) {
-        // the map has buckets and is not hardened (reserveForCopy())
-        assert(buckets && !isHardened());
+        // the map has buckets, is not hardened and has its insert limit (reserveForCopy() reserved the buckets)
+        assert(buckets && !isHardened() && getLimit());
         if (count > mask) {
             grow();
         }
@@ -471,10 +475,9 @@ public:
     //! returns the length of the longest chain of a bucket (for debug functions)
     DLLLOCAL size_t maxChain() const;
 
-    //! the largest number of buckets, and so of members: the mask and the insert limit are 32 bits wide, so that the
-    //! map is as large as before qore#7557, when the mask took 64 bits, and so is a hash; the limit, which is the
-    //! number of buckets of a map that is not hardened, is never 0 then (MaxBuckets members need far more memory
-    //! than any host has)
+    //! the largest number of buckets, and so of members (2^31): the mask and the insert limit are 32 bits wide, so
+    //! that the map is as large as before qore#7557, when the mask took 64 bits, and so is a hash; an insert or a
+    //! reserve beyond it throws std::bad_alloc (documented in @ref hash_max_size)
     static constexpr size_t MaxBuckets = static_cast<size_t>(1) << 31;
 
 private:
