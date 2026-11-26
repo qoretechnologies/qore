@@ -725,7 +725,7 @@ public:
     DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
 
     //! Throws a QoreStandardException (\c RUNTIME-DECLARATION-ERROR) if the signature of a builtin variant that is
-    //! added to a namespace that no Program owns, or to a function shared with one, names a mortal declaration
+    //! added to a namespace that no Program owns names a mortal declaration
     //! (qore#7680)
     DLLLOCAL void checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);

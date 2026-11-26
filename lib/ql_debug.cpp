@@ -710,8 +710,10 @@ static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, Exce
     - kind 2: adds the class DbgRtQOne and the hashdecl DbgRtQOneHash one at a time to DbgRtQ (kind 1 first), naming
       DbgRtClass as kind 1 does
     - kind 3: adds the variant dbg_rt_shared(*DbgRtClass) to Q's copy of the function Qore::dbg_rt_shared(), which the
-      static system namespace shares with every Program: refused (\c RUNTIME-DECLARATION-ERROR)
-    - kind 8: as kind 3, adding the variant to the static system namespace itself
+      static system namespace shares with every Program: Q gets its own copy of the function (copy on write,
+      qore#7588), and the variant is Q's
+    - kind 8: as kind 3, adding the variant to the static system namespace itself: refused (\c
+      RUNTIME-DECLARATION-ERROR)
     - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
     - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
       each other's types (\a src needs no namespace of its own)
