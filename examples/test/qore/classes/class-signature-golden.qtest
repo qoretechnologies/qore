@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ClassSignatureGoldenTest
+
+#! pins the strings that the signature hashes of user classes are computed from (qore#7397)
+/** The signature hash of a class (qore_class_private::initializeIntern() and parseCommit() in lib/QoreClass.cpp, from
+    the namespace path of the class, its parent classes, the signatures of its method variants, its members, static
+    variables and constants, with the names of their types) identifies the class across Programs, and AOT images store
+    it in their CLASSES records: an image whose hashes were computed from other strings than the reader's has classes
+    that are not the types of the reader's classes of the same declarations.  A change in these strings, in their
+    format or in the names of types (QoreTypeInfo, namespace paths), therefore needs a new AOT binary format version.
+
+    This test compares the strings and the hashes of the classes of class-signature-golden/classes.q with
+    class-signature-golden/class-signature-golden.expected; they are read with the debug hook dbg_class_signature(),
+    so the test is skipped by a library built without it.  It also checks that the methods are in the signatures in
+    the order of their names (qore#7458).  QORE_UPDATE_CLASS_SIGNATURE_GOLDEN=1 rewrites the expected
+    file instead.
+*/
+class ClassSignatureGoldenTest inherits QUnit::Test {
+    private {
+        string dir = get_script_dir() + "/class-signature-golden";
+        string golden = dir + "/class-signature-golden.expected";
+
+        const BumpMessage = "the strings that class signature hashes are computed from changed (lib/QoreClass.cpp: "
+            "initializeIntern(), parseCommit(), do_sig(), do_variant_sig(), or the names of types or namespace "
+            "paths).  AOT images store class signature hashes, so this change needs a new AOT binary format version: "
+            "bump QORE_AOT_BINARY_VERSION and QORE_AOT_BINARY_MIN_VERSION in include/qore/intern/QoreAOTBinary.h "
+            "(with a history entry), then update examples/test/qore/classes/class-signature-golden/"
+            "class-signature-golden.expected deliberately (QORE_UPDATE_CLASS_SIGNATURE_GOLDEN=1 qore "
+            "class-signature-golden.qtest rewrites it)";
+    }
+
+    constructor() : QUnit::Test("ClassSignatureGolden", "1.0", \ARGV) {
+        addTestCase("class signature strings and hashes", \goldenTest());
+        set_return_value(main());
+    }
+
+    goldenTest() {
+        if (!exists_function("dbg_class_signature")) {
+            testSkip("the library has no dbg_class_signature() debug hook");
+        }
+
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        string file = dir + "/classes.q";
+        pgm.parse(ReadOnlyFile::readTextFile(file), file);
+        list<hash<auto>> sigs = pgm.callFunction("get_signatures");
+        # the methods are in the signature in the order of their names, not in that of the method map (qore#7458)
+        foreach hash<auto> sig in (sigs) {
+            assertEq(Qore::NOTHING, unsortedMethod(sig.parts), sig.path + ": methods in the order of their names");
+        }
+        string actual = format(sigs);
+
+        if (ENV.QORE_UPDATE_CLASS_SIGNATURE_GOLDEN == "1") {
+            File f();
+            f.open2(golden, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(actual);
+            printf("wrote %s\n", golden);
+            return;
+        }
+
+        string expected = ReadOnlyFile::readTextFile(golden);
+        if (actual != expected) {
+            printf("%s\n", diff(actual));
+        }
+        assertTrue(actual == expected, BumpMessage);
+    }
+
+    #! returns a unified diff of the expected and the actual text, or the differing lines without diff(1)
+    string diff(string actual) {
+        TmpDir tmp("class-signature-golden");
+        string actual_file = tmp.path + "/actual";
+        {
+            File f();
+            f.open2(actual_file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(actual);
+        }
+        int rc;
+        string out = backquote(sprintf("diff -u '%s' '%s' 2>&1", golden, actual_file), \rc);
+        if (rc == 1) {
+            return out;
+        }
+        return lineDiff(ReadOnlyFile::readTextFile(golden), actual);
+    }
+
+    #! returns the first method line of a signature that is not in the order of the method names, if any
+    /** The non-static methods come first, then the static methods; the variants of a method are in the order of
+        their declarations
+    */
+    static *string unsortedMethod(list<string> parts) {
+        hash<string, string> last = {};
+        foreach string part in (parts) {
+            foreach string line in (part.split("\n")) {
+                *list<*string> m = (line =~ x/^(?:abstract )?(?:pub|priv|int) (static )?(\w+)\(/);
+                if (!m) {
+                    continue;
+                }
+                string kind = m[0] ? "static" : "normal";
+                if (kind == "normal" && last.static) {
+                    return line;
+                }
+                if (exists last{kind} && m[1] < last{kind}) {
+                    return line;
+                }
+                last{kind} = m[1];
+            }
+        }
+    }
+
+    #! returns the golden text of the signatures
+    static string format(list<hash<auto>> sigs) {
+        string rv = "";
+        foreach hash<auto> sig in (sigs) {
+            rv += sprintf("=== %s\nhash %s\n", sig.path, sig.hash ?? "<none>");
+            int n = 0;
+            foreach string part in (sig.parts) {
+                rv += sprintf("--- part %d\n", ++n);
+                bool nl = part =~ /\n$/;
+                # the text is for reading; the hash pins every byte of it
+                foreach string line in ((nl ? part.substr(0, -1) : part).split("\n")) {
+                    rv += "  " + line + "\n";
+                }
+                if (!nl) {
+                    rv += "\\ no newline at the end of the part\n";
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! returns the lines of the expected and the actual text that differ
+    static string lineDiff(string expected, string actual) {
+        list<string> el = expected.split("\n");
+        list<string> al = actual.split("\n");
+        string rv = "";
+        int n = max(el.size(), al.size());
+        for (int i = 0; i < n; ++i) {
+            *string e = el[i];
+            *string a = al[i];
+            if (e != a) {
+                rv += sprintf("line %d:\n- %s\n+ %s\n", i + 1, e ?? "<end of file>", a ?? "<end of file>");
+            }
+        }
+        return rv;
+    }
+}

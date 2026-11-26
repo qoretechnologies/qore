@@ -2,7 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-# a reference element is bound while the assignment holds the lock of the referenced lvalue (qore#7380)
+# a reference element of a value stored into a locked lvalue is bound after the store has released the lock, also
+# when the referenced lvalue is guarded by the same lock (qore#7380, qore#7391)
 
 %modern
 %allow-weak-references
@@ -58,13 +59,13 @@ class Notified {
     public {
         auto b = 1;
         list<reference<softint>> s;
-        int notifications = 0;
+        list<string> notified = ();
     }
 
     memberNotification(string member) {
         # reads the object: this must not run under the lock of the assignment
         auto v = self.b;
-        ++notifications;
+        notified += member;
     }
 }
 
@@ -108,14 +109,142 @@ class ChainOuter {
     }
 }
 
+class LocalTarget {
+    public {
+        auto b = "6";
+        list<reference<softint>> s;
+    }
+}
+
 hashdecl H {
     auto b;
     list<reference<softint>> s;
 }
 
+# the targets of the operations that store values into a container (qore#7391)
+class Ops {
+    public {
+        auto v = "1";
+        auto w = "x";
+        list<reference<softint>> l = ();
+        list<reference<softint>> lv = ();
+        list<reference<softint>> lw = ();
+        list<list<reference<softint>>> ll = ();
+        hash<string, reference<softint>> h = {};
+        *hash<string, reference<softint>> nh;
+        hash<string, list<reference<softint>>> hl = {};
+        hash<string, hash<string, list<reference<int>>>> hh = {};
+    }
+}
+
+class OpsHolder {
+    public {
+        Ops o();
+    }
+}
+
+# the target of the stores whose path has keys with side effects (qore#7391)
+class KeyOps {
+    public {
+        auto v = "1";
+        hash<string, list<list<reference<softint>>>> h = {};
+        hash<string, list<reference<softint>>> hr = {};
+    }
+
+    constructor() {
+        list<reference<softint>> e = ();
+        list<list<reference<softint>>> l = (e,);
+        h.a = l;
+        list<reference<softint>> er = ();
+        hr.a = er;
+    }
+}
+
+# an object whose member holds a weak reference to a list (qore#7391)
+class WeakListHolder {
+    public {
+        auto wl;
+        auto s = "5";
+    }
+}
+
+# an object whose members += merges into a hash
+class Src {
+    public {
+        auto a;
+        auto b;
+    }
+}
+
+# a hashdecl whose member initializer binds a reference argument (qore#7391)
+hashdecl M3 {
+    int a = m3_init(\g_m3v);
+    list<reference<softint>> s;
+}
+
+class M3Holder {
+    public {
+        auto v = "2";
+        *hash<M3> h;
+    }
+}
+
 our hash<H> g_h = cast<hash<H>>({"b": 5});
 our hash<H> g_conv = cast<hash<H>>({"b": "5"});
 our auto g_anc;
+our hash<H> g_lref = cast<hash<H>>({"b": "9"});
+# the number of calls of k()
+our int g_k = 0;
+# the number of calls of g()
+our int g_g = 0;
+# the number of calls of m3_init(), and the variable whose reference it is given
+our int g_m3 = 0;
+our auto g_m3v = "5";
+
+# a debug build raises DBG-REFERENCE-BIND-HELD for a bind made with an lvalue write lock held, which a store path that
+# still binds a reference under its lock would make: the output of that store then shows the error (qore#7391); a
+# qcc executable has no debug functions
+if (exists_function("dbg_reference_bind_strict")) {
+    call_function("dbg_reference_bind_strict", True);
+}
+
+# a key whose evaluation is counted
+string sub k() {
+    ++g_k;
+    return "a";
+}
+
+# a value whose evaluation is counted
+auto sub g() {
+    ++g_g;
+    return 2;
+}
+
+# assigns to NOTHING, which changes nothing and gives NOTHING; the value is evaluated (qore#7391)
+auto sub assign_nothing() {
+    return NOTHING = g();
+}
+
+# the initializer of hashdecl M3
+int sub m3_init(reference<softint> r) {
+    ++g_m3;
+    return r;
+}
+
+# stores a value through a typed reference held by a local variable (a parameter)
+sub store_typed_ref(reference<list<reference<softint>>> r, list<auto> v) {
+    r = v;
+}
+
+# stores a value through a reference held by an untyped local variable (a parameter)
+sub store_untyped_ref(auto r, list<auto> v) {
+    r = v;
+}
+
+# stores a value whose element the referenced lvalue refuses through a reference held by a local variable
+sub store_int_ref(reference<list<reference<int>>> r, list<auto> v) {
+    r = v;
+}
 
 sub show(string label, code c) {
     try {
@@ -135,18 +264,14 @@ show("member of the same object", auto sub () {
     return (c.a.fullType(), c.b);
 });
 
-# a value that would have to be converted cannot be written under the lock: the target and the value stay as they were
+# a value that has to be converted is converted and written back after the lock has been released
 show("member that needs a conversion", auto sub () {
     C c();
     c.b = "7";
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.s, c.b.type(), c.b);
-    }
-    return "no exception";
+    c.s = x;
+    return (c.s.fullType(), c.b.type(), c.b);
 });
 
 # a value that the element type rejects leaves the target as it was
@@ -207,26 +332,19 @@ show("global variable", auto sub () {
 show("global variable that needs a conversion", auto sub () {
     list<auto> i = (\g_conv.b,);
     auto x = i;
-    try {
-        g_conv.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, g_conv.s, g_conv.b.type(), g_conv.b);
-    }
-    return "no exception";
+    g_conv.s = x;
+    return (g_conv.s.fullType(), g_conv.b.type(), g_conv.b);
 });
 
-# the referenced lvalue contains the target: a conversion would replace the container that the assignment writes to
+# the referenced lvalue contains the target: the bind converts the container that the assignment writes to, and the
+# store resolves its target again in the converted container
 show("reference to an ancestor of the target", auto sub () {
     hash<string, *list<reference<hash<string, *list<auto>>>>> t = {"k": NOTHING};
     g_anc = t;
     list<auto> i = (\g_anc,);
     auto x = i;
-    try {
-        g_anc.k = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, g_anc.k, g_anc.fullType());
-    }
-    return g_anc.k.fullType();
+    g_anc.k = x;
+    return (g_anc.k.fullType(), g_anc.fullType());
 });
 
 # an element of the same closure-bound variable
@@ -268,22 +386,19 @@ show("member holding an object of a recursive set", auto sub () {
     return rv;
 });
 
-# a path through another object from the object being assigned: a shared container stays as it is
+# a path through another object from the object being assigned: the converted value is written to a copy of the
+# shared container, which stays as it is
 show("path through another object with a shared container", auto sub () {
     ChainOuter c();
     c.o.h = {"k": "5"};
     hash<auto> saved = c.o.h;
     list<auto> i = (\c.o.h.k,);
     auto x = i;
-    try {
-        c.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.s, saved.k.type(), c.o.h.k.type());
-    }
-    return "no exception";
+    c.s = x;
+    return (c.s.fullType(), saved.k.type(), saved.k, c.o.h.k.type(), c.o.h.k);
 });
 
-# the same path in a recursive set, with a value that would be copied: no scan runs under the lock
+# the same path in a recursive set, with a value that is copied to be converted
 show("path through another object in a recursive set", auto sub () {
     ChainOuter c();
     ChainInner o = c.o;
@@ -292,12 +407,12 @@ show("path through another object in a recursive set", auto sub () {
     o.m = objs;
     list<auto> i = (\c.o.m,);
     auto x = i;
-    string rv;
+    list<auto> rv;
     try {
         c.l = x;
-        rv = c.l.fullType();
+        rv = (c.l.fullType(), o.m.fullType(), o.m[0] == c);
     } catch (hash<ExceptionInfo> ex) {
-        rv = ex.err;
+        rv = (ex.err,);
     }
     # breaks the cycle
     remove o.back;
@@ -329,21 +444,18 @@ show("object of a subclass", auto sub () {
     return c.o.fullType();
 });
 
-# an enum value would be converted to its base value
+# an enum value is converted to its base value
 show("enum value", auto sub () {
     TypedHolder c();
     c.b = BindEnumOne;
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.i = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.i);
-    }
-    return "no exception";
+    c.i = x;
+    return (c.i.fullType(), c.b.type(), c.b);
 });
 
-# a list whose element type is wider than the type of the reference, holding a value that the reference does not accept
+# a list whose element type is wider than the type of the reference, holding a value that the reference does not accept:
+# the target and the referenced value stay as they were
 show("list with a wider element type", auto sub () {
     TypedHolder c();
     list<*int> v = (1, NOTHING);
@@ -353,7 +465,7 @@ show("list with a wider element type", auto sub () {
     try {
         c.l = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.l);
+        return (ex.err, c.l, c.b.fullType(), c.b);
     }
     return "no exception";
 });
@@ -377,7 +489,7 @@ show("relative date for an absolute date", auto sub () {
     try {
         c.d = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.d);
+        return (ex.err, c.d, is_date_relative(c.b));
     }
     return c.d.fullType();
 });
@@ -391,7 +503,7 @@ show("list of relative dates for a list of absolute dates", auto sub () {
     try {
         c.ld = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.ld);
+        return (ex.err, c.ld, c.b.fullType(), is_date_relative(c.b[0]));
     }
     return c.ld.fullType();
 });
@@ -401,12 +513,9 @@ show("object for a soft list", auto sub () {
     c.b = new BaseValue();
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.sl = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.sl);
-    }
-    return c.sl.fullType();
+    c.sl = x;
+    # the object is converted to a list holding it
+    return (c.sl.fullType(), c.b.fullType(), c.b[0] instanceof BaseValue);
 });
 
 show("deleted object", auto sub () {
@@ -416,10 +525,11 @@ show("deleted object", auto sub () {
     delete d;
     list<auto> i = (\c.b,);
     auto x = i;
+    # a deleted object is no value, which the object type does not accept
     try {
         c.obj = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.obj);
+        return (ex.err, c.obj, type(c.b), c.b instanceof BaseValue);
     }
     return c.obj.fullType();
 });
@@ -430,10 +540,12 @@ show("weak reference to a list", auto sub () {
     c.b := v;
     list<auto> i = (\c.b,);
     auto x = i;
+    # the type would convert the list to a new list, which the weak reference does not designate: the bind is
+    # refused, nothing is stored, and the weak reference and the list it refers to stay as they are (qore#7433)
     try {
         c.lsi = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.lsi);
+        return (ex.err, c.lsi, c.b, v.fullType(), v);
     }
     return c.lsi.fullType();
 });
@@ -447,7 +559,7 @@ show("weak reference to a plain list", auto sub () {
     try {
         c.plain_list = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.plain_list);
+        return (ex.err, c.plain_list, c.b[0]);
     }
     return c.plain_list.fullType();
 });
@@ -461,7 +573,7 @@ show("weak reference to a plain hash", auto sub () {
     try {
         c.plain_hash = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.plain_hash);
+        return (ex.err, c.plain_hash, c.b.a);
     }
     return c.plain_hash.fullType();
 });
@@ -481,19 +593,16 @@ show("reference held in the referenced lvalue", auto sub () {
     return c.a.fullType();
 });
 
-# a member notification of the same object cannot run under the lock: the assignment is refused and changes nothing
+# the member notifications of the same object run after the lock has been released: one for the member written back by
+# the bind and one for the target; the round of the store that was not made adds none ("b" is first notified by the
+# assignment of 4)
 show("member notification of the same object", auto sub () {
     Notified n();
     n.b = 4;
-    int before = n.notifications;
     list<auto> i = (\n.b,);
     auto x = i;
-    try {
-        n.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, n.s, n.b, n.notifications - before);
-    }
-    return "no exception";
+    n.s = x;
+    return (n.s.fullType(), n.b.type(), n.b, n.notified);
 });
 
 # a member notification of another object runs as usual
@@ -504,4 +613,469 @@ show("member notification of another object", auto sub () {
     auto x = i;
     c.s = x;
     return (o.b.type(), o.b, o.notifications > 0);
+});
+
+# a local variable that holds a reference to a member of an object stores a value whose element refers to another
+# member of the same object (qore#7391)
+show("local reference to a member of the same object", auto sub () {
+    LocalTarget t();
+    list<auto> v = (\t.b,);
+    store_typed_ref(\t.s, v);
+    return (t.s.fullType(), t.b.type(), t.b);
+});
+
+show("untyped local reference to a member of the same object", auto sub () {
+    LocalTarget t();
+    list<auto> v = (\t.b,);
+    store_untyped_ref(\t.s, v);
+    return (t.s.fullType(), t.b.type(), t.b);
+});
+
+show("local reference to a member of another object", auto sub () {
+    LocalTarget t();
+    Other o();
+    o.b = "3";
+    list<auto> v = (\o.b,);
+    store_typed_ref(\t.s, v);
+    return (t.s.fullType(), o.b.type(), o.b, t.b);
+});
+
+show("local reference to a global variable", auto sub () {
+    list<auto> v = (\g_lref.b,);
+    store_typed_ref(\g_lref.s, v);
+    return (g_lref.s.fullType(), g_lref.b.type(), g_lref.b);
+});
+
+show("local reference to a closure-bound variable", auto sub () {
+    hash<H> h = cast<hash<H>>({"b": "4"});
+    code get = auto sub () { return h.b; };
+    list<auto> v = (\h.b,);
+    store_typed_ref(\h.s, v);
+    return (h.s.fullType(), h.b.type(), get());
+});
+
+# the referenced value is refused: the target and the referenced value stay as they were
+show("local reference with a refused element", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> v = (\c.b,);
+    try {
+        store_int_ref(\c.a, v);
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.a, c.b);
+    }
+    return "no exception";
+});
+
+# the variable of a foreach loop is given a reference by the first element; the second element is assigned through it
+show("foreach variable holding a reference", auto sub () {
+    LocalTarget t();
+    t.b = "5";
+    list<auto> elems = (\t.s, (\t.b,));
+    int n = 0;
+    foreach auto e in (elems) {
+        ++n;
+    }
+    return (n, t.s.fullType(), t.b.type(), t.b);
+});
+
+# a cast binds the reference elements of the list it converts: the referenced value is converted (qore#7377, qore#7391)
+show("cast to a list of references to int", auto sub () {
+    C c();
+    c.b = BindEnumOne;
+    list<auto> x = (\c.b,);
+    auto l = cast<list<reference<int>>>(x);
+    return (l.fullType(), c.b.type(), c.b);
+});
+
+show("cast to a list of references to int refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> x = (\c.b,);
+    try {
+        auto l = cast<list<reference<int>>>(x);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
+});
+
+show("nested cast to references to softint", auto sub () {
+    C c();
+    c.b = "7";
+    list<auto> inner = (\c.b,);
+    list<list<auto>> nested = (inner,);
+    auto l = cast<list<list<reference<softint>>>>(nested);
+    return (l.fullType(), c.b.type(), c.b);
+});
+
+show("nested cast to references to int refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> inner = (\c.b,);
+    list<list<auto>> nested = (inner,);
+    try {
+        auto l = cast<list<list<reference<int>>>>(nested);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
+});
+
+# a reference element given to a soft list element type is bound before it is wrapped in a list
+show("soft list element", auto sub () {
+    C c();
+    c.b = "8";
+    list<auto> outer = (\c.b,);
+    auto l = cast<list<softlist<reference<softint>>>>(outer);
+    return (l.fullType(), l[0].fullType(), c.b.type(), c.b);
+});
+
+show("soft list element refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> outer = (\c.b,);
+    try {
+        auto l = cast<list<softlist<reference<int>>>>(outer);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
+});
+
+# push binds the reference elements of the value with no lock held: one refers to the target's own object, one to
+# another object (qore#7391)
+show("push into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "2";
+    push o.l, \o.v;
+    push o.l, \p.v;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    # breaks the cycle
+    o.l = ();
+    return rv;
+});
+
+show("unshift into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "3";
+    p.v = "4";
+    unshift o.l, \o.w;
+    unshift o.l, \p.v;
+    # the first element refers to p.v
+    o.l[0] = 40;
+    list<auto> rv = (o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("splice into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "5";
+    p.v = "6";
+    push o.l, \o.v;
+    list<auto> rep = (\o.w, \p.v);
+    splice o.l, 0, 1, rep;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("extract from a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "7";
+    p.v = "8";
+    push o.l, \o.v;
+    list<auto> rep = (\o.w, \p.v);
+    auto removed = extract o.l, 0, 1, rep;
+    list<auto> rv = (removed.size(), o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("+= on a member list", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "9";
+    o.l += \o.v;
+    list<auto> add = (\p.v,);
+    o.l += add;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("hash += hash", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "10";
+    hash<auto> add = {"a": \o.v, "b": \p.v};
+    o.h += add;
+    list<auto> rv = (o.h.fullType(), o.h.keys(), o.v.type(), o.v, p.v.type(), p.v);
+    o.h = {};
+    return rv;
+});
+
+# the members of the object are checked as those of a hash before the hash is changed
+show("hash += object", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "11";
+    Src s();
+    s.a = \o.v;
+    s.b = \p.v;
+    o.h += s;
+    list<auto> rv = (o.h.fullType(), o.h.keys(), o.v.type(), o.v, p.v.type(), p.v);
+    o.h = {};
+    return rv;
+});
+
+# the lvalue has no value: += assigns it a hash first, after the members have been checked
+show("*hash += object", auto sub () {
+    Ops o();
+    o.w = "12";
+    Src s();
+    s.a = \o.v;
+    s.b = \o.w;
+    o.nh += s;
+    list<auto> rv = (o.nh.fullType(), o.nh.keys(), o.v.type(), o.v, o.w.type(), o.w);
+    remove o.nh;
+    return rv;
+});
+
+show("list assignment", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "13";
+    p.v = "14";
+    list<auto> a = (\o.w,);
+    list<auto> b = (\p.v,);
+    (o.lv, o.lw) = (a, b);
+    list<auto> rv = (o.lv.fullType(), o.lw.fullType(), o.w.type(), o.w, p.v.type(), p.v);
+    o.lv = ();
+    o.lw = ();
+    return rv;
+});
+
+show("object merge", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "15";
+    hash<auto> add = {"l": (\o.v, \p.v)};
+    o += add;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+# the object is the value of a member: the merge is made after the lock of that member has been released
+show("object merge through a member", auto sub () {
+    OpsHolder hd();
+    hash<auto> add = {"l": (\hd.o.v,)};
+    hd.o += add;
+    list<auto> rv = (hd.o.l.fullType(), hd.o.v.type(), hd.o.v);
+    hd.o.l = ();
+    return rv;
+});
+
+# the list is written back to the member after the loop
+show("foreach reference loop", auto sub () {
+    Ops o();
+    o.w = "16";
+    list<auto> init = ((\o.v,),);
+    o.ll = init;
+    foreach list<auto> e in (\o.ll) {
+        e += (\o.w,);
+    }
+    list<auto> rv = (o.ll.fullType(), o.ll[0].size(), o.v.type(), o.v, o.w.type(), o.w);
+    o.ll = ();
+    return rv;
+});
+
+# the keys of the path of a store that is made again are evaluated once
+show("key evaluated once", auto sub () {
+    g_k = 0;
+    Ops o();
+    list<auto> x = (\o.v,);
+    o.hl{k()} = x;
+    list<auto> rv = (g_k, o.hl.keys(), o.hl.a.fullType(), o.v.type(), o.v);
+    o.hl = {};
+    return rv;
+});
+
+show("index evaluated once", auto sub () {
+    Ops o();
+    int i = 0;
+    list<auto> x = (\o.v,);
+    o.ll[i++] = x;
+    list<auto> rv = (i, o.ll.size(), o.v.type(), o.v);
+    o.ll = ();
+    return rv;
+});
+
+# a local variable that holds a reference with a key: the key was evaluated when the reference was made
+show("local reference with a key", auto sub () {
+    g_k = 0;
+    Ops o();
+    list<auto> x = (\o.v,);
+    store_untyped_ref(\o.hl{k()}, x);
+    list<auto> rv = (g_k, o.hl.keys(), o.v.type(), o.v);
+    o.hl = {};
+    return rv;
+});
+
+# the containers created to reach the target of a store that is refused are removed again
+show("refused store with created containers", auto sub () {
+    Ops o();
+    list<auto> x = (\o.w,);
+    try {
+        o.hh.k1.k2 = x;
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, o.hh.size(), o.w);
+    }
+    return "no exception";
+});
+
+# an assignment does not convert a hash to a hashdecl: the store of a hash into a hashdecl member is refused without
+# running the hashdecl's member initializers under the lock of the store
+show("hash for a hashdecl member", auto sub () {
+    M3Holder m();
+    auto src = {"s": (\m.v,)};
+    try {
+        m.h = src;
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, g_m3, g_m3v.type(), m.v.type(), exists m.h);
+    }
+    return "no exception";
+});
+
+# a cast converts a hash to a hashdecl with no lock held: the initializer of a hashdecl member binds its reference, and
+# the reference elements of the hash are bound
+show("hashdecl initializer binding a reference in a cast", auto sub () {
+    M3Holder m();
+    auto src = {"s": (\m.v,)};
+    hash<M3> h = cast<hash<M3>>(src);
+    return (h.a, g_m3, g_m3v.type(), m.v.type(), m.v);
+});
+
+# a store that is made again after its reference elements have been bound, whose path has a key and an index with side
+# effects: they are evaluated once, by each store site (qore#7391)
+show("push with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    push o.h{k()}[i++], \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    # breaks the cycle
+    o.h = {};
+    return rv;
+});
+
+show("unshift with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    unshift o.h{k()}[i++], \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("splice with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    list<auto> rep = (\o.v,);
+    splice o.h{k()}[i++], 0, 0, rep;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("extract with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    list<auto> rep = (\o.v,);
+    auto removed = extract o.h{k()}[i++], 0, 0, rep;
+    list<auto> rv = (removed.size(), g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("+= with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    o.h{k()}[i++] += \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# the operand of a weak assignment is held before the keys of its path are evaluated
+show(":= with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    o.hr{k()}[i++] := \o.v;
+    list<auto> rv = (g_k, i, o.hr.a.size(), o.v.type(), o.v);
+    o.hr = {};
+    return rv;
+});
+
+# the element whose keys are evaluated first follows a plain element
+show("list assignment with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    auto a;
+    list<auto> x = (\o.v,);
+    (a, o.h{k()}[i++]) = (2, x);
+    list<auto> rv = (a, g_k, i, o.h.a[0].size(), o.h.a[0].fullType(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# a local variable of a scalar type that no closure binds is read again by the retry of the store
+show("local index read again", auto sub () {
+    KeyOps o();
+    int i = 1;
+    list<auto> x = (\o.v,);
+    o.h.a[i] = x;
+    list<auto> rv = (i, o.h.a.size(), o.h.a[1].fullType(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# the first run of an assignment site whose lvalue is NOTHING resolves no lvalue; its value is evaluated
+show("assignment to NOTHING", auto sub () {
+    g_g = 0;
+    auto r1 = assign_nothing();
+    auto r2 = assign_nothing();
+    return (g_g, r1, r2);
+});
+
+# a container operation through a weak reference to a list stores into the list that it designates; the target's
+# object is locked by the store, and the reference element to its member is bound after the lock has been released
+show("push through a weak reference to a list", auto sub () {
+    WeakListHolder c();
+    list<reference<softint>> l = ();
+    c.wl := l;
+    push c.wl, \c.s;
+    return (l.size(), c.wl.size(), c.s.type(), c.s);
+});
+
+show("splice through a weak reference to a list", auto sub () {
+    WeakListHolder c();
+    c.s = "6";
+    list<reference<softint>> l = ();
+    c.wl := l;
+    list<auto> rep = (\c.s,);
+    splice c.wl, 0, 0, rep;
+    return (l.size(), c.wl.size(), c.s.type(), c.s);
 });

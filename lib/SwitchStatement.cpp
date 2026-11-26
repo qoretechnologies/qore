@@ -207,7 +207,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         while (w && !rc && !*xsink) {
             if (w->code) {
-                rc = w->code->execImpl(return_value, xsink);
+                rc = w->code->execLoopBody(return_value, xsink, semantic_policy.brokenLoop());
             }
 
             w = w->next;
@@ -250,7 +250,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
 
         while (w && !rc_state && !*xsink) {
             if (w->code) {
-                rc_state = w->code->execImpl(rc, return_value, xsink);
+                rc_state = w->code->execLoopBody(rc, return_value, xsink, semantic_policy.brokenLoop());
             }
 
             w = w->next;
@@ -437,7 +437,11 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
         if (w->code) {
             QoreParseContextFlagHelper fh0(parse_context);
-            fh0.setFlags(PF_BREAK_OK);
+            // with %broken-loop-statement, the switch statement takes a continue as well (execImpl()), which a
+            // debugger's request in a handler of the case's code sees in the targets of its blocks (qore#7606); a
+            // continue statement in the case's code is then allowed also where %correct-loop-statement is in effect
+            // for it, as the switch statement takes it at run time
+            fh0.setFlags(semantic_policy.brokenLoop() ? (PF_BREAK_OK | PF_CONTINUE_OK) : PF_BREAK_OK);
 
             if (w->code->parseInitImpl(parse_context) && !err) {
                 err = -1;

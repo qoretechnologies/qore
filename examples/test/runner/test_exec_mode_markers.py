@@ -383,7 +383,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modules loaded from source and compiled with qcc
         # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
         #   as the checks are of the exit of the process that holds the Program
+        # - AOTEmptyRegex (#7623): its checks run in child processes that set their own execution modes and in qcc
+        #   executables
+        # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
+        #   started with a module directory of library code, as a module's initialization runs once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
@@ -454,6 +459,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
                                  "examples/test/qore/threads/background-runtime-parse-options.qtest",
                                  "examples/test/qore/strings/short-string-native-access.qtest",
+                                 "examples/test/qore/security/sandbox-module-source-policy-library.qtest",
                                  "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
                                  "examples/test/qore/misc/foreign-call-at-exit/foreign-call-at-exit.qtest",
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
@@ -481,6 +487,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
+                                 "examples/test/qore/security/sandbox-timezone-paths-library.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",

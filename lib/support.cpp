@@ -380,6 +380,21 @@ std::string QoreSuggestionList::getHint() const {
 
 // returns 1 for success
 static int try_include_dir(QoreString& dir, const char* file) {
+    // under a sandbox policy, a directory that the policy denies is not searched: whether a file is there is not
+    // told (qore#7518)
+    if (q_source_read_policy_applies()) {
+        QoreString candidate(dir);
+        if (!candidate.empty() && candidate.c_str()[candidate.size() - 1] != QORE_DIR_SEP) {
+            candidate.concat(QORE_DIR_SEP);
+        }
+        candidate.concat(file);
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        ExceptionSink xsink;
+        if (smh && !smh->checkFilesystemAccess(candidate.c_str(), QSEC_READ, &xsink)) {
+            xsink.clear();
+            return 0;
+        }
+    }
     //printd(5, "try_include_dir(dir='%s', file='%s')\n", dir.c_str(), file);
 
     // make fully-justified path

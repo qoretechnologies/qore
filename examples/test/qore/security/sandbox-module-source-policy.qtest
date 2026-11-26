@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The file-system policy of a sandbox applies to the sources of the modules that its code loads by path from outside
+# of the module path: such a module is read only if the policy allows its files to be read (qore#7518).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxModuleSourcePolicyTest
+
+class SandboxModuleSourcePolicyTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string denied;
+        SandboxManager manager;
+    }
+
+    constructor() : QUnit::Test("sandbox module source policy", "1.0", \ARGV) {
+        addTestCase("a module that the policy denies is not loaded by path", \deniedTest());
+        addTestCase("a module that the policy allows is loaded by path", \allowedTest());
+        addTestCase("a separated module that the policy denies is not loaded by path", \separatedTest());
+        addTestCase("a file that the policy denies is not included", \includeTest());
+        addTestCase("a library module is loaded into a container", \containerTest());
+        addTestCase("a missing file that the policy denies is denied", \missingTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("q7518m-");
+        allowed = dir + DirSep + "allowed";
+        denied = dir + DirSep + "denied";
+        mkdir(allowed);
+        mkdir(denied);
+        manager = new SandboxManager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ);
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    deniedTest() {
+        string path = writeModule(denied, "SbxDeniedA");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \loadModule(), path, "load_module()");
+        string path2 = writeModule(denied, "SbxDeniedB");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \requireModule(), (path2, "SbxDeniedB"), "%requires");
+    }
+
+    allowedTest() {
+        # the module reads a resource beside it when it is initialized, which the policy allows
+        writeFile(allowed + DirSep + "res.txt", "resource");
+        string path = writeModule(allowed, "SbxAllowed", "ReadOnlyFile::readTextFile(get_script_dir() + \"/res.txt\")");
+        assertEq("resource", requireModule(path, "SbxAllowed"));
+    }
+
+    separatedTest() {
+        string mdir = denied + DirSep + "SbxSeparated";
+        mkdir(mdir);
+        writeFile(mdir + DirSep + "SbxSeparated.qm", "module SbxSeparated { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\n");
+        writeFile(mdir + DirSep + "Code.qc", "public namespace SbxSeparated { public string sub hello() { "
+            "return \"loaded\"; } }\n");
+        # the module file is denied before it is parsed: its invalid syntax is not reported
+        writeFile(mdir + DirSep + "SbxSeparated.qm", "not qore at all\n");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \loadModule(), mdir, "a separated module");
+
+        # a source file of a separated module in an allowed directory that links to a file that the policy denies
+        string adir = allowed + DirSep + "SbxSepLink";
+        mkdir(adir);
+        writeFile(adir + DirSep + "SbxSepLink.qm", "module SbxSepLink { version = \"1.0\"; desc = \"test\"; "
+            "author = \"test\"; url = \"none\"; }\n");
+        writeFile(denied + DirSep + "Secret.qc", "public namespace SbxSepLink { public string sub hello() { "
+            "return \"secret\"; } }\n");
+        symlink(denied + DirSep + "Secret.qc", adir + DirSep + "Code.qc");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \loadModule(), adir, "a linked source file");
+    }
+
+    includeTest() {
+        string secret = denied + DirSep + "secret.q";
+        writeFile(secret, "const Secret = \"secret\";\n");
+        # directly
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(manager);
+        assertThrows("PARSE-EXCEPTION", "denied", \p.parse(), (sprintf("%%include %s\nauto sub t() { return Secret; }",
+            secret), "t"));
+        # in a module that the policy allows
+        writeFile(allowed + DirSep + "SbxInc.qm", sprintf("%%new-style\nmodule SbxInc { version = \"1.0\"; "
+            "desc = \"test\"; author = \"test\"; url = \"none\"; }\n%%include %s\npublic namespace SbxInc { "
+            "public string sub hello() { return Secret; } }\n", secret));
+        assertThrows("PARSE-EXCEPTION", "denied", \loadModule(), allowed + DirSep + "SbxInc.qm");
+    }
+
+    containerTest() {
+        # a library module loaded by sandboxed code into a container of its own is read as library code (the
+        # container is then owned by the module); this raised FILESYSTEM-ACCESS-DENIED before
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(manager);
+        p.parse("sub t(string m) { Program c(PO_NEW_STYLE); c.loadApplyToPrivateUserModule(m); }", "t");
+        p.callFunction("t", "Mime");
+        # a module that the policy denies is not loaded into a container
+        string path = writeModule(denied, "SbxContainer");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("t", path));
+
+        # code of the container that runs while the library module is loaded reads with the policy of the code
+        string secret = denied + DirSep + "csecret.q";
+        writeFile(secret, "const CSecret = \"secret\";\n");
+        Program p2(PO_NEW_STYLE);
+        p2.setSandboxManager(manager);
+        p2.parse(sprintf("auto sub t() { Program c(PO_NEW_STYLE); "
+            "c.parsePending(\"const R = f(); sub f() { Program x(PO_NEW_STYLE); "
+            "x.parse(\\\"%%include %s\\\\nconst S = CSecret;\\\", \\\"x\\\"); return \\\"x\\\"; }\", "
+            "\"pending\"); c.loadApplyToPrivateUserModule(\"DataStreamUtil\"); }", secret), "t2");
+        assertThrows("PARSE-EXCEPTION", "denied", \p2.callFunction(), ("t",), "an include during the load");
+    }
+
+    missingTest() {
+        # the same error whether the file exists or not
+        writeModule(denied, "SbxExists");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \loadModule(), denied + DirSep + "SbxExists.qm");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \loadModule(), denied + DirSep + "SbxMissing.qm");
+    }
+
+    private loadModule(string path) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(manager);
+        p.parse("sub t(string path) { load_module(path); }", "t");
+        p.callFunction("t", path);
+    }
+
+    private auto requireModule(string path, string name) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(manager);
+        p.parse(sprintf("%%requires %s\nauto sub t() { return %s::hello(); }", path, name), "t");
+        return p.callFunction("t");
+    }
+
+    # writes a source module whose hello() returns the given expression ("loaded" by default)
+    private static string writeModule(string mdir, string name, string expr = "\"loaded\"") {
+        string path = mdir + DirSep + name + ".qm";
+        writeFile(path, sprintf("%%new-style\nmodule %s { version = \"1.0\"; desc = \"test\"; author = \"test\"; "
+            "url = \"none\"; }\npublic namespace %s { const Value = %s; public auto sub hello() { return Value; } }\n",
+            name, name, expr));
+        return path;
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

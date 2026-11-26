@@ -381,6 +381,8 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the HTML error pages of a server that code restricted from external information created do not show the
+      hostname (see @ref sandbox_ambient_host_data)
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
@@ -1378,6 +1380,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     private {
         # for masking HTTP request log msgs
         *code<string(string)> maskfunc;
+
+        # if the hostname may be shown in the error pages: not if code restricted from external information created
+        # the server, nor for such code that calls the server's methods (qore#7586)
+        bool show_hostname = True;
 
         # quit server flag
         bool exit = False;
@@ -3587,11 +3593,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
+    #! Returns the HTML error page for the given status code and message
+    /** The page shows the server's name and the hostname, but not the hostname if code restricted from external
+        information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created the server or calls this method
+        (see @ref sandbox_ambient_host_data)
+    */
     string getHtmlErrorMessage(int status_code, string msg) {
-        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s on "
-            "%s</address></body></html>",
+        string address = show_hostname && SandboxManager::callerMayReadExternalInfo()
+            ? sprintf("%s on %s", http_server_string, gethostname())
+            : http_server_string;
+        return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s"
+            "</address></body></html>",
                 status_code, HttpServer::HttpCodes{status_code}, HttpServer::HttpCodes{status_code},
-                html_encode(msg), http_server_string, gethostname());
+                html_encode(msg), address);
     }
 
     static bool acceptsHtml(hash<auto> cx) {
@@ -4030,6 +4044,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        # the hostname is external information: it is decided when the server is created (qore#7586)
+        show_hostname = SandboxManager::callerMayReadExternalInfo();
         drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         if ((opts.handler_socket_max_timeout ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("handler_socket_max_timeout (%d) must not be negative",

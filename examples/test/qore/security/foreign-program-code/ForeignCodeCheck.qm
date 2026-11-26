@@ -1,0 +1,60 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of foreign-program-code.qtest: reports how the module's code sees its caller (qore#7202)
+
+%modern
+
+module ForeignCodeCheck {
+    version = "1.0";
+    desc = "reports how the module's code sees its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ForeignCodeCheck {
+#! returns the checks of the calling code as the module's code sees them
+public hash<auto> sub checks() {
+    return {
+        "fs": SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+        "net": SandboxManager::isLentToRestricted(DOM_NETWORK),
+        "ext": SandboxManager::callerMayReadExternalInfo(),
+        "secrets": SandboxManager::callerMayReceiveHostSecrets(),
+        "term": SandboxManager::isTerminalIoAllowed(),
+        "sandboxed": SandboxManager::isSandboxed(),
+    };
+}
+
+#! calls the code given and returns its value
+public auto sub call(code c) {
+    return c();
+}
+
+#! returns a registry value of the host as the module's code may read it for its caller
+public auto sub registry(string key) {
+    return get_app_registry(key);
+}
+
+#! lifts a restriction of a sandbox that the module's code creates itself
+public string sub lift_own() {
+    SandboxManager sm();
+    sm.setFilesystemDefaultPolicy(False);
+    try {
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setIsolationDomain("qore-7202-module");
+        return "lifted";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! runs code of the module under a policy barrier
+public string sub barrier() {
+    try {
+        return SandboxManager::callWithSystemPolicy(string sub () { return "barrier"; });
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}
