@@ -84,6 +84,7 @@
 #include "qore/intern/QoreIoClassesOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cctype>
@@ -6712,7 +6713,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     future_v.get<const QoreObject>());
                 future_obj->ref();
 
-                int effective_timeout = timeout_ms > 0 ? timeout_ms : timeout;
+                // the request's own timeout, which a repetition reduces to what remains of it (qore#7741)
+                int effective_timeout = request_timeout_ms > 0 ? request_timeout_ms : timeout;
                 QoreValue result = q_future_get_blocking(future_obj,
                     effective_timeout, xsink);
                 future_obj->deref(xsink);
@@ -7670,10 +7672,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         if (!request_target) {
             // only from the client's current manager: a request that completes on a manager that another thread's
             // request replaced and retired does not undo the change (qore#7741)
+            // the response of a request of the client's own: getHttpVersion() reports the client's state
+            last_url_protocol = 0;
             std::lock_guard<std::mutex> lk(conn_mgr_lock);
             if (conn_mgr == last_mgr) {
                 http2_active = !strcmp(protocol, "h2");
-                last_url_protocol = 0;
                 http3_active = !strcmp(protocol, "h3");
             }
         } else {
@@ -8881,8 +8884,8 @@ public:
                         const char* p = proto_str->c_str();
                         // only from the client's current manager: a request that completes on a manager that
                         // another thread's request replaced and retired does not change the client (qore#7741)
-                        if (!strcmp(p, "h2") && priv_ref->getConnMgrIfPresent()
-                                == (request ? request->mgr : pending_mgr)) {
+                        assert(request);
+                        if (!strcmp(p, "h2") && request && priv_ref->getConnMgrIfPresent() == request->mgr) {
                             priv_ref->http2_active = true;
                         }
                         // the response of a request of the client's own: getHttpVersion() reports the client's

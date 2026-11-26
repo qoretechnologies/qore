@@ -1169,8 +1169,8 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
     bool swapped = false;
     // true if the transitional connection was removed from the pool here, as the concrete one has closed already
     bool neg_evicted = false;
-    // the concrete connection swapped into the pool of a retired manager, referenced
-    HttpClientConnectionBase* retired_concrete = nullptr;
+    // true if the concrete connection was swapped into the pool of a retired manager (qore#7741)
+    bool retired_swap = false;
     {
         std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
         auto it = b->pool_.find(key);
@@ -1194,11 +1194,14 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
                 }
             }
         }
-        if (swapped && b->shutdown_) {
-            // the connection of a request in progress on a retired manager closes itself when the request has ended
-            // (qore#7741); the hook is set below, outside the lock, with a reference of its own
+        if (swapped) {
+            // the caller's reference is taken while the pool holds the connection: a close of the connection, which a
+            // retired manager's connection makes itself when idle, can release the pool's reference as soon as the
+            // lock is released (as in acquire, qore#6303)
             concrete_raw->ref();
-            retired_concrete = concrete_raw;
+            // the connection of a request in progress on a retired manager closes itself when the request has ended
+            // (qore#7741); the hook is set below, outside the lock
+            retired_swap = b->shutdown_;
         }
         if (swapped) {
             b->observed_protocols_.fetch_or(
@@ -1211,9 +1214,8 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
         }
     }
 
-    if (retired_concrete) {
-        retired_concrete->setIdleTimeoutHook(1);
-        retired_concrete->deref(xsink);
+    if (retired_swap) {
+        concrete_raw->setIdleTimeoutHook(1);
     }
 
     // Release the stream slot the acquire reserved on the transitional
@@ -1232,7 +1234,7 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
         // The pool owns the reference given up by concrete.release() above; the
         // caller gets its own.  Drop the pool's reference to the transitional
         // connection it no longer holds.
-        concrete_raw->ref();
+        // (the caller's reference was taken above, under the pool lock)
         neg->deref(xsink);
     } else {
         // Either the transitional connection was evicted while ALPN was in flight (a racing closeAll(), max-age
