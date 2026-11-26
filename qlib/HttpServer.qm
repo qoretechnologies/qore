@@ -290,13 +290,18 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @section httpserver_lifetime The Lifetime of a Server and Its Requests
 
     Each request holds its server while the server processes it, from its dispatch until its response has been
-    given to the server's I/O (or until it has been answered, for a request of a persistent session).  A server whose
-    last reference the program releases while requests run is therefore destroyed when the last of them ends, in that
-    request's thread, and all of them are processed by the live server, with the methods that a subclass reimplements
-    (such as @ref HttpServer::HttpServer::log() "log()" or @ref HttpServer::HttpServer::getTtl() "getTtl()").  The
-    destructor stops the server as @ref HttpServer::HttpServer::stop() "stop()" does, without waiting for the request
-    that runs it; that request's connection is closed without a response.  A request that releases the last reference
-    itself destroys the server in the same way when it ends.
+    handed to the server's I/O (sent, or queued for the I/O thread, which sends it).  A server whose last reference
+    the program releases while requests run is therefore destroyed after the last of them, in that request's thread,
+    and all of them are processed by the live server, with the methods that a subclass reimplements (such as
+    @ref HttpServer::HttpServer::log() "log()" or @ref HttpServer::HttpServer::getTtl() "getTtl()"), and answered.  The destructor stops the server as
+    @ref HttpServer::HttpServer::stop() "stop()" does, without waiting for the request that runs it: its drain sends
+    the responses that are queued, the last request's too (with a \c drain_timeout of zero or less, which means no
+    drain, they can be lost).  A request that releases the last reference itself destroys the server in the same way
+    when it ends.
+
+    As long as requests keep arriving before the requests in progress have ended, the server is held: a server under
+    sustained load is destroyed only when there is a moment without requests in progress.  To stop a server at once,
+    call @ref HttpServer::HttpServer::stop() "stop()" before releasing it.
 
     A connection that a request hands over to a handler that serves it after the request has ended (a WebSocket
     connection of the WebSocketHandler module, an event stream), and a persistent session while it waits for its next
@@ -401,8 +406,9 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
-    - a request holds its server while it runs: a server that the program releases while requests run is destroyed
-      when the last of them ends, in its thread (see @ref httpserver_lifetime;
+    - a request holds its server until its response has been handed to the server's I/O: a server that the program
+      releases while requests run is destroyed after the last of them, in its thread, and all of them are answered
+      (see @ref httpserver_lifetime;
       <a href="https://github.com/qoretechnologies/qore/issues/7509">issue 7509</a>)
     - a listener can serve only its own handlers
       (@ref HttpServer::HttpListenerOptionInfo::own_handlers_only "HttpListenerOptionInfo::own_handlers_only"):
@@ -1753,8 +1759,9 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     #! calls stop() and destroys the object
     /** If a stop is in progress (for example one started with stopNoWait()), waits for it to end first
 
-        A request holds its server while it runs, so a server whose last reference the program releases while
-        requests run is destroyed when the last of them ends, in its thread (see @ref httpserver_lifetime)
+        A request holds its server until its response has been handed to the server's I/O, so a server whose last
+        reference the program releases while requests run is destroyed after the last of them, in its thread (see
+        @ref httpserver_lifetime)
     */
     destructor() {
         stopIntern(True, True);
@@ -8113,8 +8120,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     #! Answers a request on the async callback dispatcher worker if its handler answers it inline
     /** Called by HttpServerNativeAsyncTarget::tryInlineRequest() for a request that can be answered inline.  The
-        request holds the server while it runs (see processNativeRequest()), and releases it in the callback that
-        runs it, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
+        request holds the server until its response has been handed to the server's I/O (see processNativeRequest()):
+        its result takes a reference to the server to the controller, which releases it in the callback that runs the
+        request, where its dispatch is counted (see HttpAsyncSocketIoController::waitDrain()).
 
         @param info connection and request information
 
@@ -8137,8 +8145,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             remove server_hold;
         }
-        # the request released the last reference to the server (the program released it while the request ran): its
-        # stop closed the connections, so the request has no response to give (qore#6508)
+        # the request released the last reference to the server (the program released it while the request ran, and
+        # the request has no response to give that would hold the server): its stop closed the connections (qore#6508)
         if (!serv) {
             return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
         }
@@ -8214,6 +8222,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "return_to_idle": !close,
                 "ttl": serv.getTtl(),
                 "after_send": after_send,
+                # the response holds the server until the controller has given it to its I/O (see tryInlineRequest())
+                "request_hold": serv,
             };
         } catch (hash<ExceptionInfo> ex) {
             string err = sprintf("inline handler %s: %s: %s", handler.className(), ex.err, ex.desc);
@@ -8836,6 +8846,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             exit = True;
         }
 
+        # the stop holds the server until it has notified it (qore#7509): the stop calls the server, and a reference
+        # that such a call takes was the last one once the requests that the stop waits for had released theirs, so
+        # the server was destroyed in the stop before the stop had released the server's count of the listener, which
+        # the destructor's stop waits for; the hold is released last (on_exit blocks run in reverse order)
+        *HttpServer server_hold = serv;
+        on_exit remove server_hold;
         # the stop ends with the server's notification also when it raises an exception: the server waits for the
         # stop of each of its listeners (qore#7690)
         on_exit finishStop(silent);
@@ -9504,55 +9520,34 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # a stop of this listener that runs in this thread does not wait for this request (see stop())
         *Priv::RequestHelper prev_request = Priv::current_request;
         Priv::current_request = request_helper;
+        # The request holds the server until its response has been handed to the server's I/O (qore#7509): a server
+        # that the program releases while requests run is destroyed after the last of them, in its thread, instead of
+        # in the thread that released it, whose destructor would refuse the calls of the requests
+        # (OBJECT-ALREADY-DELETED), and every request is answered.  A response for the async I/O controller to send
+        # takes a reference to the server with it (HttpRequestResultInfo::request_hold, see translateToRequestResult()):
+        # the controller releases it in the request's dispatch once it has given the response to its I/O, so the stop
+        # of a destructor that runs then finds the response sent or queued, and drains it; the request's dispatch is
+        # counted then, so the stop does not wait for it (see HttpAsyncSocketIoController::waitDrain()).  The hold
+        # below is released when this method returns, where the request is current (Priv::current_request) and counted
+        # (see stop()).  A persistent session's thread does not hold the server while it waits for the session's next
+        # request (see handleQueuedPersistentConnection()); a connection handed to a handler (dedicated, streaming)
+        # does not hold it.
+        *HttpServer server_hold = serv;
         on_exit {
+            # the request is current until the end, also when the release of its server below raises an exception
+            on_exit Priv::current_request = prev_request;
             # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
             if (request_helper.h1_view) {
                 request_helper.endHandlerSocket();
             }
-            Priv::current_request = prev_request;
-        }
-
-        # The request holds the server while it runs (qore#7509): a server that the program releases while requests
-        # run is destroyed when the last of them ends, in its thread, instead of in the thread that released it, whose
-        # destructor would refuse the calls of the requests (OBJECT-ALREADY-DELETED).  The server is released here, in
-        # the request's dispatch (the handler-pool task or callback that runs it), where the request is current
-        # (Priv::current_request) and its dispatch is counted: the stop of the destructor that runs here does not wait
-        # for the request (see stop() and HttpAsyncSocketIoController::waitDrain()).  A persistent session's thread
-        # does not hold the server while it waits for the session's next request (see
-        # handleQueuedPersistentConnection()).
-        hash<HttpServerAsyncIo::HttpRequestResultInfo> rv;
-        bool held;
-        {
-            *HttpServer server_hold = serv;
-
-            # test hook (a debug build of the library only): the request has started (see dbgSetRequestHook())
-            if (Option::HAVE_LIBRARY_DEBUGGING && dbg_request_hook) {
-                dbg_request_hook(self);
-            }
-
-            rv = processNativeRequestIntern(request_helper, \server_hold, s, cx, hdr, header_info);
-            held = exists server_hold;
             remove server_hold;
         }
-        # the request released the last reference to the server (the program released it while the request ran): its
-        # stop closed the connections, so the request has no response to give and no session to continue; a dedicated
-        # connection belongs to its handler (qore#6508)
-        if (held && !serv) {
-            return request_helper.isDedicated()
-                ? <HttpServerAsyncIo::HttpRequestResultInfo>{
-                    "dedicated": True,
-                    "persistent_request_end": request_helper.persistent_end,
-                }
-                : <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
-        }
-        return rv;
-    }
 
-    #! Processes an HTTP request for processNativeRequest(), which holds the server in \a server_hold
-    /** The hold is released here before a persistent session waits for its next request
-    */
-    private hash<HttpServerAsyncIo::HttpRequestResultInfo> processNativeRequestIntern(RequestHelper request_helper,
-            reference<*HttpServer> server_hold, Socket s, hash<auto> cx, hash<auto> hdr, hash<auto> header_info) {
+        # test hook (a debug build of the library only): the request has started (see dbgSetRequestHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_request_hook) {
+            dbg_request_hook(self);
+        }
+
         request_helper.log_info = isLogInfoEnabled();
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
@@ -9927,6 +9922,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),
                 "after_send": after_send,
+                # the response holds the server until the controller has given it to its I/O (see
+                # processNativeRequest())
+                "request_hold": serv,
             };
         }
 
@@ -9961,6 +9959,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     "close": False,
                     "return_to_idle": True,
                     "ttl": serv.getTtl(),
+                    "request_hold": serv,
                 };
             }
             cx.close = True;

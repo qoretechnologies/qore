@@ -2910,6 +2910,10 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(target, sub () {
+                # the hold of the request's result is released last, after the stream has been cleaned up (see
+                # HttpRequestResultInfo::request_hold)
+                *object request_hold;
+                on_exit remove request_hold;
                 # Clean up dispatched stream state after handler completes
                 # (applies to all headers-only dispatched streams, not just body_streaming)
                 # NOTE: on_exit must be at closure scope (not inside if-block), otherwise
@@ -2921,6 +2925,7 @@ public class HttpAsyncSocketIoController {
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
+                    request_hold = result.request_hold;
                     if (result.persistent_request_end) {
                         persistentRequestReturned(target, conn_info, result.persistent_request_end);
                     }
@@ -5901,10 +5906,15 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(dispatch_target, sub () {
+                # the hold of the request's result is released last, after the stream has been cleaned up (see
+                # HttpRequestResultInfo::request_hold)
+                *object request_hold;
+                on_exit remove request_hold;
                 # NOTE: on_exit must be at closure scope, so that it runs when the request has been handled
                 on_exit cleanup_stream();
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                    request_hold = result.request_hold;
                     if (result.persistent_request_end) {
                         persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
                     }
