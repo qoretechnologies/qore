@@ -14425,6 +14425,29 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
     return qore_substitute_type_params_if_needed(sig->getReturnTypeInfo());
 }
 
+//! checks the return value of a user function's body that a fast call made against its declared return type, as
+//! ReturnStatement::execImpl() checks it (with softlist wrapping and the like), unless an exception is pending
+/** Called in the function's context and frame, before its parameters are released, as the AST interpreter checks the
+    value in the return statement: for a call that gives the references of its arguments (CONSUME), which releases
+    the parameters in the callee's frame (see execJITWithDeopt()), first thing in that release
+*/
+static void qore_rt_check_function_return_value(const UserSignature* sig, QoreValue& val, ExceptionSink* xsink) {
+    if (*xsink) {
+        return;
+    }
+    const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
+    if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+        // Missing return statement: check type and set location to method definition
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+        if (*xsink) {
+            qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    } else {
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+}
+
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
 
 // defined below
@@ -14575,6 +14598,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_entered_t(const Qore
     // variable and the implicit arguments in the callee's frame (see execJITWithDeopt())
     [[maybe_unused]] CalleeContextHelper* argv_context = nullptr;
     [[maybe_unused]] auto release_given = [sig, num_params, use_direct_params, xsink, &argv_context, &val]() {
+        // the return value is checked before the parameters are released, as the AST interpreter checks it in the
+        // return statement
+        qore_rt_check_function_return_value(sig, val, xsink);
         // the implicit argument list (the arguments that the callee does not declare) first, then the argv
         // variable and the parameters, last first, as the AST interpreter releases them
         if (argv_context) {
@@ -14653,20 +14679,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_entered_t(const Qore
         CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
         body_call_ctx, function_context.getThreadData());
 
-        // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
-        // (with softlist wrapping and the like)
-        if (!*xsink) {
-            const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-            if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-                // Missing return statement: check type and set location to method definition
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
+        // the return value is checked in the function's context and frame too, as ReturnStatement::execImpl() checks
+        // it; a call that gives its arguments checked it before it released them (release_given)
+        if constexpr (!CONSUME) {
+            qore_rt_check_function_return_value(sig, val, xsink);
         }
     }
     if constexpr (!CONSUME) {
@@ -15416,6 +15432,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
     // variable and the implicit arguments in the callee's frame (see execJITWithDeopt())
     [[maybe_unused]] CalleeContextHelper* argv_context = nullptr;
     [[maybe_unused]] auto release_given = [sig, num_params, xsink, &argv_context, &val]() {
+        // the return value is checked before the parameters are released, as the AST interpreter checks it in the
+        // return statement
+        qore_rt_check_function_return_value(sig, val, xsink);
         // the implicit argument list (the arguments that the callee does not declare) first, then the argv
         // variable and the parameters, last first, as the AST interpreter releases them
         if (argv_context) {
@@ -15467,19 +15486,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
             body_call_ctx, function_context.getThreadData());
 
-        // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
-        // (with softlist wrapping and the like)
-        if (!*xsink) {
-            const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
-            if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
+        // the return value is checked in the function's context and frame too, as ReturnStatement::execImpl() checks
+        // it; a call that gives its arguments checked it before it released them (release_given)
+        if constexpr (!CONSUME) {
+            qore_rt_check_function_return_value(sig, val, xsink);
         }
     }
     if constexpr (!CONSUME) {

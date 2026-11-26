@@ -1,3 +1,4 @@
-warm-up 600
-module: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: mod_checked:18 <- call_module:37
-local: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: local_checked:22 <- call_local:38
+warm-up 900
+module: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: mod_checked:18 <- call_module:81; exceptions: RUNTIME-TYPE-ERROR
+local: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: local_checked:22 <- call_local:82; exceptions: RUNTIME-TYPE-ERROR
+given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: given_checked:56 <- call_given:83; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
