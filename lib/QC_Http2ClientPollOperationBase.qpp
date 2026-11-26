@@ -1381,14 +1381,23 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         }
     }
 
-    // A stream that a listener reads (WebSocket/SSE over HTTP/2) gets the end of the stream as a sentinel in its queue:
+    // A stream that a listener reads (WebSocket over HTTP/2) gets the end of the stream as a sentinel in its queue:
     // the listener is woken, as it is by the end of a stream that the peer ended (see handleReading()); otherwise it
-    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965)
-    // (the registrations are not checked: the connection's close has cleared them, and a stream without a listener
-    // only has its notification kept, on a connection that is gone)
-    for (int32_t sid32 : failed_streams) {
-        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
-            data_ready_streams.push_back(sid32);
+    // learns that the connection is gone only when something else makes it look (its next heartbeat; issue #6965).
+    // Only the streams with a listener are notified (notify_streams, which the connection's close does not clear):
+    // a stream without one has no listener to wake, and the operation of a connection whose streams have no
+    // listeners has no onStreamData() method to notify (an HTTPClient connection; issue #7695)
+    if (!failed_streams.empty()) {
+        AutoLocker al(sq_lock);
+        for (int32_t sid32 : failed_streams) {
+            std::vector<int32_t>::iterator i = std::find(notify_streams.begin(), notify_streams.end(), sid32);
+            if (i == notify_streams.end()) {
+                continue;
+            }
+            notify_streams.erase(i);
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
+                data_ready_streams.push_back(sid32);
+            }
         }
     }
 }
@@ -1412,6 +1421,10 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
     {
         AutoLocker al(sq_lock);
         pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj}});
+        // the stream's listener is notified when the connection fails (see notifyPendingStreams())
+        if (std::find(notify_streams.begin(), notify_streams.end(), stream_id) == notify_streams.end()) {
+            notify_streams.push_back(stream_id);
+        }
     }
 
     // the stream's data is credited as the drain takes it, so the data that a bounded queue has no room for stays in
@@ -1691,6 +1704,17 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
         if (it != stream_queues.end()) {
             released.push_back(it->second);
             stream_queues.erase(it);
+        }
+    }
+    // the listeners of the completed streams have been notified of their end: a failure of the connection has no
+    // more to tell them (see notifyPendingStreams())
+    if (!completed.empty()) {
+        AutoLocker al(sq_lock);
+        for (int32_t sid : completed) {
+            std::vector<int32_t>::iterator i = std::find(notify_streams.begin(), notify_streams.end(), sid);
+            if (i != notify_streams.end()) {
+                notify_streams.erase(i);
+            }
         }
     }
 }
