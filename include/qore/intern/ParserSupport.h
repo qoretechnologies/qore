@@ -206,8 +206,13 @@ DLLLOCAL extern QoreParseState* yyget_extra(yyscan_t scanner);
 //! Ends the input of a parse that has not reached the end of its input, as when the parser's stack is exhausted
 DLLLOCAL void qore_scanner_end_input(yyscan_t scanner);
 DLLLOCAL extern int yyparse(yyscan_t yyscanner);
-DLLLOCAL extern struct yy_buffer_state* yy_scan_string(const char*, yyscan_t scanner);
-DLLLOCAL extern struct yy_buffer_state* yy_scan_bytes(const char*, int, yyscan_t scanner);
+//! Makes the given bytes the input of the scanner; the scanner's own buffer is the current one afterwards (qore#7774)
+/** The parser does not name flex's buffer type or declare flex's yy_scan_bytes() itself: its return type is not the
+    same in every release of flex (flex 2.7.8 declares it as \c yybuffer, a different type than the \c
+    yy_buffer_state* of the releases before it), and two declarations of one function with different return types
+    do not compile
+*/
+DLLLOCAL void qore_scanner_scan_bytes(const char* bytes, int len, yyscan_t scanner);
 DLLLOCAL void yyset_in(FILE* in_str, yyscan_t yyscanner);
 DLLLOCAL int yylex_destroy(yyscan_t yyscanner);
 DLLLOCAL void yyset_lineno(int line_number, yyscan_t yyscanner);
