@@ -44,3 +44,41 @@ after try argument null
 ordinary 1 1
 before throw 1
 caught EXPECTED null
+dtor a
+dtor w
+caught 1
+dtor p
+dtor a
+caught 2
+dtor b
+dtor w
+caught 3
+dtor a
+dtor w
+caught 4
+dtor a
+dtor w
+caught 5
+dtor c
+dtor a
+dtor b
+caught 6
+dtor a
+dtor w
+caught 1
+dtor p
+dtor a
+caught 2
+dtor b
+dtor w
+caught 3
+dtor a
+dtor w
+caught 4
+dtor a
+dtor w
+caught 5
+dtor c
+dtor a
+dtor b
+caught 6

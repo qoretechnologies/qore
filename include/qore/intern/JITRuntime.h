@@ -121,6 +121,9 @@ uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 //! Add two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_auto_local_add_operand(uint64_t left, uint64_t raw);
+uint64_t qore_rt_auto_local_add_operand_var(uint64_t left, const LocalVar* var);
+uint64_t qore_rt_auto_local_add_operand_aot(uint64_t left, QoreAOTContext* ctx, int32_t idx);
 void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry, uint64_t* current, uint64_t* previous);
 
 //! Subtract two QoreValues with compound-assignment dynamic dispatch
@@ -605,6 +608,7 @@ uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_weak_source_container(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink);
+uint64_t qore_rt_weak_share_copy_store(uint64_t value, uint64_t held, ExceptionSink* xsink);
 uint64_t qore_rt_take_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b);
 void qore_rt_add_assign_release_operand(uint64_t value, uint64_t* slot);
 uint64_t qore_rt_weak_share_param(uint64_t value);

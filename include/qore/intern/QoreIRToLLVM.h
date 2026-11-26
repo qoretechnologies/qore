@@ -1282,6 +1282,12 @@ private:
     // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
     // only if it holds the value (qore_rt_release_reference_read())
     std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the slot of each read site of emitReferenceLocalRead() -> the slot of the value read before it at the site
+    std::unordered_map<llvm::AllocaInst*, llvm::AllocaInst*> reference_read_previous_slots;
+    // the result of each generic += of an "auto" local paired with its store whose local can hold a reference -> the
+    // i1 that is true if the local held one when the operation was made: the operation is made through it, and the
+    // paired store stores nothing then (autoAddHoldsReference(), QoreIRInstruction::paired_auto_add_store, qore#7421)
+    std::unordered_map<uint32_t, llvm::Value*> auto_add_reference_flags;
     // the arrays of given argument slots that are null when no read through a reference holds its value (see
     // buildArgCleanupArray())
     std::unordered_set<llvm::Value*> nullable_arg_cleanups;
@@ -2124,9 +2130,11 @@ private:
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
     //! returns \a owned, or a copy of its own if it is a weakly shared list or hash (qore#7342): the tag, the node type
-    //! and the flags of the container are tested inline, and the copy is made out of line
+    //! and the flags of the container are tested inline, and the copy is made out of line; \a current is the storage
+    //! of the local that a store gives \a owned, if any: the container that it holds already gets no new holder (a +=
+    //! changed it in place, qore#7421)
     llvm::Value* emitWeakShareCheck(llvm::Module& module, llvm::Function* func, llvm::Value* owned,
-            llvm::Value* xsink);
+            llvm::Value* xsink, llvm::Value* current = nullptr);
     //! returns an i1 that is true if \a value is a weakly shared list or hash (the test of emitWeakShareCheck(), without
     //! the reference count), which a store may have copied (qore#7342)
     llvm::Value* emitWeakSharedTest(llvm::Module& module, llvm::Function* func, llvm::Value* value);
@@ -3231,9 +3239,19 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
-    //! Releases compiler-held duplicate owners before a dynamic local string append.
-    void prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
+    //! Releases compiler-held duplicate owners before a dynamic local string append; returns the left operand of the
+    //! += helper: \a lhs, or the reference that the local holds, through which the operation is made (qore#7421)
+    llvm::Value* prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
         llvm::Function* llvm_func);
+    //! returns the i1 that is true if the local of the generic += \a inst paired with its store holds a reference,
+    //! read from its reference flag once, or nullptr if the local cannot hold one (auto_add_reference_flags, qore#7421)
+    llvm::Value* autoAddHoldsReference(const QoreIRInstruction& inst, llvm::Function* llvm_func);
+    //! emits the paired store \a inst of a generic += of an "auto" local: it stores nothing if the operation was made
+    //! through a reference that the local holds (QoreIRInstruction::paired_auto_add_store, qore#7421)
+    bool lowerPairedAutoAddStore(const QoreIRInstruction* inst, llvm::Value* holds_ref, llvm::Function* llvm_func,
+        llvm::Module& module, std::string& error, const QoreIRInstruction* next);
+    // true while lowerPairedAutoAddStore() emits the store itself
+    bool lowering_paired_auto_add_store = false;
 
     //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
     /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds

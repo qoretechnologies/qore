@@ -4745,6 +4745,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             inst->auto_local_string_append = false;
+            inst->paired_auto_add_store = false;
             if (inst->opcode == QoreIROpcode::AddAssignAny || (inst->opcode == QoreIROpcode::Invoke
                     && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode == QoreIROpcode::AddAssignAny)) {
                 has_generic_add_assign = true;
