@@ -2561,7 +2561,8 @@ DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
     The walk resolves the sandboxes as for interrupts (QoreSandboxManagerHelper::All): a policy barrier
     (SandboxManager::callWithSystemPolicy(), a capability of SandboxManager::createSystemPolicyCall()) does not hide
     restricted code; only the barrier of a trusted build (SandboxManager::createTrustedBuildCall()) hides the code
-    that calls it, whose sandbox does not govern the build.  The code of a class that restricted code declared is
+    that calls it, whose sandbox does not govern the build, as does the initialization of library code that code that
+    is not restricted loads.  The code of a class that restricted code declared is
     restricted wherever it runs (qore_calling_class_is_restricted()).
 
     @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if none is found or it is not

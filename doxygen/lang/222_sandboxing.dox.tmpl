@@ -1381,9 +1381,12 @@ authenticate();
     - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
       sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
       (see below);
-    - code that is not trusted cannot mark imported classes and hashdecls for re-export to the modules that a
-      %Program loads (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
-      @ref Qore::Program::importHashDecl() "Program::importHashDecl()").
+    - restricted code cannot mark imported classes and hashdecls for re-export to the modules that a %Program loads
+      (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
+      @ref Qore::Program::importHashDecl() "Program::importHashDecl()"): code that a sandbox that refuses uncontrolled
+      APIs governs, whose parse options restrict a functional domain, or library code that such code loaded while it
+      is initialized; code that a sandbox that allows uncontrolled APIs governs is not restricted here (see
+      @ref sandbox_manager_classes).
 
     A module that a caller loads by path, or finds through a module path that a %Program added with
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
@@ -2527,6 +2530,21 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     uncontrolled APIs: @ref Qore::SandboxManager::isRestricted() "isRestricted()" for the code that calls it, and
     @ref Qore::SandboxManager::isFromRestrictedProgram() "isFromRestrictedProgram()" for the %Program of the class of an
     object; both are evaluated at each call and fail closed.
+
+    %Qore applies the same rule to the relation of classes by injection
+    (@ref Qore::Program::importClass() "Program::importClass()" with \c inject set): only the %Program that declares
+    both classes, or code that is not restricted, may relate them.  Restricted code is code that a sandbox that refuses
+    uncontrolled APIs governs, also as the caller of trusted code further down the call stack, code whose parse
+    options restrict a functional domain, and library code that restricted code loaded while it is initialized; the
+    test fails closed.  Code that only a sandbox that allows
+    uncontrolled APIs governs relates classes by injection and re-exports imported classes as trusted code does.  A
+    policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a
+    restricted caller from this rule: trusted code that it calls for restricted code cannot relate classes by
+    injection or re-export them.  A trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") and the
+    initialization of library code that code that is not restricted loads run as trusted code, and can.  The same
+    classification applies to every rule that restricts what code may do (see @ref sandbox_manager_classes).
 
     @section sandbox_exceptions Security Exceptions
 
