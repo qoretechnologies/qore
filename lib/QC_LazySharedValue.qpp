@@ -62,14 +62,20 @@
     process-shared, and its value is built as described above.  An object that other code creates (sandboxed code, a
     trusted deputy acting for it, or code that gives a builder of sandboxed code), such as one of a module that a
     sandboxed %Program loads by its path, is private (see isProcessShared()): its value is also built once and for
-    every caller of get(), but as a plain call of the builder, which runs as the code that created it, with its own
-    provenance and restrictions, also when trusted code calls get(); nothing that it builds is marked as shared, and
-    its value is not checked, as it crosses no trust boundary.  A builder that is a bound callback or a capability is
-    refused in both modes.
+    every caller of get(), but as a plain call of the builder, which runs with the provenance and the restrictions of
+    its own code, also when trusted code calls get(); nothing that it builds is marked as shared, and its value is not
+    checked, as it crosses no trust boundary.  A builder that is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") is refused in
+    both modes.
 
     @note
-    - create a process-shared object during module initialization or trusted startup and keep it in a
-      \c private:internal static member; the builder must build only from trusted metadata, and must not call code
+    - an object that library code creates later than its initialization, for whichever caller needs it first, is
+      private if that caller is sandboxed or acts for sandboxed code, and then builds its value as that caller's code
+      would; code that must have a process-shared object creates it during module initialization or trusted startup
+      (and keeps it in a \c private:internal static member), or checks isProcessShared(), or gives the constructor's
+      \c require_shared option, which refuses to create a private object
+    - the builder must build only from trusted metadata, and must not call code
       that its callers supply
     - the value is returned as it is: the builder must mark (@ref Qore::SandboxManager::shareObject()
       "SandboxManager::shareObject()", or the \c freeze() of the data provider types) or otherwise protect the objects
@@ -104,10 +110,16 @@ qclass LazySharedValue [arg=QoreLazySharedValue* v; ns=Qore::Thread];
 /** @param builder the code that builds the value; it takes no arguments; a plain callback (not a bound callback or a
     capability) of code that no sandbox governs
 
-    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback or a capability
+    @param require_shared if @ref True, the object must be process-shared: the constructor raises an exception
+    instead of creating a private object (see the class description)
+
+    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()"), or
+    @p require_shared is @ref True and the object would be private
 */
-LazySharedValue::constructor(code builder) {
-    ReferenceHolder<QoreLazySharedValue> v(new QoreLazySharedValue(builder, xsink), xsink);
+LazySharedValue::constructor(code builder, bool require_shared = False) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreLazySharedValue> v(new QoreLazySharedValue(builder, require_shared, xsink), xsink);
     if (*xsink) {
         return;
     }

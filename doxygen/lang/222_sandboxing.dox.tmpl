@@ -813,7 +813,9 @@ authenticate();
     sandboxed code creates, or a trusted deputy for it, or with a builder of sandboxed code (the static members of a
     module that a sandboxed %Program loads by its path, for example) is private: its value is built once, but as a
     plain call of its builder, which runs with the provenance and the restrictions of its own code, whoever calls
-    \c get(), also trusted code; nothing that it builds is marked as shared.
+    \c get(), also trusted code; nothing that it builds is marked as shared.  Library code that must have a
+    process-shared object creates it during its initialization, or checks \c isProcessShared(), or gives the
+    constructor's \c require_shared option, which refuses to create a private object.
 
     The value is published as it is: the builder marks or freezes the objects that it shares, as for any shared
     object; the check of the value before it is published refuses only objects and callable values that sandboxed or

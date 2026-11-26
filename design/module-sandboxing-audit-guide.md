@@ -444,6 +444,11 @@ later caller (issues #7684, #7002).  Use `Qore::Thread::LazySharedValue` (one va
 once, as trusted code (a trusted build when the caller is sandboxed, acts for sandboxed code or is restricted), and
 its value is published to every caller.  Rules:
 
+- an object that the module creates later than its initialization, for whichever caller needs it first, is private
+  (`isProcessShared()` is `False`) if that caller is sandboxed or acts for sandboxed code, and builds its value as that
+  caller's code; to have a process-shared object, create it in the module's initialization (a static member
+  initializer), or check `isProcessShared()`, or give the constructor `require_shared: True`, which refuses to create
+  a private object;
 - the builder builds only from the module's own, trusted data; a map's builder raises an exception for a key that it
   does not know (a failed key leaves no entry), and never uses the key as code, a module name or an unchecked path;
 - the value is returned as it is: mark (`SandboxManager::shareObject()`) or freeze what it shares; the check before

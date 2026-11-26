@@ -80,7 +80,9 @@ public:
         SandboxManager::createTrustedBuildCall()): its value is built as trusted code; otherwise it is private: its
         value is built as a call of the builder, in the context of the code that created it (qore#7684)
     */
-    DLLLOCAL QoreLazySharedBase(const ResolvedCallReferenceNode* builder, ExceptionSink* xsink);
+    /** @param require_shared if true, raises SANDBOX-CAPABILITY-ERROR instead of creating a private object
+    */
+    DLLLOCAL QoreLazySharedBase(const ResolvedCallReferenceNode* builder, bool require_shared, ExceptionSink* xsink);
 
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -143,8 +145,8 @@ protected:
 //! The private data of a LazySharedValue
 class QoreLazySharedValue : public QoreLazySharedBase {
 public:
-    DLLLOCAL QoreLazySharedValue(const ResolvedCallReferenceNode* builder, ExceptionSink* xsink)
-            : QoreLazySharedBase(builder, xsink), entry(std::make_shared<QoreLazySharedEntry>()) {
+    DLLLOCAL QoreLazySharedValue(const ResolvedCallReferenceNode* builder, bool require_shared, ExceptionSink* xsink)
+            : QoreLazySharedBase(builder, require_shared, xsink), entry(std::make_shared<QoreLazySharedEntry>()) {
     }
 
     //! Returns the value, building it the first time
@@ -178,8 +180,8 @@ protected:
 //! The private data of a LazySharedMap
 class QoreLazySharedMap : public QoreLazySharedBase {
 public:
-    DLLLOCAL QoreLazySharedMap(const ResolvedCallReferenceNode* builder, int64 max_size, ExceptionSink* xsink)
-            : QoreLazySharedBase(builder, xsink), max_size(max_size) {
+    DLLLOCAL QoreLazySharedMap(const ResolvedCallReferenceNode* builder, int64 max_size, bool require_shared,
+            ExceptionSink* xsink) : QoreLazySharedBase(builder, require_shared, xsink), max_size(max_size) {
     }
 
     //! Returns the value of the key, building it the first time

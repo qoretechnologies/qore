@@ -58,16 +58,22 @@ qclass LazySharedMap [arg=QoreLazySharedMap* m; ns=Qore::Thread];
     @param max_size the most entries (values built or being built); 0 (the default) or less for no limit; a key that would
     exceed it is refused
 
-    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback or a capability
+    @param require_shared if @ref True, the object must be process-shared: the constructor raises an exception
+    instead of creating a private object (see @ref Qore::Thread::LazySharedValue "LazySharedValue")
+
+    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback (a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()" or
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()"), or
+    @p require_shared is @ref True and the object would be private
     @throw LAZYSHAREDMAP-ERROR @p max_size is negative
 */
-LazySharedMap::constructor(code builder, int max_size = 0) {
+LazySharedMap::constructor(code builder, int max_size = 0, bool require_shared = False) [flags=NAMED_ARGS] {
     if (max_size < 0) {
         xsink->raiseException("LAZYSHAREDMAP-ERROR", "the maximum size of a LazySharedMap cannot be negative (%lld "
             "given)", max_size);
         return;
     }
-    ReferenceHolder<QoreLazySharedMap> m(new QoreLazySharedMap(builder, max_size, xsink), xsink);
+    ReferenceHolder<QoreLazySharedMap> m(new QoreLazySharedMap(builder, max_size, require_shared, xsink), xsink);
     if (*xsink) {
         return;
     }

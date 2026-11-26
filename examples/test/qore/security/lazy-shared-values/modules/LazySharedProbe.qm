@@ -89,6 +89,19 @@ public class Probe {
         return limited.get(key);
     }
 
+    #! creates a lazy value later than the module's initialization, for whichever caller needs it first, and returns
+    #! whether it is process-shared, and the state of its value, or the exception
+    static string createLazily(bool require_shared) {
+        try {
+            LazySharedValue v(\Probe::buildSingle(), require_shared);
+            hash<auto> r = v.get();
+            return sprintf("process-shared: %y, obj shared: %y", v.isProcessShared(),
+                SandboxManager::isSharedObject(r.obj));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     static hash<auto> getSingle() {
         return single.get();
     }

@@ -188,9 +188,12 @@ int lazy_shared_check_value(const QoreValue v, const char* what, ExceptionSink* 
 }
 }
 
-QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, ExceptionSink* xsink) {
-    // a bound callback or a capability as the builder would run its rights for whoever calls get(): refused in both
-    // modes
+QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, bool require_shared,
+        ExceptionSink* xsink) {
+    // a bound callback (a system-policy or trusted build capability) as the builder would run its rights for whoever
+    // calls get(): refused in both modes; a capability of SandboxManager::createSystemThreadCall() is not refused in a
+    // private object, whose builder is called as its holder could call it, and is refused in a process-shared one by
+    // qore_create_trusted_build_call()
     if (qore_get_sandbox_bound_callback(b)) {
         xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the builder of a lazy shared value must be a plain "
             "callback, not a bound callback or a capability");
@@ -222,6 +225,11 @@ QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, Excep
         if (!build_cap) {
             return;
         }
+    } else if (require_shared) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a process-shared lazy value is required, but the creating "
+            "code is sandboxed or acts for sandboxed code, or the builder has sandbox provenance or belongs to a "
+            "sandboxed Program");
+        return;
     }
     builder = b->refRefSelf();
 }
@@ -248,6 +256,9 @@ int QoreLazySharedBase::getIntern(SafeLocker& sl, const std::shared_ptr<QoreLazy
             return 1;
         }
         int builder_tid = entry->builder_tid.load(std::memory_order_relaxed);
+        // checked before the PID: a builder that forked during its build is refused its own value in the child (a
+        // thread of the child whose TID is that of a builder of the parent is refused too; every other thread of the
+        // child builds the value again, as the PID differs)
         if (builder_tid == tid) {
             xsink->raiseException("SHARED-INIT-ERROR", "%s is needed by its own builder", what);
             return -1;

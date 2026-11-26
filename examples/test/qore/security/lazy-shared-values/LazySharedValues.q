@@ -71,8 +71,15 @@ string sub create_value() {
 
 string sub create_map() {
     return try_it(auto sub () {
-        LazySharedMap m(string sub (string k) { return k; });
-        return sprintf(\"process-shared: %y, value: %y\", m.isProcessShared(), m.get(\"k\"));
+        LazySharedMap m(string sub (string k) { if (k == \"bad\") { throw \"BAD-KEY\"; } return k; });
+        string bad;
+        try {
+            m.get(\"bad\");
+        } catch (hash<ExceptionInfo> ex) {
+            bad = ex.err;
+        }
+        return sprintf(\"process-shared: %y, value: %y, a failed key: %s, entries: %d\", m.isProcessShared(),
+            m.get(\"k\"), bad, m.size());
     });
 }
 
@@ -122,6 +129,10 @@ LazySharedValue sub private_value() {
             \"fs\": fs,
         };
     });
+}
+
+string sub create_lazily(bool require_shared) {
+    return LazySharedProbe::Probe::createLazily(require_shared);
 }
 
 string sub describe_private(LazySharedValue v) {
@@ -188,6 +199,12 @@ printf("a bound callback as the builder: %s\n", (string sub () {
             r.sandboxed, r.fs);
     })());
 }
+
+# library code that creates a lazy value for whichever caller needs it first: private for a tenant, unless the
+# library requires a process-shared value
+printf("library code creates a lazy value for the tenant: %s; with require_shared: %s; for trusted code with "
+    "require_shared: %s\n", tenant.callFunction("create_lazily", False), tenant.callFunction("create_lazily", True),
+    LazySharedProbe::Probe::createLazily(True));
 
 # 2: a sandboxed first caller
 printf("tenant first caller: %s; plain lazy pattern: %s\n", tenant.callFunction("value_of", "tenant"),
