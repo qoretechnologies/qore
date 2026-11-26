@@ -197,6 +197,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         */
         const AsyncQueueSafetyGraceMs = 30000;
 
+        #! a wait of a happy-eyeballs race that takes this much longer than asked is logged (qore#7694)
+        const HappyEyeballsLateWaitMs = 2000;
+
         #! Race-phase recheck interval for async happy eyeballs
         /** Once H2 has joined the race, this bounds how long the nonblocking
             caller can wait before re-reading both candidates' authoritative
@@ -3849,6 +3852,10 @@ printf("%d connection(s) migrated\n", migrated);
 
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H3 + H2 race for %s", key);
 
+        # the timings of the waits of the race, for the argument of a timeout (qore#7694)
+        int race_start_us = clock_get_monotonic_us();
+        list<hash<auto>> stages = ();
+
         hash<auto> h3_url_info = prepareH3Probe(url_info, key);
 
         # Create H3 connection (non-blocking — constructor sets up QUIC poll op)
@@ -3912,8 +3919,10 @@ printf("%d connection(s) migrated\n", migrated);
             if (deadline) {
                 stagger_ms = min(stagger_ms, ceilMs(deadline - clock_get_monotonic_us()));
             }
-            controller.waitForNotifier(h3_notifier, stagger_ms,
+            int wait_start_us = clock_get_monotonic_us();
+            bool signaled = controller.waitForNotifier(h3_notifier, stagger_ms,
                 opts.connect_timeout + AsyncQueueSafetyGraceMs);
+            heNoteWait(\stages, key, "h3-stagger", stagger_ms, wait_start_us, race_start_us, signaled);
             h3_notifier.acknowledge();
             *HttpClientConnection w = hePickReady(h3conn);
             if (w) {
@@ -3943,7 +3952,7 @@ printf("%d connection(s) migrated\n", migrated);
         int race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
         bool expired = False;
         *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier, \race_deadline,
-            deadline, \expired, claim);
+            deadline, \expired, claim, \stages, race_start_us);
         if (w) {
             return w;
         }
@@ -3956,11 +3965,44 @@ printf("%d connection(s) migrated\n", migrated);
             handed_over = True;
             heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline, claim);
             log(LoggerLevel::DEBUG, "happy eyeballs: handed the race for %s over to the background", key);
-            throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race");
+            throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race", {
+                "stages": stages,
+                "total_ms": (clock_get_monotonic_us() - race_start_us) / 1000,
+            });
         }
 
         # No candidate connected: collect error details, clean up all of them, and throw
         heThrowConnectError(h3conn, h2conn, h1conn, key);
+    }
+
+    #! Internal: records the timing of one wait of a happy-eyeballs race, and logs a wait that overran (qore#7694)
+    /** The controller delivers the timeout of the wait's operation at once; a wait that took much longer than asked
+        means that the controller delivered it late, or that its safety bound ended the wait (the controller logs that
+        too).  The timings are in the argument of the timeout that the race may end with.
+
+        @param stages the timings of the waits of the race
+        @param key the host:port pool key
+        @param stage the name of the wait
+        @param asked_ms the time the wait was asked to take in milliseconds
+        @param wait_start_us the start of the wait on the monotonic clock in microseconds
+        @param race_start_us the start of the race on the monotonic clock in microseconds
+        @param signaled the result of the wait (@ref True if the notifier was signaled in time)
+    */
+    private heNoteWait(reference<list<hash<auto>>> stages, string key, string stage, int asked_ms, int wait_start_us,
+            int race_start_us, bool signaled) {
+        int now = clock_get_monotonic_us();
+        int took_ms = (now - wait_start_us) / 1000;
+        stages += {
+            "stage": stage,
+            "start_ms": (wait_start_us - race_start_us) / 1000,
+            "asked_ms": asked_ms,
+            "took_ms": took_ms,
+            "signaled": signaled,
+        };
+        if (took_ms > asked_ms + HappyEyeballsLateWaitMs) {
+            log(LoggerLevel::WARN, "happy eyeballs: the %s wait for %s took %d ms, %d ms were asked: the I/O "
+                "controller delivered the timeout late", stage, key, took_ms, asked_ms);
+        }
     }
 
     #! Internal: runs a synchronous happy-eyeballs race until a candidate wins, all of them settle, or a bound passes
@@ -3976,13 +4018,16 @@ printf("%d connection(s) migrated\n", migrated);
         @param expired set to @ref True if \a deadline passed before an outcome
         @param claim the creation claim of the race, which identifies it in @ref bg_races if it goes on in the
         background
+        @param stages the timings of the waits of the race, to which each wait is added (see heNoteWait())
+        @param race_start_us the start of the race on the monotonic clock in microseconds
 
         @return the committed winner, or @ref nothing if no candidate won (all of them settled, the race's bound
         passed, the caller's deadline passed, or the manager is shutting down)
     */
     private *HttpClientConnection heRunRace(hash<auto> url_info, string key, Http3ClientConnection h3conn,
             Http2ClientConnection h2conn, reference<*Http1ClientConnection> h1conn, EventNotifier race_notifier,
-            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim) {
+            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim,
+            reference<list<hash<auto>>> stages, int race_start_us) {
         while (True) {
             *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
             if (w) {
@@ -4025,7 +4070,9 @@ printf("%d connection(s) migrated\n", migrated);
             # Socket::poll syscall).  See the h3_notifier path above; the
             # explicit Queue-level safety bound is the same belt-and-suspenders
             # guard against a lost controller completion.
-            controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
+            int wait_start_us = clock_get_monotonic_us();
+            bool signaled = controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
+            heNoteWait(\stages, key, "race", remaining, wait_start_us, race_start_us, signaled);
             race_notifier.acknowledge();
         }
     }
@@ -5747,9 +5794,9 @@ printf("%d connection(s) migrated\n", migrated);
 
         @throw HTTPCLIENT-TIMEOUT always
     */
-    private static throwAcquireTimeout(string key, string reason) {
+    private static throwAcquireTimeout(string key, string reason, *hash<auto> arg) {
         throw "HTTPCLIENT-TIMEOUT", sprintf("no connection to %s was acquired within the request's time: %s", key,
-            reason);
+            reason), arg;
     }
 
     #! The number of closed connections kept for getStats() (see recordClose())

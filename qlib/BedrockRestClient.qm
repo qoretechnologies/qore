@@ -171,6 +171,10 @@ hash<ChatResponse> r = p.chat((
       and reads the ConverseStream through the async I/O controller
       (@ref BedrockRestClient::BedrockLlmProvider::supportsAsyncChat() "BedrockLlmProvider::supportsAsyncChat()")
       (<a href="https://github.com/qoretechnologies/qore/issues/7648">issue 7648</a>)
+    - the start of a streamed chat (@ref BedrockRestClient::BedrockLlmProvider::chatStream() "chatStream()" and its
+      asynchronous call), until its response has started the event stream, is retried as a chat request is: on
+      HTTP 429 and 5xx responses, with the call's retry options
+      (<a href="https://github.com/qoretechnologies/qore/issues/7661">issue 7661</a>)
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
     - initial release
@@ -450,6 +454,19 @@ public class BedrockEventStream {
     /** @return HTTP status and response headers available so far */
     hash<auto> getResponseInfo() {
         return stream.getResponseInfo();
+    }
+
+    #! Waits until the response has started the event stream, without reading an event
+    /** @param timeout_ms idle timeout; omitted to use the HTTP client timeout
+        @return the HTTP response metadata
+        @throw AWS-EVENT-STREAM-HTTP-ERROR unsuccessful HTTP status (with the response as the argument) or wrong
+        response media type
+        @throw AWS-EVENT-STREAM-TIMEOUT no response arrived before the timeout
+        @see @ref AwsRestClient::AwsSignedEventStream::waitForResponse() "AwsSignedEventStream::waitForResponse()"
+        @since BedrockRestClient 1.2
+    */
+    hash<auto> waitForResponse(*timeout timeout_ms) {
+        return stream.waitForResponse(timeout_ms);
     }
 
     #! Cancels the session, including a blocked read; safe to call repeatedly
@@ -866,7 +883,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     #! Streams text, tool-call fragments, stop reason, and usage from ConverseStream
     /** Each native event is delivered immediately. Exactly one final <tt>done</tt> event follows clean EOF,
         after the message stop and usage metadata; errors or callback failures cancel the stream without
-        retrying a partially delivered generation.
+        retrying a partially delivered generation.  The start of the stream, until its response has started the
+        event stream, is retried as @ref chat() retries its request: on HTTP 429 and 5xx responses, with the retry
+        policy of @ref QoreLlmUtils::AbstractLlmProvider::withRetry() "withRetry()".
 
         @param messages conversation history
         @param callback receives each incremental event
@@ -889,9 +908,28 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         *BedrockEventStream stream;
         bool stopped = False;
         checkRequestCancelled(opts);
+        # the start of the stream (until its response has started the event stream, before any event is delivered)
+        # is retried as chat() retries its request (qore#7661)
         try {
-            stream = rest_client.openConverseStream(getBedrockModelId(opts), body);
+            stream = withRetry(BedrockEventStream sub () {
+                # a deadline that has passed fails the attempt before its request is sent
+                int timeout_ms = getRequestTimeoutMs(opts);
+                BedrockEventStream s = rest_client.openConverseStream(getBedrockModelId(opts), body);
+                # a cancellation closes the connection of the request at once, also while its response is awaited
+                int start_cancel_id = addRequestCancelHandler(opts, sub () { s.close(); });
+                on_exit removeRequestCancelHandler(opts, start_cancel_id);
+                try {
+                    s.waitForResponse(timeout_ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    s.close();
+                    rethrow;
+                }
+                return s;
+            }, opts);
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "LLM-CANCELLED") {
+                rethrow;
+            }
             throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc + getErrorMessageSuffix(ex), ex;
         }
         on_exit stream.close();
@@ -982,7 +1020,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     #! Starts the request of @ref chatStream() as a step of an asynchronous operation, without holding a thread
     /** The request, its events and its errors are those of @ref chatStream(): the ConverseStream is opened and read
         by the async I/O controller, its frames are decoded on the I/O thread, and each event is delivered in a task
-        of \a op.  As with @ref chatStream(), the start of the stream is not retried.  See
+        of \a op.  As with @ref chatStream(), the start of the stream is retried, with a wait on a timer.  See
         @ref QoreLlmUtils::AbstractLlmProvider::startChatStreamAsync() "AbstractLlmProvider::startChatStreamAsync()".
 
         @since BedrockRestClient 1.2
@@ -1004,10 +1042,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             return;
         }
         BedrockAsyncStreamState state();
-        # chatStream() does not retry the start of the stream (qore#7661), and nor does this call
-        hash<QoreLlmUtils::LlmRequestOptions> stream_opts = opts;
-        stream_opts.max_retries = 0;
-        stream_opts.rate_limit_retries = 0;
+        # the start of the stream is retried as chatStream() retries it (qore#7661)
         # the call's deadline (LlmRequestOptions::deadline) ends the stream, as chatStream()'s reads end at it; a
         # deadline that has passed is reported by the attempt, which sends nothing then
         *int deadline_ms;
@@ -1017,7 +1052,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 deadline_ms = remaining_ms;
             }
         }
-        QoreLlmUtils::LlmAsyncSseRequest req(self, op, stream_opts,
+        QoreLlmUtils::LlmAsyncSseRequest req(self, op, opts,
             code<nothing()> sub (QoreLlmUtils::LlmAsyncSseRequest r, int attempt) {
                 # each wait, also the wait for the response that starts the stream, is bounded by the request
                 # timeout, as each read of chatStream() is

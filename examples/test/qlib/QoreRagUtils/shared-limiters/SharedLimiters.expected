@@ -1,0 +1,10 @@
+the tenant: limits of the tenant's limiter: {requests: 1, tokens: 1}
+the host's limits: {requests: 300, tokens: 100000}
+the host's request: admitted
+the tenant's code shares its limiter: True
+the host's limiter is the tenant's: False
+another tenant's limiter is the first tenant's: False
+the host's limiter of a key with the form of the tenant's: limits: {requests: 300, tokens: 100000}
+a new key of a tenant after its bound: kept: False
+a new key of another tenant: kept: True
+the host's limiter of the account is unchanged: True

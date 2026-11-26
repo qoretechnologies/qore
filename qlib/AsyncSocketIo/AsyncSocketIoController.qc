@@ -278,12 +278,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         # than blocking the caller forever.  (Queue::get(0) blocks forever, so
         # a non-positive value is treated as "not given".)
         if (exists queue_safety_timeout && queue_safety_timeout > 0ms) {
+            int wait_start = clock_get_monotonic_us();
             try {
                 q.get(queue_safety_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "QUEUE-TIMEOUT") {
                     rethrow;
                 }
+                # the controller delivers the operation's timeout (to) long before this bound: reaching it means that a
+                # completion was lost or late, which is a controller bug (qore#7694)
+                log(Qore::Logger::LoggerLevel::WARN, "AsyncSocketIoController::waitForNotifier(): the safety bound of "
+                    "%d ms passed after %d ms without a completion from the controller (the operation's own timeout "
+                    "was %d ms; owner %y); the operation is canceled", int(queue_safety_timeout),
+                    (clock_get_monotonic_us() - wait_start) / 1000, int(to), owner);
                 # Controller did not deliver within the explicit safety bound:
                 # cancel the (possibly orphaned) operation and treat the wait
                 # as timed out / not signaled.

@@ -223,8 +223,9 @@ public class VoyageRestClientBase {
         @param requests_per_minute a configured limit; NOTHING uses the default (see @ref getDefaultRateLimits())
         @param tokens_per_minute a configured limit; NOTHING uses the default
 
-        @note Configured limits apply to every client of the account and model in the process; a client
-            without configured limits creates the limiter with the defaults but never replaces configured ones
+        @note Configured limits apply to every client of the account and model in the process (for the code of a
+            sandboxed %Program, to every client of its own %Program); a client without configured limits creates the
+            limiter with the defaults but never replaces configured ones
 
         @return the shared limiter
     */
@@ -929,6 +930,14 @@ public class VoyageEmbedder inherits AbstractEmbedder {
     #! Returns the process-wide limiter for this embedder's account and model
     private EmbedderRateLimiter getRateLimiter() {
         if (!rate_limiter) {
+            # the limiter of code that is sandboxed or acts for sandboxed code is its Program's, so the object does
+            # not keep it: the next caller can be the code of another Program (issue #7686)
+            if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+                return VoyageRestClient::VoyageRestClientBase::getRateLimiter(
+                    VoyageRestClient::VoyageRestClientBase::RateLimitEmbed,
+                    config.url ?? VoyageRestClient::VoyageRestClientBase::DefaultUrl, config.api_key, model_name,
+                    config.requests_per_minute, config.tokens_per_minute);
+            }
             AutoLock al(init_mutex);
             if (!rate_limiter) {
                 rate_limiter = VoyageRestClient::VoyageRestClientBase::getRateLimiter(
@@ -1426,6 +1435,14 @@ public class VoyageReranker inherits AbstractReranker {
     #! Returns the process-wide reranking limiter for this reranker's account and model
     private EmbedderRateLimiter getRateLimiter() {
         if (!rate_limiter) {
+            # the limiter of code that is sandboxed or acts for sandboxed code is its Program's, so the object does
+            # not keep it: the next caller can be the code of another Program (issue #7686)
+            if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+                return VoyageRestClient::VoyageRestClientBase::getRateLimiter(
+                    VoyageRestClient::VoyageRestClientBase::RateLimitRerank,
+                    config.url ?? VoyageRestClient::VoyageRestClientBase::DefaultUrl, config.api_key, model_name,
+                    config.requests_per_minute, config.tokens_per_minute);
+            }
             AutoLock al(init_mutex);
             if (!rate_limiter) {
                 rate_limiter = VoyageRestClient::VoyageRestClientBase::getRateLimiter(
