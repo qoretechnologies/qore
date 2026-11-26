@@ -34,7 +34,7 @@ class SharedCacheLoadersTest inherits QUnit::Test {
             string execution_mode = mode;
             addTestCase("execution mode " + mode, sub () {
                 # the checks run in child Programs and in the library modules, which choose their own execution
-                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+                assertEq(expected, ExecModeHarness::run_stdout(command(execution_mode), ExecModeHarness::NativeCheck::None));
             });
         }
         set_return_value(main());
