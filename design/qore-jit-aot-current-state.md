@@ -100,8 +100,8 @@ Compiled code and the IR interpreter call a call reference or closure value thro
 whose class is exactly `FunctionCallReferenceNode` or `LocalFunctionCallReferenceNode`
 (`qore_get_exact_function_call_reference()`: never a subclass, so a sandbox-bound
 reference keeps its own dispatch) takes `qore_rt_try_call_function_reference_t()`
-(qore#5578), which makes the call as `qore_rt_call_fast()` makes a call of the function
-(`qore_rt_call_fast_entered_t()`, shared with it): no argument list, no
+(qore#5578), which has `qore_rt_call_fast()` make the call, with the reference's Program as
+the explicit Program, as the generic call has it: no argument list, no
 `ResolvedCallReferenceNode::invoke()` or `dispatchValue()`, no variant search or argument
 processing (`CodeEvaluationHelper`). It does so only if all of these hold, and otherwise
 does nothing and leaves the call to the generic path:
@@ -136,17 +136,17 @@ does nothing and leaves the call to the generic path:
   sandbox's budgets, and only there can the signature not be freed meanwhile
   (qore#5822); a function of another Program, which can be deleted, takes the generic
   path;
-- the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`; a deletion
-  of a module's Program that started before it was entered refuses the call as the
-  generic path refuses it) and has no debugger attached (the global count of Programs
-  with a debugger, `qore_aot_direct_call_mode`, first).
+- the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`) and has no
+  debugger attached (the global count of Programs with a debugger,
+  `qore_aot_direct_call_mode`, first).
 
 The refusals of a call made by the expression of the background operator (qore#7087)
 are those of the generic path: of a reference created by code that may not control
 threads (`checkBackgroundCreator()`) and of the code of a Program that may not
 (`qore_check_background_direct_entry()`). The frame, the exceptions, the module
-Program's entry and call Program context (qore#7394) and the callee's promotion are those
-of `qore_rt_call_fast()`. `QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS` disables it
+Program's entry (which refuses a Program whose teardown has started) and call Program
+context (qore#7394) and the callee's promotion are those of a direct fast call
+(`qore_rt_call_fast()`). `QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS` disables it
 (testing only); debug builds count its calls (`dbg_function_reference_fast_calls()`).
 `function-reference-fast-path.qtest` compares the results, exceptions and call stacks
 with the AST interpreter in every execution mode, on the IR tier and in AOT code, and
