@@ -15282,6 +15282,14 @@ struct QoreAOTCallRefRegistry {
     }
 };
 
+//! starts the next generation of the registrations: a variant whose lookup found nothing looks again; 0 means "never
+//! looked up" and is skipped when the count wraps
+void qore_aot_callref_next_generation(QoreAOTCallRefRegistry& reg) noexcept {
+    if (reg.generation.fetch_add(1, std::memory_order_acq_rel) + 1 == 0) {
+        reg.generation.fetch_add(1, std::memory_order_acq_rel);
+    }
+}
+
 //! returns true if the entry is well formed: a function, an entry and parameter and return kinds that exist
 bool qore_aot_callref_entry_valid(const QoreAOTCallRefEntry& e) {
     if (!e.fn || !e.cref_fn || e.nparams > QORE_AOT_CALLREF_MAX_PARAMS) {
@@ -15303,16 +15311,26 @@ extern "C" DLLEXPORT void qore_aot_register_callref_entries_v1(const QoreAOTCall
     if (!entries || num_entries <= 0) {
         return;
     }
-    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
-    QoreAutoRWWriteLocker al(reg.lock);
-    for (int32_t i = 0; i < num_entries; ++i) {
-        const QoreAOTCallRefEntry& e = entries[i];
-        if (qore_aot_callref_entry_valid(e)) {
-            reg.entries[e.fn] = &e;
+    // called by a constructor function of the image: nothing may escape (an entry that cannot be registered is not
+    // used, and its calls take the generic call path)
+    QoreAOTCallRefRegistry* registry = nullptr;
+    try {
+        registry = &QoreAOTCallRefRegistry::get();
+        QoreAOTCallRefRegistry& reg = *registry;
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (int32_t i = 0; i < num_entries; ++i) {
+            const QoreAOTCallRefEntry& e = entries[i];
+            if (qore_aot_callref_entry_valid(e)) {
+                reg.entries[e.fn] = &e;
+            }
+        }
+        qore_aot_callref_next_generation(reg);
+    } catch (...) {
+        // the entries registered before the failure are found by the next lookups
+        if (registry) {
+            qore_aot_callref_next_generation(*registry);
         }
     }
-    // a variant whose lookup found nothing looks again
-    reg.generation.fetch_add(1, std::memory_order_acq_rel);
 }
 
 extern "C" DLLEXPORT void qore_aot_unregister_callref_entries_v1(const QoreAOTCallRefEntry* entries,
@@ -15320,14 +15338,18 @@ extern "C" DLLEXPORT void qore_aot_unregister_callref_entries_v1(const QoreAOTCa
     if (!entries || num_entries <= 0) {
         return;
     }
-    QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
-    QoreAutoRWWriteLocker al(reg.lock);
-    for (int32_t i = 0; i < num_entries; ++i) {
-        auto it = reg.entries.find(entries[i].fn);
-        // only this image's own entry is removed
-        if (it != reg.entries.end() && it->second == &entries[i]) {
-            reg.entries.erase(it);
+    // called by a destructor function of the image: nothing may escape
+    try {
+        QoreAOTCallRefRegistry& reg = QoreAOTCallRefRegistry::get();
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (int32_t i = 0; i < num_entries; ++i) {
+            auto it = reg.entries.find(entries[i].fn);
+            // only this image's own entry is removed
+            if (it != reg.entries.end() && it->second == &entries[i]) {
+                reg.entries.erase(it);
+            }
         }
+    } catch (...) {
     }
 }
 

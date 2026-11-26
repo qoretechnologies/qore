@@ -17933,12 +17933,25 @@ static bool emitAOTCallRefEntries(llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::ConstantArray::get(table_ty, table_entries), "qore_aot_callref_entries");
     llvm::Constant* count = llvm::ConstantInt::get(i32_ty, table_entries.size());
     auto* reg_ty = llvm::FunctionType::get(void_ty, {ptr_ty, i32_ty}, false);
+    // the runtime functions are referenced weakly and called only if present: the constructor runs when the image is
+    // loaded, before the image's AOT runtime identity is checked, so an image loaded by an older library that lacks
+    // them must still load as far as that check, which refuses it with its message (as for
+    // qore_rt_try_enter_native_method_v1())
     auto emit_ctor = [&](const char* name, const char* runtime_fn) {
         llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(void_ty, false),
             llvm::GlobalValue::InternalLinkage, name, module);
         f->setUWTableKind(llvm::UWTableKind::Default);
-        llvm::IRBuilder<> fb(llvm::BasicBlock::Create(ctx, "entry", f));
-        fb.CreateCall(module.getOrInsertFunction(runtime_fn, reg_ty), {table_gv, count});
+        auto* reg_fn = llvm::cast<llvm::Function>(module.getOrInsertFunction(runtime_fn, reg_ty).getCallee());
+        reg_fn->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", f);
+        llvm::BasicBlock* call_bb = llvm::BasicBlock::Create(ctx, "call", f);
+        llvm::BasicBlock* ret_bb = llvm::BasicBlock::Create(ctx, "ret", f);
+        llvm::IRBuilder<> fb(entry);
+        fb.CreateCondBr(fb.CreateIsNotNull(reg_fn), call_bb, ret_bb);
+        fb.SetInsertPoint(call_bb);
+        fb.CreateCall(reg_ty, reg_fn, {table_gv, count});
+        fb.CreateBr(ret_bb);
+        fb.SetInsertPoint(ret_bb);
         fb.CreateRetVoid();
         return f;
     };

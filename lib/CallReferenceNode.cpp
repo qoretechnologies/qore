@@ -519,21 +519,20 @@ bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(const QoreProgram*
 
 bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(ThreadData* td, const QoreProgram* pgm) const {
     assert(td == qore_get_thread_data() && pgm == runtime_get_program(td));
-    // a reference that its own code calls in place applies no creator context
-    if (!has_creator_po) {
-        return true;
-    }
-    if (creator_non_module != (pgm && !qore_program_is_module_inline(pgm))
-            || creator_po != qore_current_creator_parse_options(td, pgm)) {
-        return false;
-    }
     // the sandbox provenance and the origin restrictions recorded for the reference, which a call applies
-    // (QoreSandboxProvenanceHelper); a reference has them from its construction on, or never
+    // (QoreSandboxProvenanceHelper); a reference has them from its construction on, or never; tested first, so that a
+    // call path that relies on this predicate to skip QoreSandboxProvenanceHelper (the call-reference entries of AOT
+    // code) never skips recorded provenance, also of a reference that records no creator context
     if (QoreSandboxContext* context = qore_get_call_reference_provenance(this)) {
         context->deref();
         return false;
     }
-    return true;
+    // a reference that its own code calls in place applies no creator context
+    if (!has_creator_po) {
+        return true;
+    }
+    return creator_non_module == (pgm && !qore_program_is_module_inline(pgm))
+        && creator_po == qore_current_creator_parse_options(td, pgm);
 }
 
 int ResolvedCallReferenceNodeIntern::checkBackgroundCreator(ExceptionSink* xsink) const {

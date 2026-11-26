@@ -3118,11 +3118,14 @@ private:
         NaN-boxed results, which the caller owns, are joined.
 
         @param result set to the joined result, or left nullptr if the call does not have that shape (nothing is emitted)
+        @param closure_helpers true if the generic call path is made by qore_rt_call_closure_0() or
+        qore_rt_call_closure_1(), as the invoke form of the call makes it, instead of qore_rt_call_closure_fast()
 
         @return false on error
     */
     DLLLOCAL bool emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llvm::Value* ref_boxed,
-            llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error);
+            llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error,
+            bool closure_helpers = false);
 
     //! Emits the call of \a inst through a call-reference entry with no argument or one native argument giving a native
     //! value, when its value is stored into a native local of that kind (qore#5578)

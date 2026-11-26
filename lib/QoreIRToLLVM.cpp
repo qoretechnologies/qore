@@ -9629,7 +9629,8 @@ llvm::AllocaInst* QoreIRToLLVM::getCallRefEntryResultSlot(llvm::Function* llvm_f
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llvm::Value* ref_boxed,
-        llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error) {
+        llvm::Module& module, llvm::Function* llvm_func, llvm::Value*& result, std::string& error,
+        bool closure_helpers) {
     result = nullptr;
     const int nargs = static_cast<int>(inst->operands.size()) - 1;
     if (nargs > 1) {
@@ -9686,10 +9687,8 @@ bool QoreIRToLLVM::emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llv
     // the generic call path, with the argument boxed here (an owned value for an int or a float that needs a node),
     // and released here once the call returns
     builder->SetInsertPoint(generic_bb);
-    llvm::Value* args_array;
     llvm::Value* boxed_arg = nullptr;
     if (arg) {
-        args_array = allocCallArray(llvm_func, 1);
         if (arg->getType() == i64_type) {
             boxed_arg = boxIntInline(arg);
         } else if (arg->getType() == double_type) {
@@ -9697,13 +9696,29 @@ bool QoreIRToLLVM::emitScalarCallRefEntryCall(const QoreIRInstruction* inst, llv
         } else {
             boxed_arg = boxBool(arg);
         }
-        builder->CreateStore(boxed_arg, args_array);
-    } else {
-        args_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
     }
-    llvm::Value* generic_result = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
-        {ref_boxed, args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg}, "callref_generic_value");
+    llvm::Value* generic_result;
+    if (closure_helpers) {
+        // the helpers of a call with no argument and one argument, which the call made without the entry
+        generic_result = arg
+            ? builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_1",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false)),
+                {ref_boxed, boxed_arg, xsink_arg}, "callref_generic_value")
+            : builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_0",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false)),
+                {ref_boxed, xsink_arg}, "callref_generic_value");
+    } else {
+        llvm::Value* args_array;
+        if (arg) {
+            args_array = allocCallArray(llvm_func, 1);
+            builder->CreateStore(boxed_arg, args_array);
+        } else {
+            args_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        }
+        generic_result = builder->CreateCall(module.getOrInsertFunction("qore_rt_call_closure_fast",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false)),
+            {ref_boxed, args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg}, "callref_generic_value");
+    }
     if (boxed_arg && arg->getType() != i1_type) {
         builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed_arg, xsink_arg});
@@ -9726,7 +9741,9 @@ bool QoreIRToLLVM::emitNativeStoreCallRefEntryCall(const QoreIRInstruction* inst
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_NATIVE_STORE");
     result = nullptr;
     const int nargs = static_cast<int>(inst->operands.size()) - 1;
-    if (nargs > 1 || !next || next->opcode != QoreIROpcode::StoreLocal || next->operands.empty()
+    // code whose exceptions are checked later (an init function) can run the call with an exception pending, which
+    // the conversion here would take for the call's own
+    if (nargs > 1 || deferred_exception_checking || !next || next->opcode != QoreIROpcode::StoreLocal || next->operands.empty()
             || next->operands[0].id != inst->result.id || !inst->result.isValid() || disabled_env.get()) {
         return true;
     }
@@ -25488,7 +25505,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || nullable_arg_cleanups.count(closure_arg_cleanups))
                         && callRefEntryCallEligible(inst);
                     if (callref_entry && !has_closure_arg_cleanups
-                            && !emitScalarCallRefEntryCall(inst, ref_boxed, module, llvm_func, result, error)) {
+                            && !emitScalarCallRefEntryCall(inst, ref_boxed, module, llvm_func, result, error,
+                                true)) {
                         return false;
                     }
 

@@ -15040,6 +15040,14 @@ enum class QoreCallRefOutcome {
     Programs, each with its own variants and contexts).  The entry checks the stack, and the callee raises its
     exceptions in \a xsink, as for a direct call.
 
+    Like a direct call of a native fast entry, and unlike the runtime's fast call (qore_rt_call_fast()), this sets no
+    runtime parse-option override of the callee's code (QoreRtUserCallOverrideHelper), no object or class context and
+    no implicit arguments (CalleeContextHelper), and does not clear a calling closure's environment: the entry exists
+    only for a body that observes none of them (a context-independent fast entry: scalar operations on its own locals
+    and direct calls of other such bodies, no builtin call, see qore_aot_callref_entry_eligible()), so a change that
+    admits other bodies must set them up here.  The reference's sandbox provenance is not applied
+    (QoreSandboxProvenanceHelper) as the admission found none recorded (creatorContextIsCurrent() tests it first).
+
     @param kinds_ok called as <tt>bool(const QoreAOTCallRefEntry&, const UserVariantBase*)</tt> once the variant's
     signature can be read: returns true if the entry's parameter and return kinds and the variant's parameters take
     the call's arguments and give its result
@@ -15052,13 +15060,41 @@ template <typename KindsOk, typename Fill>
 static QORE_INTERN_ALWAYS_INLINE QoreCallRefOutcome qore_rt_call_ref_t(uint64_t ref_bits, int nargs,
         KindsOk&& kinds_ok, Fill&& fill, uint64_t& raw_result, uint8_t& ret_kind, ExceptionSink* xsink) {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CALLREF_ENTRIES");
+    // the switch of every call through a reference without the generic call path disables these calls too
+    static constinit QoreEnvFlag fast_calls_disabled_env("QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS");
     QoreValue ref_val = fromBits(ref_bits);
     // a value that is not a reference held as an ordinary pointer, a closure and any other kind of reference takes the
     // generic call path
     const AbstractQoreNode* node = ref_val.isPlainPointer() ? ref_val.get<const AbstractQoreNode>() : nullptr;
     if (!node || node->getType() != NT_FUNCREF || nargs > static_cast<int>(QORE_AOT_CALLREF_MAX_PARAMS)
-            || disabled_env.get()) {
+            || disabled_env.get() || fast_calls_disabled_env.get()) {
         return QoreCallRefOutcome::Miss;
+    }
+    // a call made while an exception is pending (code whose exceptions are checked later, such as an init function)
+    // takes the generic call path, as the value of the call is told from an exception that it raised by the sink
+    if (*xsink) {
+        return QoreCallRefOutcome::Miss;
+    }
+    // a function without an entry for the native code of its variant (no AOT code, or a body that has none) takes the
+    // generic call path at once, before the admission, which the runtime's fast call through a reference makes then
+    {
+        QoreProgram* ref_pgm;
+        const LocalFunctionCallReferenceNode* ref = qore_get_exact_function_call_reference(node, ref_pgm);
+        if (!ref) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const QoreFunction* func = ref->LocalFunctionCallReferenceNode::getFunction();
+        if (!func->hasSingleCallVariant()) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const UserVariantBase* uvb = func->first()->getUserVariantBase();
+        if (!uvb || !uvb->hasCachedAOT() || !uvb->hasCachedFunction()) {
+            return QoreCallRefOutcome::Miss;
+        }
+        const QoreAOTCallRefEntry* e = uvb->getAOTCallRefEntry();
+        if (!e || e->fn != uvb->getCachedAOTFunction()) {
+            return QoreCallRefOutcome::Miss;
+        }
     }
     const QoreAOTCallRefEntry* entry = nullptr;
     QoreFunctionReferenceCall call;
