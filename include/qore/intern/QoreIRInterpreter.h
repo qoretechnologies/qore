@@ -322,8 +322,9 @@ DLLLOCAL QoreValue qore_add_assign_unique_container(QoreValue container, const Q
         ExceptionSink* xsink);
 
 //! Adds \a right to the lvalue that the reference \a ref, held by an "auto" local, designates (qore#7421)
-/** The lvalue is changed under its lock, as the AST interpreter changes it, so that a list or a hash that it holds is
-    changed in place; the store of the result to the local follows, and assigns it through the reference.
+/** The lvalue is changed under its lock once, as the AST interpreter changes it, so that a list or a hash that it
+    holds is changed in place; the store paired with the operation stores nothing then
+    (QoreIRInstruction::paired_auto_add_store).
 
     @return the value of the lvalue after the operation, holding a reference, or no value if an exception was raised
 */

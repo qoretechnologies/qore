@@ -1284,6 +1284,10 @@ private:
     std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
     // the slot of each read site of emitReferenceLocalRead() -> the slot of the value read before it at the site
     std::unordered_map<llvm::AllocaInst*, llvm::AllocaInst*> reference_read_previous_slots;
+    // the result of each generic += of an "auto" local paired with its store whose local can hold a reference -> the
+    // i1 that is true if the local held one when the operation was made: the operation is made through it, and the
+    // paired store stores nothing then (autoAddHoldsReference(), QoreIRInstruction::paired_auto_add_store, qore#7421)
+    std::unordered_map<uint32_t, llvm::Value*> auto_add_reference_flags;
     // the arrays of given argument slots that are null when no read through a reference holds its value (see
     // buildArgCleanupArray())
     std::unordered_set<llvm::Value*> nullable_arg_cleanups;
@@ -3239,6 +3243,15 @@ private:
     //! += helper: \a lhs, or the reference that the local holds, through which the operation is made (qore#7421)
     llvm::Value* prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
         llvm::Function* llvm_func);
+    //! returns the i1 that is true if the local of the generic += \a inst paired with its store holds a reference,
+    //! read from its reference flag once, or nullptr if the local cannot hold one (auto_add_reference_flags, qore#7421)
+    llvm::Value* autoAddHoldsReference(const QoreIRInstruction& inst, llvm::Function* llvm_func);
+    //! emits the paired store \a inst of a generic += of an "auto" local: it stores nothing if the operation was made
+    //! through a reference that the local holds (QoreIRInstruction::paired_auto_add_store, qore#7421)
+    bool lowerPairedAutoAddStore(const QoreIRInstruction* inst, llvm::Value* holds_ref, llvm::Function* llvm_func,
+        llvm::Module& module, std::string& error, const QoreIRInstruction* next);
+    // true while lowerPairedAutoAddStore() emits the store itself
+    bool lowering_paired_auto_add_store = false;
 
     //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
     /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds

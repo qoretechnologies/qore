@@ -604,13 +604,6 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared_local(const QoreValue& v)
     qore_type_t t = n->getType();
     return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_local_container(n);
 }
-//! records that \a v, the result of a += of an "auto" local, is the container that the operation changed in place,
-//! which the store of the result that follows gives back to the lvalue that holds it (qore#7421)
-DLLLOCAL void qore_set_in_place_store(const QoreValue& v);
-//! returns true if \a v is the container that the last += of an "auto" local in this thread changed in place
-//! (qore_set_in_place_store()): its store back to the lvalue that holds it is not a share point (qore#7342), which
-//! would leave a weak reference to the container designating a copy; the record is cleared
-DLLLOCAL bool qore_take_in_place_store(const QoreValue& v);
 //! takes \a v, a list or hash that qore_weak_shared() is true for, and returns a copy of its own (qore#7342); the
 //! values in it are shared
 DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink);

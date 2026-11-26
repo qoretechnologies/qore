@@ -3565,9 +3565,12 @@ void qore_ir_mark_auto_string_appends(QoreIRFunction& func) {
             if (uses.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
                 return;
             }
-            if (uses[load.result.id].size() == 1) {
+            // the store's value is never used: a store that stores nothing (qore#7421) gives none
+            if (uses[load.result.id].size() == 1
+                    && (!store->result.isValid() || uses[store->result.id].empty())) {
                 load.auto_local_string_append = true;
                 op.auto_local_string_append = true;
+                const_cast<QoreIRInstruction*>(store)->paired_auto_add_store = true;
             }
         }
     }
