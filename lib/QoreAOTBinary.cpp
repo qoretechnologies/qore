@@ -13041,6 +13041,8 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     // it has the debugger's events of its statements, as the debug IR of a function (#5816); without a debugger, the
     // closure runs its native code
     ir->emit_debug_statements = pgm && qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+    // the calls that the serialized IR cannot express as pseudo-method instructions stay calls (qore#7733)
+    ir->lower_call_forms_for_debug_ir = true;
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     // the object of the calls through self in a closure created in a method (issue #5823)

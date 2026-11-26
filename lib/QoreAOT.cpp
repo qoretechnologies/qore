@@ -2961,7 +2961,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         const QoreFunction* source_qf = nullptr,
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
-        const AOTConstantReverseMap* constant_reverse_map = nullptr) {
+        const AOTConstantReverseMap* constant_reverse_map = nullptr, bool debug_ir = false) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2973,6 +2973,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // debugger is attached, so in a Program that can be debugged it has the step event of every statement, as the
     // AST interpreter has (#5558); the native code ignores the instructions
     ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+    // the separately lowered debug IR keeps the calls that the serialized IR cannot express otherwise (qore#7733)
+    ir_func->lower_call_forms_for_debug_ir = debug_ir;
     // Set source identity before QoreIRBuilder lowers statements; direct-call
     // self-recursion detection requires exact variant identity because
     // overloads share the same QoreFunction family.
@@ -3178,13 +3180,16 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     return 0;
 }
 
-//! Lowers the debug IR of a function whose IR the AOT-only interprocedural rewrites changed (#7696)
+//! Lowers the debug IR of a function whose IR the AOT-only interprocedural rewrites changed (#7696), or whose lowering
+//! made calls that the serialized IR cannot express (#7733)
 /** The debug IR runs in the IR interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()), so
     it must run as the source does and make every call that the source makes: the rewrites of the native code's IR
     (fusions of calls with the expressions that consume their results, projections that replace calls by their known
     results, specializations from the facts of the callees) are not serialized and are unknown to the interpreter.
     The function is therefore lowered again from its parse tree, as for a generic specialized fast entry, without
-    them.
+    them, and with the calls of substr(), index() and rindex() kept as calls
+    (QoreIRFunction::lower_call_forms_for_debug_ir): the pseudo-method instructions that the lowering makes of them
+    hold the function call as their expression, which the serialized IR does not keep.
 
     @return the unrewritten IR, or nullptr with \a error set if the lowering failed
 */
@@ -3192,7 +3197,7 @@ static std::unique_ptr<QoreIRFunction> aotLowerUnrewrittenDebugIR(const QoreIRFu
         UserVariantBase* uvb, const char* name, QoreProgram* pgm, const QoreFunction* source_qf,
         const AOTConstantReverseMap* constant_reverse_map, std::string& error) {
     QoreIRFunction* ir_func = nullptr;
-    if (tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, nullptr, nullptr, constant_reverse_map)
+    if (tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, nullptr, nullptr, constant_reverse_map, true)
             || !ir_func) {
         delete ir_func;
         if (error.empty()) {
@@ -22276,9 +22281,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 AOTFunctionOutliner outline_probe;
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
-                // the debug IR, when the rewrites of the native code's IR changed it (#7696)
+                // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
+                // the serialized IR cannot express (#7733)
                 std::unique_ptr<QoreIRFunction> debug_ir_func;
-                if (!will_outline && refine_interprocedural(*ir_func)) {
+                const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
+                if (rewritten || ir_func->has_debug_ir_call_forms) {
                     std::string debug_error;
                     debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, function_name.c_str(), pgm, func,
                         const_reverse_map, debug_error);
@@ -22822,9 +22829,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     AOTFunctionOutliner outline_probe;
                     bool will_outline = outline_probe.run(ir_func, false);
                     outline_probe.undo();
-                    // the debug IR, when the rewrites of the native code's IR changed it (#7696)
+                    // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
+                    // the serialized IR cannot express (#7733)
                     std::unique_ptr<QoreIRFunction> debug_ir_func;
-                    if (!will_outline && refine_interprocedural(*ir_func)) {
+                    const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
+                    if (rewritten || ir_func->has_debug_ir_call_forms) {
                         std::string debug_error;
                         debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, method_name.c_str(), pgm, nullptr,
                             const_reverse_map, debug_error);

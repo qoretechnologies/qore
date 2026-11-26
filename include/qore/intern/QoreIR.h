@@ -5016,6 +5016,17 @@ public:
         Program's statement index at runtime.
     */
     bool emit_debug_statements = false;
+    //! True if the lowering keeps the calls of the functions that it otherwise makes pseudo-method instructions of
+    //! (substr(), index(), rindex() and the one-argument string functions; qore#7733)
+    /** Set for the separately lowered debug IR of AOT code (see aotLowerUnrewrittenDebugIR() in QoreAOT.cpp): such an
+        instruction holds the function call as its expression, which the serialized IR does not keep, so the IR
+        interpreter would run the pseudo-method and its exceptions would have the pseudo-method's frame.
+    */
+    bool lower_call_forms_for_debug_ir = false;
+    //! True if the lowering made a pseudo-method instruction of a function call (see lower_call_forms_for_debug_ir)
+    /** The AOT compiler then lowers the function's debug IR separately (qore#7733).
+    */
+    bool has_debug_ir_call_forms = false;
     //! Returns true if the step events of the function get the paths of a debugger's flow requests (#6201)
     /** Only the debug IR of AOT code has them (QoreIRDebugFlowTargets): new calls of it run that IR in the IR
         interpreter while a debugger is attached (UserVariantBase::materializeAOTDebugIR()).  Code lowered from the
