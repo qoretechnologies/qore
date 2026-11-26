@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Le caractère de guillemet des champs (par défaut : `\"`) ; les champs sont lus avec lui, et les séparateurs dans les champs entre guillemets ne sont pas comptés lors de la détection du séparateur"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Ligne d'en-tête"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "La ligne contenant les noms des colonnes, ou 0 s'il n'y en a pas"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "La ligne (numérotée à partir de 1) contenant les noms des colonnes, ou `0` si les données n'en ont pas ; si elle n'est pas indiquée, la ligne d'en-tête est déterminée à partir des données. Utilisez-la lorsque la personne qui connaît le fichier indique où se trouvent les noms des colonnes"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Nombre maximal de lignes"

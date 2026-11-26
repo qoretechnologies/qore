@@ -935,6 +935,18 @@
           "source": "The field quote character (default: `\"`); fields are read with it, and separators inside quoted fields are not counted when the separator is detected",
           "message": "Znak uvozovky polí (výchozí: `\"`); pole se čtou s ním a oddělovače v polích v uvozovkách se při zjišťování oddělovače nepočítají"
         },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Řádek záhlaví"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Řádek s názvy sloupců, nebo 0, pokud žádný není"
+        },
+        "app.Q3N2.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names, or `0` if the data has none; when not given, the header row is found from the data. Use it when the person who knows the file says where the column names are",
+          "message": "Řádek s názvy sloupců číslovaný od 1, nebo `0`, pokud data žádný nemají; pokud není zadán, řádek záhlaví se zjistí z dat. Použijte ho, když osoba, která soubor zná, řekne, kde jsou názvy sloupců"
+        },
         "app.Q3N2.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
           "source": "Maximum Rows",
           "message": "Maximální počet řádků"
