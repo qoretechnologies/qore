@@ -206,7 +206,7 @@ public class ListDataType inherits QoreDataType {
         bool generated_display_name = (display_name == AbstractDataField::getDisplayName(name));
         # a type that a frozen type holds is shared as well (qore#7728)
         if (frozen) {
-            element_type.freeze();
+            freezeHeld(element_type);
         }
         self.element_type = element_type;
         if (element_type.getTags().dynamic) {
@@ -266,6 +266,11 @@ public class ListDataType inherits QoreDataType {
         return qtype
             ? ListDataType::getQoreType(qtype, or_nothing)
             : (or_nothing ? AutoListOrNothingType : AutoListType);
+    }
+
+    #! Returns the element type; see AbstractDataProviderType::getHeld()
+    private *list<object> getHeld() {
+        return (element_type,);
     }
 
     #! Marks the types that the type holds as shared; see AbstractDataProviderType::freeze()
