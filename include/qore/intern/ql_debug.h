@@ -40,6 +40,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
@@ -356,6 +357,12 @@ DLLLOCAL bool qore_dbg_hash_foreign_member_hash();
 //! returns the sites of keyed containers recorded by QORE_KEYED_HASH_SITE(): site -> the hash of the probe of its
 //! hasher (qore#7750)
 DLLLOCAL std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites();
+
+//! returns the sites of the adaptive containers that switched to the keyed hash (qore#7750)
+DLLLOCAL std::set<std::string> qore_dbg_get_keyed_hash_switched_sites();
+
+//! makes the unkeyed hash of adaptive containers give every key the same hash, or stops it (qore#7750)
+DLLLOCAL void qore_dbg_set_keyed_hash_collide(bool collide);
 
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);

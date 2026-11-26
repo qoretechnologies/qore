@@ -92,4 +92,98 @@ inline uint64_t qore_siphash13(uint64_t k0, uint64_t k1, const void* data, size_
     return v0 ^ v1 ^ v2 ^ v3;
 }
 
+#include <cstring>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_SIPHASH_INLINE inline __attribute__((always_inline))
+#else
+#define QORE_SIPHASH_INLINE inline
+#endif
+
+//! the state of SipHash-1-3 and its steps; the steps are always inline, so that the hash makes no call (qore#7750)
+struct qore_siphash13_state {
+    uint64_t v0, v1, v2, v3;
+
+    QORE_SIPHASH_INLINE qore_siphash13_state(uint64_t k0, uint64_t k1)
+            : v0(k0 ^ 0x736f6d6570736575ull), v1(k1 ^ 0x646f72616e646f6dull), v2(k0 ^ 0x6c7967656e657261ull),
+            v3(k1 ^ 0x7465646279746573ull) {
+    }
+
+    static QORE_SIPHASH_INLINE uint64_t rotl(uint64_t x, int b) {
+        return (x << b) | (x >> (64 - b));
+    }
+
+    QORE_SIPHASH_INLINE void round() {
+        v0 += v1; v1 = rotl(v1, 13); v1 ^= v0; v0 = rotl(v0, 32);
+        v2 += v3; v3 = rotl(v3, 16); v3 ^= v2;
+        v0 += v3; v3 = rotl(v3, 21); v3 ^= v0;
+        v2 += v1; v1 = rotl(v1, 17); v1 ^= v2; v2 = rotl(v2, 32);
+    }
+
+    //! compresses one 8-byte word
+    QORE_SIPHASH_INLINE void compress(uint64_t m) {
+        v3 ^= m;
+        round();
+        v0 ^= m;
+    }
+
+    //! the finalization rounds
+    QORE_SIPHASH_INLINE uint64_t finish() {
+        v2 ^= 0xff;
+        round();
+        round();
+        round();
+        return v0 ^ v1 ^ v2 ^ v3;
+    }
+
+    //! reads the 8 bytes at \a p as a little-endian word
+    static QORE_SIPHASH_INLINE uint64_t load8(const unsigned char* p) {
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        uint64_t w;
+        memcpy(&w, p, 8);
+        return w;
+#else
+        uint64_t w = 0;
+        for (size_t i = 0; i < 8; ++i) {
+            w |= static_cast<uint64_t>(p[i]) << (8 * i);
+        }
+        return w;
+#endif
+    }
+
+    //! reads the \a n (< 8) bytes at \a p as a little-endian word
+    static QORE_SIPHASH_INLINE uint64_t loadTail(const unsigned char* p, size_t n) {
+        uint64_t w = 0;
+        for (size_t i = 0; i < n; ++i) {
+            w |= static_cast<uint64_t>(p[i]) << (8 * i);
+        }
+        return w;
+    }
+};
+
+//! SipHash-1-3, the same function as qore_siphash13(), with all its steps inline and the input read in words
+//! (qore#7750)
+/** For the hashers of std containers (qore_keyed_hash.h), which hash a key at each search; qore_siphash13() stays as
+    it is for the key maps of hashes
+*/
+inline uint64_t qore_siphash13_fast(uint64_t k0, uint64_t k1, const void* data, size_t len) {
+    const unsigned char* p = static_cast<const unsigned char*>(data);
+    qore_siphash13_state s(k0, k1);
+    const unsigned char* end = p + (len & ~static_cast<size_t>(7));
+    for (; p != end; p += 8) {
+        s.compress(qore_siphash13_state::load8(p));
+    }
+    // the last word: the remaining bytes and the length modulo 256 in the high byte
+    s.compress((static_cast<uint64_t>(len) << 56) | qore_siphash13_state::loadTail(p, len & 7));
+    return s.finish();
+}
+
+//! SipHash-1-3 of the 8 little-endian bytes of \a v: the same as qore_siphash13() of those 8 bytes (qore#7750)
+inline uint64_t qore_siphash13_u64(uint64_t k0, uint64_t k1, uint64_t v) {
+    qore_siphash13_state s(k0, k1);
+    s.compress(v);
+    s.compress(static_cast<uint64_t>(8) << 56);
+    return s.finish();
+}
+
 #endif

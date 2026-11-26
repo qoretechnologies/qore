@@ -114,6 +114,28 @@ int main(int argc, char** argv) {
         check(sh(std::string(s)) == expected, "string hash of a std::string");
         check(sh(s) == expected, "string hash of a C string");
     }
+    // the inline variants are the same function as qore_siphash13() for every length up to 64 bytes
+    {
+        unsigned char buf[64];
+        for (size_t i = 0; i < sizeof buf; ++i) {
+            buf[i] = static_cast<unsigned char>(i * 37 + 11);
+        }
+        bool same_fast = true;
+        for (size_t len = 0; len <= sizeof buf; ++len) {
+            if (qore_siphash13_fast(k[0], k[1], buf, len) != qore_siphash13(k[0], k[1], buf, len)) {
+                same_fast = false;
+            }
+        }
+        check(same_fast, "qore_siphash13_fast() is qore_siphash13() for 0 - 64 bytes");
+        uint64_t v = 0x0123456789abcdefull;
+        unsigned char vb[8];
+        for (size_t i = 0; i < 8; ++i) {
+            vb[i] = static_cast<unsigned char>(v >> (8 * i));
+        }
+        check(qore_siphash13_u64(k[0], k[1], v) == qore_siphash13(k[0], k[1], vb, 8),
+            "qore_siphash13_u64() is qore_siphash13() of the 8 little-endian bytes");
+    }
+
     // a key with a NUL byte is hashed with all its bytes
     std::string nul("a\0b", 3);
     check(sh(nul) == static_cast<size_t>(qore_siphash13(k[0], k[1], nul.data(), 3)), "string hash with a NUL byte");

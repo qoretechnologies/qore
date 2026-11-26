@@ -98,7 +98,7 @@ public:
     }
 
     DLLLOCAL size_t operator()(std::string_view s) const noexcept {
-        return static_cast<size_t>(qore_siphash13(k[0], k[1], s.data(), s.size()));
+        return static_cast<size_t>(qore_siphash13_fast(k[0], k[1], s.data(), s.size()));
     }
 
     //! the hash of a fixed string, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
@@ -125,12 +125,7 @@ public:
     template <typename T>
     DLLLOCAL size_t operator()(T v) const noexcept {
         static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_keyed_int_hash takes integer keys");
-        uint64_t u = static_cast<uint64_t>(v);
-        unsigned char b[8];
-        for (size_t i = 0; i < 8; ++i) {
-            b[i] = static_cast<unsigned char>(u >> (8 * i));
-        }
-        return static_cast<size_t>(qore_siphash13(k[0], k[1], b, sizeof b));
+        return static_cast<size_t>(qore_siphash13_u64(k[0], k[1], static_cast<uint64_t>(v)));
     }
 
     //! the hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
@@ -188,7 +183,223 @@ using qore_keyed_int_set = std::unordered_set<K, qore_keyed_int_hash>;
 //! Internal, debug builds only: records that a container of the given site was constructed with a keyed hasher and
 //! the hash of the hasher's probe (QORE_KEYED_HASH_SITE()); read by dbg_keyed_hash_sites()
 DLLEXPORT void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept;
+
+//! Internal, debug builds only: records that an adaptive container of the given site switched to the keyed hash;
+//! read by dbg_keyed_hash_switched_sites()
+DLLEXPORT void qore_intern_dbg_keyed_hash_switched(const char* site) noexcept;
+
+//! Internal, debug builds only: true while dbg_keyed_hash_force_collisions() makes the unkeyed hash of adaptive
+//! containers give every key the same hash, as keys that share their hash would have
+DLLEXPORT bool qore_intern_dbg_keyed_hash_collide() noexcept;
 #endif
+
+//! the state of an adaptive hasher: unkeyed (the standard hash) until its container switches it to the keyed hash
+struct qore_adaptive_hash_state {
+    //! the key of the process once the container uses the keyed hash, nullptr before
+    const uint64_t* k = nullptr;
+};
+
+//! The hasher of qore_adaptive_int_map and qore_adaptive_int_set: the standard hash of an integer (its value) until
+//! the container switches it to SipHash-1-3 with the secret key of the process
+/** libstdc++ takes it for a "fast" hash, so the nodes do not store the hashes of their keys, and a rehash after the
+    switch hashes every key again with the keyed hash
+*/
+class qore_adaptive_int_hash {
+public:
+    DLLLOCAL explicit qore_adaptive_int_hash(const qore_adaptive_hash_state* s) : s(s) {
+    }
+
+    template <typename T>
+    DLLLOCAL size_t operator()(T v) const noexcept {
+        static_assert(std::is_integral_v<T> || std::is_enum_v<T>, "qore_adaptive_int_hash takes integer keys");
+        uint64_t u = static_cast<uint64_t>(v);
+        if (s->k) {
+            return static_cast<size_t>(qore_siphash13_u64(s->k[0], s->k[1], u));
+        }
+#ifdef DEBUG
+        if (qore_intern_dbg_keyed_hash_collide()) {
+            return 0;
+        }
+#endif
+        return static_cast<size_t>(u);
+    }
+
+    //! the keyed hash of a fixed value, for the debug registry of keyed containers (QORE_KEYED_HASH_SITE())
+    DLLLOCAL uint64_t dbgProbe() const {
+        const uint64_t* k = qore_intern_hash_process_key();
+        return qore_siphash13_u64(k[0], k[1], static_cast<uint64_t>(0x0123456789abcdefull));
+    }
+
+private:
+    const qore_adaptive_hash_state* s;
+};
+
+template <>
+struct qore_is_keyed_hasher<qore_adaptive_int_hash> : public std::true_type {
+};
+
+//! the common part of the adaptive integer containers: a container that uses the standard hash of its integer keys
+//! until an insert makes the chain of a bucket longer than MaxChain, and then the keyed hash of the process
+/** As the key maps of hashes do (qore#7557): containers of keys that do not share their buckets keep the cheaper
+    standard hash.  The switch happens at an insert, rehashes every key once, and is final for the container.  The
+    container cannot be copied or moved, as its hasher refers to its state.
+
+    @tparam C the std::unordered_map or std::unordered_set type with qore_adaptive_int_hash
+*/
+template <typename C>
+class qore_adaptive_container_base {
+public:
+    using container_t = C;
+    using hasher = qore_adaptive_int_hash;
+    using key_type = typename C::key_type;
+    using iterator = typename C::iterator;
+    using const_iterator = typename C::const_iterator;
+
+    //! the longest chain of a bucket before the container switches to the keyed hash
+    static constexpr size_t MaxChain = 16;
+
+    //! creates the container
+    /** @param site the name of the site of the container, for the debug registry (QORE_KEYED_HASH_SITE())
+    */
+    DLLLOCAL explicit qore_adaptive_container_base(const char* site) : c(0, qore_adaptive_int_hash(&state)) {
+#ifdef DEBUG
+        this->site = site;
+#else
+        (void)site;
+#endif
+    }
+
+    qore_adaptive_container_base(const qore_adaptive_container_base&) = delete;
+    qore_adaptive_container_base& operator=(const qore_adaptive_container_base&) = delete;
+
+    DLLLOCAL hasher hash_function() const {
+        return c.hash_function();
+    }
+
+    DLLLOCAL iterator begin() {
+        return c.begin();
+    }
+    DLLLOCAL const_iterator begin() const {
+        return c.begin();
+    }
+    DLLLOCAL iterator end() {
+        return c.end();
+    }
+    DLLLOCAL const_iterator end() const {
+        return c.end();
+    }
+    DLLLOCAL iterator find(key_type k) {
+        return c.find(k);
+    }
+    DLLLOCAL const_iterator find(key_type k) const {
+        return c.find(k);
+    }
+    DLLLOCAL size_t count(key_type k) const {
+        return c.count(k);
+    }
+    DLLLOCAL size_t size() const {
+        return c.size();
+    }
+    DLLLOCAL bool empty() const {
+        return c.empty();
+    }
+    DLLLOCAL void reserve(size_t n) {
+        c.reserve(n);
+    }
+    //! removes the elements; the container keeps the hash it uses
+    DLLLOCAL void clear() {
+        c.clear();
+    }
+
+    //! returns true if the container uses the keyed hash
+    DLLLOCAL bool isKeyed() const {
+        return state.k;
+    }
+
+protected:
+    qore_adaptive_hash_state state;
+    C c;
+#ifdef DEBUG
+    const char* site;
+#endif
+
+    //! checks the chain of the bucket of the key just inserted, and switches to the keyed hash if it is too long
+    /** @return true if the container was rehashed (its iterators are invalid then)
+    */
+    DLLLOCAL bool checkInserted(key_type k) {
+        if (!state.k && c.bucket_size(c.bucket(k)) > MaxChain) {
+            return switchToKeyed();
+        }
+        return false;
+    }
+
+    //! switches the container to the keyed hash; nothing is changed if it cannot (the next insert into a full chain
+    //! tries again)
+    /** @return true if the container was rehashed with the keyed hash
+    */
+    DLLLOCAL bool switchToKeyed() noexcept {
+        try {
+            state.k = qore_intern_hash_process_key();
+            // a bucket count that differs from the current one, so that every key is hashed again
+            c.rehash(c.bucket_count() + 1);
+        } catch (...) {
+            // the buckets are allocated before any node moves, so a failed rehash left them as they were, with
+            // the unkeyed hash
+            state.k = nullptr;
+            return false;
+        }
+#ifdef DEBUG
+        qore_intern_dbg_keyed_hash_switched(site);
+#endif
+        return true;
+    }
+};
+
+//! an unordered map with integer keys that switches to the keyed hash of the process when a chain grows too long
+template <typename K, typename V>
+class qore_adaptive_int_map : public qore_adaptive_container_base<std::unordered_map<K, V, qore_adaptive_int_hash>> {
+    using base_t = qore_adaptive_container_base<std::unordered_map<K, V, qore_adaptive_int_hash>>;
+public:
+    using iterator = typename base_t::iterator;
+
+    DLLLOCAL explicit qore_adaptive_int_map(const char* site) : base_t(site) {
+    }
+
+    template <typename... A>
+    DLLLOCAL std::pair<iterator, bool> try_emplace(K k, A&&... args) {
+        std::pair<iterator, bool> rv = this->c.try_emplace(k, std::forward<A>(args)...);
+        if (rv.second) {
+            if (this->checkInserted(k)) {
+                // the switch rehashed the container, which invalidates its iterators (not its elements)
+                rv.first = this->c.find(k);
+            }
+        }
+        return rv;
+    }
+
+    DLLLOCAL V& operator[](K k) {
+        return try_emplace(k).first->second;
+    }
+};
+
+//! an unordered set of integers that switches to the keyed hash of the process when a chain grows too long
+template <typename K>
+class qore_adaptive_int_set : public qore_adaptive_container_base<std::unordered_set<K, qore_adaptive_int_hash>> {
+    using base_t = qore_adaptive_container_base<std::unordered_set<K, qore_adaptive_int_hash>>;
+public:
+    using iterator = typename base_t::iterator;
+
+    DLLLOCAL explicit qore_adaptive_int_set(const char* site) : base_t(site) {
+    }
+
+    DLLLOCAL std::pair<iterator, bool> insert(K k) {
+        std::pair<iterator, bool> rv = this->c.insert(k);
+        if (rv.second) {
+            this->checkInserted(k);
+        }
+        return rv;
+    }
+};
 
 //! Asserts at compile time that a container uses a keyed hasher, and in debug builds records its site
 /** Placed where the container is constructed (the constructor of its owner, or after the declaration of a local

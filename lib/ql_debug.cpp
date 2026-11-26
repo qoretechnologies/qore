@@ -32264,6 +32264,27 @@ static QoreValue f_dbg_keyed_hash_sites(const QoreListNode* params, RuntimeConfi
     return rv.release();
 }
 
+//! Debug-only: makes the unkeyed hash of the adaptive containers give every key the same hash, as keys that share
+//! their hash would have, or stops it (qore#7750)
+/** @param collide True to give every key the same unkeyed hash, False to stop
+*/
+static QoreValue f_dbg_keyed_hash_force_collisions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_set_keyed_hash_collide(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: returns the sites of the adaptive containers that switched to the keyed hash in this process
+//! (qore#7750)
+static QoreValue f_dbg_keyed_hash_switched_sites(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& site : qore_dbg_get_keyed_hash_switched_sites()) {
+        rv->push(new QoreStringNode(site), xsink);
+    }
+    return rv.release();
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -38422,6 +38443,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_keyed_hash_sites", f_dbg_keyed_hash_sites, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_keyed_hash_force_collisions", f_dbg_keyed_hash_force_collisions, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "collide");
+    qns.addBuiltinVariant("dbg_keyed_hash_switched_sites", f_dbg_keyed_hash_switched_sites, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, listTypeInfo, 0);
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

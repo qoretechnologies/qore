@@ -56,6 +56,7 @@
 #include <cstring>
 #include <atomic>
 #include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -461,6 +462,39 @@ void qore_intern_dbg_keyed_hash_site(const char* site, uint64_t probe) noexcept 
 std::map<std::string, uint64_t> qore_dbg_get_keyed_hash_sites() {
     std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
     return qore_dbg_keyed_hash_sites ? *qore_dbg_keyed_hash_sites : std::map<std::string, uint64_t>();
+}
+
+namespace {
+//! the sites of the adaptive containers that switched to the keyed hash (debug builds); protected by
+//! qore_dbg_keyed_hash_sites_lock
+std::set<std::string>* qore_dbg_keyed_hash_switched_sites = nullptr;
+//! true while dbg_keyed_hash_force_collisions() is in effect
+std::atomic<bool> qore_dbg_keyed_hash_collide_flag{false};
+}
+
+void qore_intern_dbg_keyed_hash_switched(const char* site) noexcept {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    // an allocation failure only leaves the switch unrecorded
+    try {
+        if (!qore_dbg_keyed_hash_switched_sites) {
+            qore_dbg_keyed_hash_switched_sites = new std::set<std::string>;
+        }
+        qore_dbg_keyed_hash_switched_sites->insert(site);
+    } catch (const std::bad_alloc&) {
+    }
+}
+
+bool qore_intern_dbg_keyed_hash_collide() noexcept {
+    return qore_dbg_keyed_hash_collide_flag.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_set_keyed_hash_collide(bool collide) {
+    qore_dbg_keyed_hash_collide_flag.store(collide, std::memory_order_relaxed);
+}
+
+std::set<std::string> qore_dbg_get_keyed_hash_switched_sites() {
+    std::lock_guard<std::mutex> guard(qore_dbg_keyed_hash_sites_lock);
+    return qore_dbg_keyed_hash_switched_sites ? *qore_dbg_keyed_hash_switched_sites : std::set<std::string>();
 }
 #endif
 
