@@ -1,0 +1,285 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ./LazyAppActionsHooks.qm
+
+%exec-class LazyValueAppCycleTest
+
+#! Regression test for qore#7712: the lazy values of the action catalog and the initialization of apps
+/** The lazy values of DataProviderActionCatalog are LazySharedValue objects, which wait for each other on their own;
+    the catalog's cycle check of the waits for the initialization of apps also sees the threads that read a value
+    that is not built, so that a builder that waits for an app whose initialization reads the same value on another
+    thread ends with an error or reads the app as registered so far, instead of a deadlock, whichever thread waits
+    first.  The order of the threads is fixed with latches and the catalog's test hooks, with no sleeps.
+
+    A value of a module whose load fails is removed; a build that a reader started while the module was loaded ends
+    into the value removed, which no reader reaches afterwards.
+*/
+class LazyValueAppCycleTest inherits QUnit::Test {
+    public {
+        #! the most to wait for a thread, in milliseconds; a deadlock fails the test instead of hanging it
+        const Deadline = 60000;
+    }
+
+    private {
+        #! the values that the test module registers
+        hash<string, int> ids;
+
+        #! the apps that the value builders need: value -> app
+        hash<string, string> apps;
+
+        #! the threads that build the values: value -> queue of TIDs
+        hash<string, Queue> builders = {
+            "builder-first": new Queue(),
+            "reader-first": new Queue(),
+        };
+
+        #! released when the builder of a value may read its app: value -> latch
+        hash<string, Counter> builder_go = {
+            "builder-first": new Counter(1),
+            "reader-first": new Counter(1),
+        };
+
+        #! what the builders read from their apps: value -> the actions
+        hash<string, list<string>> builder_read;
+    }
+
+    constructor() : QUnit::Test("lazy values and the initialization of apps", "1.0") {
+        addTestCase("a value whose builder waits for an app that reads it raises in the app's initialization",
+            \builderWaitsFirstTest());
+        addTestCase("a builder that needs an app whose initialization waits for the value reads the app as it is",
+            \readerWaitsFirstTest());
+        addTestCase("a build in progress when the module's load fails publishes nothing", \failedLoadBuildTest());
+        addTestCase("a registration that fails with SHARED-INIT-ERROR runs again", \sharedInitErrorRetryTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        apps = {
+            "builder-first": LazyValueAppCycleTest::registerApp("LazyValueBuilderFirst"),
+            "reader-first": LazyValueAppCycleTest::registerApp("LazyValueReaderFirst"),
+        };
+        # the values are registered by a module, while it is loaded; their builders read the apps
+        Hooks::set("LazyValueAppCycleModule", sub () {
+            foreach string name in (keys builders) {
+                string value = name;
+                ids{value} = DataProviderActionCatalog::registerLazyValue(string sub () {
+                    builders{value}.push(gettid());
+                    builder_go{value}.waitForZero();
+                    builder_read{value} = sort(map $1.action, DataProviderActionCatalog::getActions(apps{value},
+                        False)) ?? ();
+                    return value + ": built";
+                });
+            }
+        });
+        on_exit Hooks::set("LazyValueAppCycleModule");
+        load_module(normalize_dir(get_script_dir()) + "/LazyValueAppCycleModule.qm");
+    }
+
+    globalTearDown() {
+        map DataProviderActionCatalog::deregisterDynamicApp($1), apps.iterator();
+    }
+
+    builderWaitsFirstTest() {
+%ifdef QoreDebug
+        string value = "builder-first";
+        string app = apps{value};
+        # the app's initialization runs on thread B, and reads the value once the builder waits for the app
+        Counter b_owns(1);
+        Counter a_waits(1);
+        *string b_read;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            b_owns.dec();
+            a_waits.waitForZero();
+            try {
+                b_read = DataProviderActionCatalog::getLazyValue(ids{value});
+            } catch (hash<ExceptionInfo> ex) {
+                b_read = ex.err;
+            }
+            LazyValueAppCycleTest::registerAction(app, "late");
+        });
+        Queue results();
+        # thread B initializes the app
+        background LazyValueAppCycleTest::run(results, "b", auto sub () {
+            return sort(map $1.action, DataProviderActionCatalog::getActions(app, False));
+        });
+        b_owns.waitForZero();
+        # thread A builds the value, whose builder waits for the app that thread B initializes
+        background LazyValueAppCycleTest::run(results, "a", auto sub () {
+            return DataProviderActionCatalog::getLazyValue(ids{value});
+        });
+        int a_tid = builders{value}.get(Deadline);
+        builder_go{value}.dec();
+        assertTrue(DataProviderActionCatalog::waitForInitWait(a_tid, app, Deadline), "the builder waits for the app");
+        # the app's initialization reads the value now: the wait would close a cycle
+        a_waits.dec();
+        hash<string, auto> r = LazyValueAppCycleTest::collect(results, 2);
+        assertEq("SHARED-INIT-ERROR", b_read);
+        assertEq(("late",), r.b);
+        assertEq(value + ": built", r.a);
+        # the builder read the app once its initialization had ended
+        assertEq(("late",), builder_read{value});
+        assertEq(value + ": built", DataProviderActionCatalog::getLazyValue(ids{value}));
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
+    }
+
+    readerWaitsFirstTest() {
+%ifdef QoreDebug
+        string value = "reader-first";
+        string app = apps{value};
+        # the app's initialization runs on thread B, and reads the value while thread A builds it
+        Queue b_tids();
+        *string b_read;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            b_tids.push(gettid());
+            b_read = DataProviderActionCatalog::getLazyValue(ids{value});
+            LazyValueAppCycleTest::registerAction(app, "late");
+        });
+        Queue results();
+        # thread A builds the value
+        background LazyValueAppCycleTest::run(results, "a", auto sub () {
+            return DataProviderActionCatalog::getLazyValue(ids{value});
+        });
+        builders{value}.get(Deadline);
+        # thread B initializes the app, whose initialization waits for the value
+        background LazyValueAppCycleTest::run(results, "b", auto sub () {
+            return sort(map $1.action, DataProviderActionCatalog::getActions(app, False));
+        });
+        int b_tid = b_tids.get(Deadline);
+        assertTrue(dbg_lazy_shared_wait_waiting(b_tid, Deadline), "the app's initialization waits for the value");
+        # the builder needs the app now: waiting for it would close a cycle, so it reads the app as it is
+        builder_go{value}.dec();
+        hash<string, auto> r = LazyValueAppCycleTest::collect(results, 2);
+        assertEq((), builder_read{value});
+        assertEq(value + ": built", r.a);
+        assertEq(value + ": built", b_read);
+        assertEq(("late",), r.b);
+%else
+        testSkip("the test needs the catalog's test hooks, which only debug builds have");
+%endif
+    }
+
+    failedLoadBuildTest() {
+        *int id;
+        Counter started(1);
+        Counter release(1);
+        Queue results();
+        Hooks::set("LazyAppActionsFailedLoad", sub () {
+            id = DataProviderActionCatalog::registerLazyValue(string sub () {
+                started.dec();
+                release.waitForZero();
+                return "orphan";
+            });
+            # a reader builds the value while the module is loaded
+            background LazyValueAppCycleTest::run(results, "reader", auto sub () {
+                return DataProviderActionCatalog::getLazyValue(id);
+            });
+            started.waitForZero();
+            throw "LAZY-TEST-LOAD-ERROR", "the module fails to load";
+        });
+        on_exit Hooks::set("LazyAppActionsFailedLoad");
+        int sp = ImplicitModuleTransaction::savepoint();
+        *hash<ExceptionInfo> error;
+        try {
+            load_module(normalize_dir(get_script_dir()) + "/LazyAppActionsFailedLoad.qm");
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+            ImplicitModuleTransaction::rollback(sp);
+        }
+        assertEq("LAZY-TEST-LOAD-ERROR", error.err, sprintf("the module failed to load: %y", error));
+        assertTrue(exists id, "the module registered a value");
+        # the value is removed while its build runs
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "no lazy value is registered",
+            \DataProviderActionCatalog::getLazyValue(), id);
+        release.dec();
+        # the reader that ran the build gets its value; the catalog does not
+        hash<string, auto> r = LazyValueAppCycleTest::collect(results, 1);
+        assertEq("orphan", r.reader);
+        assertThrows("DATA-PROVIDER-LAZY-VALUE-ERROR", "no lazy value is registered",
+            \DataProviderActionCatalog::getLazyValue(), id);
+    }
+
+    sharedInitErrorRetryTest() {
+        # the error that a read of a value raises when its builder waits for the app that the reader initializes
+        # depends on the order of the threads: it does not keep the app's registration from running again
+        string app = LazyValueAppCycleTest::registerApp("LazyValueRetry");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int runs = 0;
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            if (!runs++) {
+                throw "SHARED-INIT-ERROR", "a read of a lazy value would close a cycle of waits";
+            }
+            LazyValueAppCycleTest::registerAction(app, "late");
+        });
+        *string err;
+        try {
+            DataProviderActionCatalog::getActions(app, False);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("SHARED-INIT-ERROR", err);
+        assertEq(("late",), map $1.action, DataProviderActionCatalog::getActions(app, False));
+        assertEq(2, runs);
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    #! Runs code in a thread and queues its name and result, or its error
+    private static run(Queue results, string name, code c) {
+        try {
+            results.push({"name": name, "value": c()});
+        } catch (hash<ExceptionInfo> ex) {
+            results.push({"name": name, "value": sprintf("%s: %s", ex.err, ex.desc)});
+        }
+    }
+
+    #! Returns the results of a number of threads: name -> result
+    private static hash<string, auto> collect(Queue results, int count) {
+        hash<string, auto> rv = {};
+        for (int i = 0; i < count; ++i) {
+            hash<auto> r = results.get(Deadline);
+            rv{r.name} = r.value;
+        }
+        return rv;
+    }
+
+    #! Registers a dynamic app with a random name
+    private static string registerApp(string prefix) {
+        string app = prefix + "_" + get_random_string(8);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "lazy value cycle test",
+            "desc": "lazy value cycle test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        return app;
+    }
+
+    #! Registers an action of a dynamic app
+    private static registerAction(string app, string action) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": action,
+            "path": "/" + action,
+            "display_name": action,
+            "short_desc": action,
+            "desc": action,
+            "action_code": DPAT_API,
+        });
+    }
+}

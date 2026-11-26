@@ -70,6 +70,9 @@
     both modes.
 
     @note
+    - the builder runs only when get() is first called, never when the object is created: an exception that it raises
+      is raised to the caller of get() that ran it (for a value that a module creates when it is loaded, at its first
+      use, not when the module is loaded)
     - an object that library code creates later than its initialization, for whichever caller needs it first, is
       private if that caller is sandboxed or acts for sandboxed code, and then builds its value as that caller's code
       would; code that must have a process-shared object creates it during module initialization or trusted startup
