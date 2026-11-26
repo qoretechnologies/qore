@@ -24397,13 +24397,13 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
 
 QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
     ASYNC_IO_TRACE("H2Mux::continuePoll() acquiring lock...\n");
+    // set_non_block is read under the socket lock: an abort() on another thread clears it under that lock
+    // (abortLocked(); issue #7699); only the paths that end the operation call this
     auto clear_non_block = [&]() {
+        AutoLocker al(sock->priv->m);
         if (set_non_block) {
-            AutoLocker al(sock->priv->m);
-            if (set_non_block) {
-                set_non_block = false;
-                sock->priv->clearNonBlock();
-            }
+            set_non_block = false;
+            sock->priv->clearNonBlock();
         }
     };
 
@@ -24429,7 +24429,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
     }
 
     while (true) {
-        switch (h2_state) {
+        switch (h2_state.load(std::memory_order_acquire)) {
             case H2C_SEND_PREFACE: {
                 // Send client connection preface (SETTINGS frame)
                 int rv = h2_session->sendConnectionPrefaceNonBlocking(xsink);
@@ -24442,7 +24442,10 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
                     return getSocketPollInfoHash(xsink, rv);
                 }
-                h2_state = H2C_RECV_PREFACE;
+                if (!advanceState(H2C_SEND_PREFACE, H2C_RECV_PREFACE)) {
+                    // an abort() on another thread closed the operation: the CLOSED case ends it
+                    continue;
+                }
                 // Fall through to receive preface
             }
 
@@ -24624,8 +24627,10 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 }
 
                 // No completed streams yet - check if we're past the preface stage
-                if (h2_state == H2C_RECV_PREFACE) {
-                    h2_state = H2C_READING;
+                // the state is changed only once, after the preface: a pass in the READING state does no
+                // compare-and-exchange
+                if (h2_state.load(std::memory_order_relaxed) == H2C_RECV_PREFACE) {
+                    advanceState(H2C_RECV_PREFACE, H2C_READING);
                 }
 
                 if (goaway_done()) {
@@ -24647,7 +24652,8 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 return nullptr;
 
             default:
-                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d", h2_state);
+                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d",
+                    h2_state.load(std::memory_order_acquire));
                 return nullptr;
         }
     }
