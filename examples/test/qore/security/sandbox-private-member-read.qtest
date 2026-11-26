@@ -48,6 +48,38 @@ class HSub inherits HostTarget {
 }
 ";
 
+#! a tenant subclass of the trusted class that reads its own object as a whole: the private members of the trusted
+#! class are not given to it in any form (qore#6843)
+const HostSubSelfSource = "%modern
+class Bag {
+}
+
+class HSelf inherits HostTarget {
+    hash<string, string> readSelf() {
+        object b = new Bag();
+        b += self;
+        hash<auto> h = {};
+        h += self;
+        return {
+            \"keys\": (keys self).join(\",\"),
+            \"member-names\": self.keys().join(\",\"),
+            \"size\": sprintf(\"%d\", self.size()),
+            \"elements\": sprintf(\"%d\", elements self),
+            \"cast\": (keys hash(self)).join(\",\"),
+            \"plus\": (keys (self + {})).join(\",\"),
+            \"plus-left\": (keys ({} + self)).join(\",\"),
+            \"plus-equals\": (keys h).join(\",\"),
+            \"object-merge\": (keys b).join(\",\"),
+            \"iterator\": (map $1, new ObjectKeyIterator(self)).join(\",\"),
+        };
+    }
+}
+
+hash<string, string> sub read_self() {
+    return (new HSelf()).readSelf();
+}
+";
+
 #! the code of the library tenant: the classes whose private members the tenants' subclasses read, declared by
 #! sandboxed code, and the child Programs that share them (each with a sandbox of its own, also governed by the
 #! library tenant's sandbox, whose code it runs)
@@ -351,6 +383,7 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         foreach string mode in (keys ExecModes) {
             addTestCase("tenant reads in " + mode, getTenantTest(mode));
             addTestCase("held merge in " + mode, getHeldTest(mode));
+            addTestCase("trusted parent class in " + mode, getTrustedParentTest(mode));
         }
         addTestCase("trusted code", \trustedTest());
         addTestCase("trusted class", \trustedClassTest());
@@ -362,6 +395,39 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
     #! returns the test of the given execution mode
     private code getTenantTest(string mode) {
         return sub () { tenantTest(mode); };
+    }
+
+    #! returns the trusted parent class test of the given execution mode
+    private code getTrustedParentTest(string mode) {
+        return sub () { trustedParentTest(mode); };
+    }
+
+    #! the code of a tenant's subclass of a class that trusted code declared reads its own object as a whole: the
+    #! private members of the trusted class are not given to it (qore#6843), in every form
+    trustedParentTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        p.setSandboxManager(new SandboxManager());
+        p.parse(HostSubSelfSource, "tenant");
+        hash<string, bool> r;
+        for (int i = 0; i < count; ++i) {
+            r{sprintf("%y", p.callFunction("read_self"))} = True;
+        }
+        hash<string, string> expected = {
+            "keys": "pub",
+            "member-names": "pub",
+            "size": "1",
+            "elements": "1",
+            "cast": "pub",
+            "plus": "pub",
+            "plus-left": "pub",
+            "plus-equals": "pub",
+            "object-merge": "pub",
+            "iterator": "pub",
+        };
+        assertEq((sprintf("%y", expected),), keys r, mode + ": the tenant's own object");
     }
 
     #! returns the held merge test of the given execution mode

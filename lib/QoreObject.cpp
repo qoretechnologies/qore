@@ -863,7 +863,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
 
         if (!o.data->empty()) {
             const qore_class_private* src_priv = qore_class_private::get(*o.theclass);
-            if (src_ctx == src_priv) {
+            // every member for the source object's class, unless sandboxed code declared it with a parent class that
+            // trusted code declared, whose private members it cannot use (qore#6843)
+            if (src_ctx == src_priv && !src_priv->sandbox_private_members) {
                 new_data = o.data->copy();
             } else {
                 new_data = new QoreHashNode(autoTypeInfo);
@@ -1400,10 +1402,11 @@ static const qore_class_private* qore_object_runtime_member_class_context(const 
 }
 
 //! returns true if the member is visible to the class context in getRuntimeMemberHash(): every member for the object's
-//! class, otherwise those that the class context can use on the object
+//! class, unless sandboxed code declared it with a parent class that trusted code declared, whose private members it
+//! cannot use (qore#6843); otherwise those that the class context can use on the object
 static bool qore_object_runtime_member_visible(const qore_class_private* theclass_priv,
         const qore_class_private* class_ctx, const char* key) {
-    if (class_ctx == theclass_priv) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members) {
         return true;
     }
     const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(key, class_ctx);
@@ -1465,7 +1468,7 @@ QoreListNode* qore_object_private::getRuntimeMemberListSlow(ExceptionSink* xsink
     // the keys of getRuntimeMemberHash(), in its order, without copying the values: the visible members, then the
     // class context's internal data, whose keys replace visible members of the same name in place
     const QoreHashNode* odata = getInternalData(class_ctx);
-    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members && (!odata || odata->empty())) {
         return data->getKeys();
     }
     ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
@@ -1537,7 +1540,7 @@ int64 qore_object_private::getRuntimeMemberCountSlow() const {
 
     // the size of getRuntimeMemberHash() without copying the values
     const QoreHashNode* odata = getInternalData(class_ctx);
-    if (class_ctx == theclass_priv && (!odata || odata->empty())) {
+    if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members && (!odata || odata->empty())) {
         return data->size();
     }
     int64 rc = 0;
