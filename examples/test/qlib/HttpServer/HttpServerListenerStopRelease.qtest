@@ -25,10 +25,11 @@
 
 
     A listener's stop started with HttpListener::stopNoWait() is in progress (held by the listener's stopping hook)
-    when another thread releases the last reference to the server: the server's destructor stops the server, and its
-    stop waits for the stops of its listeners.  The listener's stop cannot call the server then (a method call on an
-    object whose destructor runs in another thread is refused, qore#7509): it releases the server's count of its
-    listeners itself, and the destructor ends.
+    when another thread deletes the server: the server's destructor stops the server, and its stop waits for the stops
+    of its listeners.  The listener's stop cannot call the server then (a method call on an object whose destructor
+    runs in another thread is refused, qore#7509): it releases the server's count of its listeners itself, and the
+    destructor ends.  (The listener's stop holds the server until it ends, so a release of the last reference to the
+    server in another thread does not destroy the server while the stop runs: the stop destroys it when it ends.)
 */
 
 %modern
@@ -102,7 +103,7 @@ class HttpServerListenerStopReleaseTest inherits QUnit::Test {
             server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
             listener = server.test_listeners.get();
             in_dtor = server.test_in_dtor;
-            # the other thread releases the last reference: this thread hands its reference over and releases it
+            # the other thread deletes the server: this thread hands its reference over and releases it
             handoff.push(server);
             remove server;
         }
@@ -110,11 +111,11 @@ class HttpServerListenerStopReleaseTest inherits QUnit::Test {
         listener.stopNoWait();
         assertEq(True, stopping.get(HangTimeout), "the listener's stop started");
 
-        # the server is released in another thread: its destructor stops it, and waits for the listener's stop
+        # the server is deleted in another thread: its destructor stops it, and waits for the listener's stop
         background sub () {
             on_exit destroyed.dec();
             TestServer server = handoff.get();
-            remove server;
+            delete server;
         }();
         assertEq(0, in_dtor.waitForZero(HangTimeout), "the server's destructor started");
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - threads, listener sockets, WebSocket connections and the destruction of a server in the thread of one of its requests
+# test-platform: macos - threads, listener sockets, TLS, HTTP/2 and HTTP/3 connections, WebSocket connections and the destruction of a server in the thread of one of its requests
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -24,15 +24,19 @@
     DEALINGS IN THE SOFTWARE.
 
 
-    A request holds its server while it runs (qore#7509): a server whose last reference the program releases while
-    requests run is destroyed when the last of them ends, in that request's thread.  A call of an object whose
-    destructor runs in another thread is refused (OBJECT-ALREADY-DELETED), so a request that ran while the destructor
-    ran in the thread that released the server could not call the server: its handler was not called, the methods
-    that a subclass of the server reimplements (log(), maskData(), getTtl()) were not called for it, and its client
-    got no response.  A request that released the last reference itself destroyed the server as soon as its handler
-    returned, before the server logged the response.
+    A request holds its server until its response has been handed to the server's I/O (qore#7509): a server whose
+    last reference the program releases while requests run is destroyed after the last of them, in that request's
+    thread, and every request is answered, the last one too.  A call of an object whose destructor runs in another
+    thread is refused (OBJECT-ALREADY-DELETED), so a request that ran while the destructor ran in the thread that
+    released the server could not call the server: its handler was not called, the methods that a subclass of the
+    server reimplements (log(), maskData(), getTtl()) were not called for it, and its client got no response.  The
+    request whose end destroyed the server (also one that released the last reference itself) got no response either:
+    the destructor's stop closed its connection before the response was sent.
 
-    A connection that a request handed to a handler for its whole life (a WebSocket connection) does not hold the
+    Each case runs over HTTP/1.1 (requests answered in the handler pool, and inline, on the callback dispatcher worker),
+    HTTP/2 and HTTP/3.
+
+    A connection that a request hands to a handler for its whole life (a WebSocket connection) does not hold the
     server: the program's release of the server destroys it, which closes the connection, as before.
 */
 
@@ -46,11 +50,15 @@
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
+%requires ../../TestCertificates.qm
 
 %exec-class HttpServerRequestHoldsServerTest
 
 #! Upper bound for any wait that a regression turns into a hang
 const HangTimeout = 30s;
+
+#! The ways a request is served: HTTP/1.1 in the handler pool or inline, HTTP/2, HTTP/3
+const Variants = ("h1", "h1-inline", "h2", "h3");
 
 #! A server that reports its destruction and the calls of the methods that it reimplements
 class TestServer inherits HttpServer {
@@ -93,17 +101,49 @@ class ServerHolder {
     }
 }
 
-#! Answers each request with 200; releases the server of the holder first if one is given
-class OkHandler inherits AbstractHttpRequestHandler {
+#! Answers each request with 200 and "ok"
+class TestHandler inherits AbstractHttpRequestHandler {
     private {
+        #! True: the handler answers the requests inline (HTTP/1.1 requests without a body)
+        bool inline_ok;
+        #! if set, the request releases the server that it holds (the last reference)
         *ServerHolder holder;
+        #! if set, each request takes a gate from it and waits until the gate is released
+        *Queue free_gates;
+        #! receives a hash for each request that the handler runs: "tid" and, if gated, "gate"
+        Queue entered();
     }
 
-    constructor(*ServerHolder holder) {
+    constructor(bool inline_ok, *ServerHolder holder, *Queue free_gates) {
+        self.inline_ok = inline_ok;
         self.holder = holder;
+        self.free_gates = free_gates;
+    }
+
+    Queue getEntered() {
+        return entered;
+    }
+
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return inline_ok;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return answer();
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return answer();
+    }
+
+    private hash<HttpResponseInfo> answer() {
+        if (free_gates) {
+            Counter gate = free_gates.get(HangTimeout);
+            entered.push({"tid": gettid(), "gate": gate});
+            gate.waitForZero();
+        } else {
+            entered.push({"tid": gettid()});
+        }
         if (holder) {
             # the last reference to the server
             remove holder.server;
@@ -135,45 +175,51 @@ class HttpServerRequestHoldsServerTest inherits QUnit::Test {
     }
 
     constructor() : Test("HttpServerRequestHoldsServerTest", "1.0") {
-        addTestCase("a server released while requests run is destroyed after the last of them, which all call it",
-            \inFlightTest());
-        addTestCase("a request that releases the last reference to its server destroys it when it ends",
-            \releaseInRequestTest());
+        foreach string variant in (Variants) {
+            addTestCase(sprintf("%s: a server released while requests run is destroyed after the last of them, which "
+                "are all answered", variant), \inFlightTest(), variant);
+            addTestCase(sprintf("%s: a request that releases the last reference to its server is answered, and "
+                "destroys the server", variant), \releaseInRequestTest(), variant);
+        }
         addTestCase("an open WebSocket connection does not hold its server", \webSocketTest());
         set_return_value(main());
     }
 
-    inFlightTest() {
-        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+    inFlightTest(string variant) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING && variant != "h1-inline") {
             testSkip("needs a debug build of the library for HttpListener::dbgSetRequestHook()");
         }
+        bool inline = (variant == "h1-inline");
         Queue events();
         *TestServer server = new TestServer(events);
-        server.setHandler("ok", "", NOTHING, new OkHandler());
-        server.setDefaultHandler("ok", new OkHandler());
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        server.waitForAsyncIo();
 
-        # each request waits in the request hook until its gate is released
+        # each request waits until its gate is released: in the request hook, before the request is set up, or in its
+        # handler for an inline request, which does not run the hook
         list<Counter> gates = map new Counter(1), xrange(NumRequests);
         on_exit map $1.dec(), gates, $1.getCount();
         Queue free_gates();
         map free_gates.push($1), gates;
+        TestHandler handler(inline, NOTHING, inline ? free_gates : NOTHING);
+        string url = startServer(variant, server, handler);
         # receives a hash for each request that has started: "tid" and "gate"
-        Queue started();
-        # called by name: the method exists only in a debug build of the library
-        call_static_method("HttpServer::HttpListener", "dbgSetRequestHook", sub (HttpListener l) {
-            Counter gate = free_gates.get(HangTimeout);
-            started.push({"tid": gettid(), "gate": gate});
-            gate.waitForZero();
-        });
-        on_exit call_static_method("HttpServer::HttpListener", "dbgSetRequestHook");
+        Queue started = handler.getEntered();
+        if (!inline) {
+            # called by name: the method exists only in a debug build of the library
+            call_static_method("HttpServer::HttpListener", "dbgSetRequestHook", sub (HttpListener l) {
+                Counter gate = free_gates.get(HangTimeout);
+                started.push({"tid": gettid(), "gate": gate});
+                gate.waitForZero();
+            });
+        }
+        on_exit if (!inline) {
+            call_static_method("HttpServer::HttpListener", "dbgSetRequestHook");
+        }
 
-        # receives the result of each request: its status code, or the error that ended it
+        # receives the result of each request
         Queue results();
         Counter clients_done();
         on_exit clients_done.waitForZero(HangTimeout);
-        map request(port, results, clients_done), xrange(NumRequests);
+        map request(variant, url, results, clients_done), xrange(NumRequests);
         list<hash<auto>> requests = map started.get(HangTimeout), xrange(NumRequests);
 
         # the program releases the server in another thread while the requests run
@@ -189,29 +235,34 @@ class HttpServerRequestHoldsServerTest inherits QUnit::Test {
         hash<auto> ev = getLifeEvent(events);
         assertEq("released", ev.event, "the requests hold the server: the release does not destroy it");
 
-        # the requests end one at a time; all but the last are answered by the live server
+        # the requests end one at a time; each is answered
         list<hash<auto>> calls = ();
         foreach hash<auto> req in (requests[0..NumRequests - 2]) {
             req.gate.dec();
-            assertEq(200, results.get(HangTimeout), "the request is answered");
+            assertEq({"code": 200, "body": "ok"}, results.get(HangTimeout), "the request is answered");
         }
-        # the last request destroys the server when it ends, in its own thread
+        # the last request is answered too; the server is destroyed in the thread of the request that releases it
+        # last (the controller releases a request's hold once its response has been given to the I/O, so the client
+        # of the previous request can have its response first)
         requests[NumRequests - 1].gate.dec();
+        assertEq({"code": 200, "body": "ok"}, results.get(HangTimeout), "the last request is answered");
         ev = getLifeEvent(events, \calls);
-        assertEq("destroyed", ev.event, "the server is destroyed when the last request ends");
-        assertEq(requests[NumRequests - 1].tid, ev.tid, "the last request's thread destroys the server");
-        # the last request's client gets the end of its connection (the server's stop closes it) or a response
-        results.get(HangTimeout);
+        assertEq("destroyed", ev.event, "the server is destroyed after the last request");
+        assertTrue(inlist(ev.tid, (map $1.tid, requests)), "a request's thread destroys the server");
         assertEq(0, clients_done.waitForZero(HangTimeout), "the clients' requests end");
 
         # each request called the methods of the server that its subclass reimplements, as long as it ran
         foreach hash<auto> req in (requests) {
             list<hash<auto>> req_calls = select calls, $1.tid == req.tid;
-            assertTrue((select req_calls, $1.event == "maskData").size() > 0, "maskData() is called for the request");
-            assertTrue((select req_calls, $1.event == "log" && $1.msg =~ /GET \/?req /).size() > 0,
-                "log() logs the request");
-            assertTrue((select req_calls, $1.event == "log" && $1.msg =~ /HTTP\/1\.1 200 /).size() > 0,
-                "log() logs the response");
+            if (!inline) {
+                # an inline request is not set up or logged
+                assertTrue((select req_calls, $1.event == "maskData").size() > 0,
+                    "maskData() is called for the request");
+                assertTrue((select req_calls, $1.event == "log" && $1.msg =~ /GET \/?req /).size() > 0,
+                    "log() logs the request");
+                assertTrue((select req_calls, $1.event == "log" && $1.msg =~ /HTTP\/[0-9.]+ 200 /).size() > 0,
+                    "log() logs the response");
+            }
             assertTrue((select req_calls, $1.event == "getTtl").size() > 0, "getTtl() is called for the response");
         }
         # the events after the destruction are the messages that the stop of HttpServer's destructor logs (the
@@ -220,33 +271,32 @@ class HttpServerRequestHoldsServerTest inherits QUnit::Test {
         assertEq((), (select after, $1.event != "log"), "the server is destroyed once");
     }
 
-    releaseInRequestTest() {
+    releaseInRequestTest(string variant) {
+        bool inline = (variant == "h1-inline");
         Queue events();
         ServerHolder holder();
         holder.server = new TestServer(events);
-        holder.server.setHandler("ok", "", NOTHING, new OkHandler(holder));
-        holder.server.setDefaultHandler("ok", new OkHandler(holder));
-        int port = holder.server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        holder.server.waitForAsyncIo();
+        TestHandler handler(inline, holder);
+        string url = startServer(variant, holder.server, handler);
 
         Queue results();
         Counter clients_done();
-        request(port, results, clients_done);
+        on_exit clients_done.waitForZero(HangTimeout);
+        request(variant, url, results, clients_done);
+        assertEq({"code": 200, "body": "ok"}, results.get(HangTimeout), "the request is answered");
+        int tid = handler.getEntered().get(HangTimeout).tid;
         list<hash<auto>> calls = ();
         hash<auto> ev = getLifeEvent(events, \calls);
         assertEq("destroyed", ev.event, "the server is destroyed");
         assertNothing(holder.server, "the request released the server");
-        # the request's thread destroys the server once the request has used it for the last time: after its response
-        # has been logged
-        list<hash<auto>> request_logs = select calls, $1.event == "log" && $1.msg =~ /GET \/?req /;
-        assertEq(1, request_logs.size(), "the request is logged");
-        int tid = request_logs[0].tid;
         assertEq(tid, ev.tid, "the request's thread destroys the server");
-        assertTrue((select calls, $1.tid == tid && $1.event == "log" && $1.msg =~ /HTTP\/1\.1 200 /).size() > 0,
-            "the response is logged before the server is destroyed");
+        # the request used the server until its end
+        if (!inline) {
+            assertTrue((select calls, $1.tid == tid && $1.event == "log" && $1.msg =~ /HTTP\/[0-9.]+ 200 /).size()
+                > 0, "the response is logged before the server is destroyed");
+        }
         assertTrue((select calls, $1.tid == tid && $1.event == "getTtl").size() > 0,
             "getTtl() is called for the response before the server is destroyed");
-        results.get(HangTimeout);
         assertEq(0, clients_done.waitForZero(HangTimeout), "the client's request ends");
     }
 
@@ -281,6 +331,39 @@ class HttpServerRequestHoldsServerTest inherits QUnit::Test {
         assertEq("closed", getLifeEvent(events).event, "the destruction closes the WebSocket connection");
     }
 
+    #! Sets the handler of the server and starts its listener for the variant; returns the URL of the listener
+    private string startServer(string variant, HttpServer server, AbstractHttpRequestHandler handler) {
+        server.setHandler("test", "", NOTHING, handler);
+        server.setDefaultHandler("test", handler);
+        hash<auto> info;
+        switch (variant) {
+            case "h1":
+            case "h1-inline":
+                info = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+                server.waitForAsyncIo();
+                return "http://127.0.0.1:" + info.port;
+            case "h2":
+                info = server.addListener(<HttpListenerOptionInfo>{
+                    "node": "127.0.0.1",
+                    "service": 0,
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                });
+                server.waitForAsyncIo();
+                return "https://127.0.0.1:" + info.port;
+            case "h3":
+                info = server.addQuicListener(<HttpListenerOptionInfo>{
+                    "node": "127.0.0.1",
+                    "service": 0,
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                });
+                server.waitForAsyncIo();
+                return "https://127.0.0.1:" + info.port;
+        }
+        throw "TEST-ERROR", sprintf("unknown variant %y", variant);
+    }
+
     #! Returns the next event that is not a call of a reimplemented method (a release, a destruction or a close)
     /** The calls before it are added to \a calls
     */
@@ -296,19 +379,34 @@ class HttpServerRequestHoldsServerTest inherits QUnit::Test {
         }
     }
 
-    #! Sends a GET request in another thread; its status code, or the error that ended it, is pushed on results
-    private request(int port, Queue results, Counter clients_done) {
+    #! Sends a GET request in another thread with the variant's HTTP version
+    /** A hash with the status code ("code") and the message body ("body") of the response, or the error that ended
+        the request ("err"), is pushed on \a results
+    */
+    private request(string variant, string url, Queue results, Counter clients_done) {
+        hash<auto> opts = {
+            "url": url,
+            "timeout": HangTimeout,
+            "connect_timeout": HangTimeout,
+        };
+        switch (variant) {
+            case "h2":
+                opts += {"http_version": "2.0", "ssl_verify_cert": False};
+                break;
+            case "h3":
+                opts += {"http_version": "3.0", "ssl_verify_cert": False, "accept_all_certs": True};
+                break;
+        }
         clients_done.inc();
         background sub () {
             on_exit clients_done.dec();
             try {
-                Socket s();
-                s.connect("127.0.0.1:" + port, HangTimeout);
-                s.send("GET /req HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-                hash<auto> hdr = s.readHTTPHeader(HangTimeout);
-                results.push(hdr.status_code);
+                HTTPClient hc(opts);
+                hash<auto> info;
+                hash<auto> resp = hc.send(NOTHING, "GET", "/req", NOTHING, False, \info);
+                results.push({"code": resp.status_code, "body": resp.body});
             } catch (hash<ExceptionInfo> ex) {
-                results.push(ex.err);
+                results.push({"err": ex.err, "desc": ex.desc});
             }
         }();
     }
