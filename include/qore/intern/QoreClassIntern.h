@@ -4117,9 +4117,9 @@ public:
     //! Locks the registry of ancestries (qore#7614)
     DLLLOCAL static std::unique_lock<std::mutex> lockAncestry();
 
-    //! Returns true if QoreClass::rescanParents() of \a qc must lock the registry of ancestries: if \a qc, one of its
-    //! ancestors or one of their ancestors is registered with a parent class whose ancestry is not final (qore#7614)
-    DLLLOCAL static bool rescanNeedsAncestryLock(const qore_class_private& qc);
+    //! Returns true if QoreClass::rescanParents() must lock the registry of ancestries: if any class is registered
+    //! with a parent class whose ancestry is not final (qore#7614)
+    DLLLOCAL static bool rescanNeedsAncestryLock();
 
     //! Returns true if the ancestry of the class is final: the class and all its ancestors have all their base classes
     DLLLOCAL bool ancestryFinal() const {

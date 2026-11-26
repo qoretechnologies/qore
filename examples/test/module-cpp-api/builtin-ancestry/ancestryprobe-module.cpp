@@ -25,6 +25,8 @@
       another thread reads it (with the test hook, as for concurrentReaders())
     - <tt>AncestryProbe::rescanPlainReaders(int n)</tt>: as rescanReaders(), with the parent class a plain QoreClass that
       gets base classes after it was inherited, so that the rescan does not lock the registry of ancestries
+    - <tt>AncestryProbe::rescanDeep()</tt>: a rescan that reaches a registered class three levels down through
+      out-of-date lists takes the lock of the registry (checked with \c qore_dbg_ancestry_registry_locked())
     - <tt>AncestryProbe::concurrentReaders(int n)</tt>: \c A gets \a n later base classes while another thread reads
       the ancestors of \c B; in a debug build, the reader takes a snapshot of the ancestors before \c A is complete and
       reads it, and the new list, while the completion holds the new list published (the libqore test hook
@@ -664,7 +666,17 @@ struct ReaderResult {
     int64 new_seen = -1;
     //! the number of the classes of \a lates found by ID after the change
     int64 found = -1;
+    //! 1 if the lock of the registry of ancestries was held while the hook waited, 0 if not, -1 if not known
+    int64 registry_locked = -1;
 };
+
+typedef bool (*locked_query_t)();
+
+//! returns the libqore function that tells if the lock of the registry of ancestries is held (debug builds only), or
+//! nullptr
+locked_query_t get_locked_query() {
+    return reinterpret_cast<locked_query_t>(dlsym(RTLD_DEFAULT, "qore_dbg_ancestry_registry_locked"));
+}
 
 //! runs \a change while a reader thread holds a snapshot of the ancestors of \a target taken before it; when the
 //! test hook of libqore is called for \a target (in a debug build), the reader reads that snapshot, a new one and the
@@ -705,6 +717,10 @@ bool read_while(const QoreClass* target, const std::vector<QoreClass*>& lates, R
             }
         }
         r.found = found;
+        // the thread waiting in the hook holds the lock if the change takes it
+        if (locked_query_t is_locked = get_locked_query()) {
+            r.registry_locked = is_locked() ? 1 : 0;
+        }
         h.set(ReaderState::ReaderDone);
     });
     if (setter && !h.wait(ReaderState::HaveView)) {
@@ -753,6 +769,7 @@ QoreValue f_concurrent_readers(const QoreListNode* args, RuntimeConfig&, Excepti
     rv->setKeyValue("old_seen", r.old_seen, nullptr);
     rv->setKeyValue("new_seen", r.new_seen, nullptr);
     rv->setKeyValue("found_in_hook", r.found, nullptr);
+    rv->setKeyValue("registry_locked", r.registry_locked, nullptr);
     return rv.release();
 }
 
@@ -801,6 +818,7 @@ QoreValue f_rescan_readers(const QoreListNode* args, RuntimeConfig&, ExceptionSi
     rv->setKeyValue("old_seen", r.old_seen, nullptr);
     rv->setKeyValue("new_seen", r.new_seen, nullptr);
     rv->setKeyValue("found_in_hook", r.found, nullptr);
+    rv->setKeyValue("registry_locked", r.registry_locked, nullptr);
     return rv.release();
 }
 
@@ -856,6 +874,54 @@ QoreValue f_rescan_plain_readers(const QoreListNode* args, RuntimeConfig&, Excep
     rv->setKeyValue("old_seen", r.old_seen, nullptr);
     rv->setKeyValue("new_seen", r.new_seen, nullptr);
     rv->setKeyValue("found_in_hook", r.found, nullptr);
+    rv->setKeyValue("registry_locked", r.registry_locked, nullptr);
+    return rv.release();
+}
+
+//! AncestryProbe::rescanDeep(): QoreClass::rescanParents() of a class whose out-of-date ancestors reach a class that
+//! is registered with an open parent class three levels down: the rescan takes the lock of the registry
+/** Plain QoreClasses C <- A <- X <- Y (each gets its base class after its subclass inherited it, so the lists are out
+    of date), then Y gets an open QoreBuiltinClass P as a base class and is registered with it; C's rescan recurses to
+    Y, whose list the completion of P replaces with the lock held
+*/
+QoreValue f_rescan_deep(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    Scenario s;
+    auto plain = [&s](const char* prefix) {
+        std::string name = prefix + std::to_string(++class_seq);
+        std::string path = "AncestryProbeScenario::" + name;
+        QoreClass* qc = new QoreClass(name.c_str(), path.c_str());
+        s.add(qc);
+        return qc;
+    };
+    QoreClass* y = plain("Y");
+    QoreClass* x = plain("X");
+    QoreClass* a = plain("A");
+    QoreClass* c = plain("C");
+    c->addBaseClass(a, true);
+    a->addBaseClass(x, true);
+    x->addBaseClass(y, true);
+    QoreClass* p = s.create("P");
+    y->addBaseClass(p, true);
+    if (linked_query_t is_linked = get_linked_query()) {
+        rv->setKeyValue("y_linked_p", is_linked(y, p), nullptr);
+        rv->setKeyValue("c_linked_a", is_linked(c, a), nullptr);
+    }
+    rv->setKeyValue("c_y_before", has_ancestor(c, y), nullptr);
+    ReaderResult r;
+    std::vector<QoreClass*> found_in;
+    found_in.push_back(y);
+    bool hook = read_while(c, found_in, r, [&]() {
+        c->rescanParents();
+    });
+    rv->setKeyValue("c_y", has_ancestor(c, y), nullptr);
+    rv->setKeyValue("c_p", has_ancestor(c, p), nullptr);
+    // P is closed: Y is completed
+    p->initializeBuiltin();
+    s.add(p);
+    rv->setKeyValue("y_p", has_ancestor(y, p), nullptr);
+    rv->setKeyValue("hook", hook, nullptr);
+    rv->setKeyValue("registry_locked", r.registry_locked, nullptr);
     return rv.release();
 }
 
@@ -953,6 +1019,7 @@ static void ancestryprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink&
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
     module_ns->addBuiltinVariant("rescanPlainReaders", f_rescan_plain_readers, QCF_NO_FLAGS, QDOM_DEFAULT,
         autoHashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
+    module_ns->addBuiltinVariant("rescanDeep", f_rescan_deep, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo);
     module_ns->addBuiltinVariant("gapProgram", f_gap_program, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
         codeTypeInfo, QORE_PARAM_NO_ARG, "cb");
     module_ns->addBuiltinVariant("checkObject", f_check_object, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,

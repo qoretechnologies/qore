@@ -34,6 +34,7 @@ class BuiltinAncestryTest inherits QUnit::Test {
         addTestCase("concurrent readers", \concurrentReadersTest());
         addTestCase("rescanning the parent classes while another thread reads", \rescanReadersTest());
         addTestCase("rescanning without the registry lock while another thread reads", \rescanPlainReadersTest());
+        addTestCase("rescanning that reaches a registered class through out-of-date lists", \rescanDeepTest());
         addTestCase("import and subclass in another Program in the gap", \gapProgramTest());
         set_return_value(main());
     }
@@ -147,6 +148,8 @@ class BuiltinAncestryTest inherits QUnit::Test {
         assertEq(2, h.old_seen);
         assertEq(n + 2, h.new_seen);
         assertEq(n, h.found_in_hook);
+        # the completion holds the lock of the registry while the hook waits
+        assertEq(1, h.registry_locked);
     }
 
     rescanReadersTest() {
@@ -163,6 +166,8 @@ class BuiltinAncestryTest inherits QUnit::Test {
         assertEq(3, h.old_seen);
         assertEq(n + 3, h.new_seen);
         assertEq(n, h.found_in_hook);
+        # B is registered with A: the rescan holds the lock of the registry
+        assertEq(1, h.registry_locked);
     }
 
     rescanPlainReadersTest() {
@@ -180,6 +185,24 @@ class BuiltinAncestryTest inherits QUnit::Test {
         assertEq(3, h.old_seen);
         assertEq(n + 3, h.new_seen);
         assertEq(n, h.found_in_hook);
+        # no class is registered: the rescan does not take the lock of the registry
+        assertEq(0, h.registry_locked);
+    }
+
+    rescanDeepTest() {
+        hash<auto> h = AncestryProbe::rescanDeep();
+        # the lists of C, A and X are out of date until they are rescanned
+        assertFalse(h.c_y_before);
+        assertTrue(h.c_y);
+        assertTrue(h.c_p);
+        assertTrue(h.y_p);
+        if (!h.hook) {
+            testSkip("the libqore test hook is only available in debug builds");
+        }
+        assertTrue(h.y_linked_p);
+        assertFalse(h.c_linked_a);
+        # Y, three levels down, is registered with P: the rescan of C holds the lock of the registry
+        assertEq(1, h.registry_locked);
     }
 
     gapProgramTest() {

@@ -1160,7 +1160,8 @@ public:
         Safe to call multiple times: once the ancestry of the class is complete, subsequent calls do nothing; while
         it is not (the class is registered with a parent class whose ancestry is not complete), each call takes a
         global lock, and a class that is closed but not complete and has no such parent class (after a completion
-        that failed with an exception) is completed again.
+        that failed with an exception, or when its last such parent class was deleted directly, which leaves it
+        unregistered) is completed again.
 
         @since %Qore 3.0
     */
