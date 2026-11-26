@@ -2670,6 +2670,44 @@ uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot,
 uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     int32_t last, ExceptionSink* xsink);
 
+//! AOT call of the canonical <string>::split(string) variant with its defaults (lib/QoreAOTStringRuntime.cpp)
+/** @param ctx the AOT context of the caller
+    @param slot the slot of the call, whose prelinked target is the canonical variant
+    @param base_bits the receiver, borrowed
+    @param separator_bits the separator, borrowed
+    @param arg_cleanups the cleanup slots of the caller's temporary arguments, or nullptr; the caller clears them
+    after the call
+    @param xsink for exceptions
+
+    @return the list of the fields (an owned reference), or NOTHING if an exception was raised
+
+    A string receiver and separator (also a short string or a string enum member) are split as the builtin splits
+    them, in the builtin's frame, without an argument list; any other operand, and a call while a Program has a
+    debugger or with QORE_AOT_DISABLE_PRELINKED_CALLS set, takes the ordinary call
+    (qore_rt_dot_eval_pseudo_method_direct_aot_consume_args()), which takes the argument over
+*/
+uint64_t qore_rt_pseudo_string_split_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    uint64_t separator_bits, uint64_t** arg_cleanups, ExceptionSink* xsink);
+
+//! AOT call of the canonical trim(string, *string) variant with one argument (lib/QoreAOTStringRuntime.cpp)
+/** @param ctx the AOT context of the caller
+    @param slot the slot of the call, whose prelinked target is the canonical variant
+    @param value_bits the argument, borrowed
+    @param arg_cleanups the cleanup slots of the caller's temporary arguments, or nullptr; the caller clears them
+    after the call
+    @param xsink for exceptions
+
+    @return the trimmed copy of the string (an owned reference), or NOTHING if an exception was raised
+
+    A string argument (also a short string or a string enum member) is trimmed as the builtin trims it, in the
+    builtin's frame, without an argument list, if the call's Program is the thread's current Program; any other
+    argument or Program, and a call while a Program has a debugger or with QORE_AOT_DISABLE_PRELINKED_CALLS set,
+    takes the ordinary call
+    (qore_rt_call_direct_aot_consume_args()), which takes the argument over
+*/
+uint64_t qore_rt_string_trim_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value_bits,
+    uint64_t** arg_cleanups, ExceptionSink* xsink);
+
 //! Direct static method call with pre-evaluated arguments — builds QoreListNode.
 //! Calls qore_method_private::eval() with nullptr for self.
 uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
