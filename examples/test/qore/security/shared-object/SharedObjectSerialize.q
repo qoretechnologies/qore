@@ -109,6 +109,13 @@ public class Box inherits Serializable {
     }
 }
 
+#! holds a value in a static class variable
+public class StaticHolder inherits Serializable {
+    public {
+        static auto held;
+    }
+}
+
 #! holds a weak reference to an object
 public class WeakBox inherits Serializable {
     public {
@@ -177,6 +184,11 @@ string sub serialize_deputy(code deputy, object o) {
     return try_serialize(auto sub () { return deputy(o); });
 }
 
+# serializes an object with its static class variables
+string sub serialize_static(object o) {
+    return try_serialize(auto sub () { return Serializable::serialize(o, QSF_INCLUDE_STATIC_CLASS_VARS); });
+}
+
 # whether the data that the tenant serializes holds a value that the class leaves out
 string sub leaks(object o) {
     try {
@@ -242,8 +254,16 @@ printf("tenant serializes a subclass that serializes a member: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookChild())));
 printf("tenant serializes a subclass with only transient members: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookTransientChild())));
-printf("tenant serializes a shared object of a builtin class with a serializer: %s\n",
-    p.callFunction("serialize_one", "Serializable::serialize()", shared(new SharedTimeZone())));
+printf("tenant serializes a shared object of a builtin class with a serializer: %s; one that is not shared: %s\n",
+    p.callFunction("serialize_one", "Serializable::serialize()", shared(new SharedTimeZone())),
+    p.callFunction("serialize_one", "Serializable::serialize()", new SharedTimeZone()));
+StaticHolder::held = shared(new GuardedNoHook());
+printf("tenant serializes a shared object in a static class variable: %s\n", p.callFunction("serialize_static",
+    new StaticHolder()));
+StaticHolder::held = new GuardedNoHook();
+printf("tenant serializes one that is not shared in a static class variable: %s\n",
+    p.callFunction("serialize_static", new StaticHolder()));
+remove StaticHolder::held;
 {
     GuardedNoHook o = shared(new GuardedNoHook());
     GuardedNoHook c = Serializable::deserialize(o.serialize());

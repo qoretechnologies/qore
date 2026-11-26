@@ -804,7 +804,8 @@ authenticate();
     Serializing a shared object gives its members, also the private ones, as data, from which
     @ref Qore::Serializable::deserialize() "Serializable::deserialize()" makes an ordinary object, so code that is
     sandboxed or acts for sandboxed code (as decided for a copy) cannot serialize a shared object, also not in a value
-    that holds it (a member of another object, a hash or a list), with any of the serialization APIs: the
+    that holds it (a member of another object, a hash, a list, a weak reference or a static class variable), with
+    any of the serialization APIs: the
     serialization raises \c SHARED-OBJECT-ERROR before anything is written, whatever the classes of the object
     declare (\c serializeMembers() included).  Trusted code serializes shared objects as any other object.
     Deserialization is not affected: an object that it makes is not shared unless its class marks it; deserialized

@@ -19,6 +19,8 @@ trusted code serializes one with serializeMembers(): no secret
 tenant round trip of one that is not shared: shared: False, secret: secret
 tenant serializes a subclass that serializes a member: SHARED-OBJECT-ERROR
 tenant serializes a subclass with only transient members: SHARED-OBJECT-ERROR
-tenant serializes a shared object of a builtin class with a serializer: SHARED-OBJECT-ERROR
+tenant serializes a shared object of a builtin class with a serializer: SHARED-OBJECT-ERROR; one that is not shared: serialized (binary)
+tenant serializes a shared object in a static class variable: SHARED-OBJECT-ERROR
+tenant serializes one that is not shared in a static class variable: serialized (binary)
 trusted code serializes it: deserialized shared: False, secret: secret
 trusted code serializes it in an object: secret
