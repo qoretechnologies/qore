@@ -135,6 +135,69 @@ class ThreadProcessor inherits DataProvider::AbstractDataProcessor {
     }
 }
 
+#! holds the first record in its logDebug() (its output) or logError() (its error) until it may go on, and reports
+#! its destruction
+class HoldingLogPipeline inherits DataProvider::DataProviderPipeline {
+    public {
+        Counter in_log(1);
+        Counter go(1);
+        bool armed = True;
+        Queue events;
+    }
+
+    constructor(hash<PipelineOptionInfo> opts, Queue events) : DataProviderPipeline(opts) {
+        self.events = events;
+    }
+
+    destructor() {
+        events.push({"event": "destroyed", "tid": gettid()});
+    }
+
+    logDebug(string fmt, ...) {
+        if (armed && fmt =~ /data processor .* output/) {
+            hold();
+        }
+    }
+
+    logError(string fmt, ...) {
+        if (armed) {
+            hold();
+        }
+    }
+
+    private hold() {
+        armed = False;
+        in_log.dec();
+        go.waitForZero(HangTimeout);
+    }
+}
+
+#! reports the end of the destructor of its pipeline (the shutdown of its collector follows the wait for the queue
+#! threads)
+class ShutdownCollector inherits TestMetricsCollector {
+    private {
+        Queue events;
+    }
+
+    constructor(Queue events) {
+        self.events = events;
+    }
+
+    shutdown() {
+        events.push({"event": "collector shut down", "tid": gettid()});
+    }
+}
+
+#! logs nothing: its logError() raises an error
+class ThrowingLogPipeline inherits DataProvider::DataProviderPipeline {
+    constructor(hash<PipelineOptionInfo> opts) : DataProviderPipeline(opts) {
+    }
+
+    logError(string fmt, ...) {
+        throw "LOGERROR-FAILED", "the log failed";
+    }
+}
+
 class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
     constructor() : QUnit::Test("PipelineDestroyedWhileProcessing", "1.0") {
         addTestCase("a record in progress completes while the pipeline is destroyed", \completesTest());
@@ -143,6 +206,12 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         addTestCase("a queue thread calls the reimplemented log methods of a live pipeline", \overridesTest());
         addTestCase("the error of a queue thread of a live pipeline is logged with its reimplemented logError()",
             \overridesErrorTest());
+        addTestCase("a pipeline whose last reference a queue thread's call holds is destroyed in the queue thread",
+            \destroyedInQueueTest(), False);
+        addTestCase("a pipeline whose last reference a queue thread's error report holds is destroyed in the queue "
+            "thread", \destroyedInQueueTest(), True);
+        addTestCase("an error of a record is reported when the pipeline's logError() raises an error",
+            \throwingLogErrorTest());
         set_return_value(main());
     }
 
@@ -201,6 +270,74 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         list<hash<auto>> calls = map pipe.calls.get(), xrange(pipe.calls.size());
         assertTrue((select calls, $1.method == "logError" && $1.tid == tid && $1.msg =~ /TEST-ERROR/).size() > 0,
             "the queue thread's error is logged with the pipeline's logError()");
+    }
+
+    #! The program releases the pipeline while the queue thread calls its logDebug() or logError() (qore#7509)
+    /** The call holds the last reference: the pipeline is destroyed in the queue thread, once the thread has released
+        the pipeline's lock, which the destructor takes; the record completes, and its error is reported
+    */
+    destroyedInQueueTest(bool fail) {
+        Queue events();
+        Queue errors();
+        ShutdownCollector collector(events);
+        ThreadProcessor proc(fail);
+        ThreadProcessor proc2(False);
+        Counter go;
+        {
+            HoldingLogPipeline pipe(<PipelineOptionInfo>{
+                "name": "destroyed-in-queue",
+                "error_log": sub (string fmt, ...) {
+                    errors.push(vsprintf(fmt, argv));
+                },
+                "metrics_collector": collector,
+            }, events);
+            pipe.append(proc);
+            pipe.append(proc2);
+            go = pipe.go;
+            pipe.submit({"a": 1});
+            assertEq(0, pipe.in_log.waitForZero(HangTimeout), "the queue thread calls the pipeline");
+        }
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
+        # the program has released the pipeline: the queue thread's call holds it
+        int tid = proc.tids.get(HangTimeout);
+        go.dec();
+        hash<auto> ev = events.get(HangTimeout);
+        assertEq("destroyed", ev.event, "the pipeline is destroyed");
+        assertEq(tid, ev.tid, "the queue thread destroys the pipeline");
+        assertEq("collector shut down", events.get(HangTimeout).event,
+            "the destructor does not wait for the queue thread that runs it");
+        if (fail) {
+            assertEq(0, proc2.tids.size(), "the failed record goes no further");
+            # the destructor raises the record's error once it has shut the collector down: the queue thread logs it
+            string msg;
+            while (msg !~ /PIPELINE-FAILED/) {
+                msg = errors.get(HangTimeout);
+            }
+            assertRegex("PIPELINE-FAILED", msg,
+                "the record's error is reported by the destructor that runs in the queue thread");
+        } else {
+            assertEq(tid, proc2.tids.get(HangTimeout), "the record completes");
+        }
+    }
+
+    #! The pipeline's logError() raises an error while the error of a record is reported (qore#7509)
+    throwingLogErrorTest() {
+        Queue errors();
+        ThrowingLogPipeline pipe(<PipelineOptionInfo>{
+            "name": "throwing-log",
+            "error_log": sub (string fmt, ...) {
+                errors.push(vsprintf(fmt, argv));
+            },
+        });
+        pipe.append(new ThreadProcessor(True));
+        pipe.submit({"a": 1});
+        # the error is recorded, and the pipeline aborted, before it is logged
+        assertThrows("PIPELINE-FAILED", \pipe.waitDone());
+        list<string> logged = map errors.get(), xrange(errors.size());
+        assertTrue((select logged, $1 =~ /TEST-ERROR/ && $1 =~ /could not be logged/ && $1 =~ /LOGERROR-FAILED/).size()
+            > 0, "the logging error is logged with the shared state's log");
     }
 
     #! submits a record, releases the pipeline in another thread while the record is processed, and lets the record go on
