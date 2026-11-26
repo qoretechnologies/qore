@@ -52,7 +52,11 @@ warning encountered at script.q:2 (Qore builtin code)
 BINARY-MODULE-SOURCE-FALLBACK: binary module '...' for feature '...' failed to load; loading source module '...' ...
     @endverbatim
     and with a <tt>next warning:</tt> line between two warnings; the location line and a separator line that belong
-    to such a warning are part of it.
+    to such a warning are part of it.  In the default one-line format of parse diagnostics (see
+    \c --diag-format), such a warning is one line with its location (or \c qore when it has none):
+    @verbatim
+script.q:2:11: warning: BINARY-MODULE-SOURCE-FALLBACK: binary module '...' for feature '...' failed to load; ...
+    @endverbatim
 
     The warnings are about the environment, not output of the program, which ran the source module.  A test that reads
     the standard error of a child process as its output separates them with split_loader_warnings() or removes them
@@ -66,6 +70,21 @@ public namespace LoaderWarnings {
         return line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): AOT module '.*' for feature '.*' is out of date: /
             || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): binary module '.*' for feature '.*' failed to load; loading source module '.*' /
             || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): [0-9]+ AOT modules? (was|were) loaded from (its|their) source because /;
+    }
+
+    #! returns the text of a parse warning written as one line (<tt>location: warning: CODE: ...</tt>), or NOTHING
+    /** @param line a line, with or without its line break
+    */
+    public *string sub one_line_warning_text(string line) {
+        *list<*string> m = (line =~ x/^(?:qore|.*?:[0-9]+(?::[0-9]+)?): warning: (.*?)\n?$/);
+        return m ? m[0] : NOTHING;
+    }
+
+    #! returns True if the line is the notice that a report stopped at QORE_EXCEPTION_REPORT_LIMIT, in either format
+    /** @param line a line, with or without its line break
+    */
+    public bool sub is_report_limit_notice(string line) {
+        return line =~ /^(qore: note: |\*\*\* )maximum exception count reached \([0-9]+\); suppressing further output/;
     }
 
     #! separates the module loader warnings from the other lines of the output of a child process
@@ -94,6 +113,18 @@ public namespace LoaderWarnings {
                 continue;
             }
             if (line =~ /^warning: / && is_loader_warning(line)) {
+                push warnings, trim(line, "\n");
+                continue;
+            }
+            # a parse warning in the one-line format: its text is the warning
+            *string text = one_line_warning_text(line);
+            if (text && text =~ /^BINARY-MODULE-SOURCE-FALLBACK: / && is_loader_warning(text)) {
+                push warnings, text;
+                continue;
+            }
+            # the notice that the report of the warnings stopped at its limit, when loader warnings came before it: the
+            # warnings that it suppressed are of the same report (QORE_EXCEPTION_REPORT_LIMIT)
+            if (warnings && is_report_limit_notice(line) && (!rest || !is_report_limit_notice(rest.last()))) {
                 push warnings, trim(line, "\n");
                 continue;
             }

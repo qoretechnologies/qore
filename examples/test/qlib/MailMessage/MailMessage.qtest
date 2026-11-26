@@ -20,6 +20,7 @@ public class Main inherits QUnit::Test {
 
     constructor() : Test("MailMessageTest", "1.0") {
         addTestCase("Test serialize()", \testSerialize(), NOTHING);
+        addTestCase("Compose plain and HTML alternatives", \testComposeAlternatives());
         addTestCase("Test multipart type detection", \testMultipartTypeDetection(), NOTHING);
         addTestCase("Test getFrom bug fix", \testGetFromBugFix(), NOTHING);
         addTestCase("Test attachment handling", \testAttachmentHandling(), NOTHING);
@@ -206,6 +207,24 @@ lorem ipsum\r
             string r = msg.serialize();
             assertRegex("Content-Transfer-Encoding: quoted-printable", r);
         }
+    }
+
+    testComposeAlternatives() {
+        Message msg("from@example.org", "Alternatives");
+        msg.addTO("to@example.org");
+        msg.setBody("<p>Růžová</p>", ContentEncoding::Base64, "text/html");
+        msg.addPlainAlternative("Plain café");
+        assertTrue(msg.isMultipart());
+        assertEq("alternative", msg.getInfo().multipart_type);
+        assertEq("Plain café", msg.getBody());
+        assertEq("<p>Růžová</p>", msg.getParts()[0].getData());
+        assertThrows("BODY-ERROR", \msg.addPlainAlternative(), "second");
+        Message parsed(msg.serializeRaw());
+        assertEq("alternative", parsed.getMultipartType());
+        assertEq("Plain café", parsed.getBody());
+        assertEq("<p>Růžová</p>", parsed.getParts()[0].getData());
+        msg.attach("sample.bin", "application/octet-stream", parse_base64_string("AP8="));
+        assertEq("mixed", msg.getMultipartType());
     }
 
     testMultipartTypeDetection() {

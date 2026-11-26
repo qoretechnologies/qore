@@ -749,6 +749,62 @@ DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td
 */
 DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm);
 
+//! Returns true if the current thread's code has elevated explicitly out of the sandbox of its callers
+/** True inside SandboxManager::callWithSystemPolicy() or a capability of SandboxManager::createSystemPolicyCall() (a
+    policy barrier), unless a sandboxed Program was entered inside the barrier or the policy of a sandbox governs the
+    code that runs there (the provenance of code created by sandboxed code) (qore#7148)
+*/
+DLLLOCAL bool qore_sandbox_policy_elevated();
+
+//! Returns true if trusted code that is not module code acts for the application of the sandboxed code it runs for
+/** Host Program code that runs for sandboxed code acts for the application of that sandboxed code (qore#7148), set in
+    \a app_id, which is, in this order:
+    - the sandboxed caller that a parse, a commit, a call reference or a module load hid (QoreCallerSandboxHelper,
+      the application that its caller acted for), as in qore_caller_is_sandboxed(), and then the innermost sandboxed
+      Program entered on the thread's call stack: the sandboxed code that called the host code
+    - none (QORE_NO_PROGRAM_ID) in a thread that module code started, whose work can serve every caller of the module,
+      unless it continues an operation or a task, and in work that continues a context captured for no application
+      (QoreSandboxContext::app_id)
+    - the application of the innermost provenance frame: that which the code that created the object or the closure
+      that runs acted for (QoreSandboxContext::app_id)
+    - \a callback_app: the application of the operation whose callback runs, if any
+    - the application that the code that submitted the operation or the task that the thread continues, or that started
+      the thread, acted for (QoreSandboxContext::app_id)
+    - none (QORE_NO_PROGRAM_ID) if a sandbox governs the code that names no Program
+
+    It returns false (the code acts for its own Program's application) if no sandbox governs the code and no callback of
+    an operation runs (\a callback_app), if it runs for a SandboxManager::callGoverned() call, whose application it
+    has, or if it elevated explicitly (qore_sandbox_policy_elevated()); qore_host_code_app_id() checks the explicit
+    elevation first.
+
+    @param app_id set to the application if the function returns true
+    @param host the host Program whose code runs or calls module code (the current Program can be the module's)
+    @param callback_app the application of the operation whose callback runs on the thread, or nullptr
+    @param sandboxed the result of qore_caller_is_sandboxed() if the caller has it, or -1
+*/
+DLLLOCAL bool qore_host_code_sandboxed_app_id(qore_program_id_t& app_id, const QoreProgram* host,
+        const qore_program_id_t* callback_app, int sandboxed = -1);
+
+//! Returns the application that the code of the given host Program (not a module, not sandboxed) acts for (qore#7148)
+/** Its own Program's application where it elevated explicitly (qore_sandbox_policy_elevated()), otherwise that of the
+    sandboxed code that it runs for (qore_host_code_sandboxed_app_id()), or its own Program's application where it runs
+    for none; also for the module code that it calls (the application that a module call records), so that host code
+    cannot act for its own application by delegating to module code
+
+    @param host the host Program whose code runs or calls
+    @param sandboxed the result of qore_caller_is_sandboxed() if the caller has it, or -1
+*/
+DLLLOCAL qore_program_id_t qore_host_code_app_id(const QoreProgram* host, int sandboxed = -1);
+
+//! Returns the application of the operation whose callback runs on the thread, or nullptr if none runs (qore#7010)
+DLLLOCAL const qore_program_id_t* qore_aio_callback_app_id();
+
+//! Returns the application that the calling code acts for in the ownership checks of the async I/O controller
+/** AsyncIoControllerPriv::callerAppId(): the application Program's ID, QORE_NO_PROGRAM_ID for no application; recorded
+    in the contexts that the code captures, so that the work that it hands off acts for the same application (qore#7148)
+*/
+DLLLOCAL qore_program_id_t qore_aio_caller_app_id(int sandboxed = -1);
+
 //! returns true if module code runs in its own Program for an application with restrictions
 /** @param app_pgm_id set to the ID of the application Program that the module code runs for
 
@@ -918,6 +974,9 @@ DLLLOCAL int qore_check_background_direct_call(ExceptionSink* xsink);
     choose the modules that library code uses (see QoreModuleManager::isTrustedModulePath()).
 */
 DLLLOCAL bool qore_caller_is_untrusted();
+
+//! returns true while library code that untrusted code loaded is initialized on the current thread (qore#7566)
+DLLLOCAL bool qore_caller_in_untrusted_module_init();
 
 //! Returns the sandbox of the code running on the current thread, if any, for the modules that it chooses
 /** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
@@ -1382,6 +1441,17 @@ public:
     //! host code created), not the API of a host that starts a thread for a sandboxed caller.  The thread-start
     //! context of such a thread counts for qore_scope_creator_is_sandboxed()
     bool capturer_sandboxed = false;
+    //! True if the capturing code's current Program is a module's Program: for the context that a thread starts with,
+    //! the thread was started by module code, whose work can serve every caller of the module and so runs for no
+    //! application (qore#7010), also the host code that it calls (qore#7148)
+    bool capturer_module = false;
+    //! The application that the capturing code acted for (see qore_aio_caller_app_id()), QORE_NO_PROGRAM_ID for none,
+    //! or 0 if no sandbox governed it (qore#7148)
+    /** The host's code that continues the context (in a thread or a task that the capturing code started or submitted,
+        in the callback of its operation, or in an object or closure that it created) acts for this application: the
+        work that code hands off acts for the application that the code acted for when it handed it off
+    */
+    qore_program_id_t app_id = 0;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -2260,6 +2330,22 @@ DLLLOCAL bool qore_calling_code_is_sandboxed();
 */
 DLLLOCAL void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm);
 
+//! Sets the budget of a sandbox for time zones loaded from paths (qore#7566)
+/** Only code that is not restricted (see qore_caller_is_untrusted()) can raise either limit, also of a manager that
+    restricted code created; restricted code can only lower them.
+
+    @param sm the manager; a composite manager has no budget of its own (its members' budgets apply)
+    @param max_zones the most zones (name entries); 0 = path zones are refused
+    @param max_bytes the most memory in bytes; 0 = path zones are refused
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink);
+
+//! the type of SandboxManager::getTimeZonePathLimits() (qore#7566)
+DLLLOCAL extern const TypedHashDecl* hashdeclSandboxTimeZonePathInfo;
+
 //! Checks that the code running on the current thread may change \a sm (issue #5659)
 /** Trusted code may change any sandbox manager; code that is not trusted (see qore_calling_code_is_untrusted()) may
     change only one that code of its own Program created (see qore_sandbox_manager_record_creator()): not the one that governs
@@ -2419,6 +2505,16 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
+//! Returns true if restricted code is on the calling thread's call stack (qore#7635)
+/** Code of a Program that qore_program_is_restricted() reports restricted (a sandbox that does not trust its code
+    governs it, or it is sandboxed without a manager): the Programs on the call stack are walked as in
+    qore_caller_is_sandboxed(), also past a Program whose sandbox trusts its code, and a sandboxed caller that a parse
+    or module load hid from the walk (see QoreCallerSandboxHelper) counts if it was restricted.  Code that restricted
+    code calls acts for it: a class that it parses or loads is a class of restricted code, also when the sandbox of
+    its own Program trusts its code
+*/
+DLLLOCAL bool qore_caller_has_restricted_code();
+
 //! Returns the Program of the calling code whose per-Program cache a library class uses (see
 //! SandboxManager::setProgramCacheValue())
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
@@ -2483,9 +2579,23 @@ public:
         return barrier_depth;
     }
 
+    //! Returns true if restricted code was on the caller's call stack (qore_caller_has_restricted_code()) (qore#7635)
+    DLLLOCAL bool isRestricted() const {
+        return restricted;
+    }
+
     //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
     DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
         return sandboxed_pgm_id;
+    }
+
+    //! Returns the application that the caller acted for (see qore_aio_caller_app_id()), QORE_NO_PROGRAM_ID for none
+    /** The host's code that runs in the target Program for the caller acts for it (qore#7148); it is not always the
+        application of the sandboxed Program of the caller (getSandboxedProgramId()): the work of a thread that module
+        code started, which only the sandbox inherited from the code that started the thread governs, acts for none
+    */
+    DLLLOCAL qore_program_id_t getAppId() const {
+        return app_id;
     }
 
     DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
@@ -2499,6 +2609,10 @@ private:
     //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
     qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
+    //! see isRestricted()
+    bool restricted = false;
+    //! the application that the caller acted for (see getAppId())
+    qore_program_id_t app_id = 0;
 };
 
 //! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program

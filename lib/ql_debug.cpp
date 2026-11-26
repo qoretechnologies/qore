@@ -394,12 +394,47 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
 //! Adds a namespace with a builtin function, a constant, a class and a hashdecl to the root namespace of the calling
 //! Program at run time, through the public C++ API that a binary module calls (qore#7530)
 /** With a name \c "outer::inner", the declarations are in the subnamespace \c inner of the namespace \c outer that is
-    added.  With \c variant 1, the function also has a variant with a string parameter, and the namespace has a function
-    \c dbg_rt_new() with a parameter of the type of its class.  Adding a namespace with the same name again merges it
-    with the one that the Program has: a declaration that the Program already has is not added again (it is kept with
-    the namespace, as the declarations that are added can use its type), and nothing reaches the parse-error path, as
-    there is no parse
+    added. With \c variant 1, the function also has a variant with a string parameter, and the namespace has a
+    function \c dbg_rt_new() with a parameter of the type of its class, \c dbg_rt_ref() and \c dbg_rt_code() that name
+    it through a reference type and a typed code type, and a generic hashdecl \c DbgRtGen<T>. Adding a namespace with
+    the same name again merges it with the one that the Program has: a declaration that the Program already has is not
+    added again (it is kept with the namespace, as the declarations that are added can use its type), and nothing
+    reaches the parse-error path, as there is no parse
 */
+//! a static generic builtin class (Qore::DbgRtBox<T>), made when the debug functions are added (qore#7540)
+static QoreClass* dbg_rt_box = nullptr;
+//! the type DbgRtBox<DbgRtClass> that the last dbg_add_runtime_namespace() with variant 3 made, before the namespace
+//! was added to the Program; read only while that Program lives
+static std::atomic<const QoreTypeInfo*> dbg_rt_box_type{nullptr};
+
+//! Returns True if the type DbgRtBox<DbgRtClass> made by the last dbg_add_runtime_namespace() with variant 3 is an
+//! unsafe receiver (qore#7540); valid while the Program that added the namespace lives
+static QoreValue f_dbg_rt_box_unsafe(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreTypeInfo* ti = dbg_rt_box_type.load(std::memory_order_acquire);
+    if (!ti) {
+        return xsink->raiseException("DBG-RT-BOX-ERROR", "no type made yet");
+    }
+    return QoreTypeInfo::isUnsafeReceiver(ti);
+}
+
+//! Returns True if a marking event of the current Program's root namespace did not complete (qore#7540)
+static QoreValue f_dbg_runtime_refresh_pending(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    RootQoreNamespace* root = getProgram()->getRootNS();
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(*qore_root_ns_private::get(*root));
+    return qore_root_ns_private::get(*root)->runtimeRefreshPending();
+}
+
+//! Returns the number of variants whose references the marking events of run-time namespaces refreshed (qore#7608)
+static QoreValue f_dbg_runtime_variant_refreshes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_runtime_variant_refreshes();
+}
+
+//! Returns the number of scans of the parameterized class types for declarations that became mortal (qore#7540)
+static QoreValue f_dbg_program_local_derived_type_scans(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_program_local_derived_type_scans();
+}
+
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     // a short string value is inline: read through the helper
     QoreStringValueHelper name(get_hard_value_param(params, 0));
@@ -409,6 +444,32 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 5: a namespace is attached empty, then a class is added to it one at a time (addSystemClass()), then a
+    // function whose parameter names the class (qore#7649)
+    if (variant == 5) {
+        if (sep != std::string::npos) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
+        }
+        RootQoreNamespace* root = getProgram()->getRootNS();
+        root->addNamespace(new QoreNamespace(inner.c_str()));
+        QoreNamespace* ans = getProgram()->findNamespace(QoreString(inner.c_str()));
+        if (!ans) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
+        }
+        QoreClass* one = new QoreClass("DbgRtOne", (path + "::DbgRtOne").c_str());
+        ans->addSystemClass(one);
+        ans->addBuiltinVariant("dbg_rt_one", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            one->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        return QoreValue();
+    }
+    // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
+    bool fail_refresh = variant == 4;
+    if (fail_refresh) {
+        variant = 2;
+    }
+    if (variant == 2 && sep != std::string::npos) {
+        return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 2 takes a name without '::'");
+    }
     std::unique_ptr<QoreNamespace> ns(new QoreNamespace(inner.c_str()));
     ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     if (variant == 1) {
@@ -418,21 +479,129 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     ns->addConstant("DbgRtConst", static_cast<int64>(variant));
     QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
     ns->addSystemClass(qc);
+    if (variant == 3) {
+        // a type of a static generic class with the class as its type argument, made before the namespace is added, and
+        // a function that names it: the type is upgraded to an unsafe receiver when the class becomes mortal
+        type_vec_t args = {qc->getTypeInfo()};
+        const QoreTypeInfo* bt = qore_get_parameterized_class_type(dbg_rt_box, args, false);
+        dbg_rt_box_type.store(bt, std::memory_order_release);
+        ns->addBuiltinVariant("dbg_rt_box", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_parameterized_class_type(dbg_rt_box, args, true), QORE_PARAM_NO_ARG, "box");
+    }
     if (variant == 1) {
         // a function that uses the type of the class of this namespace, which is not added when the Program has it
         ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
             qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // functions that name the class through a reference type and a typed code type (qore#7540)
+        ns->addBuiltinVariant("dbg_rt_ref", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_reference_or_nothing_type(qc->getOrNothingTypeInfo()), QORE_PARAM_NO_ARG, "ref");
+        type_vec_t code_params = {qc->getOrNothingTypeInfo()};
+        ns->addBuiltinVariant("dbg_rt_code", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_code_or_nothing_type(qc->getOrNothingTypeInfo(), code_params), QORE_PARAM_NO_ARG,
+            "code");
+        // a generic hashdecl, whose instances are made by the code that names them
+        TypedHashDecl* gen = new TypedHashDecl("DbgRtGen", (path + "::DbgRtGen").c_str());
+        gen->addTypeParameter("T");
+        gen->addMember("a", bigIntTypeInfo, QoreValue());
+        ns->addSystemHashDecl(gen);
+        // an instance of the generic hashdecl made before the namespace is added, in a signature
+        ns->addBuiltinVariant("dbg_rt_gen", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            gen->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
+        // an enum and a function with a parameter of its type
+        QoreEnumDecl* en = new QoreEnumDecl("DbgRtEnum", (path + "::DbgRtEnum").c_str(), bigIntTypeInfo);
+        en->addMember("A", static_cast<int64>(1));
+        en->addMember("B", static_cast<int64>(2));
+        ns->addSystemEnum(en);
+        ns->addBuiltinVariant("dbg_rt_enum", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            en->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
     }
     // the namespace takes the hashdecl and the class (their destructors are not public)
     TypedHashDecl* hd = new TypedHashDecl("DbgRtHash", (path + "::DbgRtHash").c_str());
     hd->addMember("a", bigIntTypeInfo, QoreValue(static_cast<int64>(variant)));
     ns->addSystemHashDecl(hd);
+    if (variant == 1) {
+        // a function with a parameter of the type of the hashdecl
+        ns->addBuiltinVariant("dbg_rt_hash", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            hd->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+    }
+    // variant 2: functions added before the classes that they name are added (qore#7540): DbgRtLate is added to the
+    // namespace after it was added to the Program, and DbgRtLateB is in the namespace <name>C, which is added after
+    // the namespace <name>F with the function that names it
+    QoreClass* late = nullptr;
+    std::unique_ptr<QoreNamespace> late_fns;
+    std::unique_ptr<QoreNamespace> late_cns;
+    if (variant == 2) {
+        late = new QoreClass("DbgRtLate", (path + "::DbgRtLate").c_str());
+        ns->addBuiltinVariant("dbg_rt_late", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        late_fns.reset(new QoreNamespace((inner + "F").c_str()));
+        late_cns.reset(new QoreNamespace((inner + "C").c_str()));
+        QoreClass* lateb = new QoreClass("DbgRtLateB", (std::string("::") + inner + "C::DbgRtLateB").c_str());
+        late_cns->addSystemClass(lateb);
+        late_fns->addBuiltinVariant("dbg_rt_lateb", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateb->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // a hashdecl, an enum and an instance of a generic hashdecl of <name>C that functions of <name>F name: the
+        // attach of <name>C refreshes them through the declarations that it marks (qore#7608)
+        std::string cpath = std::string("::") + inner + "C::";
+        TypedHashDecl* lateh = new TypedHashDecl("DbgRtLateH", (cpath + "DbgRtLateH").c_str());
+        lateh->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateh);
+        late_fns->addBuiltinVariant("dbg_rt_lateh", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateh->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+        QoreEnumDecl* latee = new QoreEnumDecl("DbgRtLateE", (cpath + "DbgRtLateE").c_str(), bigIntTypeInfo);
+        latee->addMember("A", static_cast<int64>(1));
+        late_cns->addSystemEnum(latee);
+        late_fns->addBuiltinVariant("dbg_rt_latee", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            latee->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
+        TypedHashDecl* lateg = new TypedHashDecl("DbgRtLateG", (cpath + "DbgRtLateG").c_str());
+        lateg->addTypeParameter("T");
+        lateg->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateg);
+        late_fns->addBuiltinVariant("dbg_rt_lateg", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateg->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
+    }
     if (sep != std::string::npos) {
         std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
         outer->addNamespace(ns.release());
         ns.reset(outer.release());
     }
-    getProgram()->getRootNS()->addNamespace(ns.release());
+    RootQoreNamespace* root = getProgram()->getRootNS();
+    root->addNamespace(ns.release());
+    if (variant == 2) {
+        // the class is added to the namespace that the Program has now
+        QoreNamespace* added = root->findLocalNamespace(inner.c_str());
+        assert(added);
+        added->addSystemClass(late);
+        // a variant added twice to the namespace that the Program has: the function keeps the first one only
+        for (int i = 0; i < 2; ++i) {
+            added->addBuiltinVariant("dbg_rt_late2", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+                late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        }
+        if (fail_refresh) {
+            // the attach of a namespace with a class fails after the class is marked: the namespace is not attached
+            // (and is freed here), and its marking event is completed by the next one, the attach of an empty
+            // namespace
+            std::unique_ptr<QoreNamespace> fns(new QoreNamespace((inner + "X").c_str()));
+            fns->addSystemClass(new QoreClass("DbgRtFailClass",
+                (std::string("::") + inner + "X::DbgRtFailClass").c_str()));
+            qore_dbg_fail_next_runtime_refresh();
+            try {
+                root->addNamespace(fns.get());
+                fns.release();
+            } catch (std::bad_alloc&) {
+            }
+            if (!fns) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attach did not fail");
+            }
+            if (!qore_root_ns_private::get(*root)->runtimeRefreshPending()) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the failed event is not pending");
+            }
+            root->addNamespace(new QoreNamespace((inner + "Y").c_str()));
+        } else {
+            root->addNamespace(late_fns.release());
+            root->addNamespace(late_cns.release());
+        }
+    }
     return QoreValue();
 }
 
@@ -726,6 +895,34 @@ static QoreValue f_dbg_type_retirement_blockers(const QoreListNode* params, Runt
         l->push(h.release(), xsink);
     }
     return l.release();
+}
+
+//! the value that dbg_keep_until_cleanup() keeps, in a list, released by qore_cleanup()
+static std::atomic<QoreListNode*> dbg_cleanup_holder{nullptr};
+
+void qore_dbg_release_cleanup_holder() {
+    QoreListNode* l = dbg_cleanup_holder.exchange(nullptr, std::memory_order_acq_rel);
+    if (l) {
+        ExceptionSink xsink;
+        l->deref(&xsink);
+        // nothing can report an exception at library cleanup
+        xsink.clear();
+    }
+}
+
+//! Debug-only: keeps a value until library cleanup, after the binary modules are deleted (qore#7540)
+/** The value replaces the one kept before, which is released; qore_cleanup() releases it where it clears the Programs
+    that their owners keep beyond that point, so that a test can check what a value that something keeps to the end
+    of the process does then
+*/
+static QoreValue f_dbg_keep_until_cleanup(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+    l->push(get_param_value(params, 0).refSelf(), xsink);
+    QoreListNode* old = dbg_cleanup_holder.exchange(l.release(), std::memory_order_acq_rel);
+    if (old) {
+        old->deref(xsink);
+    }
+    return QoreValue();
 }
 
 //! Returns the number of class, hashdecl and enum declarations of Programs that are not freed, or -1 if the library
@@ -5392,6 +5589,11 @@ public:
             ctrl.io_waiting = false;
         }
         return 0;
+    }
+
+    //! Returns the index of the I/O thread that the operations on the pollable object are routed to
+    static int routeThread(AsyncIoControllerPriv& ctrl, const AbstractPollableIoObjectBase* sock) {
+        return ctrl.getThreadIndex(AsyncIoControllerPriv::getRouteKey(sock));
     }
 
     static void resize(UnitTestCounters& c) {
@@ -24277,6 +24479,39 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: returns the index of the I/O thread of the global async I/O controller that the operations on a pollable object are routed to (qore#7624)
+/** Operations are routed by the socket, not by their key: a test of keys that collide on different I/O threads needs
+    two objects that are routed to different threads.  DEBUG builds only.
+
+    @param sock the pollable I/O object (an EventNotifier, a Socket)
+
+    @return the I/O thread index
+
+    @throw DBG-ARGUMENT-ERROR the object is not a pollable I/O object
+*/
+static QoreValue f_dbg_async_io_route_thread(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* sock_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AbstractPollableIoObjectBase> sock(static_cast<AbstractPollableIoObjectBase*>(
+        const_cast<QoreObject*>(sock_obj)->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!sock) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the object is not a pollable I/O object");
+        return QoreValue();
+    }
+    return static_cast<int64>(AsyncIoCloseTest::routeThread(**ctrl, *sock));
+}
+
 //! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
 static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -34325,6 +34560,79 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: waits until a QUIC session has no data in flight and can send at once (qore#7638)
+/** As dbg_quic_wait_idle(), and also until no timer of the session is due soon: after the session sent, the pacing of
+    its sends (or another timer) can keep it from writing until a moment shortly after, when its own timer writes what
+    is pending, so that a write made before then (Socket::flushQuicPendingData(), for example) writes nothing.  With
+    nothing in flight, the timers that remain (the idle timeout, keep-alive) are far off: a timer due within 100 ms is
+    waited for, until the moment that it is due, which is known, and the state is checked again then.
+
+    @param session_id the QUIC session ID
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if the session has nothing in flight and no timer due within 100 ms, False if the wait timed out
+
+    @throw QUIC-ERROR there is no such QUIC session
+*/
+static QoreValue f_dbg_quic_wait_send_ready(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_send_ready(): invalid session ID %lld or timeout "
+            "%lld", (long long)session_id, (long long)timeout_ms);
+        return QoreValue();
+    }
+    SocketSyncPoll::assertNotOnIoThread("Qore", "dbg_quic_wait_send_ready", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::shared_ptr<QuicSession> session;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        auto i = dbg_quic_sessions.find(session_id);
+        if (i != dbg_quic_sessions.end()) {
+            session = i->second.lock();
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "dbg_quic_wait_send_ready(): no QUIC session with id %lld",
+            (long long)session_id);
+        return QoreValue();
+    }
+    // a timer due within this many nanoseconds is a pending send, not the idle timeout or keep-alive
+    static constexpr int64_t soon_ns = 100 * 1000 * 1000;
+    qore_dbg_quic_idle_waiters.fetch_add(1, std::memory_order_acq_rel);
+    ON_BLOCK_EXIT([] { qore_dbg_quic_idle_waiters.fetch_sub(1, std::memory_order_acq_rel); });
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        uint64_t gen;
+        {
+            std::lock_guard<std::mutex> lk(dbg_quic_idle_m);
+            gen = dbg_quic_idle_gen;
+        }
+        // checked without the waiters' lock: it takes the session's lock
+        int64_t ns = session->dbgNsUntilExpiry();
+        bool in_flight = session->getBytesInFlight() > 0;
+        if (!in_flight && ns > soon_ns) {
+            return true;
+        }
+        // the moment that the timer is due is known: the state is checked again then, or when the session reads
+        auto until = deadline;
+        if (!in_flight) {
+            auto due = std::chrono::steady_clock::now() + std::chrono::nanoseconds(ns)
+                + std::chrono::microseconds(100);
+            if (due < until) {
+                until = due;
+            }
+        }
+        std::unique_lock<std::mutex> lk(dbg_quic_idle_m);
+        bool woken = dbg_quic_idle_cv.wait_until(lk, until, [gen] { return dbg_quic_idle_gen != gen; });
+        if (!woken && std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+    }
+}
+
 //! Debug-only: waits until no QUIC session of the process has data in flight or anything left to write (qore#7452)
 /** When a client and a server in the process have nothing in flight and nothing to write, each has had all its
     packets that need an acknowledgment acknowledged by the other, and has no frame waiting to be sent (ex: a client's
@@ -37314,11 +37622,24 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_keep_until_cleanup", f_dbg_keep_until_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    // a static generic builtin class (qore#7540)
+    dbg_rt_box = new QoreClass("DbgRtBox", "::Qore::DbgRtBox");
+    dbg_rt_box->addTypeParameter("T");
+    qns.addSystemClass(dbg_rt_box);
+    qns.addBuiltinVariant("dbg_rt_box_unsafe", f_dbg_rt_box_unsafe, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_refresh_pending", f_dbg_runtime_refresh_pending, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_variant_refreshes", f_dbg_runtime_variant_refreshes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_program_local_derived_type_scans", f_dbg_program_local_derived_type_scans,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
@@ -37657,6 +37978,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_route_thread", f_dbg_async_io_route_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        objectTypeInfo, QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
@@ -38066,6 +38390,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_wait_send_ready", f_dbg_quic_wait_send_ready, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_set_client_peer_response_timeout", f_dbg_quic_set_client_peer_response_timeout,

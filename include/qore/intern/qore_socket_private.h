@@ -187,6 +187,10 @@ class QoreSocketObject;
 //! Returns the bytes of an HTTP/2 stream's buffered data that nghttp2 has taken so far (never decreases)
 /** @return the byte count, -1 if the session is closed or the stream is gone, or if an exception was raised
 */
+DLLLOCAL int qore_socket_object_quic_set_input_stream_send_bound(QoreSocketObject* s, int64_t session_id,
+    int64_t min_rate, int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink);
+DLLLOCAL int qore_socket_object_h2_set_input_stream_send_bound(QoreSocketObject* s, int64_t min_rate,
+    int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink);
 DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
 
 //! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session

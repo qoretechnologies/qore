@@ -1433,6 +1433,33 @@ void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
     untrusted_creators[sm] = id;
 }
 
+int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink) {
+    assert(sm);
+    if (max_zones < 0 || max_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the time zone path limits cannot be negative; got: zones "
+            QLLD ", bytes " QLLD, max_zones, max_bytes);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(sm)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "a composite sandbox has no time zone path limits of its own; "
+            "the limits of each of its sandboxes apply");
+        return -1;
+    }
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    // restricted code (also through the code of a module that acts for it) can only lower a limit: a budget that it
+    // could raise, also of a manager that it created, would let it pin memory that the host did not grant (qore#7566)
+    if ((max_zones > account->tz_max_zones.load() || max_bytes > account->tz_max_bytes.load())
+            && qore_caller_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setTimeZonePathLimits(): restricted code can "
+            "only lower the time zone path limits of a sandbox");
+        return -1;
+    }
+    account->tz_max_zones.store(max_zones);
+    account->tz_max_bytes.store(max_bytes);
+    return 0;
+}
+
 int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
     if (!qore_calling_code_is_untrusted()) {
         return 0;
@@ -2205,8 +2232,9 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            sandboxed.store(true, std::memory_order_release);
+            // the manager flag first: a reader that sees the Program sandboxed also sees that it has a manager
             any_sandbox_manager.store(true, std::memory_order_release);
+            sandboxed.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -2234,16 +2262,102 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
     return nullptr;
 }
 
-bool qore_object_program_is_sandboxed(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
+namespace {
+//! Returns true if the code that declares the class is sandboxed (see qore_class_declared_by_sandboxed_code())
+bool qore_class_own_code_sandboxed(const qore_class_private& qc, qore_program_id_t* id) {
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram()); a builtin
+    // class without a source Program and without a released state gives false
+    std::lock_guard<std::mutex> al(qc.dataLock());
+    QoreProgram* p = qc.spgm.load();
+    if (p) {
+        if (!qore_program_is_sandboxed(p)) {
+            return false;
+        }
+        if (id) {
+            *id = qore_program_private::get(*p)->getProgramId();
+        }
+        return true;
+    }
+    if (!qc.released_sandboxed.load()) {
         return false;
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    return static_cast<bool>(sm);
+    if (id) {
+        *id = qc.released_spgm_id.load();
+    }
+    return true;
+}
+
+//! Returns true if \a check is true for the class or one of its base classes (qore#7576)
+/** The hierarchy is walked depth first, the class before its base classes, in the order of their declaration, each
+    class once: a class reached through more than one path is not looked at again, so that the walk is linear in the
+    number of classes of the hierarchy
+*/
+template <typename F>
+bool qore_class_hierarchy_any(const qore_class_private& qc, F check) {
+    std::vector<const qore_class_private*> stack{&qc};
+    std::vector<const qore_class_private*> visited;
+    while (!stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (std::find(visited.begin(), visited.end(), c) != visited.end()) {
+            continue;
+        }
+        visited.push_back(c);
+        if (check(*c)) {
+            return true;
+        }
+        if (c->scl) {
+            // pushed in reverse, so that the first base class is looked at first
+            for (auto i = c->scl->rbegin(), e = c->scl->rend(); i != e; ++i) {
+                if ((*i)->sclass) {
+                    stack.push_back(qore_class_private::get(*(*i)->sclass));
+                }
+            }
+        }
+    }
+    return false;
+}
+
+//! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
+/** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
+    was imported into another Program, whose namespace then holds it; once that Program has released the class, the
+    state that it had then is used (see qore_class_private::isSandboxedCode()).
+
+    @param qc the class
+    @param id if not null, set to the ID of the Program that declares the first sandboxed class found
+*/
+bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
+    return qore_class_hierarchy_any(qc, [id] (const qore_class_private& c) {
+        return qore_class_own_code_sandboxed(c, id);
+    });
+}
+
+//! Returns true if the code that declares the class, or one of its base classes, is restricted (qore#7576)
+bool qore_class_declared_by_restricted_code(const qore_class_private& qc) {
+    return qore_class_hierarchy_any(qc, [] (const qore_class_private& c) {
+        return c.isRestrictedCode();
+    });
+}
+}
+
+bool qore_object_program_is_sandboxed(const QoreObject* obj) {
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), nullptr)) {
+        return true;
+    }
+    QoreProgram* pgm = obj->getProgram();
+    return pgm && qore_program_is_sandboxed(pgm);
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
+    try {
+        // the code that declares the class or a base class (qore#7576), and the Program the class is used in
+        if (qore_class_declared_by_restricted_code(*qore_class_private::get(*obj->getClass()))) {
+            return true;
+        }
+    } catch (std::bad_alloc&) {
+        // fails closed
+        return true;
+    }
     return qore_program_is_restricted(obj->getProgram());
 }
 
@@ -2269,12 +2383,11 @@ bool qore_program_is_restricted(const QoreProgram* pgm) {
 }
 
 bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
-        return false;
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), &id)) {
+        return true;
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    if (!sm) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
         return false;
     }
     id = qore_program_private::get(*pgm)->getProgramId();
@@ -2379,6 +2492,8 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     if (!qore_caller_is_sandboxed()) {
         return 0;
     }
+    pcs.sandboxed = true;
+    pcs.restricted = qore_caller_has_restricted_code();
     sandboxed.store(true, std::memory_order_release);
     try {
         qore_caller_sandbox_refs(pcs.sm, pcs.policy);
@@ -2425,6 +2540,11 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
         }
         pending_creator_policy = policy.release();
     }
+    // code that restricted code calls is restricted for the classes that it declares, also when a manager of a Program
+    // that trusts its code governs it: such code acts for the restricted code (qore#7635)
+    if (pcs.sandboxed && pcs.restricted) {
+        pending_restricted_caller = true;
+    }
     return 0;
 }
 
@@ -2448,7 +2568,14 @@ void qore_program_private::releaseSandboxManagers(ExceptionSink* xsink) {
     dropPendingCreatorSandbox();
 }
 
+bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
+    assert(parsingLocked());
+    return pending_restricted_caller || commit_restricted_caller
+        || (pending_creator_sandbox && !pending_creator_sandbox->trustsUncontrolledApis());
+}
+
 void qore_program_private::dropPendingCreatorSandbox() {
+    pending_restricted_caller = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2460,16 +2587,19 @@ void qore_program_private::dropPendingCreatorSandbox() {
 }
 
 int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
-    if (!pending_creator_sandbox && !pending_creator_policy) {
-        return 0;
-    }
-    try {
-        addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
-    } catch (std::bad_alloc&) {
-        xsink->outOfMemory();
-        return -1;
+    // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
+    // goes ahead, cleared when it ends
+    const bool restricted = pending_restricted_caller;
+    if (pending_creator_sandbox || pending_creator_policy) {
+        try {
+            addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
     }
     dropPendingCreatorSandbox();
+    commit_restricted_caller = restricted;
     return 0;
 }
 
@@ -2652,6 +2782,20 @@ int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
     }
     xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
         "(functional domain TERMINAL_IO, PO_NO_TERMINAL_IO)", what);
+    return -1;
+}
+
+int qore_check_system_object_change(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // fails closed, as qore_check_process_wide_registration(): true if the governing sandbox cannot be resolved; false
+    // under a module initialization barrier for the code that loads library code
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot call %s() "
+        "with a system constant object: the process-wide standard I/O objects are shared by every Program of the "
+        "process", what);
     return -1;
 }
 

@@ -344,10 +344,27 @@ authenticate();
     nor call their private methods (see @ref sandboxed_class_private_access).  It can still override and implement the
     private methods of the trusted class, and call the base class's version of a method that it overrides.
 
-    The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
-    sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager
-    was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
-    not trust.
+    The rule is decided for a class when it is committed: a class parsed in a Program whose sandbox manager does not
+    trust its code is a class that sandboxed code declared.  A sandbox manager trusts the code that it governs when it
+    allows uncontrolled APIs (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy(True)";
+    see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"): a host that gives its own trusted
+    Programs a manager to make their I/O interruptible and their threads terminable, and allows them uncontrolled
+    APIs, keeps the private access of their classes, while a tenant's Program with the default policy has none.  The
+    code that parses or loads the class counts too: a class that restricted code parses or loads in a Program whose
+    sandbox trusts its code, in a Program without a sandbox or in a Program that it creates is a class that sandboxed
+    code declared.  A class of a Program whose sandbox trusts its code is also a class that trusted code declared, so
+    a tenant's subclass of it has no private access to it.  Code that restricted code calls acts for it: a class that
+    such code parses or loads is a class that sandboxed code declared, also when the sandbox of the Program of the
+    code that parses it trusts its code (a host's function that parses the source that a tenant hands it, for
+    example).  A Program that is sandboxed without a manager (one that sandboxed code marked sandboxed, which no
+    manager governs) is restricted for this rule, as for
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; this includes a
+    Program without a manager of its own into which code that any sandbox governs parsed code that failed, as no
+    sandbox was attached for that code.  Code
+    that a sandbox restricts cannot relax the policy of the manager that governs it, and a class keeps the access that
+    it was committed with when the policy is changed later.  A class that a Program parsed before a sandbox manager
+    was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses
+    code that it does not trust.
 
     @subsection sandbox_program_capability Program Objects Are Capabilities
 
@@ -584,7 +601,8 @@ authenticate();
     @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()").
     This holds for all code that is sandboxed, whether a @ref Qore::SandboxManager "SandboxManager" or the
     restrictions of its %Program sandbox it, directly, in the calls of module code that it makes and in the threads
-    that module code starts for it.
+    that module code starts for it, as well as for the trusted code of the host that sandboxed code calls, which acts
+    for the sandboxed code's application (see @ref sandbox_host_code_application).
     The code of a thread that module code starts runs for no application, as such a thread can serve every caller
     of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
     is sandboxed; sandboxed code that runs for no application acts on no operation and cancels only the timers that its
@@ -683,6 +701,65 @@ authenticate();
     - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
       member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
       \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
+
+    @since %Qore 3.0
+
+    @subsection sandbox_host_code_application Host Code That Sandboxed Code Calls Acts for the Caller's Application
+
+    The trusted code of the host (the code of a %Program that is not sandboxed and is not a module) that runs for
+    sandboxed code acts for the application of that sandboxed code, restricted to it, as module code does: an
+    operation of the process-wide async I/O controller that it submits belongs to the sandboxed code's application,
+    and it cancels, flushes and replaces only that application's operations and timers, by key, owner or ID (see
+    @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()",
+    @ref Qore::AsyncIoController::cancelByKey() "cancelByKey()",
+    @ref Qore::AsyncIoController::cancelByOwner() "cancelByOwner()" and
+    @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()").  This is the case for host code that:
+    - sandboxed code calls, directly or through module code: an imported function, a call reference or a closure that
+      the host gives it, or a method of an object of the host
+    - runs in the callback of an operation of the sandboxed code (the callback of the host's object, for example)
+    - runs in a thread that such code starts, or in a task that it submits to a
+      @ref Qore::Thread::ThreadPool "ThreadPool"
+
+    The sandboxed code that called the host code comes first: sandboxed code that host code calls in the callback of
+    an operation acts for its own application, not for that of the operation, also when the operation is the host's
+    or another tenant's.  Host code in a thread that module code starts acts for no application, as the module code
+    there does (such a thread can serve every caller of the module), so it acts on no operation of an application.
+
+    A host API that is exported to sandboxed code and that acts on async I/O operations by a key or an owner that it
+    is given therefore acts only on the operations of the sandboxed code that it runs for, unless it elevates.  An
+    object or a closure that the host's code creates while it serves sandboxed code keeps that code's sandbox (see
+    @ref sandbox_provenance), so the host's code that later runs it acts for that code's application as well; and the
+    work that host code hands off from a thread that module code started (a thread, a task, an object, a closure or a
+    call reference that it creates or gets, an operation or a timer that it submits or adds) acts for no application,
+    as that thread's work does, also the method of an object of a host class that sandboxed code created when the
+    host's code calls it there.  In general, the work that code hands off acts for the application that the code acted
+    for when it handed it off: the work that elevated code hands off acts for the host's application, and a task that
+    module code submits to a @ref Qore::Thread::ThreadPool "ThreadPool" acts for the application that the module code
+    acted for (a thread that module code starts acts for none).  The module code that the host's code calls acts for
+    the same application as the host's code, also in the callback of the host's own operation.
+
+    An object or a closure that the host's code creates while it serves a tenant, or inside an elevation, is therefore
+    a capability of that tenant's application, or of the host's: the host does not give it to another tenant, whose code
+    would act for that application through it where it runs it later (as the callback of a timer or the object of an
+    operation, for example).
+
+    Host code that serves sandboxed code and acts for its own %Program's application elevates explicitly:
+    - with a capability of @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"
+      registered during trusted startup, which acts for the host wherever it is called, also in the callback of a
+      tenant's operation
+    - with @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" called with code
+      that was not created while serving sandboxed code (a call reference created during trusted startup, for
+      example); as for the file system and network policy, the barrier does not remove the sandbox of code created
+      while serving sandboxed code (a call reference or a closure that the host's code creates then), nor that of the
+      callback of a tenant's operation (see @ref sandbox_provenance), so such code still acts for the tenant's
+      application
+
+    Sandboxed code that the elevated code calls acts for its own application, and so does the host code that it calls.
+    Elevated code acts for the application of its own %Program, as the host's code does where it serves no sandboxed
+    code; it remains restricted to that application where a sandboxed caller is on the thread's call stack.
+
+    Code that a @ref Qore::SandboxManager::callGoverned() "SandboxManager::callGoverned()" call runs acts for the
+    application of the governed %Program, as before.
 
     @since %Qore 3.0
 
@@ -1324,8 +1401,9 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     that is created where no %Program is running, such as the main %Program of the \c qore program or a %Program
     that an embedding application creates: its code is not restricted for time zones even if its parse options
     restrict functional domains (but @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" still refuses paths).  For
-    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, also when restricted
-    code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
+    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, unless every sandbox
+    that governs the code grants a budget for time zones from paths (see @ref sandbox_time_zone_paths), also when
+    restricted code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
     a path in a restricted %Program; restricted code also gets the time zone of a region by the canonical name of the
     region's
     file (its path in the zoneinfo directory with the links resolved, and on macOS its true name), so the time zones
@@ -1333,9 +1411,7 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
     can depend on which name of a region was loaded first.  This applies to region names from data as well (a
     deserialized date or @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API
-    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  Limits on the time
-    zones of each tenant, which would allow restricted code to load paths, are a follow-up
-    (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative
+    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  For other code, a relative
     path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path
     was loaded already; the file is opened at exactly this path without blocking, the policy is checked again for
@@ -1353,6 +1429,46 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     <tt>unknown time zone region</tt>.  The name of the local zone denotes the local zone in data, also when it is
     a path (a local time file outside of a zoneinfo directory), without any file access.  The time zone of a date
     literal in code is the time zone that the code had when it was parsed, also one loaded from a path.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_time_zone_paths Time Zones from Paths in a Sandbox
+
+    Code that a sandbox governs can load a time zone from a zoneinfo file path only if the host grants every sandbox
+    that governs it a budget with
+    @ref Qore::SandboxManager::setTimeZonePathLimits() "SandboxManager::setTimeZonePathLimits()": a most number of
+    time zone names and a most memory.  A sandbox has no budget by default, so its code loads time zone regions only
+    (see @ref sandbox_fs_tz_regions).  Only code that is not restricted can raise a budget, also of a sandbox that
+    restricted code created; restricted code can lower one, and a copy of a sandbox has none.
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+sm.addFilesystemAllowedPath("/srv/tenant/zoneinfo", QSEC_READ);
+sm.setTimeZonePathLimits(16, 4 * 1024 * 1024);
+    @endcode
+
+    With a budget:
+    - the path must be absolute, without \c ".", \c ".." or empty components; the time zone is named by the path as
+      given
+    - the file-system policy of each sandbox must allow reading the path, and again the file that the open reached,
+      by its canonical path; the file is opened without blocking and must be a regular zoneinfo file
+    - time zones are never freed, so every new time zone name that the code loads (also a name whose file or data
+      changed since it was loaded) is charged to each sandbox that governs the code, for the life of the sandbox, with
+      the memory of its time zone; a name that is loaded already costs nothing.  The use is reported by
+      @ref Qore::SandboxManager::getTimeZonePathLimits() "SandboxManager::getTimeZonePathLimits()"; a load beyond a
+      budget raises \c SANDBOX-TIMEZONE-LIMIT
+    - the code of one @ref sandbox_isolation_domains "isolation domain" can load at most 256 time zone names
+      (32 MiB) from paths in all, across the sandboxes of the domain
+    - the code of a module that the sandboxed code calls, and the threads and the Programs that it starts, are
+      governed and charged in the same way
+    - the @ref set-time-zone "%set-time-zone" directive with a path in a %Program that sandboxes govern is decided by
+      and charged to the sandboxes of the %Program and of the code that parses it
+    - in a date literal of restricted code, a path names only the %Program's own time zone (in code compiled ahead of
+      time, such a literal is in UTC)
+
+    Code restricted only by its parse options has no sandbox to charge and cannot load paths.  On Windows, restricted
+    code cannot load paths.
 
     @since %Qore 3.0
 
