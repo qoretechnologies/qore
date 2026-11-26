@@ -39,7 +39,7 @@ class SharedObjectUpdateScopeTest inherits QUnit::Test {
             addTestCase("execution mode " + mode, sub () {
                 # the checks run in child Programs and in the library modules, whose code (the catalog worker that
                 # builds the lazy values) chooses its own execution, so the native compilation is not checked
-                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+                assertEq(expected, ExecModeHarness::run_stdout(command(execution_mode), ExecModeHarness::NativeCheck::None));
             });
         }
         # no IR tier case: the library modules' own code (the catalog worker) is compiled to native code there too

@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ExecModeHarnessStdoutTest
+
+#! ExecModeHarness::run_stdout() compares only what a fixture prints on stdout (qore#7686)
+/** A native library that a module of a fixture loads can print on stderr, as onnxruntime does on some arm64 hosts,
+    which depends on the host and is no output of the fixture (the fixture here prints on stderr itself):
+    ExecModeHarness::run() returns it after the output on stdout, and ExecModeHarness::run_stdout(), which the tests
+    that compare the output of a fixture with an expected file use, does not; a fixture that fails still fails the
+    test, as run_stdout() raises its exit status and its stderr, also a fixture whose thread fails, which exits with
+    status 0, as run_stdout() raises the diagnostics of Qore on stderr.
+*/
+class ExecModeHarnessStdoutTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir;
+        string fixture;
+        string failing;
+        string failing_thread;
+        string failing_sandboxed;
+    }
+
+    constructor() : QUnit::Test("exec mode harness stdout", "1.0", \ARGV) {
+        dir = make_tmp_dir();
+        # the fixture prints its output on stdout, and something else on stderr, as a native library that a module
+        # loads can when it warns about the host
+        File f();
+        fixture = dir + "/fixture.q";
+        f.open2(fixture, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nstderr.printf(\"a warning of a native library about the host\\n\");\n"
+            "printf(\"the fixture's output\\n\");\n");
+        f.close();
+        failing = dir + "/failing.q";
+        f.open2(failing, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nprintf(\"partial\\n\");\nthrow \"FIXTURE-ERROR\", \"the fixture fails\";\n");
+        f.close();
+        # an exception that no code handles in a thread does not end the process, which exits with status 0
+        failing_thread = dir + "/failing-thread.q";
+        f.open2(failing_thread, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nCounter c(1);\nbackground sub () { on_exit c.dec(); throw \"THREAD-ERROR\", \"x\"; }();\n"
+            "c.waitForZero();\nprintf(\"done\\n\");\n");
+        f.close();
+        # and so does one in a thread of sandboxed code, whose report is marked with its Program
+        failing_sandboxed = dir + "/failing-sandboxed.q";
+        f.open2(failing_sandboxed, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nProgram p(PO_NEW_STYLE);\np.setSandboxManager(new SandboxManager());\n"
+            "p.parse(\"sub run() { Counter c(1); background sub () { on_exit c.dec(); throw \\\"SANDBOXED-ERROR\\\", "
+            "\\\"x\\\"; }(); c.waitForZero(); }\", \"tenant\");\np.callFunction(\"run\");\nprintf(\"done\\n\");\n");
+        f.close();
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () { check(execution_mode); });
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        remove_tree(dir);
+    }
+
+    private check(string mode) {
+        string command = sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+        # run() returns the module's warning on stderr after the fixture's output
+        assertEq("the fixture's output\na warning of a native library about the host\n",
+            ExecModeHarness::run(command, ExecModeHarness::NativeCheck::None));
+        # run_stdout() returns the fixture's output only
+        assertEq("the fixture's output\n", ExecModeHarness::run_stdout(command, ExecModeHarness::NativeCheck::None));
+        # a fixture that fails fails the test
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "FIXTURE-ERROR", \ExecModeHarness::run_stdout(),
+            (sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(failing)),
+            ExecModeHarness::NativeCheck::None));
+        # and so does a fixture whose thread fails, although its exit status is 0, also a thread of sandboxed code
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "THREAD-ERROR", \ExecModeHarness::run_stdout(),
+            (sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(failing_thread)),
+            ExecModeHarness::NativeCheck::None));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "SANDBOXED-ERROR", \ExecModeHarness::run_stdout(),
+            (sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(failing_sandboxed)),
+            ExecModeHarness::NativeCheck::None));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

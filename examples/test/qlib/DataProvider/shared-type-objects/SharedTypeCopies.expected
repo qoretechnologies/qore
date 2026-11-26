@@ -10,3 +10,9 @@ its nested type: x y
 the shared field's default value: null
 the shared simple type's options: null
 the tenant changes a copy that trusted code made: SANDBOX-REGISTRATION-ERROR
+marked: type: True, field: True
+the tenant's copy of a marked type: shared: False, default value: {d: 1}, accepts: {d: 1}, change: changed
+the tenant's copy of a marked field: shared: False, default value: "dflt", accepts: "v", change: changed
+trusted code's copy of a marked type: shared: False, fields: d t, default value: {d: 1}
+trusted code's copy of a marked field: shared: False, default value: "trusted"
+the marked type and field are unchanged: d, "dflt"
