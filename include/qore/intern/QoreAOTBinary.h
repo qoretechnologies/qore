@@ -732,6 +732,8 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //!        break or a continue request abandons the return of the block that it leaves, where the block decides it, as
 //!        the AST interpreter's block releases the return (qore#7625); no operand: the function takes the request;
 //!        one operand, the request (an integer constant): the run decides; the maximum opcode in the AOT header is 447
+//!      - header flag QORE_AOT_FLAG_DEBUGGING (0x0008): the code was compiled with debugging (qcc -g; qore#7676);
+//!        readers before v54 ignore it, and qcc refuses to link objects with and without it
 //! The shared format version for the changes of the AOT3 batch (see v54 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT3_VERSION = 54;
 //! First format version whose debug IR can have HandlerAbandonReturn (see v54 above, qore#7625).
