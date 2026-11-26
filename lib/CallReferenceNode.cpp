@@ -1149,7 +1149,8 @@ __attribute__((noinline)) const AbstractQoreNode* qore_get_call_reference_scan_n
     if (const ResolvedCallReferenceNode* callback = qore_get_sandbox_bound_callback(n)) {
         return callback;
     }
-    if (const RunTimePseudoMethodReferenceNode* pr = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(n)) {
+    // the class is final: tested by its exact type, without the string comparisons of a dynamic_cast
+    if (const RunTimePseudoMethodReferenceNode* pr = qore_exact_node_cast<RunTimePseudoMethodReferenceNode>(n)) {
         const QoreValue& v = pr->getValue();
         return v.isOpaque() ? nullptr : v.getInternalNode();
     }
@@ -1248,7 +1249,7 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     ReferenceHolder<QoreHashNode> member_hash(xsink);
     if (const ResolvedCallReferenceNode* ref = getHashMember(member_hash)) {
         // the code member binds the names, as a named call through it does
-        if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
+        if (const ResolvedCallReferenceNodeIntern* iref = qore_get_resolved_call_reference_intern(ref)) {
             return iref->dispatchNamed(args, arg_names, policy, xsink);
         }
         return ResolvedCallReferenceNodeIntern::dispatchNamed(args, arg_names, policy, xsink);
@@ -1262,7 +1263,7 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const RunTimePseudoMethodReferenceNode* vc = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(v);
+    const RunTimePseudoMethodReferenceNode* vc = qore_exact_node_cast<RunTimePseudoMethodReferenceNode>(v);
     return vc && vc->method == method && vc->val.isEqualHard(val, xsink);
 }
 

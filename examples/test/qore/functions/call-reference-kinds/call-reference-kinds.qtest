@@ -22,10 +22,11 @@
 
     CallReferenceKinds.q calls references to a function, to a static method, to both by a scoped path, to methods of
     objects (made with typed, object and auto receivers, in the class and through self, dispatched on a subclass),
-    closures and closures of an object, and each of them bound to the sandbox, positionally, in a try block, with
-    named arguments, through call_function_args() and in the background, compares them, and calls method references
-    to deleted objects; its output must be the one in CallReferenceKinds.expected, which the AST interpreter prints,
-    in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+    closures, closures of an object and pseudo-methods of a hash with code members, and each of them bound to the
+    sandbox, positionally, in a try block, with named arguments, through call_function_args() and in the background,
+    compares them, and calls method references to deleted objects, and calls the code members of a hash as its methods,
+    also with a temporary argument; its output must be the one in CallReferenceKinds.expected, which the AST interpreter
+    prints, in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
 */
 class CallReferenceKindsTest inherits QUnit::Test {
     private {

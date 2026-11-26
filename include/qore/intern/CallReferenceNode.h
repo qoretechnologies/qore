@@ -664,7 +664,7 @@ private:
     to a pseudo-method of an object is a RunTimeObjectMethodReferenceNode, whose call looks the method up by name as a
     direct call does.  The value is scanned for recursive references (qore_get_call_reference_scan_node())
 */
-class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimePseudoMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     //! a pseudo-method is builtin code
     DLLLOCAL const QoreProgram* getOriginCodeProgram() const override {
@@ -858,7 +858,7 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_listed_call_refe
     static_assert(std::is_final_v<FunctionCallReferenceNode> && std::is_final_v<MethodCallReferenceNode>
         && std::is_final_v<StaticMethodCallReferenceNode> && std::is_final_v<RunTimeObjectMethodReferenceNode>
         && std::is_final_v<RunTimeResolvedMethodReferenceNode> && std::is_final_v<DeferredFunctionCallReferenceNode>
-        && std::is_final_v<DeferredStaticMethodCallReferenceNode>,
+        && std::is_final_v<DeferredStaticMethodCallReferenceNode> && std::is_final_v<RunTimePseudoMethodReferenceNode>,
         "an exact type test is only equivalent to a dynamic_cast for a final class");
     if (!r || r->getType() == NT_RUNTIME_CLOSURE) {
         return nullptr;
@@ -867,7 +867,7 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_listed_call_refe
     if (t == &typeid(FunctionCallReferenceNode) || t == &typeid(MethodCallReferenceNode)
             || t == &typeid(StaticMethodCallReferenceNode) || t == &typeid(RunTimeObjectMethodReferenceNode)
             || t == &typeid(RunTimeResolvedMethodReferenceNode) || t == &typeid(DeferredFunctionCallReferenceNode)
-            || t == &typeid(DeferredStaticMethodCallReferenceNode)) {
+            || t == &typeid(DeferredStaticMethodCallReferenceNode) || t == &typeid(RunTimePseudoMethodReferenceNode)) {
         const ResolvedCallReferenceNodeIntern* rv = static_cast<const ResolvedCallReferenceNodeIntern*>(r);
         assert(rv == dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
         return rv;

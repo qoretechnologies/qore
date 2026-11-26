@@ -23196,7 +23196,7 @@ static QoreValue qore_rt_invoke_call_ref_given_list(const ResolvedCallReferenceN
     if (callref->getType() == NT_RUNTIME_CLOSURE) {
         return static_cast<const QoreClosureBase*>(callref)->execValueTmpArgs(args, xsink);
     }
-    if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+    if (auto* rcr = qore_get_resolved_call_reference_intern(callref)) {
         QoreSandboxProvenanceHelper provenance(callref);
         return rcr->execValueTmpArgs(args, xsink);
     }

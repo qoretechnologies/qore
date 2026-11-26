@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # calls every kind of call reference (function, static method, method of an object resolved at run time and when the
-# reference is made, closure, closure of an object, and each of them bound to the sandbox) positionally, in a try
+# reference is made, closure, closure of an object, pseudo-method of a hash with code members, and each of them bound
+# to the sandbox) positionally, in a try
 # block, with named arguments and through call_function_args(), compares them, calls them in the background, and
 # calls method references to deleted objects; prints what each case returns and raises
 
@@ -114,6 +115,13 @@ object untyped = new C(2);
 auto any = new D();
 C dc = new D();
 
+# a hash whose code members are called through a pseudo-method reference and as hash members
+hash<auto> members = {
+    "f": \f(),
+    "m": \typed.m(),
+    "cl": int sub (int a, int b = 2) { return a * 1000 + b; },
+};
+
 hash<string, code> refs = {
     "function": \f(),
     "static method": \C::s(),
@@ -129,6 +137,11 @@ hash<string, code> refs = {
     "method through self": dc.getSelfRef(),
     "closure": int sub (int a, int b = 2) { return a * 1000 + b; },
     "closure of an object": dc.getClosure(),
+    # a reference to a pseudo-method of a value that is not an object, which calls the code member of the hash
+    "pseudo-method, function member": \members.f(),
+    "pseudo-method, method member": \members.m(),
+    # (not with a closure member: a named call through such a reference raises NAMED-CALL-NOT-SUPPORTED, where a
+    # named call through the closure binds the names)
 };
 
 foreach hash<auto> i in (refs.pairIterator()) {
@@ -153,6 +166,42 @@ printf("references made in the class to the same object: %y, to another object: 
     typed.getLocalRef() == typed.getLocalRef(), typed.getLocalRef() == dc.getLocalRef());
 printf("references made through self to the same object: %y, to another object: %y\n",
     dc.getSelfRef() == dc.getSelfRef(), dc.getSelfRef() == typed.getSelfRef());
+
+printf("pseudo-method references to the same member of the same hash: %y, to another member: %y, to a function: "
+    "%y\n", \members.f() == \members.f(), \members.f() == \members.cl(), \members.f() == \f());
+
+# calls of the code members of a hash as methods of the hash
+foreach string key in (members.keys()) {
+    int sum = 0;
+    for (int i = 0; i < 20; ++i) {
+        switch (key) {
+            case "f": sum += members.f(i, 1); break;
+            case "m": sum += members.m(i, 1); break;
+            case "cl": sum += members.cl(i, 1); break;
+        }
+    }
+    printf("hash member %s: loop %d\n", key, sum);
+}
+
+# calls of the code members of a hash as methods of the hash with a temporary argument, which the call gives to the
+# callee's parameter
+int sub lf(list<auto> l, int b = 2) {
+    return l[0] * 10 + b;
+}
+
+hash<auto> list_members = {
+    "f": \lf(),
+    "cl": int sub (list<auto> l, int b = 2) { return l[0] * 1000 + b; },
+};
+{
+    int fsum = 0;
+    int clsum = 0;
+    for (int i = 0; i < 20; ++i) {
+        fsum += list_members.f((i, 0), 1);
+        clsum += list_members.cl((i, 0), 1);
+    }
+    printf("hash member with a temporary argument f: loop %d, cl: loop %d\n", fsum, clsum);
+}
 
 # method references to deleted objects raise before the arguments are evaluated (not tested for a reference bound
 # to the sandbox, whose call in the compiled execution modes evaluates the arguments before the bound reference
