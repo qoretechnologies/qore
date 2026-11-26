@@ -1540,7 +1540,7 @@ public:
     //! \a retiring: the declaration being retired, if any; \a skip_key, \a skip1 and \a skip2: the key and the
     //! types of a declaration being destroyed, whose pointers are left; compared without being read, as the
     //! declaration can be partly destroyed
-    DLLLOCAL QoreDerivedTypeOrphaner(QoreTypeOwner* retiring, const void* skip_key = nullptr,
+    QoreDerivedTypeOrphaner(QoreTypeOwner* retiring, const void* skip_key = nullptr,
             const QoreTypeInfo* skip1 = nullptr, const QoreTypeInfo* skip2 = nullptr) : retiring(retiring),
             skip_key(skip_key), skip1(skip1), skip2(skip2) {
         // an enum has no key: its declaration is found in its type, which is destroyed after the purge
@@ -1554,7 +1554,7 @@ public:
     //! the other user declarations that the derived types name, with the derived types
     std::vector<std::pair<QoreTypeOwner*, const QoreTypeInfo*>> named;
 
-    DLLLOCAL void orphan(const QoreTypeInfo* ti, int depth = 0) {
+    void orphan(const QoreTypeInfo* ti, int depth = 0) {
         if (!ti || depth > 4) {
             return;
         }
@@ -1626,12 +1626,12 @@ private:
     const QoreTypeInfo* skip2;
     const QoreEnumDecl* skip_enum = nullptr;
 
-    DLLLOCAL bool isSkipped(const void* p) const {
+    bool isSkipped(const void* p) const {
         return p && p == skip_key;
     }
 
     //! Returns true if the pointer to \a o is orphaned; otherwise it is recorded
-    DLLLOCAL bool isRetiring(QoreTypeOwner* o) {
+    bool isRetiring(QoreTypeOwner* o) {
         if (o == retiring) {
             return true;
         }
@@ -1639,11 +1639,11 @@ private:
         return false;
     }
 
-    DLLLOCAL bool isSkippedType(const QoreTypeInfo* ti) const {
+    bool isSkippedType(const QoreTypeInfo* ti) const {
         return ti && (ti == skip1 || ti == skip2);
     }
 
-    DLLLOCAL const QoreTypeInfo* tombType(const QoreTypeInfo* ti, QoreTypeOwner* o) {
+    const QoreTypeInfo* tombType(const QoreTypeInfo* ti, QoreTypeOwner* o) {
         bool ok;
         const QoreTypeInfo* t = qore_type_tombstone(ti, ok);
         if (!ok || t == ti) {
@@ -1653,7 +1653,7 @@ private:
         return t;
     }
 
-    DLLLOCAL void orphanType(const QoreOrphanablePtr<const QoreTypeInfo>& p) {
+    void orphanType(const QoreOrphanablePtr<const QoreTypeInfo>& p) {
         const QoreTypeInfo* ti = p.get();
         if (isSkippedType(ti)) {
             return;
@@ -1667,7 +1667,7 @@ private:
         }
     }
 
-    DLLLOCAL void orphanSpec(const QoreTypeSpec& spec) {
+    void orphanSpec(const QoreTypeSpec& spec) {
         switch (spec.getTypeSpec()) {
             case QTS_CLASS: {
                 const QoreClass* qc = spec.getClass();
@@ -7600,13 +7600,13 @@ namespace {
 struct QoreCallArgWeakTarget {
     AbstractQoreNode* target = nullptr;
 
-    DLLLOCAL ~QoreCallArgWeakTarget() {
+    ~QoreCallArgWeakTarget() {
         if (target) [[unlikely]] {
             release(target);
         }
     }
 
-    DLLLOCAL static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
+    static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
         ExceptionSink xsink;
         target->deref(&xsink);
     }

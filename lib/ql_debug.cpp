@@ -781,28 +781,28 @@ namespace {
 */
 class DbgCompletionRejectOp : public SocketPollOperationBase {
 public:
-    DLLLOCAL DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
+    DbgCompletionRejectOp(QoreObject* sock_obj, QorePromise* promise, std::string err, std::string desc,
             bool worker) : sock_obj(sock_obj), promise(promise), err(std::move(err)), desc(std::move(desc)),
             worker(worker) {
     }
 
-    DLLLOCAL virtual bool needsWorkerDispatch() const override {
+    virtual bool needsWorkerDispatch() const override {
         return worker;
     }
 
-    DLLLOCAL ~DbgCompletionRejectOp() {
+    ~DbgCompletionRejectOp() {
         ExceptionSink xsink;
         promise->deref(&xsink);
     }
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return false;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (calls++) {
             xsink->raiseException(err.c_str(), "%s", desc.c_str());
             return nullptr;
@@ -813,7 +813,7 @@ public:
         return *xsink ? nullptr : info.release();
     }
 
-    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
+    virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink)
             override {
         if (canceled) {
             promise->setError("DBG-CANCELED", "the operation was canceled", QoreValue(), xsink);
@@ -828,7 +828,7 @@ public:
         return true;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return "waiting";
     }
 
@@ -10140,7 +10140,8 @@ public:
                 if (e->d_name[0] == '.') {
                     continue;
                 }
-                char path[64], target[256];
+                // the prefix and the longest name that a directory entry can have
+                char path[sizeof("/proc/self/fd/") + sizeof(e->d_name)], target[256];
                 snprintf(path, sizeof(path), "/proc/self/fd/%s", e->d_name);
                 ssize_t len = readlink(path, target, sizeof(target) - 1);
                 if (len <= 0) {
@@ -35243,8 +35244,9 @@ int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms) {
 */
 static QoreValue f_dbg_http_ws_simulate_send_progress(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    int64_t rate = get_param_value(params, 0).getAsBigInt();
-    int64_t step_ms = get_param_value(params, 1).getAsBigInt();
+    // int64 (long long), as QLLD expects, and as getAsBigInt() returns
+    int64 rate = get_param_value(params, 0).getAsBigInt();
+    int64 step_ms = get_param_value(params, 1).getAsBigInt();
     if (rate <= 0) {
         dbg_ws_sim_rate.store(0, std::memory_order_release);
         return QoreValue();

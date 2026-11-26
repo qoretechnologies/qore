@@ -6189,7 +6189,7 @@ static const char* QORE_MODULE_PROGRAMS_CLOSED_DESC = "the Program of a module c
 
 static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* td, ExceptionSink* xsink) {
     ++td->module_entry_refusals;
-    xsink->raiseException("PROGRAM-ERROR", QORE_MODULE_PROGRAMS_CLOSED_DESC);
+    xsink->raiseException("PROGRAM-ERROR", "%s", QORE_MODULE_PROGRAMS_CLOSED_DESC);
 }
 
 //! returns true if the value is a string equal to the given one
@@ -6628,11 +6628,15 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us, 
 
 //! writes the warning that the cleanup no longer waits for the handles of work handed over to other threads
 static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names) {
-    char head[256];
-    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process waited " QLLD " ms after its "
-        "deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, which "
-        "did not end; the modules are left as they are:", qore_get_module_cleanup_handover_grace(), names.size(),
+    // a literal, so that the arguments are checked against it, and the size of the buffer follows from it
+#define QORE_DROPPED_HANDLES_HEAD "warning: the module cleanup at the end of the process waited " QLLD " ms after " \
+        "its deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, " \
+        "which did not end; the modules are left as they are:"
+    // the text, and the most that the two numbers (20 digits and a sign each) and the plural suffix can add
+    char head[sizeof(QORE_DROPPED_HANDLES_HEAD) + 2 * 21 + 1];
+    snprintf(head, sizeof head, QORE_DROPPED_HANDLES_HEAD, qore_get_module_cleanup_handover_grace(), names.size(),
         names.size() == 1 ? "" : "s");
+#undef QORE_DROPPED_HANDLES_HEAD
     // written with one call, so that the output of other threads does not split it
     try {
         std::string msg = head;
@@ -11455,11 +11459,11 @@ namespace {
 class QoreProcessEndCallbacks {
 public:
     //! @param wait_ms the longest wait of a thread that reaches an end point while the callbacks run on another thread
-    DLLLOCAL explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
+    explicit QoreProcessEndCallbacks(int64 wait_ms) : wait_ms(wait_ms) {
     }
 
     //! Registers a callback of the process \a pid; returns its ID, or -1 if the process has started to end
-    DLLLOCAL int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
+    int64 add(qore_process_end_callback_t cb, void* arg, pid_t pid) {
         std::lock_guard<std::mutex> l(m);
         if (!isIdleLocked(pid)) {
             return -1;
@@ -11469,7 +11473,7 @@ public:
     }
 
     //! Deregisters a callback; never waits: 0 if it had not run, 1 if it ran or runs on another thread, -1 if unknown
-    DLLLOCAL int remove(int64 id) {
+    int remove(int64 id) {
         std::lock_guard<std::mutex> l(m);
         for (auto i = entries.begin(), e = entries.end(); i != e; ++i) {
             if (i->id == id) {
@@ -11487,7 +11491,7 @@ public:
 
         @return true if this call ran the callbacks
     */
-    DLLLOCAL bool run(qore_process_end_e reason, pid_t pid) {
+    bool run(qore_process_end_e reason, pid_t pid) {
         std::vector<Entry> snapshot;
         {
             std::unique_lock<std::mutex> l(m);
@@ -11545,19 +11549,19 @@ public:
 
 #ifdef DEBUG
     //! sets the wait bound
-    DLLLOCAL void setWaitMs(int64 ms) {
+    void setWaitMs(int64 ms) {
         std::lock_guard<std::mutex> l(m);
         wait_ms = ms;
     }
 
     //! waits until the callbacks have started to run, at most \a timeout_ms; returns true if they have
-    DLLLOCAL bool waitStarted(int64 timeout_ms) {
+    bool waitStarted(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return started_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return state != Idle; });
     }
 
     //! waits until a thread waits for the callbacks, at most \a timeout_ms; returns true if one does
-    DLLLOCAL bool waitWaiter(int64 timeout_ms) {
+    bool waitWaiter(int64 timeout_ms) {
         std::unique_lock<std::mutex> l(m);
         return waiter_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return waiters > 0; });
     }
@@ -11599,11 +11603,11 @@ private:
     int waiters = 0;
 #endif
 
-    DLLLOCAL bool isIdleLocked(pid_t pid) const {
+    bool isIdleLocked(pid_t pid) const {
         return state == Idle || state_pid != pid;
     }
 
-    DLLLOCAL Entry* findLocked(int64 id) {
+    Entry* findLocked(int64 id) {
         for (Entry& e : entries) {
             if (e.id == id) {
                 return &e;
