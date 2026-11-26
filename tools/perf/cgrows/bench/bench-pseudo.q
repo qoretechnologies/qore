@@ -1,7 +1,8 @@
 %modern
 # pseudo-method call loops: L=pv (a pseudo-method without an intrinsic: <string>::isEncodingValid()), L=pl (one with
 # an intrinsic: <string>::length()), L=pt (<int>::typeCode(), an intrinsic of every type), L=ps (<string>::split() of a
-# string local, qore#5578), L=tr (trim() of a string local); N iterations
+# string local, qore#5578), L=tr (trim() of a string local), L=lw (<string>::lwr() of a string local, qore#7711);
+# N iterations
 int sub f(int a) { return a; }
 int sub run_pv(int n) {
     string s = "abc";
@@ -43,6 +44,15 @@ int sub run_tr(int n) {
     }
     return t;
 }
+int sub run_lw(int n) {
+    string s = " A B C ";
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        string l = s.lwr();
+        t += l.size();
+    }
+    return t;
+}
 int n = ENV.N.toInt();
 switch (ENV.L) {
     case "pv": run_pv(n); break;
@@ -50,4 +60,5 @@ switch (ENV.L) {
     case "pt": run_pt(n); break;
     case "ps": run_ps(n); break;
     case "tr": run_tr(n); break;
+    case "lw": run_lw(n); break;
 }
