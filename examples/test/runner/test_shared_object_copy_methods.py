@@ -14,12 +14,6 @@ isOrphanedSharedObject() and isOutsideSharedTypeBuild()) and fail for each one w
 or only an empty one: a copy() method with no code declares that its class guards no state of its own with the
 comment "no own guarded state" in its body.  Methods defined out of line (Class::method()) are not scanned.
 
-Serializing a shared object is refused for such code in the same way unless each class of the object that
-serializes data declares its own serializeMembers() method, which leaves out what the class guards (qore#7673); the
-core enforces that per class.  So that such an opt-in is never accidental, a class that guards state for a shared
-object and declares serializeMembers() marks the method with the comment "shared-object: leaves out <members>" or
-"no own guarded state" in its body or in the lines that document it, and the tests fail for a class that does not.
-
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
@@ -37,10 +31,6 @@ GUARD = re.compile(r"\bisSharedObject\s*\(\s*self\s*\)|\bshared_object\b|\bisOrp
                    r"\bisOutsideSharedTypeBuild\s*\(")
 #! the comment of a copy() method with no code, whose class guards no state of its own
 NO_OWN_STATE = "no own guarded state"
-#! the comment of a serializeMembers() method of a class that guards state, naming what it leaves out
-LEAVES_OUT = re.compile(r"shared-object: leaves out \S")
-SERIALIZE_MEMBERS = re.compile(r"^\s*(?:(?:public|private(?::\w+)?|synchronized)\s+)*(?:[\w:<>*]+\s+)?"
-                               r"serializeMembers\s*\(")
 #! a regular expression literal: its text can hold a '#', a quote or a brace
 REGEX = re.compile(r"[=!]~\s*(s|x|tr)?/")
 
@@ -88,29 +78,13 @@ def strip(text):
 def scan_text(text):
     """Returns {class name: declares copy()} for the classes of the text whose own code guards state for a shared
     object; a copy() method counts if it has code or the comment NO_OWN_STATE."""
-    return {name: v[0] for name, v in scan_classes(text).items()}
-
-
-def scan_text_serialize(text):
-    """Returns {class name: marked} for the classes of the text whose own code guards state for a shared object and
-    that declare serializeMembers(); a method is marked if it or the lines that document it hold the comment
-    LEAVES_OUT or NO_OWN_STATE."""
-    return {name: v[1] for name, v in scan_classes(text).items() if v[1] is not None}
-
-
-def scan_classes(text):
-    """Returns {class name: (declares copy(), serializeMembers() marked or None)} for the guarding classes"""
     found = {}
     depth = 0
-    # the open classes: [name, depth of its body, declares copy(), guards, serializeMembers() marked or None]
+    # the open classes: [name, depth of its body, declares copy(), guards]
     classes = []
     pending = None
     # the copy() method being read: [class, first line]
     copy_method = None
-    # the serializeMembers() method being read: [class, first line of the method and of its documentation]
-    ser_method = None
-    # the first line of the documentation comment before the current line, if any
-    doc_start = None
     raw = text.split("\n")
     lines = strip(text).split("\n")
     for i, line in enumerate(lines):
@@ -118,24 +92,14 @@ def scan_classes(text):
         if m:
             pending = m.group(1)
         if pending and "{" in line:
-            classes.append([pending, depth + 1, False, False, None])
+            classes.append([pending, depth + 1, False, False])
             pending = None
             depth += line.count("{") - line.count("}")
             continue
-        stripped_raw = raw[i].strip()
-        if stripped_raw.startswith("#!") or stripped_raw.startswith("/**"):
-            if doc_start is None:
-                doc_start = i
-        elif line.strip():
-            if not (classes and depth == classes[-1][1] and SERIALIZE_MEMBERS.match(line)):
-                doc_start = None
         if classes:
             cls = classes[-1]
             if depth == cls[1] and COPY.match(line):
                 copy_method = [cls, i]
-            if depth == cls[1] and SERIALIZE_MEMBERS.match(line):
-                ser_method = [cls, doc_start if doc_start is not None else i]
-                doc_start = None
             if GUARD.search(line):
                 cls[3] = True
         depth += line.count("{") - line.count("}")
@@ -145,14 +109,10 @@ def scan_classes(text):
             if code.strip() or NO_OWN_STATE in "\n".join(raw[copy_method[1]:i + 1]):
                 copy_method[0][2] = True
             copy_method = None
-        if ser_method and depth == ser_method[0][1] and "}" in line:
-            text_lines = "\n".join(raw[ser_method[1]:i + 1])
-            ser_method[0][4] = bool(LEAVES_OUT.search(text_lines) or NO_OWN_STATE in text_lines)
-            ser_method = None
         while classes and depth < classes[-1][1]:
-            name, _, declares_copy, guards, ser_marked = classes.pop()
+            name, _, declares_copy, guards = classes.pop()
             if guards:
-                found[name] = (declares_copy, ser_marked)
+                found[name] = declares_copy
     return found
 
 
@@ -176,23 +136,6 @@ def scan(unbalanced=None):
                 unbalanced.append(rel)
             for name, declares_copy in scan_text(text).items():
                 found[(rel, name)] = declares_copy
-    return found
-
-
-def scan_serialize():
-    """Returns {(path, class name): marked} for the guarding classes of the module sources that declare
-    serializeMembers()"""
-    found = {}
-    for top in SOURCE_DIRS:
-        for path in sorted(top.rglob("*")):
-            if path.suffix not in SUFFIXES or not path.is_file() or "/test/" in path.as_posix():
-                continue
-            text = path.read_text(encoding="utf-8", errors="replace")
-            if not GUARD.search(text):
-                continue
-            rel = path.relative_to(ROOT).as_posix()
-            for name, marked in scan_text_serialize(text).items():
-                found[(rel, name)] = marked
     return found
 
 
@@ -240,59 +183,6 @@ class F {
 }
 """
         self.assertEqual({"A": True, "B": False, "D": False, "E": True, "F": False}, scan_text(src))
-
-    def test_scan_text_serialize(self):
-        src = """
-class A {
-    bool f() { return SandboxManager::isSharedObject(self); }
-    copy() { x = 1; }
-    private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return members;
-    }
-}
-class B {
-    bool f() { return SandboxManager::isSharedObject(self); }
-    copy() { x = 1; }
-    #! Serializes the members
-    /** shared-object: leaves out cache, lock
-    */
-    private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        remove members.cache;
-        return members;
-    }
-}
-class C {
-    bool f() { return SandboxManager::isSharedObject(self); }
-    copy() { x = 1; }
-    private:internal *hash<auto> serializeMembers(*hash<auto> members) {
-        # no own guarded state
-        return members;
-    }
-}
-class D {
-    # shared-object: leaves out x (a comment of another method)
-    g() {}
-
-    bool f() { return SandboxManager::isSharedObject(self); }
-    copy() { x = 1; }
-    private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return members;
-    }
-}
-class E {
-    copy() { x = 1; }
-    private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return members;
-    }
-}
-"""
-        self.assertEqual({"A": False, "B": True, "C": True, "D": False}, scan_text_serialize(src))
-
-    def test_guarding_classes_mark_serialize_members(self):
-        unmarked = ["%s %s" % k for k, marked in sorted(scan_serialize().items()) if not marked]
-        self.assertEqual([], unmarked, "classes that guard state for a shared object and declare serializeMembers() "
-                         "without the comment 'shared-object: leaves out <members>' or 'no own guarded state' "
-                         "(see this test's description)")
 
     def test_scan_finds_guarding_classes(self):
         found = scan()

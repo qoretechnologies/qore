@@ -513,9 +513,8 @@ QoreValue QoreSerializable::serializeObjectToData(const QoreObject& obj, bool we
 imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject& self,
         QoreInternalSerializationContext& context, const QoreString& str, imap_t::iterator hint,
         ExceptionSink* xsink) {
-    // a shared object is serialized for sandboxed code only if each of its classes that serializes data declares
-    // serializeMembers() (qore#7673); checked before the object is added to the index, so that a refused object
-    // aborts the serialization
+    // code that is sandboxed or acts for sandboxed code cannot serialize a shared object (qore#7673); checked before
+    // the object is added to the index, so that a refused object aborts the serialization
     {
         const qore_object_private* opriv = qore_object_private::get(self);
         if (opriv->isShared()) [[unlikely]] {

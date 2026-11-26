@@ -1,13 +1,14 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # Code that is sandboxed or acts for sandboxed code cannot serialize an object that trusted code marked as shared
-# with SandboxManager::shareObject(), also when it is held by another value, unless each class of the object that
-# serializes data declares its own serializeMembers() method, which leaves out what the class guards; trusted code
-# serializes as before, and a deserialized object is not shared (qore#7673); see shared-object-serialize.qtest
+# with SandboxManager::shareObject(), also when it is held by another value, whatever its classes declare
+# (serializeMembers() included); trusted code serializes as before, and a deserialized object is not shared
+# (qore#7673); see shared-object-serialize.qtest
 
 %modern
 %enable-all-warnings
 %no-child-restrictions
+%allow-weak-references
 
 #! guards a private member with isSharedObject(self) and declares no serializeMembers() method
 public class GuardedNoHook inherits Serializable {
@@ -26,7 +27,8 @@ public class GuardedNoHook inherits Serializable {
     }
 }
 
-#! guards a private member with isSharedObject(self) and leaves it out in its own serializeMembers() method
+#! guards a private member with isSharedObject(self) and leaves it out in its own serializeMembers() method, which
+#! does not let sandboxed code serialize a shared object
 public class GuardedHook inherits Serializable {
     public {
         string name = "hook";
@@ -43,6 +45,31 @@ public class GuardedHook inherits Serializable {
     #! shared-object: leaves out secret
     private:internal *hash<auto> serializeMembers(*hash<auto> members) {
         remove members.secret;
+        return members;
+    }
+}
+
+#! guards a private hash and a private object, which its own serializeMembers() method leaves out (from the members
+#! of the class; their data is serialized before it is called)
+public class GuardedHookContainers inherits Serializable {
+    public {
+        string name = "containers";
+    }
+
+    private {
+        *hash<auto> secret_hash = {"key": "hidden-hash-value"};
+        *Box secret_obj = new Box("hidden-object-value");
+    }
+
+    string useSecret() {
+        return SandboxManager::isSharedObject(self) ? "refused" : sprintf("%s %s", secret_hash.key ?? "no hash",
+            exists secret_obj ? secret_obj.v : "no object");
+    }
+
+    #! shared-object: leaves out secret_hash, secret_obj
+    private:internal *hash<auto> serializeMembers(*hash<auto> members) {
+        remove members.secret_hash;
+        remove members.secret_obj;
         return members;
     }
 }
@@ -82,6 +109,17 @@ public class Box inherits Serializable {
     }
 }
 
+#! holds a weak reference to an object
+public class WeakBox inherits Serializable {
+    public {
+        auto v;
+    }
+
+    constructor(object v) {
+        self.v := v;
+    }
+}
+
 # the code of a tenant: a sandboxed Program
 const TenantCode = "
 %modern
@@ -118,6 +156,7 @@ hash<string, code> sub serializations() {
         \"in a member of an object\": auto sub (object o) { return Serializable::serialize(new Box(o)); },
         \"in a hash\": auto sub (object o) { return Serializable::serialize({\"k\": o}); },
         \"in a list\": auto sub (object o) { return Serializable::serialize((1, o)); },
+        \"in a weak reference\": auto sub (object o) { return Serializable::serialize(new WeakBox(o)); },
     };
 }
 
@@ -136,6 +175,16 @@ string sub serialize_self(GuardedNoHook o) {
 # trusted code that the tenant calls serializes the object for it
 string sub serialize_deputy(code deputy, object o) {
     return try_serialize(auto sub () { return deputy(o); });
+}
+
+# whether the data that the tenant serializes holds a value that the class leaves out
+string sub leaks(object o) {
+    try {
+        string data = sprintf(\"%y\", Serializable::serializeToData(o));
+        return data =~ /hidden/ ? \"LEAKED\" : \"left out\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 
 # what the tenant gets back from the data that it serializes
@@ -162,7 +211,7 @@ object sub shared(object o) {
 code deputy = binary sub (object o) { return Serializable::serialize(o); };
 
 foreach string name in (p.callFunction("serialization_names")) {
-    printf("tenant %s: shared without serializeMembers(): %s; with its own: %s; not shared: %s\n", name,
+    printf("tenant %s: shared: %s; shared with serializeMembers(): %s; not shared: %s\n", name,
         p.callFunction("serialize_one", name, shared(new GuardedNoHook())),
         p.callFunction("serialize_one", name, shared(new GuardedHook())),
         p.callFunction("serialize_one", name, new GuardedNoHook()));
@@ -170,14 +219,26 @@ foreach string name in (p.callFunction("serialization_names")) {
 printf("tenant has the class serialize it: %s\n", p.callFunction("serialize_self", shared(new GuardedNoHook())));
 printf("trusted deputy serializes it for the tenant: %s\n", p.callFunction("serialize_deputy", deputy,
     shared(new GuardedNoHook())));
-printf("trusted deputy serializes one with its own serializeMembers() for the tenant: %s\n",
+printf("trusted deputy serializes one with serializeMembers() for the tenant: %s\n",
     p.callFunction("serialize_deputy", deputy, shared(new GuardedHook())));
 printf("tenant round trip without serializeMembers(): %s\n", p.callFunction("round_trip",
     shared(new GuardedNoHook())));
-printf("tenant round trip with its own serializeMembers(): %s\n", p.callFunction("round_trip",
+printf("tenant round trip with serializeMembers(): %s\n", p.callFunction("round_trip",
     shared(new GuardedHook())));
+printf("tenant serializes containers that serializeMembers() leaves out: %s\n",
+    p.callFunction("leaks", shared(new GuardedHookContainers())));
+printf("tenant round trip with containers left out: %s\n", p.callFunction("round_trip",
+    shared(new GuardedHookContainers())));
+{
+    GuardedHookContainers o = shared(new GuardedHookContainers());
+    GuardedHookContainers c = Serializable::deserialize(o.serialize());
+    printf("trusted code serializes containers: %s\n", c.useSecret());
+    GuardedHook h = shared(new GuardedHook());
+    GuardedHook hc = Serializable::deserialize(h.serialize());
+    printf("trusted code serializes one with serializeMembers(): %s\n", hc.useSecret());
+}
 printf("tenant round trip of one that is not shared: %s\n", p.callFunction("round_trip", new GuardedNoHook()));
-printf("tenant serializes a subclass that serializes a member without its own serializeMembers(): %s\n",
+printf("tenant serializes a subclass that serializes a member: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookChild())));
 printf("tenant serializes a subclass with only transient members: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookTransientChild())));

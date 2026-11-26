@@ -412,13 +412,8 @@ public:
     //! Returns 0 if the calling code can serialize the object, or raises SHARED-OBJECT-ERROR and returns -1
     //! (qore#7673)
     /** Called only for an object marked as shared, before it is serialized.  It decides as checkSharedCopy() does
-        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code can
-        serialize a shared object only if every class of the object that serializes data of its own declares its own
-        serializeMembers() method in Qore code, which leaves out what the class guards for a shared object.  The
-        serializer serializes the members of each class of the hierarchy separately and calls the serializeMembers()
-        method of that class only, so an inherited method does not count; a class with no members that are serialized
-        (none, or only transient ones) needs none, a builtin class with a serializer (other than Serializable, which
-        serializes no data) is refused, and virtual base classes are skipped, as the serializer skips them.
+        (code that is sandboxed or acts for sandboxed code; fails closed; no update-scope exemption): such code cannot
+        serialize a shared object, as the data would give it all of the object's members, also the private ones.
 
         @param xsink for the exception
     */

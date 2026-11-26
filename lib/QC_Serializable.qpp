@@ -247,8 +247,7 @@ hash<SerializationInfo> h = obj.serializeToData();
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
@@ -271,8 +270,7 @@ obj.serialize(stream);
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
@@ -296,8 +294,7 @@ binary b = obj.serialize();
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
@@ -350,10 +347,9 @@ class MyClass inherits Qore::Serializable {
 
     @see deserializeMembers()
 
-    @note Code that is sandboxed or acts for sandboxed code can serialize an object that is shared by every %Program
-    of the process (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()") only if each class of
-    the object that serializes members declares this method itself, which leaves out what the class guards for a shared
-    object (see @ref sandbox_shared_objects)
+    @note Code that is sandboxed or acts for sandboxed code cannot serialize an object that is shared by every
+    %Program of the process (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), whatever
+    this method does (see @ref sandbox_shared_objects)
 */
 private:internal *hash<auto> Serializable::serializeMembers(*hash<auto>[doc] members) [flags=NAMED_ARGS] {
 }
@@ -549,8 +545,7 @@ hash<SerializationInfo> h = serializeToData(val);
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
@@ -575,8 +570,7 @@ Serializable::serialize(val, stream);
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */
@@ -601,8 +595,7 @@ binary bin = Serializable::serialize(val);
 
     @throw SERIALIZATION-ERROR the object cannot be serialized as it contains non-serializable data
     @throw SHARED-OBJECT-ERROR code that is sandboxed or acts for sandboxed code serializes an object that is shared by
-    every %Program of the process, also one that the value holds, whose classes do not each declare
-    serializeMembers() (see @ref sandbox_shared_objects)
+    every %Program of the process, also one that the value holds (see @ref sandbox_shared_objects)
     (@ref closure "closures", @ref call_reference "call references", @ref lvalue_references "references",
     and non-serializable objects)
 */

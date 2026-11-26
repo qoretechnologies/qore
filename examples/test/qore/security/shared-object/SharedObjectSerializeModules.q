@@ -1,8 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # The shared objects of the classes of the standard modules that guard their state with
-# SandboxManager::isSharedObject(self) cannot be serialized by a tenant, as those classes declare no
-# serializeMembers() method; trusted code serializes them as before (qore#7673); see shared-object-serialize.qtest
+# SandboxManager::isSharedObject(self) cannot be serialized by a tenant; trusted code serializes them as before
+# (qore#7673); see shared-object-serialize.qtest
 
 %modern
 %enable-all-warnings

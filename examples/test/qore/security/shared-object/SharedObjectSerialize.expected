@@ -1,19 +1,24 @@
-tenant serialize(): shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
-tenant serializeToData(): shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (hash); not shared: serialized (hash)
-tenant Serializable::serialize(): shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
-tenant Serializable::serializeToData(): shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (hash); not shared: serialized (hash)
-tenant serialize() to a stream: shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
-tenant in a member of an object: shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
-tenant in a hash: shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
-tenant in a list: shared without serializeMembers(): SHARED-OBJECT-ERROR; with its own: serialized (binary); not shared: serialized (binary)
+tenant serialize(): shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant serializeToData(): shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (hash)
+tenant Serializable::serialize(): shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant Serializable::serializeToData(): shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (hash)
+tenant serialize() to a stream: shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant in a member of an object: shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant in a hash: shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant in a list: shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
+tenant in a weak reference: shared: SHARED-OBJECT-ERROR; shared with serializeMembers(): SHARED-OBJECT-ERROR; not shared: serialized (binary)
 tenant has the class serialize it: SHARED-OBJECT-ERROR
 trusted deputy serializes it for the tenant: SHARED-OBJECT-ERROR
-trusted deputy serializes one with its own serializeMembers() for the tenant: serialized (binary)
+trusted deputy serializes one with serializeMembers() for the tenant: SHARED-OBJECT-ERROR
 tenant round trip without serializeMembers(): SHARED-OBJECT-ERROR
-tenant round trip with its own serializeMembers(): shared: False, secret: no secret
+tenant round trip with serializeMembers(): SHARED-OBJECT-ERROR
+tenant serializes containers that serializeMembers() leaves out: SHARED-OBJECT-ERROR
+tenant round trip with containers left out: SHARED-OBJECT-ERROR
+trusted code serializes containers: no hash no object
+trusted code serializes one with serializeMembers(): no secret
 tenant round trip of one that is not shared: shared: False, secret: secret
-tenant serializes a subclass that serializes a member without its own serializeMembers(): SHARED-OBJECT-ERROR
-tenant serializes a subclass with only transient members: serialized (binary)
+tenant serializes a subclass that serializes a member: SHARED-OBJECT-ERROR
+tenant serializes a subclass with only transient members: SHARED-OBJECT-ERROR
 tenant serializes a shared object of a builtin class with a serializer: SHARED-OBJECT-ERROR
 trusted code serializes it: deserialized shared: False, secret: secret
 trusted code serializes it in an object: secret

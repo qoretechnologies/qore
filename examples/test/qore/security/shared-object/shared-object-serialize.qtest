@@ -18,11 +18,11 @@
 #! Regression test for qore#7673: serialization of a shared object fails closed for sandboxed code
 /** Code that is sandboxed or acts for sandboxed code (a tenant, a trusted deputy that the tenant calls, the code of
     the object's own class) cannot serialize an object that trusted code marked with SandboxManager::shareObject(),
-    with any of the serialization APIs, nor a value that holds one (an object, a hash or a list), unless each class
-    of the object that serializes data declares its own serializeMembers() method, which leaves out what the class
-    guards (an inherited one does not count, a class with only transient members needs none, and a builtin class with
-    a serializer is refused); nothing is written to a stream for a refused object.  Trusted code serializes as
-    before, and a deserialized object is not shared.
+    with any of the serialization APIs, nor a value that holds one (an object, a hash, a list or a weak reference),
+    whatever its classes declare (a class with its own serializeMembers() method, also one that leaves out private
+    containers, a subclass, a class with only transient members, a class that inherits a builtin class with a
+    serializer); nothing is written to a stream for a refused object.  Trusted code serializes as before, and a
+    deserialized object is not shared.
 
     SharedObjectSerialize.q checks these serializations; SharedObjectSerializeModules.q checks that the tenant cannot
     serialize the shared objects of the classes of the standard modules that guard their state with
