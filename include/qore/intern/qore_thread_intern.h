@@ -2308,6 +2308,13 @@ DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 //! Returns true if the Program is sandboxed or its parse options restrict a functional domain
 DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
 
+//! Returns true if the Program is restricted (qore_program_is_restricted()) or its parse options restrict a
+//! functional domain (qore#7737)
+/** As qore_program_code_is_untrusted(), for the rules that restrict what code may do: a Program that a trusted
+    (governed) sandbox governs is not
+*/
+DLLLOCAL bool qore_program_code_is_restricted_or_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
@@ -2475,6 +2482,35 @@ DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
     that the object is shared (see qore_caller_creates_shared_objects())
 */
 DLLLOCAL int qore_caller_sandbox_state();
+
+//! returns 1 if the calling code is restricted (see qore_caller_is_restricted()), 0 if not, and -1 if the governing
+//! sandbox cannot be resolved for lack of memory (qore#7737)
+/** As qore_caller_sandbox_state(), for the rules that restrict what code may do; for callers that must fail closed in
+    the other direction than qore_caller_is_restricted() (see qore_caller_creates_shared_objects())
+*/
+DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true if the code running on the current thread is restricted, or acts for restricted code (qore#7737)
+/** The classification of the rules that restrict what code may do (the relation of classes by injection; qore#7730):
+    the code that qore_caller_is_sandboxed() looks at, where only a restricting sandbox counts, one that refuses
+    uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); a composition is restricting if any member is),
+    and a Program sandboxed without a manager (qore_program_is_restricted(), which fails closed).  Code that a trusted
+    (governed) sandbox governs, one that allows uncontrolled APIs (SandboxManager::setUncontrolledApiPolicy()), is
+    sandboxed but not restricted: its interrupts, limits, budgets, I/O policies and isolation domain still apply
+    (qore_caller_is_sandboxed()), as do the rules for process-wide registrations.
+
+    Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
+
+    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if it is not known
+*/
+DLLLOCAL bool qore_caller_is_restricted(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true if the calling code is restricted (qore_caller_is_restricted()), restricts a functional domain, or
+//! is library code that such code loaded, while it is initialized (qore#7737)
+/** As qore_caller_is_untrusted(), for the rules that restrict what code may do: code that a trusted (governed)
+    sandbox governs is not untrusted by this test
+*/
+DLLLOCAL bool qore_caller_is_restricted_or_untrusted();
 
 //! returns true if what the calling code creates may be shared by every Program: the code is not sandboxed, or the
 //! governing sandbox cannot be resolved (fails closed: such an object is treated as shared, which sandboxed code

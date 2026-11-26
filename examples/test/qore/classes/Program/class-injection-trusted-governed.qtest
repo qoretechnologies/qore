@@ -1,0 +1,317 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandboxing: the trust classification of sandboxed callers of Program::importClass()
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Class injection and the re-export of imported classes and hashdecls refuse only restricted callers (qore#7730): code
+# that a sandbox that refuses uncontrolled APIs governs, also further up the call stack, or code whose parse options
+# restrict a functional domain.  Code that a sandbox that allows uncontrolled APIs governs (one that a host attaches to
+# its trusted code only to interrupt or limit it) relates classes by injection and re-exports as trusted code does.
+
+%modern
+%allow-injection
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class ClassInjectionTrustedGovernedTest
+
+#! the class that the host injects in place of DatasourcePool
+class QdspClient inherits Qore::SQL::AbstractDatasource {
+}
+
+#! a hashdecl that the host imports for re-export
+hashdecl HostInfo {
+    string name;
+}
+
+#! a Program that the host builds, with an injected class
+class HostProgram inherits Program {
+    constructor() : Program(PO_NO_SYSTEM_API | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE) {
+        importClass("QdspClient", "Qore::SQL::DatasourcePool", True);
+        importSystemApi();
+    }
+}
+
+#! host code: builds a Program with an injected class
+string sub build_host_program() {
+    try {
+        HostProgram p();
+        return "built";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! host code: imports a class for re-export
+string sub reexport_class() {
+    try {
+        Program p(PO_NEW_STYLE);
+        p.importClass("QdspClient", NOTHING, NOTHING, CSP_UNCHANGED, True);
+        return "imported";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! host code: imports a hashdecl for re-export
+string sub reexport_hashdecl() {
+    try {
+        Program p(PO_NEW_STYLE);
+        p.importHashDecl("HostInfo", NOTHING, True);
+        return "imported";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+class ClassInjectionTrustedGovernedTest inherits QUnit::Test {
+    public {
+        #! the code of the tenant Programs
+        const TenantSource = "%modern
+auto sub call(code c) {
+    return c();
+}
+code sub wrap(code c) {
+    return auto sub () { return c(); };
+}
+string sub inject(Program dst) {
+    try {
+        dst.importClass(\"QdspClient\", \"Qore::SQL::DatasourcePool\", True);
+        return \"injected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub reexport(Program dst) {
+    try {
+        dst.importClass(\"QdspClient\", NOTHING, NOTHING, CSP_UNCHANGED, True);
+        return \"imported\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    public {
+        #! a module from the process-wide module path whose initialization injects a class
+        const ModuleSource = "%modern
+%no-child-restrictions
+module InjectProbe {
+    version = \"1.0\";
+    desc = \"class injection probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        InjectProbe::Probe::result = InjectProbe::Probe::build();
+    };
+}
+
+public namespace InjectProbe {
+class QdspClient inherits Qore::SQL::AbstractDatasource {
+}
+
+public class Probe {
+    public {
+        static string result;
+    }
+
+    static string build() {
+        try {
+            Program p(PO_NO_SYSTEM_API | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
+            p.importClass(\"InjectProbe::QdspClient\", \"Qore::SQL::DatasourcePool\", True);
+            return \"built\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+}
+";
+
+        #! the child: a tenant with the sandbox given loads the module first
+        const ChildSource = "%modern
+%no-child-restrictions
+*SandboxManager sm;
+if (ARGV[0] != \"none\") {
+    sm = new SandboxManager();
+    if (ARGV[0] == \"trusted\") {
+        sm.setUncontrolledApiPolicy(True);
+        sm.setMaxThreads(16);
+    } else {
+        sm.setNetworkDefaultPolicy(True);
+    }
+}
+Program p(PO_NEW_STYLE);
+if (sm) {
+    p.setSandboxManager(sm);
+}
+p.parse(\"%requires InjectProbe\\nstring sub get() { return InjectProbe::Probe::result; }\\n\", \"tenant\");
+printf(\"result: %s\\n\", p.callFunction(\"get\"));
+";
+    }
+
+    private {
+        TmpDir tmp("qore-class-injection-trusted-governed-");
+    }
+
+    constructor() : Test("class injection by trusted governed code", "1.0", \ARGV) {
+        addTestCase("a sandbox that allows uncontrolled APIs", \trustedGovernedTest());
+        addTestCase("a sandbox that refuses uncontrolled APIs", \restrictingTest());
+        addTestCase("a trusted build call of a restricting sandbox", \trustedBuildTest());
+        addTestCase("no sandbox", \noSandboxTest());
+        addTestCase("injection by the tenant's own code", \directTest());
+        addTestCase("parse options that restrict a functional domain", \parseOptionsTest());
+        addTestCase("trusted governed code called by restricted code", \nestedTest());
+        addTestCase("re-export", \reexportTest());
+        addTestCase("the initialization of a module that a tenant loads", \moduleTest());
+        set_return_value(main());
+    }
+
+    #! a tenant Program with the given sandbox, if any
+    private static Program tenant(*SandboxManager sm, int po = PO_NEW_STYLE) {
+        Program p(po);
+        # a host class that the tenant did not declare
+        p.importClass("QdspClient");
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! a sandbox that allows uncontrolled APIs and limits threads: it governs trusted code
+    private static SandboxManager trustedManager() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setMaxThreads(16);
+        return sm;
+    }
+
+    #! a sandbox that refuses uncontrolled APIs (the default): it restricts its code
+    private static SandboxManager restrictingManager() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        return sm;
+    }
+
+    trustedGovernedTest() {
+        SandboxManager sm = trustedManager();
+        Program p = tenant(sm);
+        # the code is governed but not restricted
+        assertTrue(p.callFunction("call", \SandboxManager::isSandboxed()));
+        assertFalse(p.callFunction("call", \SandboxManager::isRestricted()));
+        assertEq("built", p.callFunction("call", \build_host_program()));
+    }
+
+    restrictingTest() {
+        Program p = tenant(restrictingManager());
+        assertTrue(p.callFunction("call", \SandboxManager::isRestricted()));
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("call", \build_host_program()));
+    }
+
+    trustedBuildTest() {
+        code build = SandboxManager::createTrustedBuildCall(\build_host_program());
+        Program p = tenant(restrictingManager());
+        assertEq("built", p.callFunction("call", build));
+    }
+
+    noSandboxTest() {
+        Program p = tenant();
+        assertEq("built", p.callFunction("call", \build_host_program()));
+        assertEq("built", build_host_program());
+    }
+
+    #! a Program that classes can be injected into
+    private static Program target() {
+        return new Program(PO_NO_SYSTEM_API | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
+    }
+
+    directTest() {
+        # tenant code that injects a class that it did not declare itself
+        assertEq("injected", tenant().callFunction("inject", target()));
+        assertEq("injected", tenant(trustedManager()).callFunction("inject", target()));
+        assertEq("CLASS-IMPORT-ERROR", tenant(restrictingManager()).callFunction("inject", target()));
+    }
+
+    parseOptionsTest() {
+        Program p = tenant(NOTHING, PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("reexport", new Program(PO_NEW_STYLE)));
+        # also with a sandbox that allows uncontrolled APIs
+        p = tenant(trustedManager(), PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("inject", target()));
+        assertEq("CLASS-IMPORT-ERROR", p.callFunction("reexport", new Program(PO_NEW_STYLE)));
+    }
+
+    nestedTest() {
+        Program trusted = tenant(trustedManager());
+        Program restricted = tenant(restrictingManager());
+        # a closure of the trusted governed Program that calls the host code, called by the restricted Program
+        code c = trusted.callFunction("wrap", \build_host_program());
+        assertEq("built", trusted.callFunction("call", c));
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", c));
+        # a closure of the restricted Program, called by the trusted governed Program
+        code r = restricted.callFunction("wrap", \build_host_program());
+        assertEq("CLASS-IMPORT-ERROR", trusted.callFunction("call", r));
+        # the trusted governed Program's own injection, when the restricted Program calls it
+        code i = trusted.callFunction("wrap", auto sub () { return trusted.callFunction("inject", target()); });
+        assertEq("injected", trusted.callFunction("call", i));
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", i));
+    }
+
+    reexportTest() {
+        Program trusted = tenant(trustedManager());
+        assertEq("imported", trusted.callFunction("call", \reexport_class()));
+        assertEq("imported", trusted.callFunction("call", \reexport_hashdecl()));
+
+        Program restricted = tenant(restrictingManager());
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", \reexport_class()));
+        assertEq("HASHDECL-IMPORT-ERROR", restricted.callFunction("call", \reexport_hashdecl()));
+
+        # tenant code that re-exports itself
+        assertEq("imported", trusted.callFunction("reexport", new Program(PO_NEW_STYLE)));
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("reexport", new Program(PO_NEW_STYLE)));
+
+        # trusted code
+        assertEq("imported", reexport_class());
+        assertEq("imported", reexport_hashdecl());
+    }
+
+    moduleTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string module_dir = tmp.path + DirSep + "modules";
+        mkdir(module_dir);
+        writeFile(module_dir + DirSep + "InjectProbe.qm", ModuleSource);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, ChildSource);
+        # trusted code, governed or not, relates the module's classes; restricted code that loads the module does not
+        assertEq("result: built", runChild(qore_bin, libqore_dir, module_dir, child, "none"));
+        assertEq("result: built", runChild(qore_bin, libqore_dir, module_dir, child, "trusted"));
+        assertEq("result: CLASS-IMPORT-ERROR", runChild(qore_bin, libqore_dir, module_dir, child, "restricting"));
+    }
+
+    #! writes a file
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+
+    #! runs the child with the sandbox given; returns its output, trimmed
+    private string runChild(string qore_bin, string libqore_dir, string module_dir, string child, string how) {
+        string output = tmp.path + DirSep + "output-" + how + ".txt";
+        string cmd = sprintf("LD_LIBRARY_PATH='%s' DYLD_LIBRARY_PATH='%s' QORE_LIBDIR='%s' QORE_MODULE_DIR='%s' "
+            "'%s' '%s' '%s' > '%s' 2>&1", libqore_dir, libqore_dir, libqore_dir, module_dir, qore_bin, child, how,
+            output);
+        int rc = system(cmd);
+        string out = trim(ReadOnlyFile::readTextFile(output));
+        assertEq(0, rc, out);
+        return out;
+    }
+}

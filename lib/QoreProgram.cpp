@@ -3597,8 +3597,10 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
                 const bool owns_classes = caller && frame->getCallType() == CT_BUILTIN
                     && frame->getCallName() == "Program::importClass" && (!previous || previous->getCallType() == CT_USER)
                     && qore_class_private::get(*c)->declaredBy(caller) && qore_class_private::get(*oc)->declaredBy(caller);
-                if (!owns_classes && (qore_program_code_is_untrusted(caller) || qore_caller_is_sandboxed()
-                        || qore_caller_is_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
+                // only restricted code is refused: code that a trusted (governed) sandbox governs relates classes as
+                // trusted code (qore#7737)
+                if (!owns_classes && (qore_program_code_is_restricted_or_untrusted(caller)
+                        || qore_caller_is_restricted_or_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
                     xsink->raiseException("CLASS-IMPORT-ERROR", "only the declaring Program or trusted code may "
                         "relate these classes by injection");
                     return;
