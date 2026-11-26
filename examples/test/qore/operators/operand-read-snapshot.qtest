@@ -15,6 +15,12 @@
 
 our list<int> g_list;
 
+#! a class whose constructor takes an argument, for a declaration that constructs its value in an operand
+class ArgTaker {
+    constructor(auto x) {
+    }
+}
+
 class OperandReadSnapshotTest inherits QUnit::Test {
     constructor() : QUnit::Test("OperandReadSnapshot", "1.0") {
         addTestCase("comparison operators", \testComparison());
@@ -114,17 +120,24 @@ class OperandReadSnapshotTest inherits QUnit::Test {
         assertEq((1, 2, 0, (1, 2, 3)), a + (0, a += 3), "in a list");
         string s = sprintf("%s", "ab");
         assertEq("abab x", s + trim(s += " x "), "in a call of a string function");
+        # a change in the argument of a declaration that constructs its value
+        a = ownList((1, 2));
+        list<auto> r = a + (ArgTaker c(a += 3));
+        assertEq(3, r.size(), "in a declaration that constructs its value");
+        assertEq((1, 2), r[0..1]);
     }
 
     testOtherChanges() {
         list<int> a = ownList((1, 2, 3));
         assertFalse(a == (splice a, 0, 1), "splice");
         a = ownList((1, 2, 3));
-        assertFalse(a == (extract a, 0, 1, ()), "extract");
+        # extract returns the elements that it removes
+        assertEq((1, 2, 3, 1), a + (extract a, 0, 1), "extract");
         a = ownList((1, 2));
         assertFalse(a == (unshift a, 0), "unshift");
         string s = sprintf("%s\n", "ab");
-        assertFalse(s == (chomp s), "chomp");
+        # chomp returns the number of characters that it removes
+        assertEq("ab\n1", s + (chomp s), "chomp");
         s = sprintf("%s", " ab ");
         assertFalse(s == (trim s), "trim");
     }

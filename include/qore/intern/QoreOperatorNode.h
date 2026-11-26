@@ -522,7 +522,9 @@ public:
         // computed when the operator is first evaluated, after its operands have been initialized
         signed char s = snapshot_left.load(std::memory_order_relaxed);
         if (s < 0) {
-            s = right.needsEval() && right.getType() != NT_VARREF ? 1 : 0;
+            // a variable reference that has an effect is a declaration that constructs its value, whose constructor
+            // and arguments can change a variable
+            s = right.needsEval() && (right.getType() != NT_VARREF || right.hasEffect()) ? 1 : 0;
             snapshot_left.store(s, std::memory_order_relaxed);
         }
         return s;
