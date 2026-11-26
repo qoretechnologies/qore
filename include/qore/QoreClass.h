@@ -1151,10 +1151,16 @@ public:
         subclass takes a global lock, and a subclass parsed from Qore code inheriting one of them always uses the
         slower lookup of its hierarchy).
 
-        Only classes created as QoreBuiltinClass take part in this: a class created as a QoreClass and made a
-        system class with setSystem() is considered to have all its base classes when it is created.
+        Only a class created as a QoreBuiltinClass can be a parent class whose base classes are still being added:
+        a class created as a QoreClass (and made a system class with setSystem()) is considered to have all its
+        base classes when it is created, so its subclasses are not completed when it gets more (they rely on
+        rescanParents()); but a QoreClass that inherits a QoreBuiltinClass whose ancestry is not complete is
+        completed like any other subclass.
 
-        Safe to call multiple times; subsequent calls are no-ops.
+        Safe to call multiple times: once the ancestry of the class is complete, subsequent calls do nothing; while
+        it is not (the class is registered with a parent class whose ancestry is not complete), each call takes a
+        global lock, and a class that is closed but not complete and has no such parent class (after a completion
+        that failed with an exception) is completed again.
 
         @since %Qore 3.0
     */

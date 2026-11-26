@@ -3233,6 +3233,13 @@ public:
 
     //! resolves the copies of the base classes; the classes of the replaced entries of the list of ancestors, whose
     //! references the caller takes over, are added to \a released (see BCSMList::resolveCopy())
+    /**
+        Known limitation (qore#7704; not reachable today, as QoreClassList::resolveCopy() has no callers): when the
+        copies of a whole namespace are resolved, a copy B' of a class B whose parent class A is not complete yet is
+        registered with A (the class of the source Program), while resolveCopy() repoints the base classes of B' to
+        the copy A' of A, which was copied before A got its later base classes: when the ancestry of A is complete,
+        B' is rebuilt from A', so B' never gets the later ancestors of A, and A' itself never closes.
+    */
     DLLLOCAL void resolveCopy(std::vector<QoreClass*>& released);
 
     //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
@@ -4077,6 +4084,9 @@ public:
 #ifdef DEBUG
     //! Asserts that no class is registered in the registry of ancestries (after the static system namespace is set up)
     DLLLOCAL static void assertNoAncestryLinks();
+
+    //! Returns true if \a child is registered as a subclass of \a parent (for tests; qore#7614)
+    DLLLOCAL static bool isAncestryLinked(const qore_class_private& child, const qore_class_private& parent);
 #endif
 
     //! Marks the base classes of a builtin class as all added (qore#7614)
@@ -4106,6 +4116,10 @@ public:
 
     //! Locks the registry of ancestries (qore#7614)
     DLLLOCAL static std::unique_lock<std::mutex> lockAncestry();
+
+    //! Returns true if QoreClass::rescanParents() of \a qc must lock the registry of ancestries: if \a qc, one of its
+    //! ancestors or one of their ancestors is registered with a parent class whose ancestry is not final (qore#7614)
+    DLLLOCAL static bool rescanNeedsAncestryLock(const qore_class_private& qc);
 
     //! Returns true if the ancestry of the class is final: the class and all its ancestors have all their base classes
     DLLLOCAL bool ancestryFinal() const {
@@ -4364,6 +4378,18 @@ public:
         return ns_deleted;
     }
 
+    //! resolves the copies of the base classes and of the classes in the method lists after all namespaces and classes
+    //! of a Program have been copied
+    /** The copies of the base classes are resolved first, then the base classes and the list of ancestors of this
+        class are changed with the lock of the registry of ancestries held if the class is registered with a parent
+        class (qore#7614), and the classes replaced are released without it.
+
+        Known limitation (qore#7704; not reachable today, as QoreClassList::resolveCopy() has no callers): when the
+        copies of a whole namespace are resolved, a copy B' of a class B whose parent class A is not complete yet is
+        registered with A (the class of the source Program), while resolveCopy() repoints the base classes of B' to
+        the copy A' of A, which was copied before A got its later base classes: when the ancestry of A is complete,
+        B' is rebuilt from A', so B' never gets the later ancestors of A, and A' itself never closes.
+    */
     DLLLOCAL void resolveCopy();
 
     DLLLOCAL void setUserData(const void* n_ptr) {
@@ -6860,6 +6886,16 @@ public:
 
     //! registers a copy of a class whose ancestry was not final when it was copied, and adds the ancestors that the
     //! class got while it was copied (qore#7614)
+    /** Called last in the constructor of the copy of an imported class: the list of ancestors of the copy is built
+        again from the base classes of the copy, which are those of the source Program, and the copy is registered
+        with each of them whose ancestry is not final; if this fails, the registration is undone.
+
+        Known limitation (qore#7704; not reachable today, as QoreClassList::resolveCopy() has no callers): when the
+        copies of a whole namespace are resolved, a copy B' of a class B whose parent class A is not complete yet is
+        registered with A (the class of the source Program), while resolveCopy() repoints the base classes of B' to
+        the copy A' of A, which was copied before A got its later base classes: when the ancestry of A is complete,
+        B' is rebuilt from A', so B' never gets the later ancestors of A, and A' itself never closes.
+    */
     DLLLOCAL void relinkCopiedAncestry(const qore_class_private& old);
 
     DLLLOCAL void setPublic();

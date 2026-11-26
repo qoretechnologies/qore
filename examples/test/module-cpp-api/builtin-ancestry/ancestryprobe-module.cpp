@@ -23,6 +23,8 @@
       \c qore_dbg_class_ancestry_final()), and a subclass of \c B made then is not final either
     - <tt>AncestryProbe::rescanReaders(int n)</tt>: QoreClass::rescanParents() grows the list of a closed class while
       another thread reads it (with the test hook, as for concurrentReaders())
+    - <tt>AncestryProbe::rescanPlainReaders(int n)</tt>: as rescanReaders(), with the parent class a plain QoreClass that
+      gets base classes after it was inherited, so that the rescan does not lock the registry of ancestries
     - <tt>AncestryProbe::concurrentReaders(int n)</tt>: \c A gets \a n later base classes while another thread reads
       the ancestors of \c B; in a debug build, the reader takes a snapshot of the ancestors before \c A is complete and
       reads it, and the new list, while the completion holds the new list published (the libqore test hook
@@ -499,10 +501,17 @@ QoreValue f_deleted_subclass(const QoreListNode*, RuntimeConfig&, ExceptionSink*
 }
 
 typedef bool (*final_query_t)(const QoreClass*);
+typedef bool (*linked_query_t)(const QoreClass*, const QoreClass*);
 
 //! returns the libqore function that tells if the ancestry of a class is final (debug builds only), or nullptr
 final_query_t get_final_query() {
     return reinterpret_cast<final_query_t>(dlsym(RTLD_DEFAULT, "qore_dbg_class_ancestry_final"));
+}
+
+//! returns the libqore function that tells if a class is registered with a parent class (debug builds only), or
+//! nullptr
+linked_query_t get_linked_query() {
+    return reinterpret_cast<linked_query_t>(dlsym(RTLD_DEFAULT, "qore_dbg_class_ancestry_linked"));
 }
 
 //! AncestryProbe::neverClosed(): a parent class that is never initialized
@@ -515,8 +524,11 @@ QoreValue f_never_closed(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsi
 
     QoreClass* b;
     QoreClass* c;
+    // A outlives the release of its reference below: it is referenced by the list of ancestors of B
+    QoreClass* a_cls;
     {
         QoreClassHolder a(s.create("A"));
+        a_cls = a;
         static_cast<QoreClass*>(a)->addBaseClass(early, true);
         b = s.create("B");
         b->addBaseClass(a, true);
@@ -549,6 +561,12 @@ QoreValue f_never_closed(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsi
         rv->setKeyValue("c_final", is_final(c), nullptr);
         rv->setKeyValue("d_final", is_final(d), nullptr);
         rv->setKeyValue("early_final", is_final(early), nullptr);
+    }
+    if (linked_query_t is_linked = get_linked_query()) {
+        rv->setKeyValue("b_linked_a", is_linked(b, a_cls), nullptr);
+        rv->setKeyValue("c_linked_b", is_linked(c, b), nullptr);
+        rv->setKeyValue("d_linked_b", is_linked(d, b), nullptr);
+        rv->setKeyValue("b_linked_early", is_linked(b, early), nullptr);
     }
     // A is destroyed with its private data, after B, C and D are destroyed with the namespace of the scenario
     return rv.release();
@@ -786,6 +804,61 @@ QoreValue f_rescan_readers(const QoreListNode* args, RuntimeConfig&, ExceptionSi
     return rv.release();
 }
 
+//! AncestryProbe::rescanPlainReaders(int n): QoreClass::rescanParents() without the lock of the registry of ancestries
+//! grows the list of a closed class while another thread reads it
+/** E is a plain QoreClass (not a QoreBuiltinClass: it is considered to have all its base classes when it is created),
+    which gets \a n base classes after X inherited it; X is not registered with any class, so rescanning its parent
+    classes (as the jni module does) does not lock the registry; it adds them to its list
+*/
+QoreValue f_rescan_plain_readers(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xsink) {
+    int64 n = HARD_QORE_VALUE_INT(args, 0);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    Scenario s;
+    std::vector<QoreClass*> lates;
+    lates.reserve(n);
+    for (int64 i = 0; i < n; ++i) {
+        QoreClass* qc = s.create("L");
+        s.add(qc);
+        lates.push_back(qc);
+    }
+    QoreClass* early = s.create("Early");
+    s.add(early);
+    std::string ename = "E" + std::to_string(++class_seq);
+    std::string epath = "AncestryProbeScenario::" + ename;
+    QoreClass* e = new QoreClass(ename.c_str(), epath.c_str());
+    e->addBaseClass(early, true);
+    s.add(e);
+    QoreClass* x = s.create("X");
+    x->addBaseClass(e, true);
+    x->initializeBuiltin();
+    s.add(x);
+    for (QoreClass* qc : lates) {
+        e->addBaseClass(qc, true);
+    }
+    rv->setKeyValue("before", (int64)(has_ancestor(x, lates[0]) ? 1 : 0), nullptr);
+    if (linked_query_t is_linked = get_linked_query()) {
+        rv->setKeyValue("x_linked_e", is_linked(x, e), nullptr);
+    }
+
+    ReaderResult r;
+    bool hook = read_while(x, lates, r, [&]() {
+        x->rescanParents();
+    });
+
+    int64 found = 0;
+    for (QoreClass* qc : lates) {
+        if (has_ancestor(x, qc)) {
+            ++found;
+        }
+    }
+    rv->setKeyValue("found", found, nullptr);
+    rv->setKeyValue("hook", hook, nullptr);
+    rv->setKeyValue("old_seen", r.old_seen, nullptr);
+    rv->setKeyValue("new_seen", r.new_seen, nullptr);
+    rv->setKeyValue("found_in_hook", r.found, nullptr);
+    return rv.release();
+}
+
 //! the classes of the last gapProgram() call, for checkObject()
 const QoreClass* gap_late = nullptr;
 const QoreClass* gap_late_parent = nullptr;
@@ -878,6 +951,8 @@ static void ancestryprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink&
         autoHashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
     module_ns->addBuiltinVariant("rescanReaders", f_rescan_readers, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
+    module_ns->addBuiltinVariant("rescanPlainReaders", f_rescan_plain_readers, QCF_NO_FLAGS, QDOM_DEFAULT,
+        autoHashTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "n");
     module_ns->addBuiltinVariant("gapProgram", f_gap_program, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
         codeTypeInfo, QORE_PARAM_NO_ARG, "cb");
     module_ns->addBuiltinVariant("checkObject", f_check_object, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1,
