@@ -82,12 +82,58 @@ auto sub in_thread(code c) {
     return q.get();
 }
 
+#! what a thread that start_worker() starts runs: the action and the Programs that it uses
+/** The Programs are created before any tenant code runs: a Program created in a thread that was started for
+    restricted code is restricted itself
+*/
+hashdecl WorkerCall {
+    #! the action: "inject", "reexport", "reexport-hashdecl" or "nested-inject"
+    string action;
+    #! the trusted governed Program whose code runs the action
+    Program pgm;
+    #! the Program that the action imports into
+    Program dst;
+}
+
+#! host code: starts a thread that runs host_worker() for the call given and waits for its result
+/** No closure is created: the thread runs host code that exists before any tenant code calls this function
+*/
+string sub start_worker(hash<WorkerCall> call) {
+    Queue q();
+    background host_worker(q, call);
+    return q.get();
+}
+
+#! host code: the thread of start_worker(); returns the result of the call or the error
+sub host_worker(Queue q, hash<WorkerCall> call) {
+    try {
+        q.push(worker_action(call));
+    } catch (hash<ExceptionInfo> ex) {
+        q.push(ex.err);
+    }
+}
+
+#! host code: runs the action of the call in its Program
+string sub worker_action(hash<WorkerCall> call) {
+    switch (call.action) {
+        case "inject": return call.pgm.callFunction("inject", call.dst);
+        case "reexport": return call.pgm.callFunction("reexport", call.dst);
+        case "reexport-hashdecl": return call.pgm.callFunction("reexport_hashdecl", call.dst);
+        # a thread that host code starts in this thread
+        case "nested-inject": return start_worker(<WorkerCall>{"action": "inject", "pgm": call.pgm, "dst": call.dst});
+    }
+    throw "UNKNOWN-ACTION", call.action;
+}
+
 class ClassInjectionTrustedGovernedTest inherits QUnit::Test {
     public {
         #! the code of the tenant Programs
         const TenantSource = "%modern
 auto sub call(code c) {
     return c();
+}
+auto sub call_with(code c, auto arg) {
+    return c(arg);
 }
 code sub wrap(code c) {
     return auto sub () { return c(); };
@@ -110,6 +156,14 @@ Program sub mk() {
 string sub reexport(Program dst) {
     try {
         dst.importClass(\"QdspClient\", NOTHING, NOTHING, CSP_UNCHANGED, True);
+        return \"imported\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub reexport_hashdecl(Program dst) {
+    try {
+        dst.importHashDecl(\"HostInfo\", NOTHING, True);
         return \"imported\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
@@ -236,6 +290,7 @@ printf(\"result: %s\\n\", reader.callFunction(\"get\"));
         addTestCase("the initialization of a module that a tenant loads", \moduleTest());
         addTestCase("a policy barrier does not hide a restricted caller", \policyBarrierTest());
         addTestCase("a thread started for restricted code", \threadTest());
+        addTestCase("trusted governed code in a thread started for restricted code", \threadWorkerTest());
         addTestCase("code parsed by restricted code into a trusted governed Program", \parsedTest());
         addTestCase("a sandbox changed while its code runs", \changedTest());
         addTestCase("a composition of a trusting and a restricting sandbox", \compositeTest());
@@ -247,6 +302,7 @@ printf(\"result: %s\\n\", reader.callFunction(\"get\"));
         Program p(po);
         # a host class that the tenant did not declare
         p.importClass("QdspClient");
+        p.importHashDecl("HostInfo");
         if (sm) {
             p.setSandboxManager(sm);
         }
@@ -405,6 +461,58 @@ printf(\"result: %s\\n\", reader.callFunction(\"get\"));
         assertEq("injected", trusted.callFunction("call", auto sub () { return in_thread(inject); }));
         # a thread that the host starts for restricted code
         assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call", auto sub () { return in_thread(inject); }));
+    }
+
+    #! a call for start_worker() with a new Program to import into
+    private static hash<WorkerCall> workerCall(string action, Program pgm) {
+        return <WorkerCall>{
+            "action": action,
+            "pgm": pgm,
+            "dst": action =~ /inject/ ? target() : new Program(PO_NEW_STYLE),
+        };
+    }
+
+    threadWorkerTest() {
+        # the actions of a trusted governed Program and what they return when it may relate classes by injection and
+        # re-export
+        const hash<string, string> Allowed = {
+            "inject": "injected",
+            "reexport": "imported",
+            "reexport-hashdecl": "imported",
+            "nested-inject": "injected",
+        };
+        const hash<string, string> Refused = {
+            "inject": "CLASS-IMPORT-ERROR",
+            "reexport": "CLASS-IMPORT-ERROR",
+            "reexport-hashdecl": "HASHDECL-IMPORT-ERROR",
+            "nested-inject": "CLASS-IMPORT-ERROR",
+        };
+        Program trusted = tenant(trustedManager());
+        Program other_trusted = tenant(trustedManager());
+        Program restricted = tenant(restrictingManager());
+        foreach string action in (keys Allowed) {
+            # a thread that the host starts for itself
+            assertEq(Allowed{action}, start_worker(workerCall(action, trusted)), "host: " + action);
+            # a thread that the host starts for trusted governed code: its own Program, and another one
+            assertEq(Allowed{action}, trusted.callFunction("call_with", \start_worker(), workerCall(action, trusted)),
+                "trusted governed: " + action);
+            assertEq(Allowed{action}, other_trusted.callFunction("call_with", \start_worker(),
+                workerCall(action, trusted)), "other trusted governed: " + action);
+            # a thread that the host starts for restricted code, with no closure created for it: the trusted
+            # governed Program called in the thread does not hide the restricted code that the thread runs for
+            assertEq(Refused{action}, restricted.callFunction("call_with", \start_worker(),
+                workerCall(action, trusted)), "restricted: " + action);
+        }
+        # the restricted Program itself, in a thread started for it
+        assertEq("CLASS-IMPORT-ERROR", restricted.callFunction("call_with", \start_worker(),
+            workerCall("inject", restricted)));
+        # a restricting sandbox: refused while it restricts, allowed once the host relaxes it
+        SandboxManager sm = restrictingManager();
+        Program relaxed = tenant(sm);
+        assertEq("CLASS-IMPORT-ERROR", relaxed.callFunction("call_with", \start_worker(),
+            workerCall("inject", trusted)));
+        sm.setUncontrolledApiPolicy(True);
+        assertEq("injected", relaxed.callFunction("call_with", \start_worker(), workerCall("inject", trusted)));
     }
 
     parsedTest() {
