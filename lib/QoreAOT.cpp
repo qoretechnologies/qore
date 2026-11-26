@@ -25913,6 +25913,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
         // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
         ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+        // the IR of the top-level code is its debug IR too, so with debugging it keeps the calls of substr(), index()
+        // and rindex() as calls, whose exceptions have the frame of the builtin, which the pseudo-method instructions
+        // made of them do not serialize (qore#7733); without debugging the native code takes the pseudo-method forms,
+        // and the top-level code then has no debug IR (see below; qore#7761)
+        ir_func->lower_call_forms_for_debug_ir = ir_func->emit_debug_statements && aotCompileWithDebugging();
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -26027,6 +26032,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         if (lowering.compileAllHandlerIRs(handler_error) < 0) {
                             printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
                                 handler_error.c_str());
+                        } else if (ir_func->has_debug_ir_call_forms) {
+                            // code compiled without debugging made pseudo-method instructions of function calls,
+                            // which the debug IR cannot express: the top-level code runs its native code under a
+                            // debugger, as a function without debug IR does (qore#7761)
+                            assert(!ir_func->lower_call_forms_for_debug_ir);
+                            printd(1, "AOT: no debug IR for _toplevel: compiled without debugging, with call forms\n");
                         } else {
                             cf.debug_ir.reset(ir_func);
                             ir_func = nullptr;

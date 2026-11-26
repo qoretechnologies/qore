@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - AOT code generation and the debug IR of compiled top-level code under a debugger
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotToplevelDebugIrCallFormsTest
+
+#! the debug IR of compiled top-level code makes the calls of substr(), index() and rindex() that the source makes
+/** The IR of top-level code compiled ahead of time is also its debug IR, which the IR interpreter runs while a
+    debugger is attached; its lowering made pseudo-method instructions of these calls, which the debug IR cannot
+    express, so their exceptions had no frame of the builtin under a debugger (qore#7761, as for functions in
+    qore#7733).  Compiled with debugging (qcc -g), the top-level code keeps them as calls and prints what the AST
+    interpreter prints in every execution mode; compiled without it, the top-level code has no debug IR and runs its
+    native code, which makes no step events.
+*/
+class AotToplevelDebugIrCallFormsTest inherits QUnit::Test {
+    public {
+        const Worker = "toplevel-call-forms";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AotToplevelDebugIrCallForms", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("top-level debug IR call forms", \callFormsTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    callFormsTest() {
+        string worker = get_script_dir() + "/" + Worker + ".qr";
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast "
+            + quote(worker), ExecModeHarness::NativeCheck::None);
+        assertRegex("substr frame: INVALID-ENCODING substr\n", ast, "the AST interpreter gives the frame of substr()");
+        assertRegex("index frame: INVALID-ENCODING index\n", ast, "the AST interpreter gives the frame of index()");
+        assertRegex("rindex frame: INVALID-ENCODING rindex\n", ast, "the AST interpreter gives the frame of rindex()");
+        assertRegex("top-level steps: [1-9]", ast, "the AST interpreter reports the steps of the top-level code");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        if (!qcc_bin) {
+            testSkip("no qcc");
+        }
+        TmpDir tmp("qore-aot-toplevel-debug-ir-call-forms-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + Worker + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -g -o " + quote(exe) + " "
+                + quote(worker));
+            assertTrue(is_file(exe), opt + " -g: qcc produced the executable");
+            assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt + " -g");
+
+            # without -g the top-level code has no debug IR: it runs natively, with no step events
+            string native = tmp.path + DirSep + Worker + opt + "-native";
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(native) + " "
+                + quote(worker));
+            assertTrue(is_file(native), opt + ": qcc produced the executable");
+            string output = ExecModeHarness::run_any(prefix + quote(native) + " -b");
+            assertRegex("(?m)^top-level steps: 0$", output, "AOT " + opt + " without -g runs natively");
+            assertRegex("(?m)^calls: \\[\"bc\", \"bc\", 2, 4, 2\\]$", output, "AOT " + opt + " without -g: results");
+        }
+    }
+}
