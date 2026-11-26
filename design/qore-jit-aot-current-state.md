@@ -137,8 +137,7 @@ does nothing and leaves the call to the generic path:
   (qore#5822); a function of another Program, which can be deleted, takes the generic
   path;
 - the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`) and has no
-  debugger attached (the global count of Programs with a debugger,
-  `qore_aot_direct_call_mode`, first).
+  debugger attached (`qore_rt_debugger_attached()`, as `qore_rt_call_fast()` tests it).
 
 The refusals of a call made by the expression of the background operator (qore#7087)
 are those of the generic path: of a reference created by code that may not control

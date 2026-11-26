@@ -14737,10 +14737,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_consume_args(const QoreFunction*
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
-// The low bit requests the cached environment override check of prelinked AOT calls; each Program with a debugger
-// attached adds two (see qore_aot_debug_program_change())
-extern DLLLOCAL std::atomic<unsigned> qore_aot_direct_call_mode;
-
 #ifdef DEBUG
 //! the number of calls through references to user functions made without the generic call path (qore#5578), for
 //! the tests (dbg_function_reference_fast_calls()); defined in the single compilation unit
@@ -14773,8 +14769,9 @@ extern DLLLOCAL std::atomic<int64_t> qore_dbg_function_reference_fast_calls;
       read the variant's signature, are all made before any Program is entered, without a reference to it, and a miss
       leaves no trace (entering a Program runs its thread entry handlers and charges a sandbox's budgets): a function
       of another Program, which can be deleted, takes the generic call path;
-    - the callee's Program is not being deleted and no debugger is attached to it: the global count of the Programs
-      with a debugger (qore_aot_direct_call_mode) first.
+    - the callee's Program is not being deleted and no debugger is attached to it (qore_rt_debugger_attached(), which
+      qore_rt_call_fast() tests as well; the global count of the Programs with a debugger is not read here, as its
+      name differs between the trees that this code is merged into: qore#7676 renamed it).
 
     The refusals of a call made by the expression of the background operator (qore#7087) are those of the generic
     call path: of a reference created by code that may not control threads (checkBackgroundCreator()), and of the code
@@ -14853,9 +14850,8 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_try_call_function_reference_t(cons
             : exec_pgm->getProgramId() != uvb->pgm_id) {
         return false;
     }
-    // a debugger: the global count of the Programs with a debugger attached (one load), then the callee's Program
-    if (uvb->pgm_deleted.load(std::memory_order_acquire)
-            || ((qore_aot_direct_call_mode.load(std::memory_order_acquire) & ~1u) && qore_rt_debugger_attached(uvb))) {
+    // a debugger attached to the callee's Program, which is allocated (the caller's, or a module's)
+    if (uvb->pgm_deleted.load(std::memory_order_acquire) || qore_rt_debugger_attached(uvb)) {
         return false;
     }
     const LocalFunctionCallReferenceNode::FastCallInfo* info = state == LocalFunctionCallReferenceNode::FCS_ELIGIBLE
