@@ -23,7 +23,8 @@
     its code records no restrictions, where the plain pattern gives unmarked objects and restricted code, and a plain
     trusted first caller gets the same without the barrier; several first callers share one build, a caller with a
     timeout gives up; a failed build, an unknown key, a builder that needs its own value, a cycle of waits of
-    builders and a value that a tenant created leave no entry; a map's maximum size is enforced.
+    builders and a value that a tenant created leave no entry; a map's maximum size is enforced.  It uses the debug
+    hooks of debug builds of the library, so its cases are skipped in other builds.
     LazySharedVendoredSchemas.q checks that the data provider modules that load their vendored schemas on first use
     build them for a sandboxed first caller as trusted code.  Their output must be the one in the .expected files in
     every execution mode, and in programs compiled with qcc -O0 and -O3 (the callers' code is parsed at run time, so
@@ -35,22 +36,35 @@ class LazySharedValuesTest inherits QUnit::Test {
         list<string> fixtures = ("LazySharedValues", "LazySharedVendoredSchemas", "LazySharedModuleByPath");
     }
 
+    public {
+        #! the fixtures that need the debug hooks of debug builds of the library
+        const DebugHookFixtures = {"LazySharedValues": True};
+    }
+
     constructor() : QUnit::Test("lazy shared values", "1.0", \ARGV) {
         foreach string fixture in (fixtures) {
             string name = fixture;
             foreach string mode in (ExecModeHarness::ExecModes) {
                 string execution_mode = mode;
                 addTestCase(name + ": execution mode " + mode, sub () {
+                    skipWithoutDebugHooks(name);
                     # the library modules' code chooses its own execution, so the native compilation is not checked
                     assertEq(expected(name), ExecModeHarness::run_stdout(command(name, execution_mode),
                         ExecModeHarness::NativeCheck::None));
                 });
             }
-            addTestCase(name + ": qcc -O0", sub () { checkQcc(name, 0); });
-            addTestCase(name + ": qcc -O3", sub () { checkQcc(name, 3); });
+            addTestCase(name + ": qcc -O0", sub () { skipWithoutDebugHooks(name); checkQcc(name, 0); });
+            addTestCase(name + ": qcc -O3", sub () { skipWithoutDebugHooks(name); checkQcc(name, 3); });
         }
 
         set_return_value(main());
+    }
+
+    #! skips a case of a fixture that needs the debug hooks of debug builds of the library, in other builds
+    private skipWithoutDebugHooks(string name) {
+        if (DebugHookFixtures{name} && !Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip(sprintf("the library is not a debug build: %s.q needs its debug hooks (dbg_*())", name));
+        }
     }
 
     private string fixture(string name) {
