@@ -297,6 +297,23 @@ public class RestSchemaActionSet {
         checkReferenceData();
         checkHostSources();
         ++construction_count;
+        # a set that trusted code builds, such as the process-wide set that a module builds from its vendored
+        # schema, is shared by every Program of the process: sandboxed code cannot change or delete it, nor its
+        # operations, which are marked when they are built (qore#7714)
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! Copies the set without the output-type callbacks it created and with a lock of its own
+    /** The operations, the schema and the peers of the copy are those of the set copied
+        (qore#7714)
+
+        @since RestSchemaActions 1.0
+    */
+    copy() {
+        output_type_callbacks = {};
+        callback_lock = new Mutex();
     }
 
     #! Returns the number of action sets constructed in the process
@@ -466,8 +483,19 @@ DataProviderActionCatalog::getActions("Stripe");
     #! Returns the callback building an action's output type, creating it on first use
     private code getOutputTypeCallback(string action, RestSchemaActionOperation op) {
         AutoLock al(callback_lock);
-        return output_type_callbacks{action}
-            ?? (output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op));
+        if (*code c = output_type_callbacks{action}) {
+            return c;
+        }
+        # the callback is a cache of the set, built from its own operation: a set that is shared by every Program
+        # keeps it in an update scope, also for a sandboxed caller (qore#7714)
+        if (SandboxManager::isSharedObject(self)) {
+            SandboxManager::updateSharedObject(self, sub () {
+                output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(opmap{action});
+            });
+        } else {
+            output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op);
+        }
+        return output_type_callbacks{action};
     }
 
     #! Returns a new callback building an operation's output type

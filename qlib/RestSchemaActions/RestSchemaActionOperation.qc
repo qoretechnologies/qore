@@ -201,6 +201,26 @@ public class RestSchemaActionOperation {
                 buildResponseType();
             }
         }
+        # an operation that trusted code builds belongs to a set that is shared by every Program of the process:
+        # sandboxed code cannot change or delete it, nor the types that it gives (qore#7714)
+        if (SandboxManager::createsSharedObjects()) {
+            if (request_type) {
+                request_type.freeze();
+            }
+            if (response_type) {
+                response_type.freeze();
+            }
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! Copies the operation
+    /** The copy has the types of the operation copied (qore#7714)
+
+        @since RestSchemaActions 1.0
+    */
+    copy() {
+        # no own guarded state: the types of a shared operation are frozen
     }
 
     #! Returns the stable action ID
@@ -1537,6 +1557,10 @@ public class RestSchemaActionOperation {
 
     #! Keeps the output type and the response conversions that buildResponseValues() built
     private publishResponseValues(hash<auto> values) {
+        # the types of a shared operation are shared with it (qore#7714); only code that may change it publishes them
+        if (values.type && SandboxManager::isSharedObject(self)) {
+            values.type.freeze();
+        }
         response_type = values.type;
         response_conv = values.conv;
         remove response_schema;
