@@ -14073,7 +14073,8 @@ const BuiltinConstructorValueVariant* BuiltinConstructorValueVariant::getDirectB
     // arguments, other than the functional domains, cannot refuse the variant
     if (signature.numParams() || signature.declaresTypeParameters() || signature.needsTypeParameterSubstitution()
             || (getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP | QCF_NO_DOMAIN_THROW))
-            || (getFunctionality() & QDOM_UNCONTROLLED_API)
+            // (the external-information domain, which a call for a borrower restricted from it refuses, qore#7678)
+            || (getFunctionality() & (QDOM_UNCONTROLLED_API | QDOM_EXTERNAL_INFO))
             || getAccess() != Public) {
         return nullptr;
     }

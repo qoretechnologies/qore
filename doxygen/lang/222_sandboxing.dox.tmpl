@@ -1603,8 +1603,9 @@ authenticate();
       no other path of the host from it
     - a %Program created by the code of the %Program takes its directory when it is created, so that code cannot go
       back to the platform default by creating a %Program; a %Program created by module code takes none, as the module
-      may keep it for all of its callers (its code runs with the module's restrictions); the code of a %Program that the host lends to
-      restricted code answers for itself, as for the environment, so it uses the directory of its own %Program
+      may keep it for all of its callers (its code runs with the module's restrictions)
+    - code restricted from external information that calls into a host %Program lent to it gets the directory of its
+      own %Program, not that of the lent %Program (see @ref sandbox_lent_program_information)
     - setting the directory grants no access to it: the host allows it in the file system policy of a sandboxed
       %Program, which can make it the only location that the code can write to; if the calling code cannot write to
       it, @ref Util::tmp_location() "tmp_location()" raises \c TMP-ERROR and uses no other directory
@@ -1623,6 +1624,40 @@ Program pgm(PO_NO_EXTERNAL_INFO);
 pgm.setSandboxManager(sm);
 pgm.setTempDir(tmp);
     @endcode
+
+    @since %Qore 3.0
+
+    @subsection sandbox_lent_program_information A Lent Program Answers for the Code That It Is Lent To
+
+    A @ref Qore::Program "Program" object is a capability: its methods that run the %Program's code
+    (@ref Qore::Program::callFunction() "callFunction()", @ref Qore::Program::callFunctionArgs() "callFunctionArgs()",
+    @ref Qore::Program::callStaticMethod() "callStaticMethod()",
+    @ref Qore::Program::callStaticMethodArgs() "callStaticMethodArgs()", @ref Qore::Program::run() "run()", the call
+    references of @ref Qore::Program::getCallReference() "getCallReference()" and the expressions of
+    @ref Qore::Program::getExpression() "getExpression()") run it with the freedom of that %Program (see
+    @ref sandbox_program_capability).  When code restricted from external information
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") calls into a %Program of the host that is not restricted from
+    it, the requests of information of the host that the %Program's code makes for it are answered as they would be
+    for that code:
+    - the functions of the external-information domain (ex: @ref Qore::gethostname() "gethostname()",
+      @ref Qore::getenv() "getenv()", @ref Qore::getcwd() "getcwd()") raise \c INVALID-FUNCTION-ACCESS, also when the
+      call was resolved when the code was parsed
+    - @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()" and
+      @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()" are
+      @ref False "False", so the library code that consults them (also the code of the modules that the %Program's
+      code calls) gives no host information and no credentials of the host, and
+      @ref Util::tmp_location() "tmp_location()" gives the directory of the borrower's %Program, if any (see
+      @ref sandbox_temp_dir), or the platform default
+
+    Module code that the %Program's code calls answers as it does when the borrower calls it directly: the functions
+    of the external-information domain that it uses itself are not refused.  A call made where no %Program of the
+    borrower is on the stack (from a thread of module code that runs for it) gives no %Program's information.  The
+    rule also applies in nested calls into other lent %Programs; every other check of the %Program's code (its file
+    system and network access, for example) and the host's own calls into the %Program are unchanged.  Known
+    limitations (see <a href="https://github.com/qoretechnologies/qore/issues/7693">issue 7693</a>): a thread that the
+    %Program's code starts in such a call, the values of the \c ENV hash and of constants evaluated when the
+    %Program was parsed, the methods of objects of the host that the borrower holds, and functions imported into the
+    lent %Program from another %Program of the host.
 
     @since %Qore 3.0
 

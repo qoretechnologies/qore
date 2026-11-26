@@ -2086,7 +2086,7 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2104,7 +2104,7 @@ QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args,
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
 }
 
-QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2116,7 +2116,7 @@ QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, Ex
         getCallReceiverTypeInfo(*method, receiver_type_info, args));
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2134,7 +2134,7 @@ QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
         arg_names, policy, pgm);
 }
 
-QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallReferenceNode::dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2747,7 +2747,7 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2758,7 +2758,7 @@ QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, Exc
     return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
 }
 
-QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
     }
@@ -2769,7 +2769,7 @@ QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, Except
     return uf->evalFunctionTmpArgs(nullptr, args, pgm, rc, xsink, explicit_inst.get());
 }
 
-QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
         LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -2781,7 +2781,7 @@ QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, con
     return uf->evalFunctionNamed(args, pgm, rc, xsink, explicit_inst.get(), 0, arg_names, policy);
 }
 
-QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallReferenceNode::dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const {
     if (check_background_creator(this, xsink)) {
         return QoreValue();
@@ -3365,4 +3365,152 @@ QoreParseOptions qore_program_authored_restrictions_po(const QoreProgram* pgm) {
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
         & ~QoreParseOptions(PO_IN_MODULE);
     return qore_non_module_program_restrictions(pgm) & restricting;
+}
+
+void qore_call_reference_set_lent_program(QoreValue v) {
+    if (v.getType() != NT_FUNCREF) {
+        return;
+    }
+    AbstractQoreNode* n = v.getInternalNode();
+    if (FunctionCallReferenceNode* f = dynamic_cast<FunctionCallReferenceNode*>(n)) {
+        f->setLentProgram();
+    } else if (StaticMethodCallReferenceNode* m = dynamic_cast<StaticMethodCallReferenceNode*>(n)) {
+        m->setLentProgram();
+    }
+}
+
+QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchValueLent(args, xsink);
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return execValueTmpArgsLent(args, xsink);
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchNamedLent(args, arg_names, policy, xsink);
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchLexicalValueLent(args, xsink, policy);
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QORE_INTERN_NOINLINE QoreValue FunctionCallReferenceNode::dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchValueLent(args, xsink);
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchValueImpl(args, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return execValueTmpArgsLent(args, xsink);
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return execValueTmpArgsImpl(args, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchNamedLent(args, arg_names, policy, xsink);
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchNamedImpl(args, arg_names, policy, xsink);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    // a reference that a Program object gave records the call as the object's methods do (qore#7678); out of line,
+    // so that the other references pay one test
+    if (__builtin_expect(lent_program, 0)) {
+        return dispatchLexicalValueLent(args, xsink, policy);
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
+}
+
+QORE_INTERN_NOINLINE QoreValue StaticMethodCallReferenceNode::dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) const {
+    QoreLentProgramInfoHelper lent_info(pgm, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dispatchLexicalValueImpl(args, xsink, policy);
 }

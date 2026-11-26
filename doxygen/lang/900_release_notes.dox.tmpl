@@ -3121,6 +3121,10 @@
       place of itself, or of a class that leads back to it through the classes that it is injected in place of or
       inherits, including classes of the other objects linked into the same program, is no longer loaded
       (<a href="https://github.com/qoretechnologies/qore/issues/7664">issue 7664</a>)
+    - the code of a host @ref Qore::Program "Program" that code restricted from external information calls through the
+      Program object answers the requests of information of the host as for that code
+      (@ref sandbox_lent_program_information;
+      <a href="https://github.com/qoretechnologies/qore/issues/7678">issue 7678</a>)
     - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
       two threads store into targets referring to each other, or hangs when the reference refers to the target's own

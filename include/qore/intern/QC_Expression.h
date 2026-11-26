@@ -56,6 +56,12 @@ public:
     }
 
     DLLLOCAL QoreValue eval(ExceptionSink* xsink) const {
+        // the expression's code answers the requests of information of the host as a caller restricted from external
+        // information would (qore#7678)
+        QoreLentProgramInfoHelper lent_info(pgm->pgm, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
         return pgm->evalExpression(exp, xsink);
     }
 

@@ -1884,10 +1884,23 @@ static bool is_caller_judged_uncontrolled_api(const QoreFunction* func, const Ab
 
     @return 0 if the call may proceed, -1 if it is refused (INVALID-FUNCTION-ACCESS raised)
 */
-static int check_sandbox_uncontrolled_api(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
-        ExceptionSink* xsink) {
-    assert(variant);
-    if (variant->isUser() || !(variant->getFunctionality() & QDOM_UNCONTROLLED_API)) {
+//! the part of check_sandbox_uncontrolled_api() for a builtin variant of the uncontrolled-API or external-information
+//! domain: out of line, so that the frame of the per-call code that calls it does not grow (qore#7678)
+static QORE_INTERN_NOINLINE int check_sandbox_restricted_builtin(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, int64 functionality, ExceptionSink* xsink) {
+    // a function of the external-information domain called by the code of a host Program that runs for a borrower
+    // restricted from external information is refused as it is for the borrower, also when the call was resolved
+    // when the code was parsed (qore#7678); not the destructor of a builtin class (see below)
+    if ((functionality & QDOM_EXTERNAL_INFO) && qore_lent_program_refuses_external_info_builtin()
+            && !dynamic_cast<const DestructorMethodFunction*>(func)) {
+        std::string class_path = func->classPath();
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "the code of a Program called for code restricted from "
+            "external information cannot access builtin %s '%s%s%s(%s)'; functional domain: EXTERNAL_INFO",
+            !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
+            !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
+        return -1;
+    }
+    if (!(functionality & QDOM_UNCONTROLLED_API)) {
         return 0;
     }
     if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
@@ -1910,6 +1923,19 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
         !class_path.empty() ? "method" : "function", !class_path.empty() ? class_path.c_str() : "",
         !class_path.empty() ? "::" : "", func->getName(), variant->getSignature()->getSignatureText());
     return -1;
+}
+
+static QORE_INTERN_ALWAYS_INLINE int check_sandbox_uncontrolled_api(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+    assert(variant);
+    if (variant->isUser()) {
+        return 0;
+    }
+    int64 functionality = variant->getFunctionality();
+    if (!(functionality & (QDOM_UNCONTROLLED_API | QDOM_EXTERNAL_INFO))) {
+        return 0;
+    }
+    return check_sandbox_restricted_builtin(func, variant, functionality, xsink);
 }
 
 #ifdef DEBUG
