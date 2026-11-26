@@ -450,9 +450,16 @@ template <class T = QoreOperatorNode>
 class QoreBinaryOperatorNode : public T {
 protected:
     QoreValue left, right;
+    //! whether the right operand can change a value that the left operand gave: -1 not known yet; see snapshotLeft()
+    mutable std::atomic<signed char> snapshot_left{-1};
 
 public:
     DLLLOCAL QoreBinaryOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right) : T(loc), left(left), right(right) {
+    }
+
+    //! copies the operands as they are, as the implicit copy did before snapshot_left (qore#7722)
+    DLLLOCAL QoreBinaryOperatorNode(const QoreBinaryOperatorNode& old) : T(old), left(old.left), right(old.right),
+            snapshot_left(old.snapshot_left.load(std::memory_order_relaxed)) {
     }
 
     DLLLOCAL ~QoreBinaryOperatorNode() {
@@ -512,7 +519,13 @@ public:
         an element of a list), so the test is not whether the operand has an effect
     */
     DLLLOCAL bool snapshotLeft() const {
-        return right.needsEval() && right.getType() != NT_VARREF;
+        // computed when the operator is first evaluated, after its operands have been initialized
+        signed char s = snapshot_left.load(std::memory_order_relaxed);
+        if (s < 0) {
+            s = right.needsEval() && right.getType() != NT_VARREF ? 1 : 0;
+            snapshot_left.store(s, std::memory_order_relaxed);
+        }
+        return s;
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
