@@ -2359,6 +2359,10 @@
       - the \c http_fields_at_top_level option gives the fields of a request only under \c "headers" (see
         @ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "http_fields_at_top_level";
         <a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
+      - a listener with the new @ref HttpServer::HttpListenerOptionInfo::own_handlers_only "own_handlers_only"
+        option serves only its own handlers, never those of the server, and the stop of a listener refuses new
+        connections before it waits for the requests in progress
+        (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
@@ -2992,8 +2996,12 @@
     - @ref Qore::Serializable "Serializable" did not apply the member access of the classes declared by trusted code to
       sandboxed code, which could read and set their non-public state through serialization (see
       @ref sandbox_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7146">issue 7146</a>)
+    - a builtin function variant that a binary module adds at run time to a function of a Program's namespace that the
+      Program shares with the static system namespace or a module's namespace is the Program's only; it was added to
+      every Program (<a href="https://github.com/qoretechnologies/qore/issues/7588">issue 7588</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
-      setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
+      setups of restricted code get the request without its credentials and without the objects of the server, such
+      as its logger (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
     - the @ref push "push" and @ref unshift "unshift" operators whose operand is the lvalue's own list (\c push l, l)
       add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an

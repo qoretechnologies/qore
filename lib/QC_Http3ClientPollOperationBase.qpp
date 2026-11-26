@@ -875,14 +875,21 @@ void Http3ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         }
     }
 
-    // A stream that a listener reads (WebSocket/SSE over HTTP/3) gets the end of the stream as a sentinel in its queue:
-    // the listener is woken, as it is by the end of a stream that the peer ended; otherwise it learns that the
-    // connection is gone only when something else makes it look (its next heartbeat; issue #6965).  The registrations
-    // are not checked: the connection's close has cleared them, and a stream without a listener only has its
-    // notification kept, on a connection that is gone
-    for (int64_t sid64 : failed_streams) {
-        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid64) == data_ready_streams.end()) {
-            data_ready_streams.push_back(sid64);
+    // A stream that a listener reads (WebSocket over HTTP/3) gets the end of the stream as a sentinel in its queue: the
+    // listener is woken, as it is by the end of a stream that the peer ended; otherwise it learns that the connection
+    // is gone only when something else makes it look (its next heartbeat; issue #6965).  Only the streams registered
+    // for notifications (notify_streams, see registerStreamNotify()) are notified, as in handleReading(): a stream
+    // without a listener has none to wake, and the operation of a connection whose streams have no listeners has no
+    // onStreamData() method to notify (an HTTPClient connection; issue #7695)
+    if (!failed_streams.empty()) {
+        AutoLocker al(stream_lock);
+        for (int64_t sid64 : failed_streams) {
+            if (!notify_streams.erase(sid64)) {
+                continue;
+            }
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid64) == data_ready_streams.end()) {
+                data_ready_streams.push_back(sid64);
+            }
         }
     }
 }

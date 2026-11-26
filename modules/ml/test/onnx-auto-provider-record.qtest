@@ -1,0 +1,292 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# onnx-auto-provider-record.qtest
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ml
+
+%exec-class OnnxAutoProviderRecordTest
+
+#! The record of the automatically selected providers that failed is made only by trusted code (qore#7672)
+/** A model whose session cannot be created with an automatically selected execution provider (or whose provider
+    cannot be appended) falls back to CPU, and the provider is recorded so that later models do not select it
+    automatically.  The record is process-wide, so a model of sandboxed code does not make it: one caller's failing
+    model must not disable the provider for the models of all other code.  The failures are recorded with the
+    debug-build hooks of the module, which call the function that the model's failures call.
+*/
+class OnnxAutoProviderRecordTest inherits QUnit::Test {
+    constructor() : Test("OnnxAutoProviderRecord", "1.0") {
+        addTestCase("trusted code records a failed provider for all models", \trustedTest());
+        addTestCase("sandboxed code does not record a failed provider for other code", \sandboxedTest());
+        addTestCase("a capability of trusted code called by sandboxed code does not record", \capabilityTest());
+        addTestCase("a Program that sandboxed code created does not record", \tenantChildTest());
+        addTestCase("a recorded failure is retried after a delay that doubles", \backoffTest());
+        addTestCase("a provider that works again is forgotten", \recoveryTest());
+        addTestCase("failures at the same time count once", \concurrentFailuresTest());
+        addTestCase("sandboxed code does not clear a recorded failure", \sandboxedSuccessTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            return;
+        }
+        if (exists_function("ml_dbg_onnx_clear_auto_provider_failures")) {
+            call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        }
+    }
+
+    globalTearDown() {
+        if (ML::ml_get_capabilities().has_onnx
+                && exists_function("ml_dbg_onnx_clear_auto_provider_failures")) {
+            call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        }
+    }
+
+    private bool skipNoHooks() {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return True;
+        }
+        if (!exists_function("ml_dbg_onnx_record_auto_provider_failure")) {
+            testSkip("the debug hooks of the ml module are only in debug builds");
+            return True;
+        }
+        return False;
+    }
+
+    private static bool disabled(string provider) {
+        return call_function("Qore::ML::ml_dbg_onnx_auto_provider_disabled", provider);
+    }
+
+    trustedTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        string provider = "CUDAExecutionProvider";
+        assertFalse(disabled(provider), "nothing is recorded at first");
+        assertTrue(call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider),
+            "trusted code records the failure");
+        assertTrue(disabled(provider), "the provider is not selected automatically for later models");
+        assertFalse(disabled("CoreMLExecutionProvider"), "only the failed provider is recorded");
+        call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        assertFalse(disabled(provider));
+    }
+
+    #! returns a Program with a sandbox, whose root is \a root
+    private static Program tenant(string root) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires ml
+
+bool sub record(string provider) {
+    return Qore::ML::ml_dbg_onnx_record_auto_provider_failure(provider);
+}
+
+bool sub is_disabled(string provider) {
+    return Qore::ML::ml_dbg_onnx_auto_provider_disabled(provider);
+}
+
+bool sub record_success(string provider) {
+    return Qore::ML::ml_dbg_onnx_record_auto_provider_success(provider);
+}
+
+auto sub run(code c) {
+    return c();
+}
+
+Program sub child() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"%requires ml\nbool sub record(string provider) { return "
+            "Qore::ML::ml_dbg_onnx_record_auto_provider_failure(provider); }\", \"child\");
+    return p;
+}
+        ", "ml_onnx_auto_provider_sandbox");
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    sandboxedTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+
+        string provider = "CUDAExecutionProvider";
+        assertFalse(p.callFunction("record", provider), "a sandboxed caller's failure is not recorded");
+        assertFalse(disabled(provider), "other code still selects the provider automatically");
+        assertFalse(p.callFunction("is_disabled", provider), "the sandboxed code's next model selects it too");
+
+        # a failure that trusted code recorded applies to sandboxed code as well
+        assertTrue(call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider));
+        assertTrue(p.callFunction("is_disabled", provider));
+        call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+    }
+
+    #! trusted code that a sandboxed caller calls, such as a capability that loads a model for it, does not record
+    capabilityTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+        string provider = "CUDAExecutionProvider";
+        code cap = SandboxManager::createSystemPolicyCall(bool sub () {
+            return call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider);
+        });
+        assertFalse(p.callFunction("run", cap), "the capability called by sandboxed code does not record");
+        assertFalse(disabled(provider));
+        # the same capability called by trusted code records
+        assertTrue(cap(), "the capability called by trusted code records");
+        assertTrue(disabled(provider));
+        call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+    }
+
+    private static *hash<auto> info(string provider) {
+        return call_function("Qore::ML::ml_dbg_onnx_auto_provider_failure_info", provider);
+    }
+
+    private static record(string provider) {
+        call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider);
+    }
+
+    #! a recorded failure keeps the provider from automatic selection for a delay that doubles, up to one hour
+    backoffTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        on_exit call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        string provider = "CUDAExecutionProvider";
+        record(provider);
+        hash<auto> i = info(provider);
+        assertEq(1, i.failures);
+        assertEq(60000, i.delay_ms, "one minute after the first failure");
+        assertGt(0, i.retry_in_ms);
+        assertLe(60000, i.retry_in_ms);
+        assertTrue(disabled(provider));
+
+        # the delay has passed: the provider is tried again (a temporary failure does not disable it for good)
+        call_function("Qore::ML::ml_dbg_onnx_expire_auto_provider_failures");
+        assertFalse(disabled(provider), "the provider is selected again after the delay");
+        assertEq(0, info(provider).retry_in_ms);
+
+        # it fails again: twice the delay
+        record(provider);
+        assertTrue(disabled(provider));
+        assertEq(2, info(provider).failures);
+        assertEq(120000, info(provider).delay_ms);
+
+        # the delay doubles up to one hour
+        list<int> delays = ();
+        for (int n = 3; n <= 10; ++n) {
+            call_function("Qore::ML::ml_dbg_onnx_expire_auto_provider_failures");
+            record(provider);
+            push delays, info(provider).delay_ms;
+        }
+        assertEq((240000, 480000, 960000, 1920000, 3600000, 3600000, 3600000, 3600000), delays);
+        assertEq(10, info(provider).failures);
+    }
+
+    #! the models that selected the provider before its failure was recorded fail at the same time: one failure
+    concurrentFailuresTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        on_exit call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        string provider = "CUDAExecutionProvider";
+        for (int i = 0; i < 7; ++i) {
+            record(provider);
+        }
+        assertEq(1, info(provider).failures, "failures in the delay of a recorded failure are the same failure");
+        assertEq(60000, info(provider).delay_ms, "the delay is not extended by them");
+        assertLe(60000, info(provider).retry_in_ms);
+        # a failure of the retry after the delay doubles it
+        call_function("Qore::ML::ml_dbg_onnx_expire_auto_provider_failures");
+        record(provider);
+        record(provider);
+        assertEq(2, info(provider).failures);
+        assertEq(120000, info(provider).delay_ms);
+    }
+
+    #! a model that creates a session with the provider again makes the record forget it
+    recoveryTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        on_exit call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        string provider = "CUDAExecutionProvider";
+        record(provider);
+        call_function("Qore::ML::ml_dbg_onnx_expire_auto_provider_failures");
+        record(provider);
+        assertEq(2, info(provider).failures);
+        call_function("Qore::ML::ml_dbg_onnx_expire_auto_provider_failures");
+        # the retry succeeds
+        assertTrue(call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_success", provider));
+        assertNothing(info(provider), "the provider that works again is forgotten");
+        assertFalse(disabled(provider));
+        # a later failure starts with the shortest delay again
+        record(provider);
+        assertEq(1, info(provider).failures);
+        assertEq(60000, info(provider).delay_ms);
+        # a success with nothing recorded changes nothing
+        call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        assertFalse(call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_success", provider));
+    }
+
+    #! only trusted code writes the record: a sandboxed caller's success does not remove a failure
+    sandboxedSuccessTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        on_exit call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+        string provider = "CUDAExecutionProvider";
+        record(provider);
+        assertFalse(p.callFunction("record_success", provider));
+        assertTrue(disabled(provider));
+        assertEq(1, info(provider).failures);
+    }
+
+    #! a Program that sandboxed code created is governed by its creator's sandbox, also when trusted code calls it
+    tenantChildTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+        Program child = p.callFunction("child");
+        string provider = "CUDAExecutionProvider";
+        assertFalse(child.callFunction("record", provider), "the Program that sandboxed code created does not record");
+        assertFalse(disabled(provider));
+    }
+}

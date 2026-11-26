@@ -337,7 +337,8 @@ public hashdecl RateLimitedCallInfo {
     A request with more tokens than the token limit is admitted alone, once the window is empty.
 
     @ref getShared() returns one process-wide limiter per key, so independently constructed clients for the
-    same provider account (for example, a new embedder per request) share one window.
+    same provider account (for example, a new embedder per request) share one window; the code of a sandboxed
+    %Program shares a limiter only with other code of the same %Program.
 
     Times are measured with the limiter's clock (@ref getClockUs()), the monotonic clock by default; a test can
     replace the clock and the waits for admission with @ref setClock() and @ref setWaiter(), so it decides with
@@ -366,6 +367,12 @@ public class EmbedderRateLimiter {
 
         #! Maximum rate-limit backoff in @ref call() when the provider sends no \c Retry-After
         const MaxRateLimitBackoffMs = 16000;
+
+        #! The largest number of limiters that getShared() keeps for one sandboxed %Program (issue #7686)
+        const MaxProgramLimiters = 64;
+
+        #! The time after which getShared() releases the limiters of a sandboxed %Program that it has not served
+        const ProgramLimiterIdleMs = 600000;
     }
 
     private {
@@ -397,8 +404,12 @@ public class EmbedderRateLimiter {
 
         #! Serializes the shared limiter registry
         static Mutex registry_lock();
-        #! Key -> process-wide limiter
+
+        #! Key -> process-wide limiter of trusted code
         static hash<string, EmbedderRateLimiter> registry = {};
+
+        #! Program ID -> the limiters of a sandboxed Program: "limiters": key -> limiter, "last_used_us": last use
+        static hash<string, hash<auto>> program_registry = {};
     }
 
     #! Creates a limiter
@@ -427,12 +438,27 @@ public class EmbedderRateLimiter {
         @param tokens_per_minute the tokens admitted per minute; NOTHING or 0 means no token limit
         @param replace apply the limits to an existing limiter
 
+        The code of a sandboxed %Program, and code that acts for it, shares a limiter only with other code of the same
+        %Program, in a registry of its own, so that it cannot change the limits of the host or of another tenant, or
+        block their requests; a %Program keeps at most @ref MaxProgramLimiters limiters, its limiters are released
+        when it has not been served for @ref ProgramLimiterIdleMs, and where the %Program cannot be identified, or it
+        keeps the largest number of limiters, it gets a limiter of its own that is not kept (issue #7686).
+
         @return the shared limiter
 
         @throw EMBEDDER-RATE-LIMIT-CONFIG-ERROR a limit is negative
     */
     static EmbedderRateLimiter getShared(string key, *int requests_per_minute, *int tokens_per_minute,
             bool replace = True) {
+        # a sandboxed caller shares limiters only with its own Program's code (issue #7686)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            *int pgm_id = SandboxManager::getCallerProgramId();
+            if (!exists pgm_id) {
+                return EmbedderRateLimiter::newShared(requests_per_minute, tokens_per_minute);
+            }
+            return EmbedderRateLimiter::getProgramShared(pgm_id.toString(), key, requests_per_minute,
+                tokens_per_minute, replace);
+        }
         AutoLock al(registry_lock);
         *EmbedderRateLimiter limiter = registry{key};
         if (limiter) {
@@ -441,9 +467,42 @@ public class EmbedderRateLimiter {
             }
             return limiter;
         }
-        limiter = new EmbedderRateLimiter(requests_per_minute, tokens_per_minute);
-        limiter.shared = True;
+        limiter = EmbedderRateLimiter::newShared(requests_per_minute, tokens_per_minute);
         registry{key} = limiter;
+        return limiter;
+    }
+
+    #! Returns the limiter of a key that the code of a sandboxed Program shares (issue #7686)
+    private:internal static EmbedderRateLimiter getProgramShared(string pgm_id, string key, *int requests_per_minute,
+            *int tokens_per_minute, bool replace) {
+        int now = clock_get_monotonic_us();
+        AutoLock al(registry_lock);
+        # the limiters of Programs that have not been served for the idle period are released
+        foreach string id in (keys program_registry) {
+            if (id != pgm_id && now - program_registry{id}.last_used_us > ProgramLimiterIdleMs * 1000) {
+                remove program_registry{id};
+            }
+        }
+        *EmbedderRateLimiter limiter = program_registry{pgm_id}.limiters{key};
+        if (limiter) {
+            program_registry{pgm_id}.last_used_us = now;
+            if (replace) {
+                limiter.setLimits(requests_per_minute, tokens_per_minute);
+            }
+            return limiter;
+        }
+        limiter = EmbedderRateLimiter::newShared(requests_per_minute, tokens_per_minute);
+        if (program_registry{pgm_id}.limiters.size() < MaxProgramLimiters) {
+            program_registry{pgm_id}.limiters{key} = limiter;
+            program_registry{pgm_id}.last_used_us = now;
+        }
+        return limiter;
+    }
+
+    #! Returns a new limiter that is marked as shared, whose test seams sandboxed code cannot set
+    private:internal static EmbedderRateLimiter newShared(*int requests_per_minute, *int tokens_per_minute) {
+        EmbedderRateLimiter limiter(requests_per_minute, tokens_per_minute);
+        limiter.shared = True;
         return limiter;
     }
 
