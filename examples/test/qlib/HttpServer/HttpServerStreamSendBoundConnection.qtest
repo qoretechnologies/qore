@@ -1,0 +1,268 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerStreamSendBoundConnection.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - HTTP/2 connections and the flow control of their streams
+# The minimum send rate of an HTTP/2 connection applies to all its streams together, while one of them waits for the
+# client (qoretechnologies/qore#7280): many streams that share a fast connection are not reset because each takes only
+# a share of it, and a connection that takes too little as a whole has all its waiting streams reset at once, the
+# bodies that handler threads send and those that the I/O thread pumps alike.  The client grants its credit at a
+# fixed rate, so the server's sends wait for it.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+%requires HttpClientIo
+
+%exec-class HttpServerStreamSendBoundConnectionTest
+
+#! the minimum rate of the listener in bytes per second
+const MinRate = 65536;
+
+#! the size of each chunk that a callback body returns
+const ChunkSize = 16 * 1024;
+
+#! the size of each body: far larger than a stream's send buffer (1 MiB), so that its sends wait for the client for
+#! the whole test
+const BodySize = 8 * 1024 * 1024;
+
+#! responds with a body from a callback (sent by the handler thread) or from an InputStream (sent by the I/O thread)
+class BodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the size of each body
+        int body_size;
+        #! True to hold the data of all the streams of the request's HTTP/3 session, as when its client grants no
+        #! credit to any of them
+        bool hold_session;
+        #! the HTTP/3 sessions of the requests
+        Queue sessions();
+    }
+
+    constructor(int body_size) {
+        self.body_size = body_size;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> hi = cx."header-info";
+        if (hi.http3) {
+            if (hold_session) {
+                call_function("dbg_quic_hold_stream_data", hi.session_id, -1);
+            }
+            sessions.push(hi.session_id);
+        }
+        if (cx.raw_path == "/pump") {
+            return <HttpResponseInfo>{"code": 200, "body": new BinaryInputStream(binary(strmul("x", body_size)))};
+        }
+        int left = body_size;
+        binary chunk = binary(strmul("x", ChunkSize));
+        return <HttpResponseInfo>{"code": 200, "send_callback": *binary sub () {
+            if (left <= 0) {
+                return;
+            }
+            left -= ChunkSize;
+            return chunk;
+        }};
+    }
+}
+
+#! checks the connection's minimum rate for its own stream directly, while nothing is sent on the connection
+class CheckHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data b) {
+        hash<auto> hi = cx."header-info";
+        auto check = bool sub (bool waiting) {
+            return hi.http3
+                ? s.checkQuicStreamSendRate(hi.session_id, hi.stream_id, waiting, 1048576, 1s)
+                : s.checkHttp2StreamSendRate(hi.stream_id, waiting, 1048576, 1s);
+        };
+        # the number of checks that found the connection below the rate
+        int verdicts = 0;
+        if (cx.raw_path == "/idle") {
+            # waits that end at once, each followed by more time without a wait than one check may charge (2 check
+            # intervals: 125 ms), 10 times: more than a window in all if the time between the waits were charged
+            for (int i = 0; i < 10; ++i) {
+                verdicts += check(True) ? 1 : 0;
+                verdicts += check(False) ? 1 : 0;
+                usleep(200ms);
+            }
+        } else {
+            # one wait without progress, checked as a sender checks it, for longer than a window
+            for (int i = 0; i < 60; ++i) {
+                if (check(True)) {
+                    ++verdicts;
+                    break;
+                }
+                usleep(50ms);
+            }
+            verdicts += check(False) ? 1 : 0;
+        }
+        return <HttpResponseInfo>{"code": 200, "body": sprintf("verdicts=%d", verdicts)};
+    }
+}
+
+class HttpServerStreamSendBoundConnectionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerStreamSendBoundConnection", "1.0") {
+        addTestCase("HTTP/2: many streams on a fast connection are not reset", \testFastConnection());
+        addTestCase("HTTP/2: a slow connection has all its waiting streams reset at once", \testSlowConnection());
+        addTestCase("HTTP/3: a connection that takes nothing has all its waiting streams cancelled at once",
+            \testHttp3NoCredit());
+        foreach bool http3 in ((False, True)) {
+            string v = http3 ? "HTTP/3" : "HTTP/2";
+            addTestCase(v + ": the time between the waits of a send is not charged", \testIdleNotCharged(), http3);
+        }
+        set_return_value(main());
+    }
+
+    private hash<auto> startServer(BodyHandler h) {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("body", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+            "stream_send_min_rate": MinRate,
+            "stream_send_min_rate_window": 1s,
+        }).port;
+        hs.waitForAsyncIo();
+        return {"server": hs, "port": port};
+    }
+
+    #! 3 streams sent by handler threads and 1 pumped stream on an HTTP/3 connection whose client grants no credit
+    testHttp3NoCredit() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires a debug build");
+        }
+        BodyHandler h(BodySize);
+        h.hold_session = True;
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+        on_exit call_function("dbg_quic_release_stream_data");
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": 60s,
+            "connect_timeout": 15s,
+        });
+        on_exit delete mgr;
+        # one request first, so that the others share its connection
+        Queue results();
+        Counter running(4);
+        code req = sub (string path) {
+            on_exit running.dec();
+            try {
+                mgr.request("https://127.0.0.1:" + setup.port, "GET", path, NOTHING, NOTHING);
+                results.push({"err": "the request succeeded", "us": clock_get_monotonic_us()});
+            } catch (hash<ExceptionInfo> ex) {
+                results.push({"err": ex.err + ": " + ex.desc, "us": clock_get_monotonic_us()});
+            }
+        };
+        background req("/");
+        int first_session = h.sessions.get(30s);
+        background req("/");
+        background req("/");
+        background req("/pump");
+        list<int> sessions = (first_session,) + (map h.sessions.get(30s), xrange(3));
+        assertEq(1, (keys (map {string($1): True}, sessions)).size(), "the requests share one connection");
+        assertEq(0, running.waitForZero(60s), "the requests ended");
+        list<hash<auto>> l = map results.get(5s), xrange(4);
+        foreach hash<auto> i in (l) {
+            assertRegex("RESET|CANCEL", i.err, "each request was cancelled");
+        }
+        list<int> times = map $1.us, l;
+        int spread = (max(times) - min(times)) / 1000;
+        assertLt(500, spread, sprintf("the cancels came within %d ms of each other", spread));
+    }
+
+    #! returns the body of a request on a listener whose handler checks the rate itself
+    private string checkRequest(bool http3, string path) {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("check", new CheckHandler());
+        hs.waitForAsyncIo();
+        on_exit hs.stop();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+            # the bounds of the connection are its listener's, set when it is accepted: the rate that the handler
+            # checks with
+            "stream_send_min_rate": 1048576,
+            "stream_send_min_rate_window": 1s,
+        }).port;
+        hs.waitForAsyncIo();
+        if (http3) {
+            HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            });
+            on_exit delete mgr;
+            hash<auto> r = mgr.request("https://127.0.0.1:" + port, "GET", path, NOTHING, NOTHING);
+            return (r.body ?? binary()).toString();
+        }
+        HTTPClient c({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+            "timeout": 30s});
+        on_exit c.disconnect();
+        return c.get(path);
+    }
+
+    #! a send's wait that ends records that the connection does not wait from then on (qoretechnologies/qore#7280)
+    testIdleNotCharged(bool http3) {
+        assertEq("verdicts=0", checkRequest(http3, "/idle"), "no verdict for the time between the waits");
+        # the measurement is live: a wait without progress for the same time is below the rate
+        assertEq("verdicts=1", checkRequest(http3, "/live"), "a verdict for a wait without progress");
+    }
+
+    #! 8 streams that together take 4 times the minimum rate, each half of it, for longer than a stream alone at half
+    #! the rate would be allowed (the window and the first step of the progress grace: about 3 s)
+    testFastConnection() {
+        int streams = 8;
+        BodyHandler h(BodySize);
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+        # a stream window of 0: each stream receives only the credit that is granted
+        RawHttp2Client c(setup.port, True, 0);
+        on_exit c.close();
+        list<int> ids = map c.get("/"), xrange(streams);
+        hash<string, hash<RawHttp2StreamResult>> r = c.readStreamsPaced(ids, 4 * MinRate, 10s);
+        foreach hash<auto> i in (r.pairIterator()) {
+            assertNothing(i.value.reset_code, sprintf("stream %s was not reset (%d bytes taken)", i.key,
+                i.value.data_bytes));
+            assertGt(0, i.value.data_bytes, sprintf("stream %s took data", i.key));
+        }
+    }
+
+    #! 3 streams sent by handler threads and 1 pumped stream that together take half of the minimum rate
+    testSlowConnection() {
+        BodyHandler h(BodySize);
+        hash<auto> setup = startServer(h);
+        on_exit setup.server.stop();
+        RawHttp2Client c(setup.port, True, 0);
+        on_exit c.close();
+        list<int> ids = map c.get("/"), xrange(3);
+        ids += c.get("/pump");
+        int start = clock_get_monotonic_us();
+        hash<string, hash<RawHttp2StreamResult>> r = c.readStreamsPaced(ids, MinRate / 2, 60s);
+        int ms = (clock_get_monotonic_us() - start) / 1000;
+        foreach hash<auto> i in (r.pairIterator()) {
+            assertTrue(exists i.value.reset_code, sprintf("stream %s was reset (%d bytes taken, ended: %y)", i.key,
+                i.value.data_bytes, i.value.ended));
+        }
+        assertLt(30000, ms, "long before the end of the bodies");
+        # one verdict for the connection: the streams are reset together (each stream's own rate ended them more
+        # than a second apart)
+        list<int> times = map $1.reset_us, r.iterator();
+        int spread = (max(times) - min(times)) / 1000;
+        assertLt(500, spread, sprintf("the resets came within %d ms of each other", spread));
+    }
+}

@@ -11121,6 +11121,11 @@ class Http3HandlerSocket inherits Qore::Socket {
         return real.getQuicStreamAckedBytes(session_id, stream_id);
     }
 
+    bool checkQuicStreamSendRate(int session_id, int stream_id, bool waiting, int min_rate, timeout window) {
+        checkStream(session_id, stream_id);
+        return real.checkQuicStreamSendRate(session_id, stream_id, waiting, min_rate, window);
+    }
+
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
         checkStream(session_id, stream_id);
         return real.waitForQuicStreamDrain(session_id, stream_id, timeout_ms);
@@ -11645,6 +11650,11 @@ class Http2HandlerSocket inherits Qore::Socket {
     int getHttp2StreamTakenBytes(int stream_id) {
         checkStream(stream_id);
         return real.getHttp2StreamTakenBytes(stream_id);
+    }
+
+    bool checkHttp2StreamSendRate(int stream_id, bool waiting, int min_rate, timeout window) {
+        checkStream(stream_id);
+        return real.checkHttp2StreamSendRate(stream_id, waiting, min_rate, window);
     }
 
     #! Returns @ref True "True" for the first caller only, which then ends the stream

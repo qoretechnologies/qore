@@ -35458,8 +35458,12 @@ static bool dbg_quic_wait_until(const std::function<bool()>& pred, int timeout_m
 }
 
 bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
-    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
-        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+    if (dbg_quic_hold_session.load(std::memory_order_acquire) != session_id) {
+        return false;
+    }
+    int64_t held = dbg_quic_hold_stream.load(std::memory_order_acquire);
+    // -2: every stream of the session
+    return held == stream_id || held == -2;
 }
 
 bool qore_dbg_quic_stream_end_held() {
@@ -35469,10 +35473,11 @@ bool qore_dbg_quic_stream_end_held() {
 //! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
 //! flow-control credit
 /** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
-    stream's send buffer deterministically.  Only one stream is held at a time.
+    stream's send buffer deterministically.  Only one stream, or all the streams of one session, are held at a time.
 
     @param session_id the QUIC session ID
-    @param stream_id the HTTP/3 stream ID of a streaming response
+    @param stream_id the HTTP/3 stream ID of a streaming response, or -1 for all the streams of the session, as when
+    its client grants no credit to any of them (qore#7280)
     @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
     thread of its socket before it writes, so that the flush writes the data held (qore#7414)
     @param with_end if True, the data of a streamed body is held also after the body has ended (qore#7653)
@@ -35481,14 +35486,15 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
     bool until_flush = get_param_value(params, 2).getAsBool();
-    if (session_id <= 0 || stream_id < 0) {
+    if (session_id <= 0 || stream_id < -1) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
         return QoreValue();
     }
-    // the stream is set first, so that no other stream of the session matches meanwhile
+    // the stream is set first, so that no other stream of the session matches meanwhile; -1 (all) is kept as -2, as
+    // -1 means no stream
     dbg_quic_hold_session.store(0, std::memory_order_release);
-    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id == -1 ? -2 : stream_id, std::memory_order_release);
     dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
     dbg_quic_hold_end.store(get_param_value(params, 3).getAsBool(), std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
