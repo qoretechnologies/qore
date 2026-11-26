@@ -2272,6 +2272,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # when the listener is stopped/deleted (on_error handles setup failures)
         c.add();
         on_error c.done();
+        http_listener.setServerStopWaitGroup(c);
 
         # the fast routes of the server, if any, are answered for the HTTP/3 requests of the listener's sessions; the
         # socket is kept so that routes created later are attached to it as well
@@ -4437,6 +4438,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the requests read from the sockets accepted from the listener give their fields as the server's option
             # says (qore#6851)
             l.setHttpFieldsAtTopLevel(http_fields_at_top_level);
+            l.setServerStopWaitGroup(c);
 
             # Register listener in maps BEFORE adding to async I/O controller
             # This prevents a race where an accept could arrive before registration is complete
@@ -7646,6 +7648,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # connection WaitGroup for dedicated socket threads
         WaitGroup dThreads();
 
+        #! the server's count of its listeners that have not stopped (see setServerStopWaitGroup())
+        *WaitGroup server_stop_wg;
+
         bool exit = False;
         bool stopped = False;
         #! set once the listener's dedicated socket handlers have been signalled to stop
@@ -8103,7 +8108,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     # Returns True if informational messages of this listener will be logged
     private bool isLogInfoEnabled() {
         # nothing is logged through a server that has been destroyed (qore#6508)
-        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : (serv ? serv.isLogInfoEnabled() : False);
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serverLogInfoEnabled();
     }
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
@@ -8494,6 +8499,47 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+    #! @cond nodoc
+    # only called by the server that creates the listener: its count of its listeners that have not stopped, which
+    # the listener's stop releases itself when it cannot call the server (qore#7509)
+    setServerStopWaitGroup(WaitGroup wg) {
+        server_stop_wg = wg;
+    }
+    #! @endcond
+
+    #! returns True if the server logs messages at the info level
+    /** False for a server that has been deleted, or that is being destroyed in another thread, which cannot be called
+        then (qore#7509): the listener's stop logs after it released the server's destructor, as the other log methods
+        do
+    */
+    private bool serverLogInfoEnabled() {
+        if (!serv) {
+            return False;
+        }
+        try {
+            return serv.isLogInfoEnabled();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+        return False;
+    }
+
+    #! releases the server's count of this listener when the listener stops while the server is being destroyed
+    private serverStopDone() {
+        if (server_stop_wg) {
+            try {
+                server_stop_wg.done();
+            } catch (hash<ExceptionInfo> ex) {
+                # as in HttpServer::listenerStopped(): the count can have been released already
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     #! Returns @ref True once the listener has stopped
     /** The server's count of running listeners was decremented for the listener when it stopped
     */
@@ -8582,7 +8628,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # no replenishment), and the fd is removed from the event loop before close.
         # listenerStopped() will skip the redundant removeListener() call.
         if (serv) {
-            serv.removeAsyncListener(self);
+            try {
+                serv.removeAsyncListener(self);
+            } catch (hash<ExceptionInfo> ex) {
+                # the server is being destroyed in another thread (a stop started with stopNoWait()), and cannot be
+                # called (qore#7509): its destructor stops its I/O controller itself
+                if (ex.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+            }
         }
 
         # Close the listener socket to release the bound port.
@@ -8627,7 +8681,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # stop() -> c.wait(), so c.done() (inside listenerStopped) must complete
         # first to avoid a deadlock.
         if (serv) {
-            serv.listenerStopped(self);
+            try {
+                serv.listenerStopped(self);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "OBJECT-ALREADY-DELETED") {
+                    rethrow;
+                }
+                # the server is being destroyed in another thread (a stop started with stopNoWait()), and cannot be
+                # called (qore#7509): its destructor waits for this listener's stop in its count of listeners, which
+                # is released here
+                serverStopDone();
+            }
         }
         # the stop notification is called here, not through the server: the server's notification above can let the
         # destruction of the server end in another thread, which clears 'serv', and the notification was then not
@@ -8740,7 +8804,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     log(string fmt, ...) {
         # this is called several times for every request: the message is built only if it is logged, by the
         # listener's logger or, for a listener without one, by the server's
-        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : (!serv || !serv.isLogInfoEnabled())) {
+        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : !serverLogInfoEnabled()) {
             return;
         }
         softlist<auto> args = fmt;

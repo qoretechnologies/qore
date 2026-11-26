@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads, listener sockets and the stop of a server in another thread
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+
+    A listener's stop started with HttpListener::stopNoWait() is in progress (held by the listener's stopping hook)
+    when another thread releases the last reference to the server: the server's destructor stops the server, and its
+    stop waits for the stops of its listeners.  The listener's stop cannot call the server then (a method call on an
+    object whose destructor runs in another thread is refused, qore#7509): it releases the server's count of its
+    listeners itself, and the destructor ends.
+*/
+
+%modern
+%require-types
+%strict-args
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerListenerStopReleaseTest
+
+const HangTimeout = 30s;
+
+#! records its listeners, and tells when its destructor starts
+class TestServer inherits HttpServer {
+    public {
+        Queue test_listeners();
+        Counter test_in_dtor(1);
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    destructor() {
+        test_in_dtor.dec();
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        HttpListener l = HttpServer::getListener(server, id, info);
+        test_listeners.push(l);
+        return l;
+    }
+}
+
+class HttpServerListenerStopReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerListenerStopRelease", "1.0") {
+        addTestCase("a listener's stop in progress while the server is destroyed", \stopInProgressTest());
+        set_return_value(main());
+    }
+
+    stopInProgressTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
+        }
+        # the first stop that marks a listener as stopping is held until the server's destructor has started
+        Counter first(1);
+        Queue stopping();
+        Counter hook_go(1);
+        # called by name: the method exists only in a debug build of the library
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            if (first.getCount()) {
+                first.dec();
+                stopping.push(True);
+                hook_go.waitForZero(HangTimeout);
+            }
+        });
+        on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+
+        Queue handoff();
+        Counter in_dtor;
+        Counter destroyed(1);
+        HttpListener listener;
+        {
+            TestServer server(<HttpServerOptionInfo>{
+                "logger": new Logger("server", LoggerLevel::getLevelError()),
+            });
+            server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+            listener = server.test_listeners.get();
+            in_dtor = server.test_in_dtor;
+            # the other thread releases the last reference: this thread hands its reference over and releases it
+            handoff.push(server);
+            remove server;
+        }
+        # the listener's stop runs in a background thread and is held once it has marked the listener as stopping
+        listener.stopNoWait();
+        assertEq(True, stopping.get(HangTimeout), "the listener's stop started");
+
+        # the server is released in another thread: its destructor stops it, and waits for the listener's stop
+        background sub () {
+            on_exit destroyed.dec();
+            TestServer server = handoff.get();
+            remove server;
+        }();
+        assertEq(0, in_dtor.waitForZero(HangTimeout), "the server's destructor started");
+
+        # the listener's stop goes on while the server is destroyed
+        hook_go.dec();
+        assertEq(0, destroyed.waitForZero(HangTimeout), "the server's destructor ended");
+    }
+}
