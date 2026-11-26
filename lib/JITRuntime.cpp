@@ -14655,29 +14655,49 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_entered_t(const Qore
         // the body of a plain function that the call runs in another Program runs with that Program's call Program
         // context (qore#7394; see execJITWithDeopt())
         const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
-        // the body runs natively (JIT/AOT), or in the IR interpreter with direct parameters (no TLS) or with the
-        // parameters instantiated above; one instantiation of execJITWithDeopt() for the three, as for a method, so
-        // that the frame kept for the return check does not add to the stack of every recursive call
-        const bool use_native = !use_direct_params && uvb->hasCachedFunction();
-        const QoreIRFunction* body_ir = use_direct_params ? ir : uvb->getCachedIR();
-        execJITWithDeopt<CONSUME>(frame, uvb, call_name,
-                [&](ExceptionSink* xs, bool& inv) -> uint64_t {
-            if (use_native) {
-                return uvb->execCachedFunction(xs, inv);
-            }
+        // the frame is the caller's (frame), so that it is kept through the check of the return value below
+        if (use_direct_params) {
+            // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
-            QoreValue ir_return_value;
-            bool ok = QoreIRInterpreter::execute(*body_ir, ir_return_value, xs, nullptr,
-                nullptr, nullptr, body_ir->cached_pre_instantiated, nullptr,
-                uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
-            if (!ok && !*xs) {
-                inv = true;  // Request deopt to AST
-                return 0;
-            }
-            return toBits(ir_return_value);
-        }, val, xsink, caller_pgm, nullptr, exec_pgm,
-        CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
-        body_call_ctx, function_context.getThreadData());
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
+                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
+                if (!ok && !*xs) {
+                    inv = true;
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm,
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
+        } else if (uvb->hasCachedFunction()) {
+            // JIT/AOT fast path
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+                return uvb->execCachedFunction(xs, inv);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm,
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
+        } else {
+            // IR fast path (standard TLS): execute IR directly without QoreListNode.
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
+                    [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
+                    nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
+                    uvb->getDebugEntryStatementBlock(), exec_pgm);
+                if (!ok && !*xs) {
+                    inv = true;  // Request deopt to AST
+                    return 0;
+                }
+                return toBits(ir_return_value);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm,
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
+        }
 
         // the return value is checked in the function's context and frame too, as ReturnStatement::execImpl() checks
         // it; a call that gives its arguments checked it before it released them (release_given)
