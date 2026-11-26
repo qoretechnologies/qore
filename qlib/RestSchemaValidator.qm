@@ -101,6 +101,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a response body of the media type \c application/x-ndjson (newline-delimited JSON) is returned as text, which
+      the caller splits into its records, as it is a sequence of JSON values and not one JSON document
+      (<a href="https://github.com/qoretechnologies/qore/issues/6503">issue 6503</a>)
     - a schema that is shared by every Program keeps what it derives from the data of its caller, such as the types
       with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
       fields that its type builds cache (see
@@ -444,7 +447,7 @@ public namespace RestSchemaValidator {
             @param oh deserialized hash from the source schema description
         */
         public initialize(hash<auto> oh) {
-            vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
+            vendorExtensions = map {$1: oh{$1}}, keys oh, $1.startsWith("x-");
         }
 
         #! Returns True if this object has the x-deprecated extension set
@@ -1685,6 +1688,9 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         static string schemaIdentityToken(string token) {
+            if (token !~ /[~\/]/) {
+                return token;
+            }
             return replace(replace(token, "~", "~0"), "/", "~1");
         }
 
@@ -4261,6 +4267,13 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
 %endif
                 MimeTypeText: (
                     "code": "text",
+                    "in": data sub (data s) { return s; },
+                ),
+
+                # newline-delimited JSON is a sequence of JSON values, one per line, and not one JSON document: it
+                # is returned as text, which the caller splits into its records (qore#6503)
+                "application/x-ndjson": (
+                    "code": "ndjson",
                     "in": data sub (data s) { return s; },
                 ),
 

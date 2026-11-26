@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() in a callback of an asynchronous operation that a callback worker thread runs
+# test-exec-mode: children - every check runs in child processes of the interpreter, which run in the default mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoWorkerForkTest
+
+#! A child forked by a callback that a callback worker runs leaves the worker at once (qore#7579)
+/** An operation's onComplete() runs on a callback worker of the async I/O controller.  When it called fork(), the
+    child went on in the worker: it released the parent's operation and took the dispatcher's lock for its next item,
+    which threads that do not exist in the child can hold.  The child script prints what ran in each process: the
+    operation must be released in the parent only; the child ends when the callback has returned, as the worker was
+    its only thread.  The second case reaches onComplete() through the delivery that follows an abort() run on a
+    worker, as for an operation that the I/O thread cancels at its timeout.  The output is read until both processes have ended.
+*/
+class AsyncIoWorkerForkTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoWorkerForkTest", "1.0") {
+        addTestCase("a child forked in onComplete() on a worker does not go on in the worker", \onCompleteTest());
+        addTestCase("a child forked in onComplete() after abort() on a worker does not release the operation",
+            \afterAbortTest());
+        set_return_value(main());
+    }
+
+    onCompleteTest() {
+        run("complete");
+    }
+
+    #! the result of an operation that the I/O thread cancels is delivered by the worker that ran its abort()
+    afterAbortTest() {
+        run("timeout");
+    }
+
+    private run(string mode) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string script = get_script_dir() + DirSep + "asyncio-worker-fork" + DirSep + "worker-fork.q";
+        int status;
+        string out = backquote(sprintf("%s -b %s %s 2>&1", TestInterpreter::qore_interpreter(), script, mode),
+            \status);
+        assertEq(0, status, out);
+        assertNRegex("unhandled|exception|Assertion|abort", out, "nothing is reported: " + out);
+        assertRegex("(^|\n)forked in onComplete\\(\\)\n", out, "the callback forked: " + out);
+        assertRegex("(^|\n)onComplete\\(\\) returned in child\n", out, "the callback returns in the child: " + out);
+        assertRegex("(^|\n)parent: script ended\n", out, "the parent ends: " + out);
+        assertNRegex("did not run", out, "the callback ran in the parent: " + out);
+        assertRegex("(^|\n)operation released in parent\n", out, "the parent releases the operation: " + out);
+        assertNRegex("(^|\n)operation released in child\n", out, "the child does not release the operation: " + out);
+    }
+}

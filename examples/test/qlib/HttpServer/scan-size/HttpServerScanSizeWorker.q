@@ -2,8 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # opens a number of keep-alive connections to an HttpServer, makes one more request on each of them and prints the
-# scans that the requests made as "root=<name> scans=<n> nodes=<n>" lines; run by HttpServerScanSize.qtest with
-# QORE_SCAN_STATS set
+# scans that the requests made as "root=<name> scans=<n> nodes=<n> unsealed=<n>" lines; run by
+# HttpServerScanSize.qtest with QORE_SCAN_STATS set
 
 %modern
 
@@ -104,7 +104,8 @@ list<Socket> socks = ();
     foreach hash<ScanStatsInfo> i in (after.iterator()) {
         int scans = i.scans - (before{i.root}.scans ?? 0);
         if (scans) {
-            printf("root=%s scans=%d nodes=%d\n", i.root, scans, i.nodes - (before{i.root}.nodes ?? 0));
+            printf("root=%s scans=%d nodes=%d unsealed=%d\n", i.root, scans, i.nodes - (before{i.root}.nodes ?? 0),
+                i.unsealed_nodes - (before{i.root}.unsealed_nodes ?? 0));
         }
     }
 }

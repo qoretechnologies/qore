@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+# IR-only companion probe. Both programs parse exactly the same source; the
+# timed loop invokes either its own callback or the other program's callback.
+# Program::callFunction enters the measuring program BEFORE the timer starts.
+string source = '%modern
+int sub step(int value) { return (value * 33 + 17) & 65535; }
+code<int(int)> sub getStep() { return \step(); }
+int sub kernel(int count, int seed, code<int(int)> callback) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = callback(seed);
+        result += seed;
+    }
+    return result;
+}
+sub measure(string name, code<int(int)> callback, int count, int warmup,
+        int samples, int milliseconds) {
+    int seed = 7;
+    for (int window = -warmup; window < samples; ++window) {
+        int checksum = 0;
+        int batches = 0;
+        int started = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= kernel(count, seed, callback);
+            ++batches;
+            elapsed = clock_get_monotonic_us() - started;
+        } while (elapsed < milliseconds * 1000);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", window < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, batches, count, checksum);
+    }
+}
+';
+
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+
+Program caller(PO_NO_CHILD_PO_RESTRICTIONS);
+Program other(PO_NO_CHILD_PO_RESTRICTIONS);
+# Parse directives can reset an inherited execution mode. Pin each child
+# explicitly so this probe cannot silently measure tiered/native execution.
+caller.setExecMode(EM_IR);
+other.setExecMode(EM_IR);
+caller.parse(source, "call-probe-caller");
+other.parse(source, "call-probe-other");
+if (caller.getExecMode() != EM_IR || other.getExecMode() != EM_IR) {
+    throw "BENCH-MODE-ERROR", "both programs must remain in IR mode";
+}
+code<int(int)> same = caller.callFunction("getStep");
+code<int(int)> cross = other.callFunction("getStep");
+if (ARGV == ("check",)) {
+    foreach int count in ((0, 1, 17, 1024, 4096)) {
+        foreach int seed in ((0, 7, 65535)) {
+            printf("CHECK\tsame_program\t%d\t%d\t%d\n", count, seed,
+                caller.callFunction("kernel", count, seed, same));
+            printf("CHECK\tcross_program\t%d\t%d\t%d\n", count, seed,
+                caller.callFunction("kernel", count, seed, cross));
+        }
+    }
+} else {
+    if (ARGV.size() != 5 || ARGV[0] !~ /^(same_program|cross_program)$/) {
+        throw "BENCH-ARGUMENT-ERROR", "expected check | NAME COUNT WARMUP SAMPLES MILLISECONDS";
+    }
+    caller.callFunction("measure", ARGV[0], ARGV[0] == "same_program" ? same : cross,
+        integerArg(1, 1, 1000000), integerArg(2, 0, 1000), integerArg(3, 1, 1000),
+        integerArg(4, 1, 60000));
+}
