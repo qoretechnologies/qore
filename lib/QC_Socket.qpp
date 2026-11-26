@@ -9393,17 +9393,20 @@ nothing Socket::setHttp2InputStreamSendBound(int min_rate, timeout window, timeo
 //! Checks the minimum rate of the HTTP/2 connection for a send that waits for the client
 /**
     The minimum rate of a connection applies to all its streams together, while one of them waits for the client:
-    the response bodies that the I/O thread sends from InputStreams (see @ref setHttp2InputStreamSendBound() and
-    @ref setQuicInputStreamSendBound()) and the sends of handler threads alike, so that many streams that share a
-    fast connection are not ended because each of them takes only a share of it.  A sender calls this method each
+    the buffered response bodies and those that the I/O thread sends from InputStreams, until the client has taken
+    them (see @ref setHttp2InputStreamSendBound() and @ref setQuicInputStreamSendBound()), and the sends of handler
+    threads alike, so that many streams that share a fast connection are not ended because each of them takes only a
+    share of it.  A sender calls this method each
     time it checks a wait for the client (\a waiting = @ref True), at least every check interval of the rate, and
     once more when its send is done (\a waiting = @ref False), which ends its wait; the wait of a stream that is not
     open is not counted, and that of a stream that closes or is reset ends with it.  When the connection is found
-    below the rate, every stream that waits for the client then is ended: the waiting bodies that the I/O thread
-    sends are reset, and each waiting sender is told so by its next call.
+    below the rate, every stream that waits for the client then is ended: the waiting bodies that the bounds charge
+    are ended as the bounds end them (on HTTP/2, a body whose end is already in the connection's send buffer ends
+    the connection), and each waiting sender is told so by its next call.
 
-    The rate of a connection is set once, by its first pumped body or by its first call of this method; the
-    \a min_rate and \a window arguments of later calls are ignored.
+    The rate of a connection is its bounds' (set when it is accepted, or a listener's default on HTTP/3); on a
+    connection without bounds, the first call of this method sets it, and the bounds replace it once they are set.
+    The \a min_rate and \a window arguments are ignored otherwise.
 
     @par Example:
     @code{.py}
@@ -10257,17 +10260,20 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
 //! Checks the minimum rate of a QUIC connection for a send on one of its HTTP/3 streams that waits for the client
 /**
     The minimum rate of a connection applies to all its streams together, while one of them waits for the client:
-    the response bodies that the I/O thread sends from InputStreams (see @ref setHttp2InputStreamSendBound() and
-    @ref setQuicInputStreamSendBound()) and the sends of handler threads alike, so that many streams that share a
-    fast connection are not ended because each of them takes only a share of it.  A sender calls this method each
+    the buffered response bodies and those that the I/O thread sends from InputStreams, until the client has taken
+    them (see @ref setHttp2InputStreamSendBound() and @ref setQuicInputStreamSendBound()), and the sends of handler
+    threads alike, so that many streams that share a fast connection are not ended because each of them takes only a
+    share of it.  A sender calls this method each
     time it checks a wait for the client (\a waiting = @ref True), at least every check interval of the rate, and
     once more when its send is done (\a waiting = @ref False), which ends its wait; the wait of a stream that is not
     open is not counted, and that of a stream that closes or is reset ends with it.  When the connection is found
-    below the rate, every stream that waits for the client then is ended: the waiting bodies that the I/O thread
-    sends are reset, and each waiting sender is told so by its next call.
+    below the rate, every stream that waits for the client then is ended: the waiting bodies that the bounds charge
+    are ended as the bounds end them (on HTTP/2, a body whose end is already in the connection's send buffer ends
+    the connection), and each waiting sender is told so by its next call.
 
-    The rate of a connection is set once, by its first pumped body or by its first call of this method; the
-    \a min_rate and \a window arguments of later calls are ignored.
+    The rate of a connection is its bounds' (set when it is accepted, or a listener's default on HTTP/3); on a
+    connection without bounds, the first call of this method sets it, and the bounds replace it once they are set.
+    The \a min_rate and \a window arguments are ignored otherwise.
 
     @par Example:
     @code{.py}

@@ -1525,7 +1525,7 @@ private:
     int64_t pump_stall_ms = 30 * 60 * 1000;
     //! true once the bounds of the pumped bodies have been set
     bool pump_bound_set = false;
-    //! true once the minimum rate of the connection has been set, by a pumped body or by a send of a handler thread
+    //! true once the minimum rate of the connection has been set, by its bounds or by a check of a handler thread
     bool pump_rate_set = false;
     //! the streams whose sends on handler threads wait for the client, which the connection's minimum rate covers
     std::unordered_set<int32_t> send_rate_waiters;
@@ -1670,8 +1670,8 @@ public:
         @param window_ms the window of the minimum rate in milliseconds
         @param stall_ms the time in milliseconds after which a body that the client takes nothing of is ended
 
-        The stall time of a connection is set once, by its first such body, and its minimum rate once, by its first
-        such body or its first checkStreamSendRate(); later values are ignored.
+        The bounds of a connection are set once; later calls are ignored.  They replace a minimum rate that a
+        checkStreamSendRate() set on the connection without them, with a new measurement.
     */
     DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
 

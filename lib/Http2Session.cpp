@@ -4421,6 +4421,10 @@ void Http2Session::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, 
         return;
     }
     pump_bound_set = true;
+    // the bounds replace a rate that a check of a handler thread set without them, with a new measurement, as on
+    // HTTP/3
+    pump_rate_set = false;
+    pump_send_rate = SendRateWindow();
     setSendRateUnlocked(min_rate, window_ms);
     if (stall_ms > 0) {
         pump_stall_ms = stall_ms;
