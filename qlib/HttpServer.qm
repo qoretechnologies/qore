@@ -12148,8 +12148,16 @@ class Http1HandlerSocket inherits Qore::Socket {
         refuse("captureRemoteCertificates");
     }
 
+    bool checkHttp2StreamSendRate(int stream_id, bool waiting, int min_rate, timeout window) {
+        refuse("checkHttp2StreamSendRate");
+    }
+
     int checkIdleDataForAsyncPoll() {
         refuse("checkIdleDataForAsyncPoll");
+    }
+
+    bool checkQuicStreamSendRate(int session_id, int stream_id, bool waiting, int min_rate, timeout window) {
+        refuse("checkQuicStreamSendRate");
     }
 
     nothing cleanupHttp2Stream(int stream_id) {
