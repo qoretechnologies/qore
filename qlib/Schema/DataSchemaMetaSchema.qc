@@ -172,6 +172,28 @@ public const DataSchemaJsonSchema = {
                     "type": "string",
                     "description": "Column comment",
                 },
+                "identity": {
+                    "type": "boolean",
+                    "description": "The database generates the column's values with its own identity "
+                        "mechanism (an identity column, IDENTITY, AUTO_INCREMENT, ...); for an integral column "
+                        "(int, or number without a scale) with no default_value",
+                },
+                "identity_start": {
+                    "type": "integer",
+                    "description": "The first generated value of an identity column (default 1)",
+                },
+                "identity_increment": {
+                    "type": "integer",
+                    "not": {"const": 0},
+                    "description": "The difference between generated values of an identity column (default 1)",
+                },
+                "identity_generation": {
+                    "type": "string",
+                    "enum": ("by default", "always", "by default on null"),
+                    "description": "When an identity column generates a value: 'by default' (default), when "
+                        "no value is given; 'always', even when one is; 'by default on null' (Oracle), also "
+                        "when null is given",
+                },
                 "driver": {
                     "type": "object",
                     "description": "Per-driver overrides merged into the base type (e.g. "
