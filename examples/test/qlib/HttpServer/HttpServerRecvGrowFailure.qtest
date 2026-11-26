@@ -26,7 +26,10 @@
     A body read whose buffer cannot grow fails the request (issue 7417): the buffer of a read grows as the data
     arrives, up to the size announced by the peer; when no more memory can be allocated for it, the read raises an
     exception, the connection is closed, and the server keeps serving other connections.  The server runs in a child
-    process whose address space is limited, so that the buffer cannot grow far.
+    process whose address space is limited once it is running, so that the buffer cannot grow far: the size of the
+    address space of a process that has just started varies by gigabytes with the timing of its threads (each one that
+    allocates memory can reserve an arena of its own), so the limit is set from that of the running server and not from
+    that of another run (qore#7744).
 */
 
 %modern
@@ -66,20 +69,15 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
         string qore = TestInterpreter::qore_interpreter();
         string script = get_script_dir() + DirSep + "HttpServerRecvGrowFailureServer.q";
 
-        # the address space of the server once it is running, without a limit
-        string measure = backquote(sprintf("%s %s measure 2>&1", quote(qore), quote(script)));
-        *string vm = (measure =~ x/vm ([0-9]+)/)[0];
-        if (!vm) {
-            throw "TEST-ERROR", sprintf("the server did not report its address space: %s", measure);
-        }
-        int limit = vm.toInt() + Room;
-
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        # the server runs with the limit; its exit code is written to "rc" when it ends
-        backquote(sprintf("(sh -c 'echo $$ > %s; ulimit -v %d && exec \"$0\" \"$1\" serve' %s %s > %s 2> %s "
-            "< /dev/null; echo $? > %s) > /dev/null 2>&1 &", quote(dir + "/pid"), limit, quote(qore), quote(script),
-            quote(dir + "/out"), quote(dir + "/err"), quote(dir + "/rc")));
+        # the server's exit code is written to "rc" when it ends; it allocates from one arena: glibc reserves an
+        # arena of 64 MiB of address space (and twice that while it aligns it) for each thread that allocates memory
+        # beside another, so the threads that the server starts once it is limited would take the room of the data of
+        # the request, and fail to start or to allocate memory instead of its read (musl has no such arenas)
+        backquote(sprintf("(sh -c 'echo $$ > %s; MALLOC_ARENA_MAX=1; export MALLOC_ARENA_MAX; exec \"$0\" \"$1\"' "
+            "%s %s > %s 2> %s < /dev/null; echo $? > %s) > /dev/null 2>&1 &", quote(dir + "/pid"), quote(qore),
+            quote(script), quote(dir + "/out"), quote(dir + "/err"), quote(dir + "/rc")));
         on_exit {
             # the server is ended if it is still running
             if (!waitForExit(dir, 0s)) {
@@ -92,6 +90,7 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
         }
 
         int port = getPort(dir);
+        limitAddressSpace(trim(readFile(dir + "/pid")).toInt());
 
         # a body with a Content-Length, and a chunk, announced larger than any memory
         checkRequest(dir, port, "Content-Length", "POST /body HTTP/1.1\r\nHost: localhost\r\n"
@@ -146,6 +145,26 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
         # the server serves another connection, and the read raised an exception; the server logs it after it has
         # shut the connection down, so it may not have logged it yet: it answers once it has
         assertEq("SOCKET-RECV-ERROR", get(port, "error/" + ++failed_reads, 90s), label);
+    }
+
+    #! limits the address space of the running server to its size now and the room for the data of a request
+    private limitAddressSpace(int pid) {
+        string status = ReadOnlyFile::readTextFile(sprintf("/proc/%d/status", pid));
+        *string vm = (status =~ x/VmSize:\s+([0-9]+)/)[0];
+        if (!vm) {
+            throw "TEST-ERROR", sprintf("the size of the address space of the server is not in its status: %s", status);
+        }
+        int limit = (vm.toInt() + Room) * 1024;
+        # prlimit is in util-linux (util-linux-misc on Alpine)
+        int rc;
+        string output = backquote(sprintf("prlimit --pid %d --as=%d:%d 2>&1", pid, limit, limit), \rc);
+        if (rc) {
+            throw "TEST-ERROR", sprintf("the address space of the server could not be limited: %s", output);
+        }
+        # the limit is in force before the requests are sent
+        string limits = ReadOnlyFile::readTextFile(sprintf("/proc/%d/limits", pid));
+        assertRegex(sprintf("Max address space\\s+%d\\s+%d\\s+bytes", limit, limit), limits,
+            "the address space of the server is limited");
     }
 
     #! returns the port of the server, which it writes once it is running
