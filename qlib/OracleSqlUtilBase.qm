@@ -4137,6 +4137,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "dba_part_key_columns"  : "all_part_key_columns",
             "dba_part_tables"       : "all_part_tables",
             "dba_sequences"         : "all_sequences",
+            "dba_tab_identity_cols" : "all_tab_identity_cols",
             "dba_synonyms"          : "all_synonyms",
             "dba_tab_columns"       : "all_tab_columns",
             "dba_tab_comments"      : "all_tab_comments",
@@ -5034,6 +5035,18 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 getSchemaMessageName(schema, name), dsdesc);
         }
 
+        hash<string, hash<auto>> identities;
+        if (oracle_get_server_major_version(ds) >= 12) {
+            string link = dblink ? "@" + dblink : "";
+            foreach hash<auto> col in (ds.selectRows("select i.column_name, i.generation_type, "
+                    "i.identity_options, c.default_on_null from " + systemView("dba_tab_identity_cols") + link
+                    + " i join " + systemView("dba_tab_columns") + link + " c on i.owner = c.owner "
+                    "and i.table_name = c.table_name and i.column_name = c.column_name "
+                    "where i.owner = %v and i.table_name = %v", schema.upr(), name.upr())) {
+                identities{col.column_name} = col;
+            }
+        }
+
         # now we have to find unvalidated but enabled not null constraints - because these cause the column to
         # appear to be "nullable" when it really isn't
         # also we can't filter by search_condition, because it's a LONG, otherwise we could make a left join
@@ -5077,6 +5090,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 row.data_scale = 0;
             }
 
+            *hash<auto> identity = identities{row.column_name};
+            if (identity) {
+                remove row.data_default;
+            }
             bool nullable = row.nullable == "Y" && !cnh{row.column_name};
             if (!native_case) {
                 row.column_name = row.column_name.lwr();
@@ -5103,6 +5120,12 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 c = new OracleColumn(row.column_name, row.data_type, th.qore, size, nullable, row.data_default,
                     row.comments ? row.comments : NOTHING, th.is_char, row.char_used == "C", row.data_length);
 
+            if (identity) {
+                *string start = (identity.identity_options =~ x/START WITH:\s*(-?\d+)/i)[0];
+                *string increment = (identity.identity_options =~ x/INCREMENT BY:\s*(-?\d+)/i)[0];
+                c.setIdentity("oracle", start.toInt(), increment.toInt(), identity.default_on_null == "YES"
+                    ? "by default on null" : identity.generation_type.lwr());
+            }
             rv.(row.column_name) = c;
         }
 

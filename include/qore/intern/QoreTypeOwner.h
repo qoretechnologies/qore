@@ -346,6 +346,36 @@ DLLLOCAL size_t qore_type_epoch_hold_count();
 */
 DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 
+//! Sets the flags of the parameterized class types made before a declaration that a type argument names became mortal
+//! (QoreParameterizedClassTypeInfo::upgradeUserTypeArgs(); qore#7540)
+/** @param marked_types the types of the declarations that became mortal; nothing is scanned if no derived type was
+    made from one of them
+    @param all true to scan in any case (the completion of a marking event that did not complete)
+*/
+DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all = false);
+
+//! Gives builtin declarations that became mortal at run time the references to the binary module declarations that
+//! they name now (qore#7540, qore#7533)
+/** A declaration of a Program takes them at its first QoreTypeOwnerBatch; one that a binary module added to a Program
+    at run time has none before its Program's teardown, which can come after the module that it names is deleted (at
+    process exit, a native module that no user module requires is deleted before the user modules' Programs).  A
+    failed allocation takes none: the declaration then takes them at its batch, as before.  The declaration must be
+    complete when its namespace is attached: a method or member added to it later is not walked for them
+*/
+DLLLOCAL void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners);
+
+#ifdef DEBUG
+//! Returns the number of scans of qore_upgrade_program_local_derived_types() (debug builds; qore#7540)
+DLLLOCAL int64 qore_dbg_program_local_derived_type_scans();
+#endif
+
+
+#ifdef DEBUG
+//! Releases the value that dbg_keep_until_cleanup() keeps, if any; called by qore_cleanup() after the binary modules
+//! are deleted, where the Programs that their owners keep are cleared (qore#7540)
+DLLLOCAL void qore_dbg_release_cleanup_holder();
+#endif
+
 //! Called by the destructor of a declaration: releases the names that it counted, which can free retired ones
 DLLLOCAL void qore_type_owner_destroyed(QoreTypeOwner* owner);
 
