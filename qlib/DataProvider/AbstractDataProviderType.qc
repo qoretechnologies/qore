@@ -1291,20 +1291,31 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"),
         such as a shared REST schema that caches the types that it builds, also marks the type as a shared object
         (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), so that sandboxed code cannot
-        change its members in any way, also not with Reflection.
+        change its members in any way, also not with Reflection.  A type that was frozen by code that may not share
+        objects, such as sandboxed code freezing a type of its own, is marked then, with the types and fields that it
+        holds, when code that may share objects freezes it again, as when such code registers it in the process-wide
+        type cache (qore#7735).
 
         @since DataProvider 3.12
     */
     freeze() {
+        bool can_share = SandboxManager::canShareObjects();
         if (frozen) {
-            return;
+            # a type frozen where it could not be marked as a shared object is marked, with the types and fields that
+            # it holds, when code that may share objects freezes it again (qore#7735)
+            if (!can_share || SandboxManager::isSharedObject(self)) {
+                return;
+            }
+        } else {
+            frozen = True;
+            shared_object = True;
         }
-        frozen = True;
-        shared_object = True;
-        freezeImpl();
-        if (SandboxManager::canShareObjects()) {
+        # marked before the types and fields that it holds, so that a type that holds itself, directly or through
+        # them, is not frozen again
+        if (can_share) {
             SandboxManager::shareObject(self);
         }
+        freezeImpl();
     }
 
     #! Makes a copy of the type that belongs to the code that makes it
@@ -1320,7 +1331,9 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     }
 
     #! Marks the types and fields that the type holds as shared; see freeze()
-    /** The base class method does nothing; a type that holds other types or fields overrides it
+    /** The base class method does nothing; a type that holds other types or fields overrides it.  It must only freeze
+        what the type holds and not change the type itself, which is marked as a shared object before it is called
+        (see freeze())
     */
     private freezeImpl() {
     }
