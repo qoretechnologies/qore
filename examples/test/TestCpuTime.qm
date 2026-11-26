@@ -33,7 +33,7 @@ module TestCpuTime {
 }
 
 /** A test that checks that a server waits without running continuously measures the CPU time that its own process
-    uses over the wait, without the compiles of the JIT's background compile thread (named \c qore-jit-bg): tiered
+    uses over the wait, without the compiles of the JIT's background compile thread (named @c qore-jit-bg): tiered
     execution compiles a function in the background once it is called often enough, which can happen during the wait
     (a client thread of the test that runs Qore code), and a compile can take tenths of a second; it is not the
     server's work (qoretechnologies/qore#7654).
@@ -51,8 +51,8 @@ public namespace TestCpuTime {
 #! Returns a snapshot of the CPU time that the threads of the process have used, for cpuTimeSince()
 /** On Linux, the CPU time of each thread in nanoseconds, from the first field of its
     @c /proc/self/task/<tid>/schedstat, or, on a kernel without it, from the @c utime and @c stime fields of its
-    @c /proc/self/task/<tid>/stat (in clock ticks of 10 ms), without the JIT's background compile thread (see
-    isJitCompileThread()); elsewhere the CPU time of the process from ps(1) (hundredths of a second on macOS), under
+    @c /proc/self/task/<tid>/stat (in clock ticks of 10 ms), without the JIT's background compile thread (named
+    @c qore-jit-bg); elsewhere the CPU time of the process from ps(1) (hundredths of a second on macOS), under
     the key @c "ps", which includes the compiles
 
     @throw CPU-TIME-ERROR the CPU time cannot be read
@@ -123,7 +123,7 @@ public float sub cpuTimeSince(hash<string, int> start) {
     return ns / 1000000000.0;
 }
 
-#! Returns the CPU time of the process from ps(1), which prints it as [[dd-]hh:]mm:ss[.ss], in nanoseconds
+#! Returns @ref True if the thread of a task file is the JIT background compile thread
 /** Returns @ref True if the thread of the @c /proc/self/task/<tid>/ file @p path is the JIT's background compile
     thread, which libqore names @c qore-jit-bg (a thread that ended or cannot be read is not)
 */
@@ -135,6 +135,7 @@ bool sub isJitCompileThread(string path) {
     }
 }
 
+#! Returns the CPU time of the process from ps(1), which prints it as [[dd-]hh:]mm:ss[.ss], in nanoseconds
 /** Linux's ps prints whole seconds, which is why cpuSnapshot() does not use it there
 */
 int sub psCpuTimeNs() {
