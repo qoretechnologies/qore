@@ -8445,6 +8445,31 @@ bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSin
     return true;
 }
 
+bool UserVariantBase::materializeAOTClosureDebugIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_lazy_closure_ir_mutex);
+    if (getCachedIR()) {
+        return true;
+    }
+    if (!aot_closure_debug_ir) {
+        return false;
+    }
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_closure_ir(
+        *aot_closure_debug_ir, const_cast<UserVariantBase*>(this), xsink, error);
+    if (!ir) {
+        if (!*xsink) {
+            xsink->raiseException("AOT-CLOSURE-IR-ERROR",
+                "could not materialize the debug IR of closure '%s': %s",
+                name ? name : "<closure>", error.empty() ? "unknown error" : error.c_str());
+        }
+        return false;
+    }
+    // the native body keeps running without a debugger: the IR is not promoted to the IR tier
+    setCachedIR(ir.release(), false);
+    aot_closure_debug_ir.reset();
+    return true;
+}
+
 bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const {
     if (cached_aot_fn) {
         return ensureAOTContext(name, xsink);
@@ -10238,6 +10263,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             tier = TIER_AST;
         } else {
             if (materializeAOTDebugIR(name, xsink)) {
+                tier = TIER_IR;
+            } else if (*xsink) {
+                return QoreValue();
+            } else if (materializeAOTClosureDebugIR(name, xsink)) {
+                // a closure created by native code runs its debug IR too (qore#7752)
                 tier = TIER_IR;
             } else if (*xsink) {
                 return QoreValue();

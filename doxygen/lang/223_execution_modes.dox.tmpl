@@ -447,6 +447,9 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       has debug IR of its own, which the IR interpreter runs while a debugger
       is attached, so that it can be stepped like any other function, and
       top-level code makes such calls as calls;
+    - a closure keeps its IR, which runs while a debugger is attached also
+      when native code created the closure, and native code calls closures
+      through the runtime instead of their native bodies directly;
     - at \c -O0, the calls that a debugger can step into are kept as calls.
 
     Code compiled without \c -g has none of these costs.  A debugger attached
