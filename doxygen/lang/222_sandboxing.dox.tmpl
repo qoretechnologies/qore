@@ -780,10 +780,9 @@ authenticate();
     \c SANDBOX-OBJECT-ACCESS-ERROR, and a read of the whole object (the member hash and its keys, iterators, slices, the
     first and last key, \c exists, the member names of \c <object>::keys() and the member count of
     \c <object>::size() and \c elements, and the merge of the object into a hash or into another object with \c +
-    and \c +=) sees the public members only, as code outside the class does; a merge of an object into a member of
+    and \c +=) sees the public members only, as code outside the class does; a merge of an object into a hash member of
     the same object gives the code of such a class the public members only also of an object that its sandbox
-    created.  Code that the owner rules apply to also gets the public members only when it merges an object of a
-    class that it has no private access to into another object.  Formatting an
+    created.  Formatting an
     object with \c %%y and serializing it, which do not depend on a class context, show the non-public members only to
     trusted code and to sandboxed code whose sandbox created the object.  A copy of an object (\c copy()) keeps the
     creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
