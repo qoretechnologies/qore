@@ -21,6 +21,10 @@ class OperandReadSnapshotTest inherits QUnit::Test {
         addTestCase("the plus operator", \testPlus());
         addTestCase("push in a later operand", \testPush());
         addTestCase("a global variable", \testGlobal());
+        addTestCase("numbers", \testNumber());
+        addTestCase("a change nested in a call or a list", \testNested());
+        addTestCase("other change operators", \testOtherChanges());
+        addTestCase("other operators", \testOtherOperators());
         addTestCase("a later operand without an effect", \testNoEffect());
         set_return_value(main());
     }
@@ -91,5 +95,48 @@ class OperandReadSnapshotTest inherits QUnit::Test {
         assertTrue(a == a, "the same value");
         assertTrue(a == (1, 2), "an equal literal");
         assertEq((1, 2, 1, 2), a + a);
+    }
+
+    testNumber() {
+        number n = 1.5n + 1n;
+        assertFalse(n == (n += 1n), "number +=");
+        assertEq(3.5n, n);
+        n = 1.5n + 1n;
+        assertTrue(n < ++n, "number ++");
+    }
+
+    testNested() {
+        list<int> a = ownList((3, 1));
+        # a change nested in the argument of a function that has no effect itself
+        assertEq((3, 1, 1, 2, 3), a + sort(a += 2), "in a call");
+        a = ownList((1, 2));
+        # a change nested in an element of a list, which is the list as it is after the change
+        assertEq((1, 2, 0, (1, 2, 3)), a + (0, a += 3), "in a list");
+        string s = sprintf("%s", "ab");
+        assertEq("abab x", s + trim(s += " x "), "in a call of a string function");
+    }
+
+    testOtherChanges() {
+        list<int> a = ownList((1, 2, 3));
+        assertFalse(a == (splice a, 0, 1), "splice");
+        a = ownList((1, 2, 3));
+        assertFalse(a == (extract a, 0, 1, ()), "extract");
+        a = ownList((1, 2));
+        assertFalse(a == (unshift a, 0), "unshift");
+        string s = sprintf("%s\n", "ab");
+        assertFalse(s == (chomp s), "chomp");
+        s = sprintf("%s", " ab ");
+        assertFalse(s == (trim s), "trim");
+    }
+
+    testOtherOperators() {
+        string s = sprintf("%s", "ab");
+        assertEq(-1, s <=> (s += "c"), "<=>");
+        list<int> a = ownList((1, 2));
+        assertFalse(a === (a += 3), "===");
+        number n = 1.5n + 1n;
+        assertEq(-1n, n - (n += 1n), "number -");
+        n = 1.5n + 1n;
+        assertEq(8.75n, n * (n += 1n), "number *");
     }
 }

@@ -450,16 +450,9 @@ template <class T = QoreOperatorNode>
 class QoreBinaryOperatorNode : public T {
 protected:
     QoreValue left, right;
-    //! whether the right operand has an effect: -1 not known yet; see snapshotLeft()
-    mutable std::atomic<signed char> snapshot_left{-1};
 
 public:
     DLLLOCAL QoreBinaryOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right) : T(loc), left(left), right(right) {
-    }
-
-    //! copies the operands as they are, as the implicit copy did before snapshot_left (qore#7722)
-    DLLLOCAL QoreBinaryOperatorNode(const QoreBinaryOperatorNode& old) : T(old), left(old.left), right(old.right),
-            snapshot_left(old.snapshot_left.load(std::memory_order_relaxed)) {
     }
 
     DLLLOCAL ~QoreBinaryOperatorNode() {
@@ -512,17 +505,14 @@ public:
         return left.hasEffect() || right.hasEffect();
     }
 
-    //! returns true if the right operand can change a value that the left operand gave (it has an effect), so that
-    //! the left operand's value is held with a reference of its own (QoreOperandEvalHolder; qore#7722)
-    /** Computed when the operator is first evaluated, after the operands have been initialized
+    //! returns true if the right operand can change a value that the left operand gave, so that the left operand's
+    //! value is held with a reference of its own (QoreOperandEvalHolder; qore#7722)
+    /** Any right operand that is evaluated can, except the read of a variable: an assignment, a change operator or a
+        call can be nested in any expression (in an argument of a call to a function that has no effect itself, or in
+        an element of a list), so the test is not whether the operand has an effect
     */
     DLLLOCAL bool snapshotLeft() const {
-        signed char s = snapshot_left.load(std::memory_order_relaxed);
-        if (s < 0) {
-            s = right.hasEffect() ? 1 : 0;
-            snapshot_left.store(s, std::memory_order_relaxed);
-        }
-        return s;
+        return right.needsEval() && right.getType() != NT_VARREF;
     }
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
