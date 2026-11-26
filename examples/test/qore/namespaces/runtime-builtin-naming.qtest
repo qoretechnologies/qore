@@ -13,12 +13,12 @@
 #! Another Program that names a declaration that a binary module added to a Program at run time keeps it
 /** A builtin declaration that a binary module adds to a namespace that a Program owns at run time is owned by that
     Program and freed with it (qore#7540, qore#7649).  Another Program can come to name it: through the import copy of
-    the class, the copy of an enum in a child Program, a builtin variant of a namespace that no Program owns, a global
-    variable imported from the Program, and builtin classes and hashdecls of its own whose member, static variable and
-    signature types name it; the naming declaration or copy keeps it, so that the other Program checks values against
-    valid types after the Program is deleted (qore#7680).  A declaration added to a namespace that no Program owns does
-    not keep it (it would keep it until library cleanup), and two Programs whose declarations name each other keep
-    each other's until library cleanup.  The declarations are added with debug functions (dbg_add_runtime_namespace(),
+    the class, the copy of an enum in a child Program, a global variable imported from the Program, and builtin classes
+    and hashdecls of its own whose member, static variable and signature types name it; the naming declaration or copy
+    keeps it, so that the other Program checks values against valid types after the Program is deleted (qore#7680).  A
+    declaration added to a namespace that no Program owns does not keep it, and a builtin variant added to one that
+    names it is refused (either would keep it until library cleanup); two Programs whose declarations name each other
+    keep each other's until library cleanup.  The declarations are added with debug functions (dbg_add_runtime_namespace(),
     dbg_add_runtime_naming()), so the test needs a library with debugging; each case runs in each execution mode, which
     the Programs that it creates set (a Program created at run time does not take the mode of the process).
 */
@@ -63,8 +63,8 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
         addTestCase("two Programs whose declarations name each other", \cycleTest());
         addTestCase("declarations of one Program attached one after the other that name each other",
             \sameProgramCycleTest());
-        # last: the variant of the static system namespace keeps the declaration until library cleanup
-        addTestCase("a variant of a namespace that no Program owns keeps what it names", \sharedVariantTest());
+        addTestCase("a variant of a namespace that no Program owns is refused if it names a Program's declaration",
+            \sharedVariantTest());
         set_return_value(main());
     }
 
@@ -97,18 +97,14 @@ auto sub gen(string arg, bool fail) { return dbg_rt_gen_instance(arg, fail); }
     }
 
     #! runs a case in each execution mode and checks that the declarations that it made are freed when it is done
-    private checkFreed(code scenario, string label, int kept = 0) {
+    private checkFreed(code scenario, string label) {
         foreach hash<auto> i in (ExecModes.pairIterator()) {
             mode = i.value;
             int before = liveDecls();
             int cycles = call_function("dbg_cross_program_cycles");
             scenario();
-            assertEq(before + kept, liveDecls(), sprintf("%s (%s): the declarations are freed", label, i.key));
+            assertEq(before, liveDecls(), sprintf("%s (%s): the declarations are freed", label, i.key));
             assertEq(cycles, call_function("dbg_cross_program_cycles"), sprintf("%s (%s): no cycle", label, i.key));
-            # only one variant is added to the static system namespace's function
-            if (kept) {
-                break;
-            }
         }
     }
 
@@ -356,22 +352,28 @@ int sub mem(auto v) { DbgRtQ::DbgRtQClass o(); o.m = v; return 1; }", "q");
 
     sharedVariantTest() {
         skipIfNoDebugging();
-        # the variant is added to the function of the static system namespace that every Program shares: it keeps the
-        # class until library cleanup
+        # a variant that names a declaration of a Program is refused when it is added to the function of the static
+        # system namespace that every Program shares (kind 3, through a Program's copy of the function) or to the static
+        # system namespace (kind 8): it would keep the declaration until library cleanup
         checkFreed(sub () {
-            Program q = newp();
-            Program p = getSource();
-            dbg_add_runtime_naming(p, 3, q);
-            delete p;
-            # the declarations retired with p are freed
-            liveDecls();
-            hash<auto> c = callCode("dbg_rt_shared");
-            q.parse(c.code, "q");
-            checkCall(q, c, "DbgRtNs::DbgRtClass");
-            Program r = newp();
-            hash<auto> cr = callCode("dbg_rt_shared");
-            r.parse(cr.code, "r");
-            checkCall(r, cr, "DbgRtNs::DbgRtClass");
-        }, "shared variant", 1);
+            foreach int kind in (3, 8) {
+                int refused = dbg_refused_shared_variants();
+                Program q = newp();
+                Program p = getSource();
+                assertThrows("RUNTIME-DECLARATION-ERROR", "DbgRtClass.*Program's own namespace",
+                    \dbg_add_runtime_naming(), (p, kind, q), sprintf("kind %d: the variant is refused", kind));
+                assertEq(refused + 1, dbg_refused_shared_variants(), sprintf("kind %d: the refusal is counted", kind));
+                delete p;
+                # the declarations retired with p are freed
+                liveDecls();
+                # the function has only its own variant
+                hash<auto> c = callCode("dbg_rt_shared");
+                q.parse(c.code, "q");
+                assertThrows("RUNTIME-OVERLOAD-ERROR", "dbg_rt_shared\\(string\\)", \q.callFunction(),
+                    "call_wrong_" + c.n, sprintf("kind %d: a wrong argument", kind));
+                assertThrows("RUNTIME-OVERLOAD-ERROR", \q.callFunction(), "call_nothing_" + c.n,
+                    sprintf("kind %d: no variant takes NOTHING", kind));
+            }
+        }, "shared variant");
     }
 }

@@ -1362,6 +1362,26 @@ void qore_ns_private::addBuiltinVariant(const char* fname, AbstractQoreFunctionV
         addBuiltinVariantIntern(fname, v);
 }
 
+void qore_ns_private::checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const {
+    std::string name;
+    bool found = QoreTypeDeclRefs::getMortalDeclName(bv.signature.getReturnTypeInfo(), name);
+    for (unsigned i = 0, e = bv.signature.numParams(); !found && i < e; ++i) {
+        found = QoreTypeDeclRefs::getMortalDeclName(bv.signature.getParamTypeInfo(i), name);
+    }
+    if (!found) {
+        return;
+    }
+#ifdef DEBUG
+    qore_dbg_count_refused_shared_variant();
+#endif
+    std::string path;
+    getPath(path);
+    throw QoreStandardException("RUNTIME-DECLARATION-ERROR", "cannot add a variant of builtin function %s::%s() "
+        "that names '%s', a declaration that a binary module added to a Program at run time, to a namespace that no "
+        "Program owns or to a function that it shares with one: the declaration is freed with its Program; add the "
+        "variant to that Program's own namespace", path.c_str(), fname, name.c_str());
+}
+
 void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFunctionVariant* v) {
     SimpleRefHolder<AbstractQoreFunctionVariant> vh(v);
 
@@ -1369,10 +1389,9 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
 
     // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
     // marked later (qore#7540); one added to a namespace that no Program owns, or to a function that the namespace
-    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs: it
-    // references the mortal declarations that it names when it is added (a variant added before a declaration that
-    // it names is marked does not reference it), which it keeps for as long as it lives, until library cleanup or
-    // until its module is deleted, as any Program can call it (qore#7680)
+    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs: it must
+    // not name a mortal declaration, which it would have to keep until library cleanup or until its module is deleted,
+    // as any Program can call it; it is refused (qore#7680)
     BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
     bool runtime_variant = false;
     if (bv) {
@@ -1380,10 +1399,10 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
             runtime_variant = !bv->isSharedOrigin();
         } else if (getRoot() || module_owned || (fe && fe->isSharedUnowned())) {
             bv->setSharedOrigin();
-            // before the variant is added, so that a failed allocation fails the call with no reference taken and the
-            // variant unpublished; no builtin declaration can be mortal before one was marked
+            // before the variant is added, so that nothing is changed; no builtin declaration can be mortal before one
+            // was marked
             if (qore_runtime_mortal_decls_exist()) {
-                bv->refMortalDecls();
+                checkSharedVariant(fname, *bv);
             }
         }
     }

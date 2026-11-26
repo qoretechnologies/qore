@@ -672,7 +672,8 @@ static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, Exce
     - kind 2: adds the class DbgRtQOne and the hashdecl DbgRtQOneHash one at a time to DbgRtQ (kind 1 first), naming
       DbgRtClass as kind 1 does
     - kind 3: adds the variant dbg_rt_shared(*DbgRtClass) to Q's copy of the function Qore::dbg_rt_shared(), which the
-      static system namespace shares with every Program
+      static system namespace shares with every Program: refused (\c RUNTIME-DECLARATION-ERROR)
+    - kind 8: as kind 3, adding the variant to the static system namespace itself
     - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
     - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
       each other's types (\a src needs no namespace of its own)
@@ -805,11 +806,17 @@ static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeCon
             ns->addSystemHashDecl(hd);
             break;
         }
-        case 3: {
-            QoreNamespace* qns = root->findLocalNamespace("Qore");
+        case 3:
+        case 8: {
+            // refused with a C++ exception, which a module converts (qore#7680)
+            QoreNamespace* qns = kind == 3 ? root->findLocalNamespace("Qore") : staticSystemNamespace;
             assert(qns);
-            qns->addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
-                QORE_PARAM_NO_ARG, "obj");
+            try {
+                qns->addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+                    cti, QORE_PARAM_NO_ARG, "obj");
+            } catch (AbstractException& e) {
+                e.convert(xsink);
+            }
             break;
         }
         case 4: {
@@ -861,6 +868,12 @@ static QoreValue f_dbg_fail_next_runtime_refs(const QoreListNode* params, Runtim
 //! Returns the number of survivors in cycles that hold references to declarations of other Programs (qore#7680)
 static QoreValue f_dbg_cross_program_cycles(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_dbg_cross_program_cycle_count());
+}
+
+//! Returns the number of builtin variants refused because they were added to a namespace that no Program owns and
+//! named a mortal declaration (qore#7680)
+static QoreValue f_dbg_refused_shared_variants(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_refused_shared_variants();
 }
 
 //! Returns the number of declarations added at run time to a namespace that no Program owns that name a mortal
@@ -37953,6 +37966,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_cross_program_cycles", f_dbg_cross_program_cycles, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_unowned_program_local_names", f_dbg_unowned_program_local_names, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_refused_shared_variants", f_dbg_refused_shared_variants, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_rt_gen_instance", f_dbg_rt_gen_instance, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolOrNothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "arg", boolTypeInfo, QORE_PARAM_NO_ARG, "fail");

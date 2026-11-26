@@ -71,11 +71,15 @@ Program's namespace data.
   - the copy of such an enum references its original (`orig_ref`), as the copy of a binary
     module's enum does;
   - a builtin variant added to a namespace that no Program owns (the static system namespace or
-    a module's), or to a function that a Program's namespace shares with one, references the
-    mortal declarations that its signature names when it is added
-    (`BuiltinFunctionVariantBase::refMortalDecls()`, before it is published); it keeps them
-    until it is freed, at library cleanup or with its module, as any Program can call it; a
-    variant added before a declaration that it names is marked does not reference it;
+    a module's), or to a function that a Program's namespace shares with one, is shared by every
+    Program and lives until library cleanup or until its module is deleted: if its signature names
+    such a declaration (as `QoreTypeDeclRefs::addMortal()` finds them), it is refused before
+    anything is changed, with a `QoreStandardException` (`RUNTIME-DECLARATION-ERROR`) that names
+    the variant and the declaration and says to add the variant to that Program's own namespace
+    (`qore_ns_private::checkSharedVariant()`; a debug build counts the refusals:
+    `qore_dbg_refused_shared_variants()`), as a reference would keep the declaration until then.
+    A variant added before a declaration that it names is marked is not refused; no binary module
+    of this repository or of the external module repositories adds such variants at run time;
   - a declaration that becomes mortal at run time (one marked when it is added or attached,
     the import copy of a builtin class, an instance of a mortal generic hashdecl) references the
     mortal declarations of other Programs that its member, static variable and signature types

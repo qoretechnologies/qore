@@ -427,6 +427,13 @@ DLLLOCAL size_t qore_dbg_cross_program_cycle_count();
 */
 DLLLOCAL int64 qore_dbg_unowned_program_local_names();
 
+//! Returns the number of builtin variants refused because they were added to a namespace that no Program owns and
+//! named a mortal declaration of a Program (debug builds, qore#7680)
+DLLLOCAL int64 qore_dbg_refused_shared_variants();
+
+//! Counts a refused builtin variant (qore_dbg_refused_shared_variants(); debug builds)
+DLLLOCAL void qore_dbg_count_refused_shared_variant();
+
 //! Counts a declaration added at run time to a namespace that no Program owns if it names a mortal declaration
 //! (qore_dbg_unowned_program_local_names(); debug builds)
 DLLLOCAL void qore_dbg_check_unowned_names(const QoreTypeOwner* owner);

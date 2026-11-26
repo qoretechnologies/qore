@@ -67,6 +67,7 @@ class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
 class QoreModuleContext;
+class BuiltinFunctionVariantBase;
 
 typedef std::list<const qore_ns_private*> nslist_t;
 
@@ -722,6 +723,11 @@ public:
         module or of the static system namespace, which share their private data, are not.
     */
     DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
+
+    //! Throws a QoreStandardException (\c RUNTIME-DECLARATION-ERROR) if the signature of a builtin variant that is
+    //! added to a namespace that no Program owns, or to a function shared with one, names a mortal declaration
+    //! (qore#7680)
+    DLLLOCAL void checkSharedVariant(const char* fname, const BuiltinFunctionVariantBase& bv) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();

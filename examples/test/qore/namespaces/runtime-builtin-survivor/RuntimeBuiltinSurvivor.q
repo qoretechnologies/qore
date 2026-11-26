@@ -79,14 +79,23 @@ switch (which) {
         break;
     }
     case "shared": {
-        # a variant of the static system namespace keeps a class added at run time until library cleanup (qore#7680)
+        # a variant of the static system namespace that names a class added at run time is refused (qore#7680)
         Program a(PO_NEW_STYLE);
         a.parse("sub add() { dbg_add_runtime_namespace(\"DbgRtNs\", 1); }
 sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "shared");
         a.callFunction("add");
         Program q(PO_NEW_STYLE);
         q.parse("sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "q");
-        q.callFunction("naming", a, 3);
+        try {
+            q.callFunction("naming", a, 3);
+            printf("the variant was not refused\n");
+            exit(6);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "RUNTIME-DECLARATION-ERROR") {
+                printf("unexpected exception: %s: %s\n", ex.err, ex.desc);
+                exit(7);
+            }
+        }
         # and a class of the static system namespace names it without a reference
         a.callFunction("naming", a, 4);
         delete a;

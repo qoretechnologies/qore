@@ -291,10 +291,24 @@ public:
     DLLEXPORT void deleteData(ExceptionSink* xsink);
 
     //! adds a function variant
+    /** A variant added at run time to a namespace that no Program owns (the static system namespace or a module's
+        namespace), or to a function that a Program's namespace shares with one, is shared by every Program: its
+        signature must not name a class, hashdecl or enum that a binary module added to a Program at run time, which
+        is freed with that Program; such a variant is refused with a QoreStandardException (\c
+        RUNTIME-DECLARATION-ERROR), which the caller converts with AbstractException::convert(), and is freed; add it to
+        that Program's own namespace instead (qore#7680)
+    */
     DLLEXPORT void addBuiltinVariant(const char* name, q_func_t f, int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
     //! adds a function variant
-    /** @since %Qore 0.9.5
+    /** A variant added at run time to a namespace that no Program owns (the static system namespace or a module's
+        namespace), or to a function that a Program's namespace shares with one, is shared by every Program: its
+        signature must not name a class, hashdecl or enum that a binary module added to a Program at run time, which
+        is freed with that Program; such a variant is refused with a QoreStandardException (\c
+        RUNTIME-DECLARATION-ERROR), which the caller converts with AbstractException::convert(), and is freed; add it to
+        that Program's own namespace instead (qore#7680)
+
+        @since %Qore 0.9.5
     */
     DLLEXPORT void addBuiltinVariant(void* ptr, const char* name, q_external_func_t f,
         int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT,

@@ -2212,6 +2212,17 @@ void qore_dbg_fail_next_runtime_refs(int count) {
 //! declaration (qore_dbg_unowned_program_local_names())
 static std::atomic<int64> dbg_unowned_program_local_names{0};
 
+//! the number of refused builtin variants (qore_dbg_refused_shared_variants())
+static std::atomic<int64> dbg_refused_shared_variants{0};
+
+int64 qore_dbg_refused_shared_variants() {
+    return dbg_refused_shared_variants.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_count_refused_shared_variant() {
+    dbg_refused_shared_variants.fetch_add(1, std::memory_order_relaxed);
+}
+
 int64 qore_dbg_unowned_program_local_names() {
     return dbg_unowned_program_local_names.load(std::memory_order_relaxed);
 }
@@ -4482,6 +4493,27 @@ void QoreTypeDeclRefs::getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& 
     // under the type lock, as addMortal() walks the type
     AutoLocker al(ctl);
     qore_type_decl_refs_private::getUnmarked(types, ti, 0);
+}
+
+bool QoreTypeDeclRefs::getMortalDeclName(const QoreTypeInfo* ti, std::string& name) {
+    if (!ti) {
+        return false;
+    }
+    // the references are released when the walk is done
+    QoreTypeDeclRefs refs;
+    refs.addMortal(ti);
+    if (refs.empty()) {
+        return false;
+    }
+    if (!refs.priv->classes.empty()) {
+        name = refs.priv->classes[0]->getName();
+    } else if (!refs.priv->hashdecls.empty()) {
+        name = refs.priv->hashdecls[0]->getName();
+    } else {
+        assert(!refs.priv->enums.empty());
+        name = refs.priv->enums[0]->getName();
+    }
+    return true;
 }
 
 void QoreTypeDeclRefs::addMortalDecls(const std::vector<const QoreClass*>& classes,

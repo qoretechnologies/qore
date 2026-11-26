@@ -39,7 +39,7 @@ class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
         addTestCase("a Program with a class added one at a time that names a class of the module kept beyond the module",
             \oneTest());
         addTestCase("two Programs whose classes name each other are freed at library cleanup", \cycleTest());
-        addTestCase("a class kept by a variant of the static system namespace is freed at library cleanup",
+        addTestCase("a refused variant of the static system namespace leaves nothing at library cleanup",
             \sharedTest());
         set_return_value(main());
     }
