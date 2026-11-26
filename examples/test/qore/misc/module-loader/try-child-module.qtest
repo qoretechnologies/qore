@@ -174,7 +174,7 @@ module %s {
 printf(\"hello: %s children: %y\\n\", TcmFbBase::hello(), TcmFbBase::children);
 ", \rc);
         assertEq(0, rc, out);
-        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nBINARY-MODULE-SOURCE-FALLBACK: binary module "
+        assertRegex("[^\n]*:2:[0-9]+: warning: BINARY-MODULE-SOURCE-FALLBACK: binary module "
             "'[^']*TcmFbExt\\.qmod' for feature 'TcmFbExt' failed to load; loading source module '[^']*TcmFbExt\\.qm' "
             "instead", out);
         # the child module is attached from its source
@@ -194,7 +194,7 @@ printf(\"hello: %s children: %y\\n\", TcmFbErrBase::hello(), TcmFbErrBase::child
 ", \rc);
         assertEq(0, rc, out);
         # the warning is a parse warning of the script with the %requires directive
-        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmFbErrBase': child "
+        assertRegex("[^\n]*:2:[0-9]+: warning: MODULE-CHILD-FAILED: module 'TcmFbErrBase': child "
             "module 'TcmFbErrExt' declared with %try-child-module is present but failed to load and was skipped", out);
         assertFalse(out =~ /^warning: /m, out);
         assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmFbErrBase::no_such_method\\(\\)'", out);
@@ -352,7 +352,7 @@ printf(\"warn: %y\\n\", w ? w.err : NOTHING);
 
 printf(\"hello: %s\\n\", TcmBrokenBase::hello());
 ");
-        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmBrokenBase': child "
+        assertRegex("[^\n]*:2:[0-9]+: warning: MODULE-CHILD-FAILED: module 'TcmBrokenBase': child "
             "module 'TcmBroken' declared with %try-child-module is present but failed to load and was skipped", out);
         assertFalse(out =~ /^warning: /m, out);
         # the child module's own error must be part of the message; it is how the broken child is found
