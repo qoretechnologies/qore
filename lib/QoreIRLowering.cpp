@@ -5650,12 +5650,12 @@ bool QoreIRLowering::lowerReturnWithoutValue(std::string& error, bool debug_flow
                 QoreIRLowering& l;
                 QoreIRBasicBlock* path_block;
                 std::vector<BlockCleanupEntry> left;
-                DLLLOCAL TailLowering(QoreIRLowering& l, QoreIRBasicBlock* path_block, size_t shared)
+                TailLowering(QoreIRLowering& l, QoreIRBasicBlock* path_block, size_t shared)
                         : l(l), path_block(path_block),
                         left(l.cleanup_stack.begin() + shared, l.cleanup_stack.end()) {
                     l.cleanup_stack.resize(shared);
                 }
-                DLLLOCAL ~TailLowering() {
+                ~TailLowering() {
                     // the capacity of the stack holds the entries again
                     l.cleanup_stack.insert(l.cleanup_stack.end(), std::make_move_iterator(left.begin()),
                         std::make_move_iterator(left.end()));
@@ -6210,12 +6210,12 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         std::vector<QoreIRBasicBlock*>& stack;
         std::vector<QoreIRBasicBlock*> saved;
         bool cut = false;
-        DLLLOCAL ~ExceptionStackRestore() {
+        ~ExceptionStackRestore() {
             if (cut) {
                 stack.swap(saved);
             }
         }
-        DLLLOCAL void cutTo(const BlockCleanupEntry& entry) {
+        void cutTo(const BlockCleanupEntry& entry) {
             if (entry.exception_depth >= stack.size()
                     || (entry.exception_depth ? stack[entry.exception_depth - 1] : nullptr)
                         != entry.outer_exception_target) {

@@ -15506,11 +15506,11 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             std::vector<uint32_t>* string_refs = aotDebugIRDigestRequested() ? &payload_string_refs : nullptr;
             struct StringRefTracking {
                 QoreAOTBinaryWriter& writer;
-                DLLLOCAL StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
+                StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
                         : writer(writer) {
                     writer.string_ref_positions = positions;
                 }
-                DLLLOCAL ~StringRefTracking() {
+                ~StringRefTracking() {
                     writer.string_ref_positions = nullptr;
                 }
             } string_ref_tracking(writer, string_refs);
