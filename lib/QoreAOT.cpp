@@ -30381,10 +30381,11 @@ static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preload
 }
 
 //! Checks the class injections of the preloaded siblings when a compile ends after their source-parse resolution
-//! and before their finalization, which checks them itself (qore#7664)
+//! and before their finalization, which checks them itself, has returned (qore#7664)
 /** The commit of the source attaches the base classes of its classes, which the classes of the siblings can inherit:
     a class that then leads back to the class that it is injected in place of releases its reference, also when the
-    compile fails before the finalization.  Declared after the preload, so that it runs while the deserializer exists.
+    compile fails, or an exception is thrown, before the finalization has checked them; a class whose reference was
+    released already is skipped.  Declared after the preload, so that it runs while the deserializer exists.
 */
 class AOTSiblingInjectionCheckGuard {
 public:
@@ -30393,7 +30394,7 @@ public:
         mdes = m;
     }
 
-    //! Disarms the guard when the finalization, which checks the injections, runs
+    //! Disarms the guard once the finalization, which checks the injections, has returned
     void disarm() {
         mdes = nullptr;
     }
@@ -31131,12 +31132,14 @@ bool QoreAOT::compileScriptFilesBatch(
             &sibling_preload.source_labels);
         AOTParseSourceGuard parse_source_guard(&batch_target_set);
         std::string resolve_error;
-        injection_check_guard.disarm();
         if (!sibling_preload.mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
             aot_compile_failed_in_preload = true;
             return false;
         }
+        // the finalization has checked the injections; until it returns, the guard checks them (a class whose
+        // reference was released is skipped)
+        injection_check_guard.disarm();
     }
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
@@ -32480,12 +32483,14 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         std::string resolve_error;
-        injection_check_guard.disarm();
         if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
             aot_compile_failed_in_preload = true;
             return false;
         }
+        // the finalization has checked the injections; until it returns, the guard checks them (a class whose
+        // reference was released is skipped)
+        injection_check_guard.disarm();
     }
     if (qoreAotHandleWarnings(wsink, error, "script parsing")) {
         return false;

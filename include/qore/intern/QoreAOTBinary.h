@@ -5495,6 +5495,13 @@ public:
 
     //! Finish AOT-only post-commit work after source parseCommit().
     bool finalizeAfterSourceParse(std::string& error) {
+        // an AOT class can have a base class of the source parsed, whose own base classes are attached when the
+        // source is committed: the class injections are checked again once it is, before anything else, so that
+        // nothing that can fail before skips the check (qore#7664)
+        if (!checkClassInjectionCycles(error)) {
+            return false;
+        }
+
         auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
             size_t i = 0;
             for (auto& sess : sessions) {
@@ -5526,11 +5533,6 @@ public:
             }
         } batch_class_lookup_scope{sessions};
 
-        // an AOT class can have a base class of the source parsed, whose own base classes are attached when the
-        // source is committed: the class injections are checked again once it is (qore#7664)
-        if (!checkClassInjectionCycles(error)) {
-            return false;
-        }
         if (!runClassPhase("AOT abstract import", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesImportAbstract(error);
