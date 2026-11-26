@@ -171,6 +171,15 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
 
         #! the deadline in milliseconds of the case of several modules
         const ModulesDeadline = 1500;
+
+        #! the grace period in milliseconds of the handover case whose handle is never released, which it waits for
+        const HandoverNeverGrace = 300;
+        #! the grace period in milliseconds of the other handover cases, which release their handles and so never
+        #! wait for it: it only bounds a wait that the cleanup must not make, and it is measured from the deadline,
+        #! which is the start of the cleanup (QORE_MODULE_CLEANUP_TIMEOUT=0), so it must also cover the time until
+        #! the onComplete() of the operation runs and releases its handle, which a loaded host can stretch past
+        #! hundreds of milliseconds
+        const HandoverReleasedGrace = 60000;
     }
 
     private {
@@ -634,10 +643,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
     #! after which a warning names it and the process ends with the modules left as they are (qore#7239)
     private runHandoverCase(string mode, string handover) {
         int status;
-        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_CLEANUP_HANDOVER_GRACE=300 "
-            "QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode,
-            shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep + "handover-client.qr"), handover),
-            \status);
+        int grace = handover == "never" ? HandoverNeverGrace : HandoverReleasedGrace;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_CLEANUP_HANDOVER_GRACE=%d "
+            "QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s 2>&1", grace, shellQuote(module_dir), shellQuote(qore_bin),
+            mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep + "handover-client.qr"),
+            handover), \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)outside: handle 0, release: False\n", out, "outside of work of the cleanup: " + out);
         assertRegex("(^|\n)outside: wrapped code is the code: True\n", out, "outside of work of the cleanup, "
@@ -674,7 +684,8 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
             assertRegex("(^|\n)later module data deleted\n", out, "the cleanup goes on with the next module: " + out);
         } else {
-            assertRegex("(^|\n)warning: the module cleanup at the end of the process waited 300 ms after its deadline "
+            assertRegex("(^|\n)warning: the module cleanup at the end of the process waited " + HandoverNeverGrace
+                + " ms after its deadline "
                 "\\(QORE_MODULE_CLEANUP_HANDOVER_GRACE\\) for 1 piece of work handed over to other threads, which did "
                 "not end; the modules are left as they are: owner 'module-cleanup-handover-never' at [^\n]*"
                 "AaHandover\\.qm:[0-9]+\n", out, "the handle is reported and no longer waited for: " + out);

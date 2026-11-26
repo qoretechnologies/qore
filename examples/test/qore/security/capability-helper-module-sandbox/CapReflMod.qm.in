@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module with a global variable, which the test reads and writes through reflection (see
+# ../capability-helper-module-sandbox.qtest; the test writes a copy named %%NAME%%)
+
+%modern
+%requires reflection
+
+module %%NAME%% {
+    version = "1.0";
+    desc = "a module global for capability-helper-module-sandbox.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () { %%NAME%%::sec = "module-data"; };
+}
+
+public namespace %%NAME%% {
+    public our string sec;
+
+    #! returns the reflection object of the global variable
+    public auto sub var() {
+        return GlobalVar::forName("%%NAME%%::sec");
+    }
+
+    #! returns the value of the global variable
+    public string sub get() {
+        return sec;
+    }
+
+    #! returns the reflection object of get()
+    public auto sub fn() {
+        return Function::forName("%%NAME%%::get");
+    }
+}

@@ -1793,9 +1793,15 @@ class QoreCatalogGeneratorRecord {
     static *string qoreCheckout() {
         *string repo = ENV{QoreSourceEnv};
         if (!repo) {
-            *string script_dir = get_script_dir();
-            if (script_dir) {
-                repo = dirname(script_dir);
+            *string script_path = get_script_path();
+            if (script_path) {
+                # the checkout is the parent of the directory of this tool, which is resolved first: the path that
+                # the tool was run with can be relative or a symbolic link to it (qore#7689)
+                try {
+                    repo = dirname(dirname(realpath(script_path)));
+                } catch (hash<ExceptionInfo> ex) {
+                    # the tool's path cannot be resolved: no checkout
+                }
             }
         }
         if (!repo || (!is_dir(repo + "/.git") && !is_file(repo + "/.git"))) {

@@ -2439,7 +2439,9 @@ class NoView inherits AbstractHttpRequestHandler {
             assertNeq("ok", r{"class." + cls}, "class " + cls + " by name");
         }
         list<string> objs = r.objects.split(",");
-        assertTrue(objs.size() > 1, "the context, the header and the listener have objects: " + r.objects);
+        # the handler's listener view is the one object that it gets: the context of a handler of restricted code has
+        # no object of the server (qore#7303)
+        assertEq(("HttpListenerHandlerView",), objs, "the objects that the handler gets: " + r.objects);
         foreach string cls in (objs) {
             assertFalse(cls == "RequestHelper" || cls == "HandlerSocketState" || cls == "HttpListener",
                 "the handler gets no object of the server's state: " + cls);
