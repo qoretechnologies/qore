@@ -291,10 +291,34 @@ public:
     DLLEXPORT void deleteData(ExceptionSink* xsink);
 
     //! adds a function variant
+    /** A variant added to a function that a Program's namespace shares with a namespace that no Program owns is the
+        Program's: the namespace gets its own copy of the function first (copy on write, qore#7588), and the variant
+        keeps the declarations that a binary module added to Programs at run time that it names.  A variant added at
+        run time to a namespace that no Program owns itself (the static system namespace or a module's namespace) is
+        shared by every Program: its signature must not name a class, hashdecl or enum that a binary module added to a Program at run time, which
+        is freed with that Program; such a variant is refused with a QoreStandardException (\c
+        RUNTIME-DECLARATION-ERROR), which the caller converts with AbstractException::convert(), and is freed; add it to
+        that Program's own namespace instead (qore#7680).  In a module's namespace initialization, where additions are
+        committed when it returns, the check is made when the variant is added, and a variant that names a declaration
+        that a namespace added in the same initialization makes mortal is refused when it is committed, with the
+        exception raised as an error of the module's initialization
+    */
     DLLEXPORT void addBuiltinVariant(const char* name, q_func_t f, int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
     //! adds a function variant
-    /** @since %Qore 0.9.5
+    /** A variant added to a function that a Program's namespace shares with a namespace that no Program owns is the
+        Program's: the namespace gets its own copy of the function first (copy on write, qore#7588), and the variant
+        keeps the declarations that a binary module added to Programs at run time that it names.  A variant added at
+        run time to a namespace that no Program owns itself (the static system namespace or a module's namespace) is
+        shared by every Program: its signature must not name a class, hashdecl or enum that a binary module added to a Program at run time, which
+        is freed with that Program; such a variant is refused with a QoreStandardException (\c
+        RUNTIME-DECLARATION-ERROR), which the caller converts with AbstractException::convert(), and is freed; add it to
+        that Program's own namespace instead (qore#7680).  In a module's namespace initialization, where additions are
+        committed when it returns, the check is made when the variant is added, and a variant that names a declaration
+        that a namespace added in the same initialization makes mortal is refused when it is committed, with the
+        exception raised as an error of the module's initialization
+
+        @since %Qore 0.9.5
     */
     DLLEXPORT void addBuiltinVariant(void* ptr, const char* name, q_external_func_t f,
         int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT,

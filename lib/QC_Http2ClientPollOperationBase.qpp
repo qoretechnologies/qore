@@ -1002,10 +1002,9 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 }
                 if (registered) {
                     ASYNC_IO_TRACE("H2Client handleReading: signaling stream=%d\n", sid32);
-                    if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
-                            sid32) == data_ready_streams.end()) {
-                        data_ready_streams.push_back(sid32);
-                    }
+                    // an abort() on another thread can add to the list at the same time (issue #7699)
+                    AutoLocker al(sq_lock);
+                    addDataReadyStreamLocked(sid32);
                 }
             }
         }
@@ -1357,8 +1356,25 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     std::unordered_map<std::string, AbstractAsyncAction*> actions_copy;
     // released after stream_lock, as releasing an action can run code that uses this operation again
     std::unordered_map<std::string, ChannelAction*> old_completed_channel_actions;
+    // the streams fail with the error that the connection recorded first: an abort() on another thread and the
+    // failure that it causes on the I/O thread (a read of the aborted connection) both notify the streams, and the
+    // streams that either notifies fail with the abort (issue #7699)
+    std::string err_str = err;
+    std::string desc_str = desc;
     {
         AutoLocker al(stream_lock);
+        if (error_info) {
+            QoreValue ev = error_info->getKeyValue("err");
+            QoreValue dv = error_info->getKeyValue("desc");
+            if (ev.getType() == NT_STRING) {
+                QoreStringValueHelper ev_str(ev);
+                err_str = ev_str->c_str();
+            }
+            if (dv.getType() == NT_STRING) {
+                QoreStringValueHelper dv_str(dv);
+                desc_str = dv_str->c_str();
+            }
+        }
         actions_copy = std::move(stream_actions);
         stream_actions.clear();
         old_completed_channel_actions.swap(completed_channel_actions);
@@ -1375,7 +1391,7 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     std::vector<int32_t> failed_streams;
     for (auto& [sid, action] : actions_copy) {
         if (action) {
-            action->executeError(err, desc, xsink);
+            action->executeError(err_str.c_str(), desc_str.c_str(), xsink);
             action->deref(xsink);
             failed_streams.push_back(static_cast<int32_t>(std::strtol(sid.c_str(), nullptr, 10)));
         }
@@ -1395,9 +1411,9 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
                 continue;
             }
             notify_streams.erase(i);
-            if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid32) == data_ready_streams.end()) {
-                data_ready_streams.push_back(sid32);
-            }
+            // under sq_lock, as this runs on the thread that calls abort(), which can be any thread, while the I/O
+            // thread adds to the list and the controller takes it (issue #7699)
+            addDataReadyStreamLocked(sid32);
         }
     }
 }
@@ -1651,9 +1667,10 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
         }
         // a refused stream is dispatched too, so that its listener reads its queue and sees the error; the reading
         // cycle may have listed the stream already
-        if ((drain_count > 0 || refused) && std::find(data_ready_streams.begin(), data_ready_streams.end(),
-                stream_id) == data_ready_streams.end()) {
-            data_ready_streams.push_back(stream_id);
+        if (drain_count > 0 || refused) {
+            // an abort() on another thread can add to the list at the same time (issue #7699)
+            AutoLocker al(sq_lock);
+            addDataReadyStreamLocked(stream_id);
         }
         if (refused) {
             completed.push_back(stream_id);
@@ -1672,9 +1689,9 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                 ExceptionSink push_xsink;
                 qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
                 push_xsink.clear();
-                if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
-                        == data_ready_streams.end()) {
-                    data_ready_streams.push_back(stream_id);
+                {
+                    AutoLocker al(sq_lock);
+                    addDataReadyStreamLocked(stream_id);
                 }
                 completed.push_back(stream_id);
             }
@@ -1690,9 +1707,9 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
             ExceptionSink push_xsink;
             qore_queue_ops(info.queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
-            if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
-                    stream_id) == data_ready_streams.end()) {
-                data_ready_streams.push_back(stream_id);
+            {
+                AutoLocker al(sq_lock);
+                addDataReadyStreamLocked(stream_id);
             }
             completed.push_back(stream_id);
         }

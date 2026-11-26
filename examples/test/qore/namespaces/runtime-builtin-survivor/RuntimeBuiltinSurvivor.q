@@ -63,6 +63,47 @@ switch (which) {
         dbg_keep_until_cleanup(s);
         break;
     }
+    case "cycle": {
+        # two Programs whose classes, added at run time, name each other: they keep each other until library cleanup,
+        # which frees them (qore#7680)
+        Program a(PO_NEW_STYLE);
+        a.parse("sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "cycle");
+        Program b(PO_NEW_STYLE);
+        a.callFunction("naming", b, 5);
+        delete a;
+        delete b;
+        if (dbg_cross_program_cycles() != 2) {
+            printf("no cycle of two\n");
+            exit(5);
+        }
+        break;
+    }
+    case "shared": {
+        # a variant of the static system namespace itself that names a class added at run time is refused (qore#7680)
+        Program a(PO_NEW_STYLE);
+        a.parse("sub add() { dbg_add_runtime_namespace(\"DbgRtNs\", 1); }
+sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "shared");
+        a.callFunction("add");
+        Program q(PO_NEW_STYLE);
+        q.parse("sub naming(Program p, int k) { dbg_add_runtime_naming(p, k); }", "q");
+        # a variant added through q's copy of the function is q's (copy on write, qore#7588), and keeps the class
+        q.callFunction("naming", a, 3);
+        try {
+            q.callFunction("naming", a, 8);
+            printf("the variant was not refused\n");
+            exit(6);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "RUNTIME-DECLARATION-ERROR") {
+                printf("unexpected exception: %s: %s\n", ex.err, ex.desc);
+                exit(7);
+            }
+        }
+        # and a class of the static system namespace names it without a reference
+        a.callFunction("naming", a, 4);
+        delete a;
+        delete q;
+        break;
+    }
     case "both": {
         # an object, whose destructor is the module's, and the Program that shares the class and its static variables
         object o = c.callFunction("mk");
