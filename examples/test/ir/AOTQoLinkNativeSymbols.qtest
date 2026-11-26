@@ -258,7 +258,7 @@ int main(int, char**) {
     init_" + agg_symbol + "_qo(pgm);
     int rc = qore_aot_script_end_batch(pgm);
     if (rc != 0) {
-        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm));
+        fprintf(stderr, \"batch flush failed rc=%d: %s\\n\", rc, qore_last_error(pgm) ? qore_last_error(pgm) : \"(reported above)\");
         qore_destroy_program(pgm);
         qore_cleanup();
         return 1;

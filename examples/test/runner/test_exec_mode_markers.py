@@ -258,6 +258,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
+        # - AOTBatchRefusedErrorOutput (#7700): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
@@ -404,6 +405,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTLinkUnresolvedReference.qtest",
+                                 "examples/test/ir/AOTBatchRefusedErrorOutput.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/AOTDebugCatchTables.qtest",
