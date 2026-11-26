@@ -24420,7 +24420,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
     }
 
     while (true) {
-        switch (h2_state) {
+        switch (h2_state.load(std::memory_order_acquire)) {
             case H2C_SEND_PREFACE: {
                 // Send client connection preface (SETTINGS frame)
                 int rv = h2_session->sendConnectionPrefaceNonBlocking(xsink);
@@ -24433,7 +24433,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
                     return getSocketPollInfoHash(xsink, rv);
                 }
-                h2_state = H2C_RECV_PREFACE;
+                advanceState(H2C_SEND_PREFACE, H2C_RECV_PREFACE);
                 // Fall through to receive preface
             }
 
@@ -24615,9 +24615,7 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 }
 
                 // No completed streams yet - check if we're past the preface stage
-                if (h2_state == H2C_RECV_PREFACE) {
-                    h2_state = H2C_READING;
-                }
+                advanceState(H2C_RECV_PREFACE, H2C_READING);
 
                 if (goaway_done()) {
                     h2_state = H2C_CLOSED;
@@ -24638,7 +24636,8 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 return nullptr;
 
             default:
-                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d", h2_state);
+                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d",
+                    h2_state.load(std::memory_order_acquire));
                 return nullptr;
         }
     }

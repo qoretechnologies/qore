@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - an HTTP/2 connection over TLS aborted on another thread while the async I/O thread reads it
+
+/*  Http2ClientAbortDataReady.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qoretechnologies/qore#7699: the abort() of an HTTP/2 client poll operation called from Qore code, on a thread
+    of its own while the async I/O thread runs the operation, marked the streams that it failed as having data
+    ready in a list that the I/O thread changes and takes without a lock (when it reads data for a stream with a
+    listener, and when it dispatches the notifications of the step that it ran): the two threads changed the list at
+    the same time.  The abort also set the state of the connection's multiplexing operation, which the I/O thread
+    reads and changes, without synchronization.  The list is now guarded by a lock and the state is atomic, and a
+    ThreadSanitizer build reports both races without the fix.
+
+    The failure that the abort causes on the I/O thread (the read of the aborted connection fails) notified the
+    streams too, with its own error: a request failed with HTTP2-READ-ERROR instead of HTTP2-ABORT when the I/O
+    thread notified it first.  The streams now fail with the error that the connection recorded first.  Each round
+    checks that the stream's listener is told of the abort and that the request fails with it while the server
+    sends data.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http2ClientAbortDataReadyTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The connections aborted: each abort is one chance for the race
+const Rounds = 20;
+
+#! Hands the test each response stream that the server sets up, so that the test writes to it directly
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! receives {sock, stream_id, wake} for each stream
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        streams.push({"sock": sock, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+}
+
+class Http2ClientAbortDataReadyTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("Http2ClientAbortDataReady", "1.0") {
+        addTestCase("abort() from Qore code while the I/O thread reads the connection", \testAbortWhileReading());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"debug": False});
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testAbortWhileReading() {
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        for (int i = 0; i < Rounds; ++i) {
+            abortRound(url, sprintf("round %d", i));
+        }
+    }
+
+    #! Aborts a connection from this thread while the server sends data on a stream with a listener
+    private abortRound(string url, string label) {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+
+        # the response is returned whole, so its data stays in the stream until the I/O thread takes it for the
+        # stream's listener
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+        hash<auto> st = handler.streams.get(HangGuard);
+        assertEq("hash", st.type(), label + ": the server set up the stream");
+        HttpClientIo::Http2ClientConnection conn = cast<HttpClientIo::Http2ClientConnection>(stream.getConnection());
+        # the stream's listener: the I/O thread marks the stream as having data ready each time it reads data for it
+        Queue q();
+        conn.registerStreamQueue(h.stream_id, q);
+
+        # the server sends data until the connection is gone, so that the I/O thread reads while the abort runs
+        Counter sender_done(1);
+        background sub () {
+            on_exit sender_done.dec();
+            try {
+                for (int j = 0; ; ++j) {
+                    st.sock.sendHttp2StreamData(st.stream_id, binary(sprintf("data: %d\n\n", j)), False);
+                    if (st.wake) {
+                        st.wake();
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the stream or the connection is gone
+            }
+        }();
+        on_exit {
+            # the sender ends when the abort ends the connection; this ends it if an assertion failed first
+            conn.getPollOperation().abort();
+            sender_done.waitForZero(HangGuard);
+        }
+
+        # the listener's queue has data: the I/O thread reads the stream for it
+        auto v = q.get(HangGuard);
+        assertEq(Type::Binary, v.type(), label + ": the listener gets the stream's data");
+
+        # the abort runs here, not on the I/O thread
+        conn.getPollOperation().abort();
+
+        # the listener is told of the end of the stream: its queue ends with the failure of the connection, after
+        # the data that was read before the abort
+        while (True) {
+            v = q.get(HangGuard);
+            if (v.typeCode() != NT_BINARY) {
+                break;
+            }
+        }
+        assertEq(Type::Hash, v.type(), label + ": the listener's queue ends with the failure of the connection");
+        assertTrue(v.error, label + ": the marker reports an error");
+        assertTrue(v.end_stream, label + ": the marker ends the stream");
+        assertTrue(conn.getPollOperation().isClosed(), label + ": the operation is closed");
+        # the request fails with the abort
+        *string err;
+        try {
+            h.future.get(HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("HTTP2-ABORT", err, label + ": the request fails with the abort");
+    }
+}
