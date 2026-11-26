@@ -32432,7 +32432,7 @@
           "message": "Identificador de la ejecución de sincronización SCIM."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (admin)",
+          "source": "Get Vibe Work usage by user (admin)",
           "message": "Obtener Uso de Vibe Work por Usuario (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "Fin de la ventana consultada, como marca de tiempo Unix en segundos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (admin)",
+          "source": "Get Vibe Work usage by agent (admin)",
           "message": "Obtener Uso de Vibe Work por Agente (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "Fin de la ventana consultada, como marca de tiempo Unix en segundos."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (admin)",
+          "source": "Get Vibe Work usage over time (admin)",
           "message": "Obtener Uso de Vibe Work a lo Largo del Tiempo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "Mes"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (admin)",
+          "source": "Get Vibe Code usage by workspace (admin)",
           "message": "Obtener Uso de Vibe Code por Espacio de Trabajo (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "ID del espacio de trabajo para filtrar los resultados."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (admin)",
+          "source": "Get Vibe Code usage by organization (admin)",
           "message": "Obtener Uso de Vibe Code por Organización (Admin)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

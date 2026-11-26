@@ -32432,7 +32432,7 @@
           "message": "SCIM 同步執行的識別碼。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (admin)",
+          "source": "Get Vibe Work usage by user (admin)",
           "message": "取得依使用者區分的 Vibe Work 用量（管理員）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "查詢時段的終點，以秒為單位的 Unix 時間戳記。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (admin)",
+          "source": "Get Vibe Work usage by agent (admin)",
           "message": "取得依代理區分的 Vibe Work 用量（管理員）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "查詢時段的終點，以秒為單位的 Unix 時間戳記。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (admin)",
+          "source": "Get Vibe Work usage over time (admin)",
           "message": "取得 Vibe Work 用量隨時間的變化（管理員）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "月"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (admin)",
+          "source": "Get Vibe Code usage by workspace (admin)",
           "message": "取得依工作空間區分的 Vibe Code 用量（管理員）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "用於篩選結果的工作空間 ID。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (admin)",
+          "source": "Get Vibe Code usage by organization (admin)",
           "message": "取得依組織區分的 Vibe Code 用量（管理員）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

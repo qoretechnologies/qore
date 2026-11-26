@@ -32432,7 +32432,7 @@
           "message": "SCIM 同期の実行の識別子。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (admin)",
+          "source": "Get Vibe Work usage by user (admin)",
           "message": "ユーザー別の Vibe Work 使用量を取得（管理者）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "照会する期間の終了（Unix タイムスタンプ、秒単位）。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (admin)",
+          "source": "Get Vibe Work usage by agent (admin)",
           "message": "エージェント別の Vibe Work 使用量を取得（管理者）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "照会する期間の終了（Unix タイムスタンプ、秒単位）。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (admin)",
+          "source": "Get Vibe Work usage over time (admin)",
           "message": "Vibe Work 使用量の推移を取得（管理者）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "月"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (admin)",
+          "source": "Get Vibe Code usage by workspace (admin)",
           "message": "ワークスペース別の Vibe Code 使用量を取得（管理者）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "結果をフィルターするためのワークスペース ID。"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (admin)",
+          "source": "Get Vibe Code usage by organization (admin)",
           "message": "組織別の Vibe Code 使用量を取得（管理者）"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

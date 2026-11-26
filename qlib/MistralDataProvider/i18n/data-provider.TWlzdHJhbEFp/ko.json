@@ -32432,7 +32432,7 @@
           "message": "SCIM 동기화 실행의 식별자입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.display_name": {
-          "source": "Get vibe work usage by user (admin)",
+          "source": "Get Vibe Work usage by user (admin)",
           "message": "사용자별 Vibe Work 사용량 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS11c2Vy.short_desc": {
@@ -32468,7 +32468,7 @@
           "message": "조회 구간의 끝으로, 초 단위 Unix 타임스탬프입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.display_name": {
-          "source": "Get vibe work usage by agent (admin)",
+          "source": "Get Vibe Work usage by agent (admin)",
           "message": "에이전트별 Vibe Work 사용량 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1ieS1hZ2VudA.short_desc": {
@@ -32504,7 +32504,7 @@
           "message": "조회 구간의 끝으로, 초 단위 Unix 타임스탬프입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.display_name": {
-          "source": "Get vibe work usage over time (admin)",
+          "source": "Get Vibe Work usage over time (admin)",
           "message": "시간 경과에 따른 Vibe Work 사용량 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtd29yay11c2FnZS1vdmVyLXRpbWU.short_desc": {
@@ -32568,7 +32568,7 @@
           "message": "월"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.display_name": {
-          "source": "Get vibe code usage by workspace (admin)",
+          "source": "Get Vibe Code usage by workspace (admin)",
           "message": "워크스페이스별 Vibe Code 사용량 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS13b3Jrc3BhY2U.short_desc": {
@@ -32616,7 +32616,7 @@
           "message": "결과를 필터링할 워크스페이스 ID입니다."
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.display_name": {
-          "source": "Get vibe code usage by organization (admin)",
+          "source": "Get Vibe Code usage by organization (admin)",
           "message": "조직별 Vibe Code 사용량 조회(관리자)"
         },
         "app.TWlzdHJhbEFp.action.YWRtaW4tZ2V0LXZpYmUtY29kZS11c2FnZS1ieS1vcmdhbml6YXRpb24.short_desc": {

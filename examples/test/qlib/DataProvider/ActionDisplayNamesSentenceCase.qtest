@@ -17,17 +17,26 @@
     display names written in the action hashes of the modules' sources: only its first word starts with a capital
     letter, apart from words in capitals (API, PDF), words with a capital after their first letter (WebSocket,
     OAuth2), single capital letters, and proper names: an app's display name (ex: "Google Drive", "Klaviyo") and the
-    product names in @ref ProperNames.
+    product names in @ref ProperNames and @ref ProperPhrases.
 
     An app's display name is a proper name as a whole: the words of "Constant Contact" or "Server Sent Events" are
     ordinary words elsewhere ("Create a contact", "List calendar events").  A one-word app name is a proper name
     only in its own module, as it is an ordinary word in the others (the "Segment" app, a Klaviyo segment).
+
+    The scan finds an action's display name in the source of its action hash when no nested hash comes before it;
+    actions whose display name follows a nested hash (such as their billing information) or that are declared in
+    REST manifests by their operation ID are not covered.
 */
 class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     public {
         #! Product names that are not the name of an app in qlib but appear in action names
         const ProperNames = (
             "Slack", "Word", "Excel", "PowerPoint", "Outlook", "Teams",
+        );
+
+        #! Product names of more than one word that are not the name of an app in qlib but appear in action names
+        const ProperPhrases = (
+            "Vibe Code", "Vibe Work",
         );
     }
 
@@ -95,6 +104,9 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
         assertEq((), titleCaseWords("Get PDF from OneDrive in Slack (v2) X", "X", multi, apps));
         # a word in parentheses and after a slash
         assertEq(("(Admin)", "Inactive"), titleCaseWords("List users (Admin) active/Inactive", "X", multi, apps));
+        # a product name of more than one word
+        assertEq((), titleCaseWords("Get Vibe Work usage by user (admin)", "X", multi, apps));
+        assertEq(("Work",), titleCaseWords("Get vibe Work usage", "X", multi, apps));
     }
 
     sentenceCaseTest() {
@@ -115,7 +127,7 @@ class ActionDisplayNamesSentenceCaseTest inherits QUnit::Test {
     private static list<string> titleCaseWords(string label, string mod, hash<string, bool> multi,
             hash<string, hash<string, bool>> apps) {
         # app names, longest first, are replaced by a marker that is not a word
-        list<string> names = keys multi;
+        list<string> names = keys multi + ProperPhrases;
         if (*hash<string, bool> own = apps{mod}) {
             names += keys own;
         }
