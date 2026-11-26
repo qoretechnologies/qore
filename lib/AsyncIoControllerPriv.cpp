@@ -11658,9 +11658,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         } else {
                             // Still pending — target socket-backed Qore ops for
                             // immediate re-poll only when there is work that the
-                            // OS readiness API may not deliver promptly: pending
-                            // writes/connect completion or application-level data
-                            // buffered in SSL/HTTP/2 layers (not the kernel buffer).
+                            // OS readiness API may not deliver: application-level
+                            // data buffered in SSL/HTTP/2 layers (not the kernel
+                            // buffer), and on macOS/BSD a wait for writability, as
+                            // for the I/O thread's own steps (see the re-queue of
+                            // POLLOUT results after Phase 2: kqueue reports a
+                            // non-blocking connect's completion only once).
+                            //
+                            // Elsewhere the event loop's level-triggered readiness
+                            // reports a writable descriptor whenever it is waited
+                            // for, so a wait for writability sleeps on the fd like
+                            // a read wait: re-polling it at once steps the op
+                            // continuously while its peer does not read (qore#7707).
                             //
                             // Plain read waits, including EventNotifier waits, must
                             // sleep on the fd. Re-queuing them here turns an event
@@ -11699,8 +11708,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                         pd_xsink.clear();
                                     }
                                 }
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+                                bool rewake_write_wait = (ev & SOCK_POLLOUT) != 0;
+#else
+                                bool rewake_write_wait = false;
+#endif
                                 if (!event_notifier && !sh.empty()
-                                        && ((ev & SOCK_POLLOUT) || has_pending_data)) {
+                                        && (rewake_write_wait || has_pending_data)) {
                                     t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {
