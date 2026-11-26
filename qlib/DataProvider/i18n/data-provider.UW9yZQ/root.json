@@ -16,8 +16,8 @@
           "message": "Built-in Qore data pipeline processors for filtering, transforming, and manipulating records in data pipelines"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
-          "message": "Filter Records"
+          "source": "Filter records",
+          "message": "Filter records"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
           "source": "Filter records by expression or DPQL string",
@@ -52,8 +52,8 @@
           "message": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
-          "message": "Select Fields"
+          "source": "Select fields",
+          "message": "Select fields"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
           "source": "Select and optionally rename fields from records",
@@ -76,8 +76,8 @@
           "message": "A list of field specifications; use `name` to keep a field as-is, or `new_name=old_name` to rename a field (e.g. `name`, `email`, `customer_name=name`)"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
-          "message": "Set Fields"
+          "source": "Set fields",
+          "message": "Set fields"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
           "source": "Set fields to constant values in each record",
@@ -100,8 +100,8 @@
           "message": "A hash of field names and values to set on each record; existing fields are overwritten, new fields are added"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
-          "message": "Remove Fields"
+          "source": "Remove fields",
+          "message": "Remove fields"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
           "source": "Remove specified fields from records",
@@ -124,8 +124,8 @@
           "message": "A list of field names to remove from each record; supports dot-notation for nested fields (e.g. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
-          "message": "Search and Replace"
+          "source": "Search and replace",
+          "message": "Search and replace"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
           "source": "Search and replace text in a record field",
@@ -268,8 +268,8 @@
           "message": "Match all occurrences, not just the first"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
-          "message": "Record Limit"
+          "source": "Record limit",
+          "message": "Record limit"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
           "source": "Limit the number of records passing through",
@@ -292,8 +292,8 @@
           "message": "The maximum number of records to pass through the pipeline; once the limit is reached, all subsequent records are dropped"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
-          "message": "Running Statistics"
+          "source": "Running statistics",
+          "message": "Running statistics"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
           "source": "Compute running statistics over windows of numeric records",
@@ -328,8 +328,8 @@
           "message": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
-          "message": "Moving Average"
+          "source": "Moving average",
+          "message": "Moving average"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
           "source": "Compute simple and exponential moving averages per record",
@@ -376,8 +376,8 @@
           "message": "Controls how much weight is given to the most recent value vs. historical values when computing the exponential moving average (EMA); higher values make the average respond faster to recent changes but also make it noisier.\n\n**Typical values**: `0.1` (smooth, slow to react), `0.2` (balanced, good default), `0.5` (responsive, tracks changes quickly); must be between `0.0` and `1.0` exclusive; default: `0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
-          "message": "Trend Analysis"
+          "source": "Trend analysis",
+          "message": "Trend analysis"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
           "source": "Detect trends using linear regression over windows of records",
@@ -424,8 +424,8 @@
           "message": "The minimum slope magnitude for the trend to be classified as `rising` or `falling`; slopes below this threshold are classified as `flat`.\n\n**Typical values**: `0.001` (sensitive — detects very gradual trends), `0.01` (moderate), `0.1` (only strong trends); use smaller values when your data has a large scale and meaningful trends have small slopes; must be >= `0`; default: `0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
-          "message": "Anomaly Detection"
+          "source": "Anomaly detection",
+          "message": "Anomaly detection"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
           "source": "Detect anomalous values using z-score analysis per record",
@@ -472,8 +472,8 @@
           "message": "How many standard deviations from the average a value must be to count as anomalous (this is called a *z-score*); for example, a threshold of `3.0` means a value must be more than 3 standard deviations away from the average to be flagged.\n\n**Typical values**: `2.0` (sensitive — flags ~5% of random data), `3.0` (standard — flags ~0.3%), `4.0` (conservative — only extreme outliers); must be greater than `0`; default: `3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
-          "message": "Calculate Data Distribution"
+          "source": "Calculate data distribution",
+          "message": "Calculate data distribution"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
           "source": "Computes median, quartiles, and spread of values",
@@ -520,8 +520,8 @@
           "message": "A comma-separated list of percentile values to compute (`0`–`100`); for example, `50` is the median, `25` and `75` are the lower and upper quartiles; default: `\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
-          "message": "Find Related Fields"
+          "source": "Find related fields",
+          "message": "Find related fields"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
           "source": "Measures how strongly fields move together",
@@ -556,8 +556,8 @@
           "message": "The number of records to accumulate before computing the correlation matrix; the window is cleared after each computation.\n\n**Sizing guidance**: correlation needs enough data for stable results; use at least `30` for basic correlation, `100`+ for reliable results"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
-          "message": "Find Delayed Relationships"
+          "source": "Find delayed relationships",
+          "message": "Find delayed relationships"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
           "source": "Discovers if changes in one field predict changes in another",
@@ -616,8 +616,8 @@
           "message": "The maximum number of time steps to shift one field relative to the other; set to `0` to use `window_size / 4` automatically; default: `0` (auto)"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
-          "message": "Count Value Ranges"
+          "source": "Count value ranges",
+          "message": "Count value ranges"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
           "source": "Groups values into ranges and counts how many fall in each",
@@ -684,8 +684,8 @@
           "message": "Quantile (equal-count bins)"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
-          "message": "Measure Speed of Change"
+          "source": "Measure speed of change",
+          "message": "Measure speed of change"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
           "source": "Tracks how fast values are changing and accelerating",
@@ -732,8 +732,8 @@
           "message": "When enabled, applies a simple moving average over the window before computing derivatives, reducing noise in the rate of change; disable for raw point-to-point rates; default: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
-          "message": "Monitor Process Stability"
+          "source": "Monitor process Stability",
+          "message": "Monitor process Stability"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -804,8 +804,8 @@
           "message": "The expected center/target value for the process; when not set, the mean of the sliding window history is used automatically; set to any value (including `0`) to use a fixed center line; default: auto (use window mean)"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
-          "message": "Detect Repeating Patterns"
+          "source": "Detect repeating patterns",
+          "message": "Detect repeating patterns"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
           "source": "Finds cyclical patterns in data automatically",
@@ -864,8 +864,8 @@
           "message": "The minimum strength of a repeating pattern (measured as autocorrelation, `0`–`1`) for it to be reported; autocorrelation measures how similar a data series is to a shifted copy of itself.\n\n**Typical values**: `0.2` (detect weak/noisy patterns), `0.3` (balanced default), `0.5` (only report strong, clear patterns); default: `0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
-          "message": "Group By and Aggregate"
+          "source": "Group by and aggregate",
+          "message": "Group by and aggregate"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
           "source": "Group records by field values and compute aggregates per group",

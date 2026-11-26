@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Vytvořit záznam"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Název tabulky v Dynamics, např.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Vyhledat jeden záznam"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Název tabulky v Dynamics, např.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Vyhledat záznamy"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Název tabulky v Dynamics, např.: `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovat záznamy"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Název tabulky v Dynamics, např.: `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Smazat záznamy"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

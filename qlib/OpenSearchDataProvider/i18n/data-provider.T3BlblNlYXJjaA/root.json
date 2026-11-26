@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
-          "source": "Search Index",
-          "message": "Search Index"
+          "source": "Search index",
+          "message": "Search index"
         },
         "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
           "source": "Search for data in an OpenSearch index",
@@ -1096,8 +1096,8 @@
           "message": "If `true` (default `false`), returns document version as part of a hit"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
-          "source": "k-NN Search",
-          "message": "k-NN Search"
+          "source": "k-NN search",
+          "message": "k-NN search"
         },
         "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
           "source": "Search an OpenSearch index with a query vector",
@@ -1288,8 +1288,8 @@
           "message": "Optional minimum score threshold"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
-          "source": "Neural Search",
-          "message": "Neural Search"
+          "source": "Neural search",
+          "message": "Neural search"
         },
         "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
           "source": "Search an OpenSearch index with text or sparse tokens",
@@ -1552,8 +1552,8 @@
           "message": "Optional minimum score threshold"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
-          "source": "Hybrid Search",
-          "message": "Hybrid Search"
+          "source": "Hybrid search",
+          "message": "Hybrid search"
         },
         "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
           "source": "Combine multiple OpenSearch query clauses",
@@ -1696,8 +1696,8 @@
           "message": "Maximum number of search results to retrieve from each shard for each hybrid subquery"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
-          "source": "Create Vector Index",
-          "message": "Create Vector Index"
+          "source": "Create Vector index",
+          "message": "Create Vector index"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
           "source": "Create an OpenSearch vector index",
@@ -1944,8 +1944,8 @@
           "message": "Period to wait for a response"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
-          "source": "Add Document",
-          "message": "Add Document"
+          "source": "Add document",
+          "message": "Add document"
         },
         "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
           "source": "Add a document to OpenSearch",
@@ -2100,8 +2100,8 @@
           "message": "If `true` (default `false`), the destination must be an index alias"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
-          "source": "Bulk Operations",
-          "message": "Bulk Operations"
+          "source": "Bulk operations",
+          "message": "Bulk operations"
         },
         "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
           "source": "Perform bulk document operations",
@@ -2328,8 +2328,8 @@
           "message": "If true, the destination must be an index alias"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
-          "source": "Scroll Search",
-          "message": "Scroll Search"
+          "source": "Scroll search",
+          "message": "Scroll search"
         },
         "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {
           "source": "Search with scroll API for large result sets",

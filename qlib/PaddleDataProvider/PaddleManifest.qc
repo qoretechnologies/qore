@@ -266,7 +266,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/customers",
                 "operation_id": "list-customers",
-                "display_name": "List Customers",
+                "display_name": "List customers",
                 "short_desc": "List the customers in this Paddle account",
                 "desc": "Lists customers, newest first by default.\n\n"
                     "Only `active` customers are returned unless `status` says otherwise, which is worth "
@@ -310,7 +310,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/customers",
                 "operation_id": "create-customer",
-                "display_name": "Create Customer",
+                "display_name": "Create customer",
                 "short_desc": "Create a customer",
                 "desc": "Creates a customer.\n\n"
                     "`email` is the only required field and it must be unique in the account: creating a "
@@ -436,7 +436,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/products",
                 "operation_id": "list-products",
-                "display_name": "List Products",
+                "display_name": "List products",
                 "short_desc": "List the products in the catalog",
                 "desc": "Lists catalog products.\n\n"
                     "Only `active` products are returned unless `status` says otherwise. Set `include` to "
@@ -474,7 +474,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/products",
                 "operation_id": "create-product",
-                "display_name": "Create Product",
+                "display_name": "Create product",
                 "short_desc": "Create a catalog product",
                 "desc": "Creates a product in the catalog.\n\n"
                     "A product is what you sell; it carries no price of its own. Create at least one price "
@@ -606,7 +606,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/prices",
                 "operation_id": "list-prices",
-                "display_name": "List Prices",
+                "display_name": "List prices",
                 "short_desc": "List the prices in the catalog",
                 "desc": "Lists catalog prices.\n\n"
                     "Only `active` prices are returned unless `status` says otherwise. Filter by "
@@ -656,7 +656,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/prices",
                 "operation_id": "create-price",
-                "display_name": "Create Price",
+                "display_name": "Create price",
                 "short_desc": "Create a price for a catalog product",
                 "desc": "Creates a price against a product.\n\n"
                     "`unit_price` is an amount in the **smallest unit of its currency** given as a string - "
@@ -759,7 +759,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/subscriptions",
                 "operation_id": "list-subscriptions",
-                "display_name": "List Subscriptions",
+                "display_name": "List subscriptions",
                 "short_desc": "List the subscriptions in this Paddle account",
                 "desc": "Lists subscriptions.\n\n"
                     "Filter by `customer_id` for one customer's subscriptions, by `status` for the state "
@@ -839,7 +839,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/transactions",
                 "operation_id": "list-transactions",
-                "display_name": "List Transactions",
+                "display_name": "List transactions",
                 "short_desc": "List the transactions in this Paddle account",
                 "desc": "Lists transactions - the records that calculate and capture revenue.\n\n"
                     "Filter by `status` to separate what has been paid (`completed`, `paid`) from what is "
@@ -904,7 +904,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/transactions",
                 "operation_id": "create-transaction",
-                "display_name": "Create Transaction",
+                "display_name": "Create transaction",
                 "short_desc": "Create a transaction, optionally billing it",
                 "desc": "Creates a transaction: the record of what a customer is being charged for.\n\n"
                     "`items` is required - each entry names a `price_id` and a `quantity`, or carries a "
@@ -992,7 +992,7 @@ public class PaddleManifest {
                 "method": "GET",
                 "path": "/reports",
                 "operation_id": "list-reports",
-                "display_name": "List Reports",
+                "display_name": "List reports",
                 "short_desc": "List the reports requested from this account",
                 "desc": "Lists reports and the state each is in.\n\n"
                     "A report is generated asynchronously: it starts `pending`, becomes `ready` when the "
@@ -1019,7 +1019,7 @@ public class PaddleManifest {
                 "method": "POST",
                 "path": "/reports",
                 "operation_id": "create-report",
-                "display_name": "Create Report",
+                "display_name": "Create report",
                 "short_desc": "Request a report; it is generated asynchronously",
                 "desc": "Requests a report. Paddle generates it in the background, so this returns a report "
                     "in the `pending` state rather than any data.\n\n"

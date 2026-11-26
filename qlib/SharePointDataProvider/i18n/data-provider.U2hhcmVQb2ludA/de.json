@@ -1960,7 +1960,7 @@
           "message": "Das zu adressierende Listenelement"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
-          "source": "Document Added",
+          "source": "Document added",
           "message": "Dokument hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Wird ausgelöst, wenn ein Dokument zu einer Dokumentbibliothek hinzugefügt wird. Verwendet Delta-Abfragen, die genau dort fortgesetzt werden, wo sie aufgehört haben, anstatt die Bibliothek erneut zu lesen"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
-          "source": "Document Modified",
+          "source": "Document modified",
           "message": "Dokument geändert"
         },
         "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Wird ausgelöst, wenn ein Dokument, das sich bereits in einer Bibliothek befindet, geändert wird. Verwendet Delta-Abfragen, die genau dort fortgesetzt werden, wo sie aufgehört haben, anstatt die Bibliothek erneut zu lesen"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
-          "source": "Folder Added",
+          "source": "Folder added",
           "message": "Ordner hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Wird ausgelöst, wenn ein Ordner zu einer Dokumentbibliothek hinzugefügt wird"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
-          "source": "List Item Added",
+          "source": "List item added",
           "message": "Listenelement hinzugefügt"
         },
         "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {

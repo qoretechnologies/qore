@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
+          "source": "List accounts",
           "message": "Elenca account"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
@@ -416,7 +416,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get an Account",
+          "source": "Get an account",
           "message": "Ottieni un account"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -436,7 +436,7 @@
           "message": "L'ID dell'account"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
-          "source": "List Sub-Accounts",
+          "source": "List sub-accounts",
           "message": "Elenca sub-account"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
-          "source": "Get a Sub-Account",
+          "source": "Get a sub-account",
           "message": "Ottieni un sub-account"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
@@ -540,7 +540,7 @@
           "message": "L'ID del sub-account"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
-          "source": "List Domains",
+          "source": "List domains",
           "message": "Elenca domini"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
@@ -624,7 +624,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
-          "source": "Get a Domain",
+          "source": "Get a domain",
           "message": "Ottieni un dominio"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
@@ -644,7 +644,7 @@
           "message": "L'ID del dominio"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
-          "source": "List Page Groups",
+          "source": "List page groups",
           "message": "Elenca gruppi di pagine"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
@@ -720,7 +720,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
-          "source": "List Pages",
+          "source": "List pages",
           "message": "Elenca pagine"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
@@ -828,7 +828,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
-          "source": "Get a Page",
+          "source": "Get a page",
           "message": "Ottieni una pagina"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
@@ -848,7 +848,7 @@
           "message": "L'ID della pagina"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
-          "source": "List Form Fields",
+          "source": "List form fields",
           "message": "Elenca campi del modulo"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
@@ -884,7 +884,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
+          "source": "List leads",
           "message": "Elenca lead"
         },
         "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Offset dei risultati"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get a Lead",
+          "source": "Get a lead",
           "message": "Ottieni un lead"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
@@ -988,7 +988,7 @@
           "message": "L'ID del lead"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create a Lead",
+          "source": "Create a lead",
           "message": "Crea un lead"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "L'ID visitatore da associare a questo lead"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete a Lead",
+          "source": "Delete a lead",
           "message": "Elimina un lead"
         },
         "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "L'identificatore univoco del lead da eliminare"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Get Lead Deletion Request",
+          "source": "Get lead deletion request",
           "message": "Ottieni richiesta di eliminazione del lead"
         },
         "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1148,7 +1148,7 @@
           "message": "ID richiesta di eliminazione"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
-          "source": "Create Lead Deletion Request",
+          "source": "Create lead deletion request",
           "message": "Crea richiesta di eliminazione lead"
         },
         "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
@@ -1220,7 +1220,7 @@
           "message": "Elimina i lead creati entro questa data (inclusa)"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get User",
+          "source": "Get user",
           "message": "Ottieni utente"
         },
         "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
@@ -1240,7 +1240,7 @@
           "message": "L'ID utente (lasciare vuoto per l'utente corrente)"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
-          "source": "Watch New Leads",
+          "source": "Watch new leads",
           "message": "Monitora nuovi lead"
         },
         "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {

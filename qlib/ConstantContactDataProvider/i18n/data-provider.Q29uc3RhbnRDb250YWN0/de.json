@@ -1336,7 +1336,7 @@
           "message": "Der zu löschende Kontakt"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Kontakte auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -1492,7 +1492,7 @@
           "message": "Die Kontakt-ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Create a Contact List",
+          "source": "Create a Contact list",
           "message": "Kontaktliste erstellen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1540,7 +1540,7 @@
           "message": "Ob diese Liste als Favorit markiert werden soll"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Update a Contact List",
+          "source": "Update a Contact list",
           "message": "Kontaktliste aktualisieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1596,7 +1596,7 @@
           "message": "Ob diese Liste als Favorit markiert werden soll"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Delete a Contact List",
+          "source": "Delete a Contact list",
           "message": "Kontaktliste löschen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "Die zu löschende Kontaktliste"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
-          "source": "List Contact Lists",
+          "source": "List Contact lists",
           "message": "Kontaktlisten auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "Get a Contact List",
+          "source": "Get a Contact list",
           "message": "Kontaktliste abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
@@ -1668,7 +1668,7 @@
           "message": "Die Kontaktlisten-ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Tag erstellen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1720,7 +1720,7 @@
           "message": "Vom Kontakt erstellter Tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "Tag aktualisieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
@@ -1752,7 +1752,7 @@
           "message": "Der neue Name des Tags"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Ein Tag löschen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1772,7 +1772,7 @@
           "message": "Der zu löschende Tag"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Tags auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
@@ -1804,7 +1804,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Tag abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Die Tag-ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Create a Custom Field",
+          "source": "Create a custom field",
           "message": "Benutzerdefiniertes Feld erstellen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Datumsfeld"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Update a Custom Field",
+          "source": "Update a custom field",
           "message": "Benutzerdefiniertes Feld aktualisieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1908,7 +1908,7 @@
           "message": "Die neue Bezeichnung für das benutzerdefinierte Feld"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Delete a Custom Field",
+          "source": "Delete a custom field",
           "message": "Benutzerdefiniertes Feld löschen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
@@ -1928,7 +1928,7 @@
           "message": "Das zu löschende benutzerdefinierte Feld"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
-          "source": "List Custom Fields",
+          "source": "List custom fields",
           "message": "Benutzerdefinierte Felder auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
-          "source": "Get a Custom Field",
+          "source": "Get a custom field",
           "message": "Benutzerdefiniertes Feld abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Das zu löschende Segment"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
-          "source": "List Segments",
+          "source": "List segments",
           "message": "Segmente auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Die Segment-ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Create an Email Campaign",
+          "source": "Create an email campaign",
           "message": "E-Mail-Kampagne erstellen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Die Betreffzeile der E-Mail"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Update an Email Campaign",
+          "source": "Update an email campaign",
           "message": "E-Mail-Kampagne aktualisieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2504,7 +2504,7 @@
           "message": "Der neue Name der E-Mail-Kampagne"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Delete an Email Campaign",
+          "source": "Delete an email campaign",
           "message": "E-Mail-Kampagne löschen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2524,7 +2524,7 @@
           "message": "Die zu löschende E-Mail-Kampagne"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
-          "source": "Schedule an Email Campaign",
+          "source": "Schedule an email campaign",
           "message": "E-Mail-Kampagne planen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
@@ -2556,7 +2556,7 @@
           "message": "Das geplante Sendedatum im ISO-8601-Format"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
-          "source": "List Email Campaigns",
+          "source": "List email campaigns",
           "message": "E-Mail-Kampagnen auflisten"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "Get an Email Campaign",
+          "source": "Get an email campaign",
           "message": "E-Mail-Kampagne abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -2668,7 +2668,7 @@
           "message": "Die E-Mail-Kampagnen-ID"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Import Contacts",
+          "source": "Import contacts",
           "message": "Kontakte importieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2704,7 +2704,7 @@
           "message": "Liste der Kontaktlisten-IDs, zu denen die importierten Kontakte hinzugefügt werden sollen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
-          "source": "Export Contacts",
+          "source": "Export contacts",
           "message": "Kontakte exportieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
@@ -2752,7 +2752,7 @@
           "message": "Liste der Feldnamen, die in den Export aufgenommen werden sollen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Add List Members",
+          "source": "Add list members",
           "message": "Listenmitglieder hinzufügen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
@@ -2928,7 +2928,7 @@
           "message": "Liste von Kontaktlisten-IDs, zu denen die Kontakte hinzugefügt werden sollen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
-          "source": "Remove List Members",
+          "source": "Remove list members",
           "message": "Listenmitglieder entfernen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
@@ -3104,7 +3104,7 @@
           "message": "Liste von Kontaktlisten-IDs, aus denen die Kontakte entfernt werden sollen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
-          "source": "Get Email Summary",
+          "source": "Get email summary",
           "message": "E-Mail-Zusammenfassung abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
@@ -3128,7 +3128,7 @@
           "message": "Eine Liste von E-Mail-Kampagnen-IDs, für die Zusammenfassungen abgerufen werden sollen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
+          "source": "Get account",
           "message": "Konto abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
@@ -3140,7 +3140,7 @@
           "message": "Constant Contact-Kontoinformationen abrufen"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
+          "source": "Update account",
           "message": "Konto aktualisieren"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
-          "source": "New Email Campaign",
+          "source": "New email campaign",
           "message": "Neue E-Mail-Kampagne"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
-          "source": "New Contact List",
+          "source": "New Contact list",
           "message": "Neue Kontaktliste"
         },
         "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {

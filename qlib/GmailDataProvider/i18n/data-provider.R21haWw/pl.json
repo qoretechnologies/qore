@@ -340,7 +340,7 @@
           "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Wyszukaj wiadomości"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Token strony służący do pobrania określonej strony wyników na liście"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Pobierz wiadomość"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "ID wiadomości do pobrania"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Pobierz załącznik"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Identyfikator załącznika do pobrania"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nowa wiadomość e-mail"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "Maksymalna liczba wiadomości dostarczanych w jednym cyklu odpytywania; brak ustawienia lub `0` oznacza brak limitu.\n\nLimit jest stosowany od **najstarszego** końca kolejki, więc kursor obserwowania nadal przesuwa się w sposób ciągły, a pozostałe wiadomości są dostarczane w kolejnych cyklach, a nie pomijane. Użyj tego, aby ograniczyć pracę, jaką może wykonać pojedynczy cykl, gdy może nagromadzić się duża kolejka"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nowe załączniki wiadomości e-mail"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Maksymalna liczba wiadomości dostarczanych w jednym cyklu odpytywania; brak ustawienia lub `0` oznacza brak limitu.\n\nLimit jest stosowany od **najstarszego** końca kolejki, więc kursor obserwowania nadal przesuwa się w sposób ciągły, a pozostałe wiadomości są dostarczane w kolejnych cyklach, a nie pomijane. Użyj tego, aby ograniczyć pracę, jaką może wykonać pojedynczy cykl, gdy może nagromadzić się duża kolejka"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Przenieś wiadomość do kosza"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "Identyfikator wiadomości do przeniesienia do kosza; zdarzenia obserwatora przekazują tę wartość jako `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Usuń wiadomość"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "Wartość nagłówka `References`: wartości `Message-ID` wiadomości w rozmowie, na którą udzielana jest odpowiedź, od najstarszej, rozdzielone spacjami i wraz z nawiasami ostrymi. Jeśli nie zostanie ustawiona, używana jest wartość `in_reply_to`. Zdarzenia obserwatora przekazują nagłówek `References` oryginalnej wiadomości"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Wyszukaj wiadomości z metadanymi"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Nagłówki wiadomości do pobrania dla każdej pasującej wiadomości; ignorowane, o ile `format` nie ma wartości `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Przywróć wiadomość z kosza"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Identyfikator wiadomości do przywrócenia z kosza; zdarzenia obserwatora przekazują tę wartość jako `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Zmień etykiety wiadomości"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Identyfikatory etykiet do usunięcia z wiadomości; etykieta jest identyfikowana przez swój identyfikator (np. `INBOX`, `UNREAD`, `Label_12`), a nie przez nazwę"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Wyświetl etykiety"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Wyświetla wszystkie etykiety na koncie, zarówno etykiety systemowe Gmail (`INBOX`, `UNREAD`, `STARRED` itd.), jak i etykiety utworzone przez użytkownika, każdą z identyfikatorem przyjmowanym przez `modify-message-labels` oraz opcję wyszukiwania `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Utwórz etykietę"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "Nie pokazuj wiadomości z etykietą na liście wiadomości"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Utwórz wersję roboczą"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "Wartość nagłówka `References`: wartości `Message-ID` wiadomości w rozmowie, na którą udzielana jest odpowiedź, od najstarszej, rozdzielone spacjami i wraz z nawiasami ostrymi. Jeśli nie zostanie ustawiona, używana jest wartość `in_reply_to`. Zdarzenia obserwatora przekazują nagłówek `References` oryginalnej wiadomości"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Wyszukaj wersje robocze"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Token strony służący do pobrania określonej strony wyników na liście"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Pobierz wersję roboczą"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Cała wiadomość jako dane MIME zakodowane w base64url w `raw`; treść nie jest analizowana"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Wyślij wersję roboczą"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "Identyfikator wersji roboczej do wysłania; `list-drafts` i `create-draft` zwracają tę wartość jako `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Usuń wersję roboczą"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

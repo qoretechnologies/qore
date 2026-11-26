@@ -892,7 +892,7 @@
           "message": "Niestandardowe atrybuty klucz-wartość dla kontaktu. Zarówno klucze, jak i wartości muszą być ciągami znaków. Klucze ze znakami specjalnymi są automatycznie konwertowane na `snake_case`"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Lista kontaktów"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -988,7 +988,7 @@
           "message": "Identyfikator kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact Tag",
+          "source": "Create a Contact tag",
           "message": "Utwórz tag kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "Kod koloru dla tagu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact Tag",
+          "source": "Update a Contact tag",
           "message": "Zaktualizuj tag kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "Nowy kod koloru dla tagu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact Tag",
+          "source": "Delete a Contact tag",
           "message": "Usuń tag kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "Unikalny identyfikator tagu do usunięcia"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact Tags",
+          "source": "List Contact tags",
           "message": "Wyświetl tagi kontaktów"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact Tag",
+          "source": "Get a Contact tag",
           "message": "Pobierz tag kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "Identyfikator tagu do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to Contact",
           "message": "Przypisz tag do kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "Identyfikator tagu do przypisania do kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from Contact",
           "message": "Usuń tag z kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "Przypisany tag do usunięcia z kontaktu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Utwórz zamówienie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "Typ kanału źródłowego"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "Zaktualizuj zamówienie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "Nowy status zamówienia"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Pobierz listę zamówień"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Pobierz zamówienie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Identyfikator zamówienia do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "Utwórz produkt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Określa, czy kwalifikuje się do prowizji partnerskich"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "Zaktualizuj produkt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Określa, czy kwalifikuje się do prowizji partnerskich"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Wyświetl listę produktów"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Pobierz produkt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "Identyfikator produktu do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
-          "source": "Update a Funnel",
+          "source": "Update a funnel",
           "message": "Zaktualizuj lejek"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "Nowa nazwa lejka"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
-          "source": "List Funnels",
+          "source": "List funnels",
           "message": "Wyświetl lejki"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
-          "source": "Get a Funnel",
+          "source": "Get a funnel",
           "message": "Pobierz lejek"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "Identyfikator lejka do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "Wyświetl kursy"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
-          "source": "Get a Course",
+          "source": "Get a course",
           "message": "Pobierz kurs"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "Identyfikator kursu do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create an Enrollment",
+          "source": "Create an enrollment",
           "message": "Utwórz zapis"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "Powód zawieszenia zapisu"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Update an Enrollment",
+          "source": "Update an enrollment",
           "message": "Zaktualizuj zapis"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "Czy zapis został ukończony"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "Wyświetl zapisy"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
-          "source": "Get an Enrollment",
+          "source": "Get an enrollment",
           "message": "Pobierz zapis"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "Identyfikator zapisu do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Create a Fulfillment",
+          "source": "Create a fulfillment",
           "message": "Utwórz realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "Określa, czy ignorować sprawdzanie stanów magazynowych podczas tworzenia realizacji"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Update a Fulfillment",
+          "source": "Update a fulfillment",
           "message": "Zaktualizuj realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "Czy wysłać powiadomienie e-mail do klienta o aktualizacji realizacji"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Delete a Fulfillment",
+          "source": "Delete a fulfillment",
           "message": "Usuń realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "Unikalny identyfikator realizacji do usunięcia"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Cancel a Fulfillment",
+          "source": "Cancel a fulfillment",
           "message": "Anuluj realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "Unikalny identyfikator realizacji do anulowania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "Wyświetl realizacje"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
-          "source": "Get a Fulfillment",
+          "source": "Get a fulfillment",
           "message": "Pobierz realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "Identyfikator realizacji do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create a Form",
+          "source": "Create a form",
           "message": "Utwórz formularz"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "Adres URL przekierowania po przesłaniu formularza"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update a Form",
+          "source": "Update a form",
           "message": "Zaktualizuj formularz"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "Nowy adres URL przekierowania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete a Form",
+          "source": "Delete a form",
           "message": "Usuń formularz"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "Unikalny identyfikator formularza do usunięcia"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "Lista formularzy"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get a Form",
+          "source": "Get a form",
           "message": "Pobierz formularz"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "Identyfikator formularza do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
-          "source": "List Form Submissions",
+          "source": "List form submissions",
           "message": "Wyświetl przesłania formularzy"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
-          "source": "Get a Form Submission",
+          "source": "Get a form submission",
           "message": "Pobierz zgłoszenie formularza"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "Identyfikator zgłoszenia do pobrania"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
-          "source": "List Applied Tags",
+          "source": "List applied tags",
           "message": "Wyświetl przypisane tagi"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "Maksymalna liczba wyników"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "Utworzono kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "Uruchamiane po utworzeniu nowego kontaktu w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Zaktualizowano kontakt"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Uruchamiane po zaktualizowaniu kontaktu w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "Zamówienie utworzone"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Uruchamia się po utworzeniu nowego zamówienia w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "Zaktualizowano zamówienie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "Uruchamia się po zaktualizowaniu zamówienia w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
-          "source": "Order Completed",
+          "source": "Order completed",
           "message": "Zrealizowano zamówienie"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "Uruchamia się po zrealizowaniu zamówienia w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Form Submission Created",
+          "source": "Form submission created",
           "message": "Utworzono przesłanie formularza"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "Uruchamia się po przesłaniu formularza w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
-          "source": "Enrollment Created",
+          "source": "Enrollment created",
           "message": "Utworzono zapis"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
@@ -3304,7 +3304,7 @@
           "message": "Uruchamia się po utworzeniu nowego zapisu na kurs w ClickFunnels"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Fulfillment Created",
+          "source": "Fulfillment created",
           "message": "Utworzono realizację"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {

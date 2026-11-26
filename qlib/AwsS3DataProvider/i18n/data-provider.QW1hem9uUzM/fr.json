@@ -340,7 +340,7 @@
           "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
-          "source": "List Buckets",
+          "source": "List buckets",
           "message": "Lister les buckets"
         },
         "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Répertorie tous les compartiments appartenant au compte authentifié, avec la date de création de chacun."
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
-          "source": "Create Bucket",
+          "source": "Create bucket",
           "message": "Créer un compartiment"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Activer le verrouillage d'objets sur le nouveau compartiment ; le verrouillage d'objets ne peut pas être activé après la création et nécessite le contrôle de version, qui est activé automatiquement lorsque cette option est sélectionnée"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
-          "source": "List Objects",
+          "source": "List objects",
           "message": "Lister les objets"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
@@ -532,7 +532,7 @@
           "message": "La valeur `next_continuation_token` renvoyée par un listage tronqué précédent ; utilisée pour récupérer la page suivante"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
-          "source": "Get Object",
+          "source": "Get object",
           "message": "Obtenir l'objet"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
@@ -592,7 +592,7 @@
           "message": "Une version spécifique de l'objet à cibler ; n'a de sens que sur les compartiments avec gestion des versions activée. Si non défini, la version actuelle est utilisée"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
-          "source": "Download File",
+          "source": "Download file",
           "message": "Télécharger le fichier"
         },
         "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Une version spécifique de l'objet à cibler ; n'a de sens que sur les compartiments avec gestion des versions activée. Si non défini, la version actuelle est utilisée"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
+          "source": "Upload file",
           "message": "Téléverser un fichier"
         },
         "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -976,7 +976,7 @@
           "message": "La clé AWS KMS avec laquelle chiffrer l'objet, sous forme d'ID de clé, d'alias ou d'ARN.\n\nUtilisé uniquement lorsque `server_side_encryption` sélectionne un schéma KMS ; s'il n'est pas défini, la clé KMS par défaut du compartiment est utilisée"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
-          "source": "Create Text Object",
+          "source": "Create text object",
           "message": "Créer un objet texte"
         },
         "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
@@ -1204,7 +1204,7 @@
           "message": "La clé AWS KMS avec laquelle chiffrer l'objet, sous forme d'ID de clé, d'alias ou d'ARN.\n\nUtilisé uniquement lorsque `server_side_encryption` sélectionne un schéma KMS ; s'il n'est pas défini, la clé KMS par défaut du compartiment est utilisée"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "Supprimer l'objet"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "Une version spécifique de l'objet à cibler ; n'a de sens que sur les compartiments avec gestion des versions activée. Si non défini, la version actuelle est utilisée"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "Copier l'objet"
         },
         "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1552,7 +1552,7 @@
           "message": "Le `Content-Disposition` avec lequel Amazon S3 doit servir le téléchargement ; utilisez ceci pour forcer un navigateur à enregistrer l'objet sous un nom choisi plutôt que de l'afficher"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
-          "source": "Delete Objects",
+          "source": "Delete objects",
           "message": "Supprimer des objets"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
@@ -1612,7 +1612,7 @@
           "message": "Supprimer les objets soumis à un verrouillage de rétention en mode gouvernance.\n\nLes identifiants doivent être autorisés pour `s3:BypassGovernanceRetention` ; les objets soumis à un verrouillage en mode **conformité** ne peuvent être supprimés par personne tant que le verrou n'a pas expiré"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
-          "source": "Move Object",
+          "source": "Move object",
           "message": "Déplacer un objet"
         },
         "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
@@ -1768,7 +1768,7 @@
           "message": "Données d'archivage à long terme récupérées en quelques heures ; la classe de stockage la plus économique"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Get Object Tags",
+          "source": "Get object tags",
           "message": "Obtenir les balises d'objet"
         },
         "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "Une version spécifique de l'objet à cibler ; n'a de sens que sur les compartiments avec gestion des versions activée. Si non défini, la version actuelle est utilisée"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
-          "source": "Set Object Tags",
+          "source": "Set object tags",
           "message": "Définir les balises de l'objet"
         },
         "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
@@ -1876,7 +1876,7 @@
           "message": "Une version spécifique de l'objet à cibler ; n'a de sens que sur les compartiments avec gestion des versions activée. Si non défini, la version actuelle est utilisée"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
-          "source": "List Object Versions",
+          "source": "List object versions",
           "message": "Lister les versions d'objet"
         },
         "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
@@ -1948,7 +1948,7 @@
           "message": "La valeur `next_version_id_marker` renvoyée par un listage tronqué précédent ; elle est utilisée conjointement avec `key_marker`"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
-          "source": "Delete Bucket",
+          "source": "Delete bucket",
           "message": "Supprimer le compartiment"
         },
         "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Le nom du compartiment à supprimer ; il doit déjà être vide"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
-          "source": "Find Objects",
+          "source": "Find objects",
           "message": "Rechercher des objets"
         },
         "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Nombre de clés à récupérer par requête ; Amazon S3 limite cela à `1000`.\n\nCela affecte la façon dont le parcours est divisé en requêtes, pas le nombre d'enregistrements retournés — l'itérateur récupère des pages supplémentaires au fur et à mesure des besoins"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
-          "source": "New Bucket",
+          "source": "New bucket",
           "message": "Nouveau compartiment"
         },
         "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
@@ -2080,7 +2080,7 @@
           "message": "Ne rien signaler d'antérieur à cette date.\n\nS'il n'est pas défini, la surveillance ne signale que ce qui apparaît après son démarrage, afin qu'un compartiment existant ne génère pas un afflux d'événements lors de sa première exécution"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
-          "source": "New or Updated File",
+          "source": "New or updated file",
           "message": "Fichier créé ou mis à jour"
         },
         "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {

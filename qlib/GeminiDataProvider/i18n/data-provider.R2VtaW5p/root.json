@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
-          "source": "Generate Content",
-          "message": "Generate Content"
+          "source": "Generate content",
+          "message": "Generate content"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
           "source": "Generate content with a Gemini model",
@@ -984,8 +984,8 @@
           "message": "Optional system instruction text that sets the behavior and context for the model"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
-          "source": "Stream Content",
-          "message": "Stream Content"
+          "source": "Stream content",
+          "message": "Stream content"
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
           "source": "Stream content generation from a Gemini model via Server-Sent Events",
@@ -1900,8 +1900,8 @@
           "message": "An optional title for the text. Only applicable when `taskType` is `RETRIEVAL_DOCUMENT`"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
-          "source": "Count Tokens",
-          "message": "Count Tokens"
+          "source": "Count tokens",
+          "message": "Count tokens"
         },
         "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
           "source": "Count the number of tokens in the given content",
@@ -2036,8 +2036,8 @@
           "message": "Content from the model"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload File",
-          "message": "Upload File"
+          "source": "Upload file",
+          "message": "Upload file"
         },
         "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
           "source": "Upload a file for use with the Gemini API",
@@ -2192,8 +2192,8 @@
           "message": "Optional display name for the uploaded file. If not provided, the file name from the uploaded file is used"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
           "source": "Delete a file stored on Google Gemini",
@@ -2216,8 +2216,8 @@
           "message": "The resource name of the file to delete (e.g., `files/abc-123`)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Create Cached Content",
-          "message": "Create Cached Content"
+          "source": "Create cached content",
+          "message": "Create cached content"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
           "source": "Create cached content for reuse across multiple requests",
@@ -2400,8 +2400,8 @@
           "message": "Content from the model"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Delete Cached Content",
-          "message": "Delete Cached Content"
+          "source": "Delete cached content",
+          "message": "Delete cached content"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
           "source": "Delete cached content",
@@ -2424,8 +2424,8 @@
           "message": "The resource name of the cached content to delete"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
-          "source": "Update Cached Content",
-          "message": "Update Cached Content"
+          "source": "Update cached content",
+          "message": "Update cached content"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
           "source": "Update the expiration of cached content",
@@ -2472,8 +2472,8 @@
           "message": "New time-to-live for the cached content (e.g., `3600s` for one hour)"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Create File Search Store",
-          "message": "Create File Search Store"
+          "source": "Create file search store",
+          "message": "Create file search store"
         },
         "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
           "source": "Create an empty file search store",
@@ -2496,8 +2496,8 @@
           "message": "The human-readable display name for the new file search store"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
-          "source": "Delete File Search Store",
-          "message": "Delete File Search Store"
+          "source": "Delete file search store",
+          "message": "Delete file search store"
         },
         "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
           "source": "Delete a file search store",
@@ -2520,8 +2520,8 @@
           "message": "The resource name of the file search store to delete"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
-          "source": "Import File to Search Store",
-          "message": "Import File to Search Store"
+          "source": "Import file to search store",
+          "message": "Import file to search store"
         },
         "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {
           "source": "Import an uploaded file into a file search store",

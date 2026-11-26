@@ -684,7 +684,7 @@
           "message": "El contacto que se eliminará"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
-          "source": "Merge Contacts",
+          "source": "Merge contacts",
           "message": "Fusionar contactos"
         },
         "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
@@ -712,7 +712,7 @@
           "message": "El contacto a fusionar y eliminar"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "Listar contactos"
         },
         "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -804,7 +804,7 @@
           "message": "El ID del contacto"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
-          "source": "Create a Company",
+          "source": "Create a company",
           "message": "Crear una compañía"
         },
         "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
@@ -852,7 +852,7 @@
           "message": "Sitio web de la empresa"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
-          "source": "Update a Company",
+          "source": "Update a company",
           "message": "Actualizar una compañía"
         },
         "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
@@ -904,7 +904,7 @@
           "message": "Sitio web de la empresa"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
-          "source": "Delete a Company",
+          "source": "Delete a company",
           "message": "Eliminar una compañía"
         },
         "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
@@ -924,7 +924,7 @@
           "message": "La empresa que se eliminará"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
-          "source": "List Companies",
+          "source": "List companies",
           "message": "Listar empresas"
         },
         "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
@@ -980,7 +980,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
-          "source": "Get a Company",
+          "source": "Get a company",
           "message": "Obtener una empresa"
         },
         "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
@@ -1000,7 +1000,7 @@
           "message": "El ID de la empresa"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
+          "source": "Create an opportunity",
           "message": "Crear una oportunidad"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1072,7 +1072,7 @@
           "message": "Notas de la oportunidad"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
+          "source": "Update an opportunity",
           "message": "Actualizar una oportunidad"
         },
         "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1140,7 +1140,7 @@
           "message": "Notas de la oportunidad"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
+          "source": "Delete an opportunity",
           "message": "Eliminar una oportunidad"
         },
         "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "La oportunidad a eliminar"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
+          "source": "List opportunities",
           "message": "Listar oportunidades"
         },
         "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
@@ -1224,7 +1224,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
+          "source": "Get an opportunity",
           "message": "Obtener una oportunidad"
         },
         "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "El ID de la oportunidad"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Crear un pedido"
         },
         "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Códigos promocionales"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "Listar pedidos"
         },
         "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Obtener un pedido"
         },
         "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "El ID del pedido"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "Crear una etiqueta"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "Categoría de la etiqueta"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "Eliminar una etiqueta"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -1444,7 +1444,7 @@
           "message": "La etiqueta a eliminar"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to Contact",
           "message": "Aplicar etiqueta a contacto"
         },
         "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Lista de ID de etiqueta enteros"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from Contact",
           "message": "Eliminar etiqueta de contacto"
         },
         "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1504,7 +1504,7 @@
           "message": "La etiqueta a eliminar"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "Listar etiquetas"
         },
         "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
@@ -1548,7 +1548,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "Obtener una etiqueta"
         },
         "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
@@ -1568,7 +1568,7 @@
           "message": "El ID de la etiqueta"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create a Note",
+          "source": "Create a note",
           "message": "Crear una nota"
         },
         "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "El tipo de nota"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update a Note",
+          "source": "Update a note",
           "message": "Actualizar una nota"
         },
         "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
@@ -1660,7 +1660,7 @@
           "message": "Cuerpo de la nota"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete a Note",
+          "source": "Delete a note",
           "message": "Eliminar una nota"
         },
         "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
@@ -1688,7 +1688,7 @@
           "message": "La nota a eliminar"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
+          "source": "List notes",
           "message": "Listar notas"
         },
         "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
@@ -1724,7 +1724,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
+          "source": "Create a task",
           "message": "Crear una tarea"
         },
         "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Usuario asignado"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
+          "source": "Update a task",
           "message": "Actualizar una tarea"
         },
         "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
@@ -1860,7 +1860,7 @@
           "message": "Estado de finalización de la tarea"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
+          "source": "Delete a task",
           "message": "Eliminar una tarea"
         },
         "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "La tarea a eliminar"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
+          "source": "List tasks",
           "message": "Listar tareas"
         },
         "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
+          "source": "Get a task",
           "message": "Obtener una tarea"
         },
         "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
@@ -1960,7 +1960,7 @@
           "message": "El ID de la tarea"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
+          "source": "List emails",
           "message": "Listar correos electrónicos"
         },
         "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
@@ -1996,7 +1996,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
-          "source": "Upload a File",
+          "source": "Upload a file",
           "message": "Subir un archivo"
         },
         "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
@@ -2044,7 +2044,7 @@
           "message": "Visibilidad del archivo"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
-          "source": "Get a File",
+          "source": "Get a file",
           "message": "Obtener un archivo"
         },
         "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
@@ -2064,7 +2064,7 @@
           "message": "El archivo que recuperar"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
-          "source": "Delete a File",
+          "source": "Delete a file",
           "message": "Eliminar un archivo"
         },
         "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "El archivo que se va a eliminar"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
-          "source": "List Files",
+          "source": "List files",
           "message": "Listar archivos"
         },
         "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
@@ -2140,7 +2140,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "Listar productos"
         },
         "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -2168,7 +2168,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "Obtener un producto"
         },
         "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "El ID del producto"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
+          "source": "List campaigns",
           "message": "Listar campañas"
         },
         "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
@@ -2228,7 +2228,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
-          "source": "List Affiliates",
+          "source": "List affiliates",
           "message": "Listar afiliados"
         },
         "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
@@ -2256,7 +2256,7 @@
           "message": "Resultados máximos"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
-          "source": "Contact Added",
+          "source": "Contact added",
           "message": "Contacto añadido"
         },
         "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
@@ -2268,7 +2268,7 @@
           "message": "Se activa cuando se crea un nuevo contacto en Keap"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "Contacto actualizado"
         },
         "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -2280,7 +2280,7 @@
           "message": "Se activa cuando se actualiza un contacto en Keap"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
-          "source": "Tag Applied",
+          "source": "Tag applied",
           "message": "Etiqueta aplicada"
         },
         "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
@@ -2292,7 +2292,7 @@
           "message": "Se activa cuando se aplica una etiqueta a un contacto en Keap"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
-          "source": "Opportunity Added",
+          "source": "Opportunity added",
           "message": "Oportunidad añadida"
         },
         "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
@@ -2304,7 +2304,7 @@
           "message": "Se activa cuando se crea una nueva oportunidad en Keap"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
-          "source": "Order Added",
+          "source": "Order added",
           "message": "Pedido añadido"
         },
         "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
@@ -2316,7 +2316,7 @@
           "message": "Se activa cuando se crea un nuevo pedido en Keap"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
-          "source": "Task Created",
+          "source": "Task created",
           "message": "Tarea creada"
         },
         "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
@@ -2328,7 +2328,7 @@
           "message": "Se activa cuando se crea una nueva tarea en Keap"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
-          "source": "Note Added",
+          "source": "Note added",
           "message": "Nota añadida"
         },
         "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {

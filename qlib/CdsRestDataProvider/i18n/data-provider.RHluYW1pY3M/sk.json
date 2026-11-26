@@ -340,7 +340,7 @@
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
+          "source": "Create record",
           "message": "Vytvoriť záznam"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
@@ -364,7 +364,7 @@
           "message": "Názov tabuľky Dynamics, napr.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
+          "source": "Find single record",
           "message": "Nájsť jeden záznam"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
@@ -388,7 +388,7 @@
           "message": "Názov tabuľky Dynamics, napr.: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
+          "source": "Find records",
           "message": "Nájsť záznamy"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Názov tabuľky Dynamics, napr.: `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
+          "source": "Update records",
           "message": "Aktualizovať záznamy"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Názov tabuľky Dynamics, napr.: `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
+          "source": "Delete records",
           "message": "Odstrániť záznamy"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {

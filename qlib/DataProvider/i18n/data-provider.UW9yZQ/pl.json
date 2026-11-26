@@ -16,7 +16,7 @@
           "message": "Wbudowane procesory potoków danych Qore do filtrowania, przekształcania i modyfikowania rekordów w potokach danych"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
+          "source": "Filter records",
           "message": "Filtruj rekordy"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Wyrażenie tekstowe DPQL do filtrowania rekordów; użyj tej opcji, pisząc predykat bezpośrednio jako tekst zamiast korzystać z kreatora wyrażeń"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
+          "source": "Select fields",
           "message": "Wybierz pola"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Lista specyfikacji pól; użyj `name`, aby zachować pole bez zmian, lub `new_name=old_name`, aby zmienić nazwę pola (np. `name`, `email`, `customer_name=name`)"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
+          "source": "Set fields",
           "message": "Ustaw pola"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Tablica asocjacyjna nazw i wartości pól do ustawienia w każdym rekordzie; istniejące pola zostaną nadpisane, nowe pola zostaną dodane"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "Usuń pola"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Lista nazw pól do usunięcia z każdego rekordu; obsługuje notację z kropką dla pól zagnieżdżonych (np. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "Znajdź i zamień"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
@@ -268,7 +268,7 @@
           "message": "Dopasuj wszystkie wystąpienia, nie tylko pierwsze"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
+          "source": "Record limit",
           "message": "Limit rekordów"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Maksymalna liczba rekordów przechodzących przez potok; po osiągnięciu limitu wszystkie kolejne rekordy są odrzucane"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
+          "source": "Running statistics",
           "message": "Statystyki kroczące"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
+          "source": "Moving average",
           "message": "Średnia ruchoma"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Kontroluje wagę przypisywaną najnowszej wartości w porównaniu z wartościami historycznymi podczas obliczania wykładniczej średniej ruchomej (EMA); wyższe wartości sprawiają, że średnia szybciej reaguje na ostatnie zmiany, ale staje się bardziej zaszumiona.\n\n**Typowe wartości**: `0.1` (wygładzona, wolno reagująca), `0.2` (zrównoważona, dobra wartość domyślna), `0.5` (reagująca, szybko śledząca zmiany); musi mieścić się w przedziale otwartym od `0.0` do `1.0`; domyślnie: `0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
+          "source": "Trend analysis",
           "message": "Analiza trendu"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Minimalna wielkość nachylenia, aby trend został sklasyfikowany jako `rising` lub `falling`; nachylenia poniżej tego progu są klasyfikowane jako `flat`.\n\n**Typowe wartości**: `0.001` (czuły — wykrywa bardzo łagodne trendy), `0.01` (umiarkowany), `0.1` (tylko silne trendy); używaj mniejszych wartości, gdy Twoje dane mają dużą skalę, a istotne trendy mają małe nachylenia; musi być >= `0`; domyślnie: `0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
+          "source": "Anomaly detection",
           "message": "Wykrywanie anomalii"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Ile odchyleń standardowych od średniej musi wynosić wartość, aby została uznana za anomalię (nazywa się to *z-score*); na przykład próg `3.0` oznacza, że wartość musi różnić się o więcej niż 3 odchylenia standardowe od średniej, aby została oznaczona.\n\n**Typowe wartości**: `2.0` (czuły — oznacza ~5% losowych danych), `3.0` (standardowy — oznacza ~0,3%), `4.0` (konserwatywny — tylko skrajne wartości odstające); musi być większy niż `0`; domyślnie: `3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
+          "source": "Calculate data distribution",
           "message": "Oblicz rozkład danych"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Rozdzielana przecinkami lista wartości percentyli do obliczenia (`0`–`100`); na przykład `50` to mediana, `25` i `75` to dolny i górny kwartyl; domyślnie: `\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
+          "source": "Find related fields",
           "message": "Znajdź powiązane pola"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Liczba rekordów do zgromadzenia przed obliczeniem macierzy korelacji; okno jest czyszczone po każdym obliczeniu.\n\n**Wskazówki dotyczące rozmiaru**: korelacja wymaga wystarczającej ilości danych do uzyskania stabilnych wyników; użyj co najmniej `30` dla podstawowej korelacji, `100`+ dla wiarygodnych wyników"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
+          "source": "Find delayed relationships",
           "message": "Znajdź opóźnione zależności"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Maksymalna liczba kroków czasowych przesunięcia jednego pola względem drugiego; ustaw `0`, aby automatycznie użyć `window_size / 4`; domyślnie: `0` (auto)"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
+          "source": "Count value ranges",
           "message": "Zliczaj zakresy wartości"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Kwantyl (przedziały o równej liczności)"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
+          "source": "Measure speed of change",
           "message": "Mierz tempo zmian"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Gdy ta opcja jest włączona, stosuje prostą średnią kroczącą w oknie przed obliczeniem pochodnych, redukując szum w tempie zmian; wyłącz dla surowych wskaźników punkt-punkt; domyślnie: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
+          "source": "Monitor process Stability",
           "message": "Monitoruj stabilność procesu"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Oczekiwana wartość środkowa/docelowa dla procesu; jeśli nie jest ustawiona, automatycznie używana jest średnia z historii ruchomego okna; ustaw dowolną wartość (w tym `0`), aby użyć stałej linii środkowej; domyślnie: auto (użyj średniej z okna)"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
+          "source": "Detect repeating patterns",
           "message": "Wykrywaj powtarzające się wzorce"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Minimalna siła powtarzającego się wzorca (mierzona jako autokorelacja, `0`–`1`), aby został zaraportowany; autokorelacja mierzy podobieństwo szeregu danych do jego przesuniętej kopii.\n\n**Typowe wartości**: `0.2` (wykrywanie słabych/zaszumionych wzorców), `0.3` (zrównoważona wartość domyślna), `0.5` (raportowanie tylko silnych, wyraźnych wzorców); domyślnie: `0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
+          "source": "Group by and aggregate",
           "message": "Grupuj i agreguj"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {

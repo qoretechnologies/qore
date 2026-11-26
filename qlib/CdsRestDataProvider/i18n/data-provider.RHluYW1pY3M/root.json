@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.display_name": {
-          "source": "Create Record",
-          "message": "Create Record"
+          "source": "Create record",
+          "message": "Create record"
         },
         "app.RHluYW1pY3M.action.Y3JlYXRlLXJlY29yZA.short_desc": {
           "source": "Create a record in a Dynamics table",
@@ -364,8 +364,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
-          "source": "Find Single Record",
-          "message": "Find Single Record"
+          "source": "Find single record",
+          "message": "Find single record"
         },
         "app.RHluYW1pY3M.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
           "source": "Find a specific record in Dynamics",
@@ -388,8 +388,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.display_name": {
-          "source": "Find Records",
-          "message": "Find Records"
+          "source": "Find records",
+          "message": "Find records"
         },
         "app.RHluYW1pY3M.action.ZmluZC1yZWNvcmRz.short_desc": {
           "source": "Find records in Dynamics",
@@ -412,8 +412,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.short_desc": {
           "source": "Update records in Dynamics",
@@ -436,8 +436,8 @@
           "message": "The name of the Dynamics table, ex: `account`"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.RHluYW1pY3M.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
           "source": "Delete records in Dynamics",

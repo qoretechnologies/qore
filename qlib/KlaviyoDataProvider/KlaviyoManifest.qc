@@ -375,7 +375,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/profiles",
                 "operation_id": "get_profiles",
-                "display_name": "List Profiles",
+                "display_name": "List profiles",
                 "short_desc": "Lists profiles",
                 "desc": "Lists the profiles in the account, newest first by default.\n\n"
                     "`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each "
@@ -457,7 +457,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/profiles",
                 "operation_id": "create_profile",
-                "display_name": "Create Profile",
+                "display_name": "Create profile",
                 "short_desc": "Creates a new profile",
                 "desc": "Creates a profile.\n\n"
                     "A profile needs at least one identifier - an e-mail address, a phone number or an "
@@ -488,7 +488,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/profile-import",
                 "operation_id": "create_or_update_profile",
-                "display_name": "Create Or Update Profile",
+                "display_name": "Create or update profile",
                 "short_desc": "Creates a new profile or updates an existing one",
                 "desc": "Creates a profile, or updates the one already carrying the identifier given.\n\n"
                     "Klaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or "
@@ -575,7 +575,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/lists",
                 "operation_id": "get_lists",
-                "display_name": "List Lists",
+                "display_name": "List lists",
                 "short_desc": "Lists all lists",
                 "desc": "Lists the account's lists.\n\n"
                     "A **list** holds profiles that opted in explicitly, where a **segment** is a rule "
@@ -617,7 +617,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/lists",
                 "operation_id": "create_list",
-                "display_name": "Create List",
+                "display_name": "Create list",
                 "short_desc": "Creates a new list",
                 "desc": "Creates a list.\n\n"
                     "`optInProcess` decides whether a profile added to the list has to confirm by e-mail "
@@ -723,7 +723,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/segments",
                 "operation_id": "get_segments",
-                "display_name": "List Segments",
+                "display_name": "List segments",
                 "short_desc": "Lists segments",
                 "desc": "Lists the account's segments.\n\n"
                     "A **segment** is a rule Klaviyo evaluates continuously, so its membership changes on "
@@ -886,7 +886,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/tags",
                 "operation_id": "get_tags",
-                "display_name": "List Tags",
+                "display_name": "List tags",
                 "short_desc": "Lists tags",
                 "desc": "Lists the account's tags.\n\n"
                     "A tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
@@ -943,7 +943,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/tags",
                 "operation_id": "create_tag",
-                "display_name": "Create Tag",
+                "display_name": "Create tag",
                 "short_desc": "Creates a new tag",
                 "desc": "Creates a tag.\n\n"
                     "A tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new "
@@ -1012,7 +1012,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/campaigns",
                 "operation_id": "get_campaigns",
-                "display_name": "List Campaigns",
+                "display_name": "List campaigns",
                 "short_desc": "Lists campaigns",
                 "desc": "Lists campaigns on the given channel.\n\n"
                     "**`channel` is required**: Klaviyo does not list campaigns across channels, so a "
@@ -1082,7 +1082,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/campaigns",
                 "operation_id": "create_campaign",
-                "display_name": "Create Campaign",
+                "display_name": "Create campaign",
                 "short_desc": "Creates a new campaign",
                 "desc": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a "
                     "send job for it.\n\n"
@@ -1198,7 +1198,7 @@ public class KlaviyoManifest {
                 "method": "POST",
                 "path": "/api/campaign-send-jobs",
                 "operation_id": "send_campaign",
-                "display_name": "Send Campaign",
+                "display_name": "Send campaign",
                 "short_desc": "Sends a campaign",
                 "desc": "Sends a campaign immediately, by creating a send job for it.\n\n"
                     "The campaign must be complete and ready to send; Klaviyo rejects a send job for a "
@@ -1309,7 +1309,7 @@ public class KlaviyoManifest {
                 "method": "GET",
                 "path": "/api/metrics",
                 "operation_id": "get_metrics",
-                "display_name": "List Metrics",
+                "display_name": "List metrics",
                 "short_desc": "Lists metrics",
                 "desc": "Lists the metrics defined in the account.\n\n"
                     "A **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and "

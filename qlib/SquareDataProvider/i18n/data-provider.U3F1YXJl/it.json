@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "Crea un cliente"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -436,7 +436,7 @@
           "message": "Un ID di riferimento esterno per il cliente"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "Aggiorna un cliente"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -504,7 +504,7 @@
           "message": "Nota cliente"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
-          "source": "Add Customer to Group",
+          "source": "Add customer to group",
           "message": "Aggiungi cliente al gruppo"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
@@ -536,7 +536,7 @@
           "message": "L'ID del gruppo di clienti"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
-          "source": "Remove Customer From Group",
+          "source": "Remove customer from group",
           "message": "Rimuovi cliente dal gruppo"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
@@ -568,7 +568,7 @@
           "message": "L'ID del gruppo di clienti"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "Elenca clienti"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Ordine decrescente"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "Ottieni un cliente"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -660,7 +660,7 @@
           "message": "L'ID cliente"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "Elimina un cliente"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -692,7 +692,7 @@
           "message": "La versione corrente del profilo cliente (per la concorrenza ottimistica)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "Crea un ordine"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -792,7 +792,7 @@
           "message": "Elenco di ID di pagamento da applicare. Se vuoto, viene utilizzato il pagamento esterno."
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
-          "source": "Get Orders",
+          "source": "Get orders",
           "message": "Ottieni ordini"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
@@ -824,7 +824,7 @@
           "message": "Filtra per ubicazione"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
+          "source": "Search orders",
           "message": "Cerca ordini"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
@@ -928,7 +928,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "Ottieni un ordine"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
@@ -948,7 +948,7 @@
           "message": "L'ID dell'ordine"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
-          "source": "Cancel an Order",
+          "source": "Cancel an order",
           "message": "Annulla un ordine"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "Token di versione per la concorrenza"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "Rimborsa pagamento"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "Motivo del rimborso"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "Elenca pagamenti"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get a Payment",
+          "source": "Get a payment",
           "message": "Ottieni un pagamento"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "L'ID del pagamento"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "Crea fattura"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "Descrizione fattura"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "Elenca fatture"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "Ottieni una fattura"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "L'ID fattura"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "Invia fattura"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "La versione corrente della fattura (per la concorrenza ottimistica)"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
-          "source": "Cancel Invoice",
+          "source": "Cancel invoice",
           "message": "Annulla fattura"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "La versione corrente della fattura (per la concorrenza ottimistica)"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "Crea appuntamento"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "Nota dal cliente"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
-          "source": "List Bookings",
+          "source": "List bookings",
           "message": "Elenca prenotazioni"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
-          "source": "Get a Booking",
+          "source": "Get a booking",
           "message": "Ottieni una prenotazione"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "L'ID della prenotazione"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
-          "source": "Cancel Booking",
+          "source": "Cancel booking",
           "message": "Annulla prenotazione"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "La versione corrente della prenotazione (per la concorrenza ottimistica)"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
-          "source": "Change Inventory",
+          "source": "Change inventory",
           "message": "Modifica inventario"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "Nessuno stato"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
-          "source": "Get Inventory Count",
+          "source": "Get inventory count",
           "message": "Ottieni conteggio inventario"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "Elenco opzionale di ID sede in base a cui filtrare i conteggi"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
-          "source": "Search Catalog",
+          "source": "Search catalog",
           "message": "Cerca nel catalogo"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
-          "source": "Find Service",
+          "source": "Find service",
           "message": "Trova servizio"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "Elenca rimborsi"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "Risultati massimi"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get a Refund",
+          "source": "Get a refund",
           "message": "Ottieni un rimborso"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "L'ID del rimborso"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "Nuovo cliente"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "Ordine creato/aggiornato"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
-          "source": "Payment Created/Updated",
+          "source": "Payment created/updated",
           "message": "Pagamento creato/aggiornato"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "Nuovo appuntamento"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
-          "source": "New Catalog Item",
+          "source": "New catalog item",
           "message": "Nuovo articolo del catalogo"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "Nuova fattura"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {

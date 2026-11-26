@@ -812,7 +812,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/groups",
                 "operation_id": "getApiV4Groups",
-                "display_name": "List Groups",
+                "display_name": "List groups",
                 "short_desc": "List the groups visible to the credential",
                 "desc": "Lists groups.\n\n"
                     "By default this includes every group the credential can see, which on GitLab.com "
@@ -834,7 +834,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/groups",
                 "operation_id": "postApiV4Groups",
-                "display_name": "Create Group",
+                "display_name": "Create group",
                 "short_desc": "Create a group or subgroup",
                 "desc": "Creates a group.\n\n"
                     "Supplying `parent_id` creates a subgroup of that group; without it the group is "
@@ -916,7 +916,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/issues",
                 "operation_id": "getApiV4Issues",
-                "display_name": "List Issues",
+                "display_name": "List issues",
                 "short_desc": "List issues across every project the user can see",
                 "desc": "Lists issues across the whole instance rather than one project.\n\n"
                     "`scope` decides whose issues: `created_by_me`, `assigned_to_me`, or `all`. Every "
@@ -1142,7 +1142,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/users",
                 "operation_id": "getApiV4Users",
-                "display_name": "List Users",
+                "display_name": "List users",
                 "short_desc": "List the users on this GitLab instance",
                 "desc": "Lists users.\n\n"
                     "This is what backs the user dropdowns on the instance-wide issue listing. The "
@@ -1606,7 +1606,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/projects",
                 "operation_id": "getApiV4Projects",
-                "display_name": "List Projects",
+                "display_name": "List projects",
                 "short_desc": "List the projects visible to the credential",
                 "desc": "Lists projects.\n\n"
                     "Without a filter this returns every project the credential can see, which on "
@@ -1642,7 +1642,7 @@ public class GitLabManifest {
                 "method": "POST",
                 "path": "/api/v4/projects",
                 "operation_id": "postApiV4Projects",
-                "display_name": "Create Project",
+                "display_name": "Create project",
                 "short_desc": "Create a project",
                 "desc": "Creates a project.\n\n"
                     "Without `namespace_id` the project is created under the authenticated user rather "
@@ -1727,7 +1727,7 @@ public class GitLabManifest {
                 "method": "GET",
                 "path": "/api/v4/topics",
                 "operation_id": "getApiV4Topics",
-                "display_name": "List Topics",
+                "display_name": "List topics",
                 "short_desc": "List the project topics defined on this instance",
                 "desc": "Lists the topics projects can be tagged with.\n\n"
                     "This is what backs the topic filter on **List Projects**; the application this "

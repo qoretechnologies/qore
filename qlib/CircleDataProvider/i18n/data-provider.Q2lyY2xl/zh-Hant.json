@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
-          "source": "List Posts",
+          "source": "List posts",
           "message": "列出貼文"
         },
         "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
@@ -396,7 +396,7 @@
           "message": "最多結果數"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
-          "source": "Get a Post",
+          "source": "Get a post",
           "message": "取得貼文"
         },
         "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
@@ -416,7 +416,7 @@
           "message": "貼文 ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
-          "source": "Create a Post",
+          "source": "Create a post",
           "message": "建立貼文"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
@@ -548,7 +548,7 @@
           "message": "若為 `True`，則不會向成員傳送有關此貼文的通知"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
-          "source": "Update a Post",
+          "source": "Update a post",
           "message": "更新貼文"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
@@ -692,7 +692,7 @@
           "message": "若為 `True`，則不會傳送有關此更新的通知"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
-          "source": "Delete a Post",
+          "source": "Delete a post",
           "message": "刪除貼文"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
@@ -716,7 +716,7 @@
           "message": "要刪除的貼文之唯一識別碼"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
-          "source": "List Comments",
+          "source": "List comments",
           "message": "列出評論"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
@@ -752,7 +752,7 @@
           "message": "最多結果數"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
-          "source": "Get a Comment",
+          "source": "Get a comment",
           "message": "取得留言"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
@@ -772,7 +772,7 @@
           "message": "留言 ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
-          "source": "Create a Comment",
+          "source": "Create a comment",
           "message": "建立留言"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
@@ -808,7 +808,7 @@
           "message": "留言的內文內容（HTML 格式）。範例：`<p>Great post!</p>`"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
-          "source": "Delete a Comment",
+          "source": "Delete a comment",
           "message": "刪除留言"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
@@ -832,7 +832,7 @@
           "message": "要刪除的留言之唯一識別碼"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
-          "source": "List Members",
+          "source": "List members",
           "message": "列出成員"
         },
         "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
@@ -884,7 +884,7 @@
           "message": "最多結果數"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
-          "source": "Invite a Member",
+          "source": "Invite a member",
           "message": "邀請成員"
         },
         "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
@@ -956,7 +956,7 @@
           "message": "邀請時要將成員加入的空間 ID 清單"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
-          "source": "Remove a Member",
+          "source": "Remove a member",
           "message": "移除成員"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
@@ -980,7 +980,7 @@
           "message": "要移除的社群成員唯一識別碼"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
-          "source": "Tag a Member",
+          "source": "Tag a member",
           "message": "為成員新增標籤"
         },
         "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
@@ -1016,7 +1016,7 @@
           "message": "要套用至成員的標籤"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
-          "source": "Untag a Member",
+          "source": "Untag a member",
           "message": "移除成員的標籤"
         },
         "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
@@ -1052,7 +1052,7 @@
           "message": "要從成員移除的標籤 ID"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
-          "source": "List Spaces",
+          "source": "List spaces",
           "message": "列出空間"
         },
         "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "最多結果數"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
-          "source": "Get a Space",
+          "source": "Get a space",
           "message": "取得空間"
         },
         "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
@@ -1124,7 +1124,7 @@
           "message": "空間 ID"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create a Space",
+          "source": "Create a space",
           "message": "建立空間"
         },
         "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1244,7 +1244,7 @@
           "message": "此空間是否已停用成員發文"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update a Space",
+          "source": "Update a space",
           "message": "更新空間"
         },
         "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1364,7 +1364,7 @@
           "message": "是否在社群的精選區域中隱藏此空間"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete a Space",
+          "source": "Delete a space",
           "message": "刪除空間"
         },
         "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "要刪除的空間之唯一識別碼"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
-          "source": "Add a Member to a Space",
+          "source": "Add a member to a space",
           "message": "新增成員至空間"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "要新增至空間的成員電子郵件地址"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
-          "source": "Remove a Member from a Space",
+          "source": "Remove a member from a space",
           "message": "從空間移除成員"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
@@ -1460,7 +1460,7 @@
           "message": "要從空間中移除的社群成員 ID"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
-          "source": "Add a Member to a Space Group",
+          "source": "Add a member to a space group",
           "message": "新增成員至空間群組"
         },
         "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
@@ -1496,7 +1496,7 @@
           "message": "要新增至空間群組的成員電子郵件地址"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
-          "source": "Remove a Member from a Space Group",
+          "source": "Remove a member from a space group",
           "message": "從空間群組移除成員"
         },
         "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "要從空間群組中移除的社群成員 ID"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
+          "source": "List communities",
           "message": "列出社群"
         },
         "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "最多結果數"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
-          "source": "Get a Community",
+          "source": "Get a community",
           "message": "取得社群"
         },
         "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
@@ -1580,7 +1580,7 @@
           "message": "社群 ID"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
-          "source": "Send a Message",
+          "source": "Send a message",
           "message": "傳送訊息"
         },
         "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
@@ -1616,7 +1616,7 @@
           "message": "訊息的正文內容"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
-          "source": "New Comment",
+          "source": "New comment",
           "message": "新留言"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "在 Circle 社群中發布新留言時觸發"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
-          "source": "New Community",
+          "source": "New community",
           "message": "新社群"
         },
         "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
@@ -1640,7 +1640,7 @@
           "message": "在 Circle 中建立新社群時觸發"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
-          "source": "Member Accepted an Invitation",
+          "source": "Member accepted an invitation",
           "message": "成員已接受邀請"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
@@ -1652,7 +1652,7 @@
           "message": "當成員接受加入 Circle 社群的邀請時觸發"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
-          "source": "New Post",
+          "source": "New post",
           "message": "新貼文"
         },
         "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
@@ -1664,7 +1664,7 @@
           "message": "在 Circle 社群中建立新貼文時觸發"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
-          "source": "New Space",
+          "source": "New space",
           "message": "新空間"
         },
         "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "在 Circle 社群中建立新空間時觸發"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
-          "source": "Member Tagged",
+          "source": "Member tagged",
           "message": "成員已被標記"
         },
         "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {

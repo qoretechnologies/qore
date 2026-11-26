@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
-          "source": "List Campaigns",
-          "message": "List Campaigns"
+          "source": "List campaigns",
+          "message": "List campaigns"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
           "source": "List and search campaigns",
@@ -388,8 +388,8 @@
           "message": "Campaigns with errors"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
-          "source": "Get Campaign",
-          "message": "Get Campaign"
+          "source": "Get campaign",
+          "message": "Get campaign"
         },
         "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
           "source": "Get a single campaign by ID",
@@ -412,8 +412,8 @@
           "message": "The unique identifier of the campaign to retrieve"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
-          "source": "Create Campaign",
-          "message": "Create Campaign"
+          "source": "Create campaign",
+          "message": "Create campaign"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
           "source": "Create a new campaign",
@@ -436,8 +436,8 @@
           "message": "The name of the campaign to create"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
-          "source": "Pause Campaign",
-          "message": "Pause Campaign"
+          "source": "Pause campaign",
+          "message": "Pause campaign"
         },
         "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
           "source": "Pause a running campaign",
@@ -460,8 +460,8 @@
           "message": "The unique identifier of the campaign to pause"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
-          "source": "Start Campaign",
-          "message": "Start Campaign"
+          "source": "Start campaign",
+          "message": "Start campaign"
         },
         "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
           "source": "Start or resume a campaign",
@@ -484,8 +484,8 @@
           "message": "The unique identifier of the campaign to start"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
-          "message": "List Leads"
+          "source": "List leads",
+          "message": "List leads"
         },
         "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
           "source": "List leads in a campaign",
@@ -508,8 +508,8 @@
           "message": "The identifier of the campaign to retrieve leads from"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
-          "message": "Get Lead"
+          "source": "Get lead",
+          "message": "Get lead"
         },
         "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
           "source": "Get a single lead from a campaign",
@@ -544,8 +544,8 @@
           "message": "The email address of the lead to retrieve"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Add Lead to Campaign",
-          "message": "Add Lead to Campaign"
+          "source": "Add lead to campaign",
+          "message": "Add lead to campaign"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
           "source": "Add a lead to a campaign",
@@ -652,8 +652,8 @@
           "message": "The website URL associated with the lead"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
-          "message": "Update Lead"
+          "source": "Update lead",
+          "message": "Update lead"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
           "source": "Update an existing lead",
@@ -772,8 +772,8 @@
           "message": "Set to `True` to mark this lead as interested in your offer"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Remove Lead from Campaign",
-          "message": "Remove Lead from Campaign"
+          "source": "Remove lead from campaign",
+          "message": "Remove lead from campaign"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
           "source": "Remove a lead from a campaign",
@@ -808,8 +808,8 @@
           "message": "The email address of the lead to remove from the campaign"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
-          "source": "List Activities",
-          "message": "List Activities"
+          "source": "List activities",
+          "message": "List activities"
         },
         "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
           "source": "List email and engagement activities",
@@ -896,8 +896,8 @@
           "message": "If `True`, only returns the first occurrence of each activity type per lead per campaign"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List manual tasks",
@@ -920,8 +920,8 @@
           "message": "Maximum number of tasks to return (max 100)"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
-          "message": "Get Task"
+          "source": "Get task",
+          "message": "Get task"
         },
         "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -944,8 +944,8 @@
           "message": "The unique identifier of the task to retrieve"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
-          "message": "Create Task"
+          "source": "Create task",
+          "message": "Create task"
         },
         "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a manual task",
@@ -1036,8 +1036,8 @@
           "message": "Date and time when this task is due"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
-          "message": "Update Task"
+          "source": "Update task",
+          "message": "Update task"
         },
         "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update a task status",
@@ -1104,8 +1104,8 @@
           "message": "Updated date and time when this task is due"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
-          "message": "Delete Task"
+          "source": "Delete task",
+          "message": "Delete task"
         },
         "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a manual task",
@@ -1128,8 +1128,8 @@
           "message": "The unique identifier of the task to delete"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List contacts",
@@ -1416,8 +1416,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
-          "source": "Email Opened",
-          "message": "Email Opened"
+          "source": "Email opened",
+          "message": "Email opened"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
           "source": "Trigger when a lead opens an email",
@@ -1440,8 +1440,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
-          "source": "Email Link Clicked",
-          "message": "Email Link Clicked"
+          "source": "Email link clicked",
+          "message": "Email link clicked"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
           "source": "Trigger when a lead clicks a link",
@@ -1464,8 +1464,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
-          "source": "Email Replied",
-          "message": "Email Replied"
+          "source": "Email replied",
+          "message": "Email replied"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
           "source": "Trigger when a lead replies to an email",
@@ -1488,8 +1488,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
-          "source": "Email Bounced",
-          "message": "Email Bounced"
+          "source": "Email bounced",
+          "message": "Email bounced"
         },
         "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
           "source": "Trigger when an email bounces",
@@ -1512,8 +1512,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
-          "source": "Lead Marked Interested",
-          "message": "Lead Marked Interested"
+          "source": "Lead marked interested",
+          "message": "Lead marked interested"
         },
         "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
           "source": "Trigger when a lead is marked as interested",
@@ -1536,8 +1536,8 @@
           "message": "Optionally filter events to a specific Lemlist campaign"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
-          "source": "Lead Marked Not Interested",
-          "message": "Lead Marked Not Interested"
+          "source": "Lead marked not interested",
+          "message": "Lead marked not interested"
         },
         "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {
           "source": "Trigger when a lead is marked as not interested",

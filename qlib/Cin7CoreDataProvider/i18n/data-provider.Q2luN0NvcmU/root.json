@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
-          "source": "Search Customers",
-          "message": "Search Customers"
+          "source": "Search customers",
+          "message": "Search customers"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
           "source": "List and search customers",
@@ -352,8 +352,8 @@
           "message": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, or modification date."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create Customer",
-          "message": "Create Customer"
+          "source": "Create customer",
+          "message": "Create customer"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Create a new customer",
@@ -720,8 +720,8 @@
           "message": "Comma-separated tags for the customer"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get Customer",
-          "message": "Get Customer"
+          "source": "Get customer",
+          "message": "Get customer"
         },
         "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
           "source": "Get a customer by ID",
@@ -744,8 +744,8 @@
           "message": "The unique identifier (GUID) of the customer to retrieve"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update Customer",
-          "message": "Update Customer"
+          "source": "Update customer",
+          "message": "Update customer"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update an existing customer",
@@ -1124,8 +1124,8 @@
           "message": "Comma-separated tags for the customer"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
-          "source": "Search Suppliers",
-          "message": "Search Suppliers"
+          "source": "Search suppliers",
+          "message": "Search suppliers"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
           "source": "List and search suppliers",
@@ -1136,8 +1136,8 @@
           "message": "Retrieve a list of suppliers from Cin7Core with optional filtering."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Create Supplier",
-          "message": "Create Supplier"
+          "source": "Create supplier",
+          "message": "Create supplier"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
           "source": "Create a new supplier",
@@ -1480,8 +1480,8 @@
           "message": "Comma-separated tags for the supplier"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
-          "source": "Get Supplier",
-          "message": "Get Supplier"
+          "source": "Get supplier",
+          "message": "Get supplier"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
           "source": "Get a supplier by ID",
@@ -1504,8 +1504,8 @@
           "message": "The unique identifier (GUID) of the supplier to retrieve"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
-          "source": "Update Supplier",
-          "message": "Update Supplier"
+          "source": "Update supplier",
+          "message": "Update supplier"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
           "source": "Update an existing supplier",
@@ -1852,8 +1852,8 @@
           "message": "Tags associated with this supplier"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
-          "source": "Search Products",
-          "message": "Search Products"
+          "source": "Search products",
+          "message": "Search products"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
           "source": "List and search products",
@@ -1864,8 +1864,8 @@
           "message": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, category, or brand."
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a product by ID",
@@ -1888,8 +1888,8 @@
           "message": "The unique identifier (GUID) of the product to retrieve"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
-          "source": "Find Product Availability",
-          "message": "Find Product Availability"
+          "source": "Find product availability",
+          "message": "Find product availability"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
           "source": "Check product stock levels",
@@ -1900,8 +1900,8 @@
           "message": "Check product availability and stock levels across warehouse locations."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
-          "source": "Search Sales",
-          "message": "Search Sales"
+          "source": "Search sales",
+          "message": "Search sales"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
           "source": "List and search sales orders",
@@ -1912,8 +1912,8 @@
           "message": "Retrieve a list of sales orders from Cin7Core with optional filtering."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
-          "source": "Create Sale",
-          "message": "Create Sale"
+          "source": "Create sale",
+          "message": "Create sale"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
           "source": "Create a new sale order",
@@ -2368,8 +2368,8 @@
           "message": "Total for this line"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
-          "source": "Get Sale",
-          "message": "Get Sale"
+          "source": "Get sale",
+          "message": "Get sale"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
           "source": "Get a sale order by ID",
@@ -2392,8 +2392,8 @@
           "message": "The unique identifier (GUID) of the sale to retrieve"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
-          "source": "Update Sale",
-          "message": "Update Sale"
+          "source": "Update sale",
+          "message": "Update sale"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
           "source": "Update an existing sale order",
@@ -2992,8 +2992,8 @@
           "message": "The total amount for this charge"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
-          "source": "Delete Sale",
-          "message": "Delete Sale"
+          "source": "Delete sale",
+          "message": "Delete sale"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
           "source": "Delete (void) a sale order",
@@ -3016,8 +3016,8 @@
           "message": "The unique identifier (GUID) of the sale to delete/void"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
-          "source": "Search Sale Payments",
-          "message": "Search Sale Payments"
+          "source": "Search sale payments",
+          "message": "Search sale payments"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
           "source": "List and search sale payments",
@@ -3028,8 +3028,8 @@
           "message": "Retrieve a list of payments for sales."
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Add Sale Payment",
-          "message": "Add Sale Payment"
+          "source": "Add sale payment",
+          "message": "Add sale payment"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
           "source": "Add a payment to a sale",
@@ -3112,8 +3112,8 @@
           "message": "The account to record the payment to"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Update Sale Payment",
-          "message": "Update Sale Payment"
+          "source": "Update sale payment",
+          "message": "Update sale payment"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
           "source": "Update an existing payment",
@@ -3208,8 +3208,8 @@
           "message": "Reference number or note for the payment"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
-          "source": "Delete Sale Payment",
-          "message": "Delete Sale Payment"
+          "source": "Delete sale payment",
+          "message": "Delete sale payment"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
           "source": "Delete a payment from a sale",
@@ -3244,8 +3244,8 @@
           "message": "The unique identifier (GUID) of the payment to delete"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Add Sale Attachment",
-          "message": "Add Sale Attachment"
+          "source": "Add sale attachment",
+          "message": "Add sale attachment"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
           "source": "Add an attachment to a sale",
@@ -3292,8 +3292,8 @@
           "message": "The file content encoded as Base64 string"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
-          "source": "Delete Sale Attachment",
-          "message": "Delete Sale Attachment"
+          "source": "Delete sale attachment",
+          "message": "Delete sale attachment"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
           "source": "Delete an attachment from a sale",
@@ -3328,8 +3328,8 @@
           "message": "The unique identifier (GUID) of the attachment to delete"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
-          "source": "Add Sale Pack",
-          "message": "Add Sale Pack"
+          "source": "Add sale pack",
+          "message": "Add sale pack"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
           "source": "Add a pack/pick record to a sale",
@@ -3496,8 +3496,8 @@
           "message": "The warehouse location for the pack"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
-          "source": "Get Sale Pack",
-          "message": "Get Sale Pack"
+          "source": "Get sale pack",
+          "message": "Get sale pack"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
           "source": "Get pack details for a sale",
@@ -3532,8 +3532,8 @@
           "message": "Optional task ID to get a specific pack record"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
-          "source": "Add Sale Shipment",
-          "message": "Add Sale Shipment"
+          "source": "Add sale shipment",
+          "message": "Add sale shipment"
         },
         "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
           "source": "Add shipment/tracking to a sale",
@@ -3748,8 +3748,8 @@
           "message": "Date by which shipment is required"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
-          "source": "Find Sale Fulfilment",
-          "message": "Find Sale Fulfilment"
+          "source": "Find sale fulfilment",
+          "message": "Find sale fulfilment"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
           "source": "Find fulfilment tasks for sales",
@@ -3760,8 +3760,8 @@
           "message": "Search for fulfilment, pick, and pack tasks for sales."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
-          "source": "Find Sale Invoices",
-          "message": "Find Sale Invoices"
+          "source": "Find sale invoices",
+          "message": "Find sale invoices"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
           "source": "Find invoices for sales",
@@ -3772,8 +3772,8 @@
           "message": "Search for invoices associated with sale orders."
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
-          "source": "Find Sale Credit Notes",
-          "message": "Find Sale Credit Notes"
+          "source": "Find sale credit notes",
+          "message": "Find sale credit notes"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
           "source": "Find credit notes for sales",
@@ -3784,8 +3784,8 @@
           "message": "Search for credit notes associated with sale orders."
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
-          "source": "Search Stock Adjustments",
-          "message": "Search Stock Adjustments"
+          "source": "Search stock adjustments",
+          "message": "Search stock adjustments"
         },
         "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
           "source": "List and search stock adjustments",
@@ -3796,8 +3796,8 @@
           "message": "Retrieve a list of stock adjustments from Cin7Core."
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Create Stock Adjustment",
-          "message": "Create Stock Adjustment"
+          "source": "Create stock adjustment",
+          "message": "Create stock adjustment"
         },
         "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Create a new stock adjustment",
@@ -3964,8 +3964,8 @@
           "message": "The unit cost for the adjustment"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Get Stock Adjustment",
-          "message": "Get Stock Adjustment"
+          "source": "Get stock adjustment",
+          "message": "Get stock adjustment"
         },
         "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Get a stock adjustment by ID",
@@ -3988,8 +3988,8 @@
           "message": "The unique identifier (GUID) of the stock adjustment to retrieve"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Update Stock Adjustment",
-          "message": "Update Stock Adjustment"
+          "source": "Update stock adjustment",
+          "message": "Update stock adjustment"
         },
         "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Update an existing stock adjustment",
@@ -4180,8 +4180,8 @@
           "message": "The status of the adjustment (Draft, Authorized, Void)"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
-          "source": "Delete Stock Adjustment",
-          "message": "Delete Stock Adjustment"
+          "source": "Delete stock adjustment",
+          "message": "Delete stock adjustment"
         },
         "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
           "source": "Delete a stock adjustment",
@@ -4204,8 +4204,8 @@
           "message": "The unique identifier (GUID) of the stock adjustment to delete/void"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
-          "source": "Find Assemblies",
-          "message": "Find Assemblies"
+          "source": "Find assemblies",
+          "message": "Find assemblies"
         },
         "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
           "source": "Find assembly/finished goods tasks",
@@ -4216,8 +4216,8 @@
           "message": "Search for assembly and finished goods tasks."
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
-          "source": "New Payment",
-          "message": "New Payment"
+          "source": "New payment",
+          "message": "New payment"
         },
         "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
           "source": "Trigger when a new payment is received",
@@ -4228,8 +4228,8 @@
           "message": "Fires when a new payment is detected on a sale via polling."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
-          "source": "New Sale Credit Note Authorized",
-          "message": "New Sale Credit Note Authorized"
+          "source": "New sale credit note authorized",
+          "message": "New sale credit note authorized"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
           "source": "Trigger when a credit note is authorized",
@@ -4240,8 +4240,8 @@
           "message": "Fires when a new sale credit note is authorized via polling."
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
-          "source": "New Sale Invoice Authorized",
-          "message": "New Sale Invoice Authorized"
+          "source": "New sale invoice authorized",
+          "message": "New sale invoice authorized"
         },
         "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
           "source": "Trigger when an invoice is authorized",
@@ -4252,8 +4252,8 @@
           "message": "Fires when a new sale invoice is authorized via polling."
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
-          "source": "Sale Tracking Changed",
-          "message": "Sale Tracking Changed"
+          "source": "Sale tracking changed",
+          "message": "Sale tracking changed"
         },
         "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
           "source": "Trigger when tracking information changes",
@@ -4264,8 +4264,8 @@
           "message": "Fires when sale tracking or shipment information changes via polling."
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
-          "source": "Sale Voided",
-          "message": "Sale Voided"
+          "source": "Sale voided",
+          "message": "Sale voided"
         },
         "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
           "source": "Trigger when a sale is voided",
@@ -4276,8 +4276,8 @@
           "message": "Fires when a sale order is voided via polling."
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
-          "source": "Stock Level Update",
-          "message": "Stock Level Update"
+          "source": "Stock level update",
+          "message": "Stock level update"
         },
         "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
           "source": "Trigger when stock levels change",
@@ -4288,8 +4288,8 @@
           "message": "Fires when product stock/inventory levels change via polling."
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
-          "source": "Customer Updated",
-          "message": "Customer Updated"
+          "source": "Customer updated",
+          "message": "Customer updated"
         },
         "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a customer is created or updated",
@@ -4300,8 +4300,8 @@
           "message": "Fires when a customer is created or modified via polling."
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
-          "source": "Supplier Updated",
-          "message": "Supplier Updated"
+          "source": "Supplier updated",
+          "message": "Supplier updated"
         },
         "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {
           "source": "Trigger when a supplier is created or updated",

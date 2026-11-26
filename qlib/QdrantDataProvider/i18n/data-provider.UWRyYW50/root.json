@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
-          "source": "Query Points",
-          "message": "Query Points"
+          "source": "Query points",
+          "message": "Query points"
         },
         "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
           "source": "Query points using vector similarity search",
@@ -352,8 +352,8 @@
           "message": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
-          "source": "Upsert Points",
-          "message": "Upsert Points"
+          "source": "Upsert points",
+          "message": "Upsert points"
         },
         "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
           "source": "Insert or update points in a collection",
@@ -364,8 +364,8 @@
           "message": "Insert or update points with vectors and optional payloads in a Qdrant collection"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
-          "message": "Create Collection"
+          "source": "Create collection",
+          "message": "Create collection"
         },
         "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Create a new Qdrant collection",
@@ -376,8 +376,8 @@
           "message": "Create a new vector collection with configurable vector parameters and distance metrics"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
-          "message": "List Collections"
+          "source": "List collections",
+          "message": "List collections"
         },
         "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
           "source": "List all Qdrant collections",
@@ -388,8 +388,8 @@
           "message": "Retrieve a list of all collections in the Qdrant instance"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
-          "source": "Count Points",
-          "message": "Count Points"
+          "source": "Count points",
+          "message": "Count points"
         },
         "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
           "source": "Count points in a collection",
@@ -400,8 +400,8 @@
           "message": "Count the number of points in a Qdrant collection, optionally with a filter"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
-          "source": "Health Check",
-          "message": "Health Check"
+          "source": "Health check",
+          "message": "Health check"
         },
         "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
           "source": "Check Qdrant server health",
@@ -412,8 +412,8 @@
           "message": "Check the health status of the Qdrant server"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
-          "source": "Delete Points",
-          "message": "Delete Points"
+          "source": "Delete points",
+          "message": "Delete points"
         },
         "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
           "source": "Delete points from a collection",
@@ -424,8 +424,8 @@
           "message": "Delete points from a Qdrant collection by point IDs or by filter conditions"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
-          "source": "Get Points",
-          "message": "Get Points"
+          "source": "Get points",
+          "message": "Get points"
         },
         "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
           "source": "Get specific points by ID",
@@ -436,8 +436,8 @@
           "message": "Retrieve specific points from a Qdrant collection by their IDs, including vectors and payloads"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
-          "source": "Scroll Points",
-          "message": "Scroll Points"
+          "source": "Scroll points",
+          "message": "Scroll points"
         },
         "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
           "source": "Scroll through points in a collection",
@@ -448,8 +448,8 @@
           "message": "Iterate through all points in a Qdrant collection using scroll-based pagination with optional filtering"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
-          "source": "Get Collection",
-          "message": "Get Collection"
+          "source": "Get collection",
+          "message": "Get collection"
         },
         "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
           "source": "Get collection info",
@@ -460,8 +460,8 @@
           "message": "Retrieve detailed information about a specific Qdrant collection, including its configuration and status"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Delete Collection",
-          "message": "Delete Collection"
+          "source": "Delete collection",
+          "message": "Delete collection"
         },
         "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Delete a Qdrant collection",
@@ -472,8 +472,8 @@
           "message": "Delete a collection and all its data from the Qdrant instance"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
-          "source": "Collection Exists",
-          "message": "Collection Exists"
+          "source": "Collection exists",
+          "message": "Collection exists"
         },
         "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
           "source": "Check if a collection exists",
@@ -484,8 +484,8 @@
           "message": "Check whether a specific collection exists in the Qdrant instance"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
-          "source": "Query Batch Points",
-          "message": "Query Batch Points"
+          "source": "Query batch points",
+          "message": "Query batch points"
         },
         "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
           "source": "Perform batch vector similarity searches",
@@ -496,8 +496,8 @@
           "message": "Execute multiple vector similarity search queries in a single batch request against a Qdrant collection"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
-          "source": "Query Grouped Points",
-          "message": "Query Grouped Points"
+          "source": "Query grouped points",
+          "message": "Query grouped points"
         },
         "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
           "source": "Perform grouped vector similarity search",
@@ -508,8 +508,8 @@
           "message": "Execute a vector similarity search on a Qdrant collection with results grouped by a specified payload field"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
-          "source": "List All Aliases",
-          "message": "List All Aliases"
+          "source": "List all aliases",
+          "message": "List all aliases"
         },
         "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
           "source": "List all collection aliases",
@@ -520,8 +520,8 @@
           "message": "Retrieve a list of all aliases and their associated collections in the Qdrant instance"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
-          "source": "Update Aliases",
-          "message": "Update Aliases"
+          "source": "Update aliases",
+          "message": "Update aliases"
         },
         "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
           "source": "Update collection aliases",
@@ -532,8 +532,8 @@
           "message": "Create, rename, or delete collection aliases in the Qdrant instance"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
-          "source": "Set Payload",
-          "message": "Set Payload"
+          "source": "Set payload",
+          "message": "Set payload"
         },
         "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
           "source": "Set payload on points",
@@ -544,8 +544,8 @@
           "message": "Set or update payload key-value pairs on points in a Qdrant collection by point IDs or filter conditions"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
-          "source": "Liveness Check",
-          "message": "Liveness Check"
+          "source": "Liveness check",
+          "message": "Liveness check"
         },
         "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
           "source": "Check Qdrant server liveness",
@@ -556,8 +556,8 @@
           "message": "Check if the Qdrant server is alive and responsive"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
-          "source": "Batch Update Points",
-          "message": "Batch Update Points"
+          "source": "Batch update points",
+          "message": "Batch update points"
         },
         "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
           "source": "Apply multiple point operations in a single batch",
@@ -568,8 +568,8 @@
           "message": "Execute a batch of heterogeneous point operations (upsert, delete, set/overwrite/delete/clear payload, update/delete vectors) in a single request for high-performance bulk updates"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
-          "source": "Search Points",
-          "message": "Search Points"
+          "source": "Search points",
+          "message": "Search points"
         },
         "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
           "source": "Search points with record streaming",
@@ -580,8 +580,8 @@
           "message": "Vector similarity search on a Qdrant collection returning results as a record stream for efficient pipeline processing"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
-          "source": "Create/Upsert Point",
-          "message": "Create/Upsert Point"
+          "source": "Create/upsert point",
+          "message": "Create/upsert point"
         },
         "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {
           "source": "Create or upsert a point in a collection",

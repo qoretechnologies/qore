@@ -82,7 +82,7 @@ module EmpathicBuildingDataProvider {
             "app": EmpathicBuildingDataProvider::AppName,
             "path": "/measurements/create",
             "action": "create-measurements",
-            "display_name": "Create Measurements",
+            "display_name": "Create measurements",
             "short_desc": "Post measurements to an EmpathicBuilding instance",
             "desc": "Post measurements to an EmpathicBuilding instance",
             "action_code": DPAT_API,

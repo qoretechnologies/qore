@@ -904,8 +904,8 @@
           "message": "The unique identifier of the contact to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List contacts from a view",
@@ -968,8 +968,8 @@
           "message": "The contact ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
-          "source": "Create Account",
-          "message": "Create Account"
+          "source": "Create account",
+          "message": "Create account"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
           "source": "Create a new account",
@@ -1196,8 +1196,8 @@
           "message": "The ID of the parent account/company"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
-          "source": "Update Account",
-          "message": "Update Account"
+          "source": "Update account",
+          "message": "Update account"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
           "source": "Update an existing account",
@@ -1436,8 +1436,8 @@
           "message": "The ID of the parent account/company"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
-          "source": "Delete Account",
-          "message": "Delete Account"
+          "source": "Delete account",
+          "message": "Delete account"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
           "source": "Delete an account",
@@ -1460,8 +1460,8 @@
           "message": "The unique identifier of the account to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
-          "source": "List Accounts",
-          "message": "List Accounts"
+          "source": "List accounts",
+          "message": "List accounts"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
           "source": "List accounts from a view",
@@ -1496,8 +1496,8 @@
           "message": "Maximum results"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
-          "source": "Get Account",
-          "message": "Get Account"
+          "source": "Get account",
+          "message": "Get account"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
           "source": "Get a single account by ID",
@@ -1516,8 +1516,8 @@
           "message": "The account ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
-          "source": "Create Deal",
-          "message": "Create Deal"
+          "source": "Create deal",
+          "message": "Create deal"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
           "source": "Create a new deal",
@@ -1720,8 +1720,8 @@
           "message": "The probability of winning the deal (`0` to `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
-          "source": "Update Deal",
-          "message": "Update Deal"
+          "source": "Update deal",
+          "message": "Update deal"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
           "source": "Update an existing deal",
@@ -1936,8 +1936,8 @@
           "message": "The probability of winning the deal (`0` to `100`)"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
-          "source": "Delete Deal",
-          "message": "Delete Deal"
+          "source": "Delete deal",
+          "message": "Delete deal"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
           "source": "Delete a deal",
@@ -1960,8 +1960,8 @@
           "message": "The unique identifier of the deal to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
-          "source": "List Deals",
-          "message": "List Deals"
+          "source": "List deals",
+          "message": "List deals"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
           "source": "List deals from a view",
@@ -1996,8 +1996,8 @@
           "message": "Maximum results"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
-          "source": "Get Deal",
-          "message": "Get Deal"
+          "source": "Get deal",
+          "message": "Get deal"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
           "source": "Get a single deal by ID",
@@ -2016,8 +2016,8 @@
           "message": "The deal ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
-          "message": "Create Task"
+          "source": "Create task",
+          "message": "Create task"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a new task",
@@ -2156,8 +2156,8 @@
           "message": "The ID of the task type"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
-          "message": "Update Task"
+          "source": "Update task",
+          "message": "Update task"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update an existing task",
@@ -2308,8 +2308,8 @@
           "message": "The ID of the task type"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
-          "message": "Delete Task"
+          "source": "Delete task",
+          "message": "Delete task"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a task",
@@ -2332,8 +2332,8 @@
           "message": "The unique identifier of the task to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List tasks with optional filter",
@@ -2388,8 +2388,8 @@
           "message": "Maximum results"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
-          "message": "Get Task"
+          "source": "Get task",
+          "message": "Get task"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -2408,8 +2408,8 @@
           "message": "The task ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Create Appointment",
-          "message": "Create Appointment"
+          "source": "Create appointment",
+          "message": "Create appointment"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
           "source": "Create a new appointment",
@@ -2528,8 +2528,8 @@
           "message": "The ID of the contact, account, or deal to associate"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Update Appointment",
-          "message": "Update Appointment"
+          "source": "Update appointment",
+          "message": "Update appointment"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
           "source": "Update an existing appointment",
@@ -2660,8 +2660,8 @@
           "message": "The ID of the contact, account, or deal to associate"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
-          "source": "Delete Appointment",
-          "message": "Delete Appointment"
+          "source": "Delete appointment",
+          "message": "Delete appointment"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
           "source": "Delete an appointment",
@@ -2684,8 +2684,8 @@
           "message": "The unique identifier of the appointment to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
-          "source": "List Appointments",
-          "message": "List Appointments"
+          "source": "List appointments",
+          "message": "List appointments"
         },
         "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
           "source": "List appointments with optional filter",
@@ -2728,8 +2728,8 @@
           "message": "Maximum results"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
-          "source": "Get Appointment",
-          "message": "Get Appointment"
+          "source": "Get appointment",
+          "message": "Get appointment"
         },
         "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
           "source": "Get a single appointment by ID",
@@ -2748,8 +2748,8 @@
           "message": "The appointment ID"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
-          "message": "Create Note"
+          "source": "Create note",
+          "message": "Create note"
         },
         "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
           "source": "Create a new note",
@@ -2808,8 +2808,8 @@
           "message": "The ID of the contact, account, or deal to associate"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
-          "message": "Update Note"
+          "source": "Update note",
+          "message": "Update note"
         },
         "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
           "source": "Update an existing note",
@@ -2844,8 +2844,8 @@
           "message": "The updated content/body of the note"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
-          "message": "Delete Note"
+          "source": "Delete note",
+          "message": "Delete note"
         },
         "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
           "source": "Delete a note",
@@ -2868,8 +2868,8 @@
           "message": "The unique identifier of the note to delete"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
-          "source": "New Contact Event",
-          "message": "New Contact Event"
+          "source": "New Contact event",
+          "message": "New Contact event"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
           "source": "Watch for new contacts",
@@ -2880,8 +2880,8 @@
           "message": "Poll for new contacts created in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
-          "source": "New Deal Event",
-          "message": "New Deal Event"
+          "source": "New deal event",
+          "message": "New deal event"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
           "source": "Watch for new deals",
@@ -2892,8 +2892,8 @@
           "message": "Poll for new deals created in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
-          "source": "New Account Event",
-          "message": "New Account Event"
+          "source": "New account event",
+          "message": "New account event"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
           "source": "Watch for new accounts",
@@ -2904,8 +2904,8 @@
           "message": "Poll for new accounts created in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task Event",
-          "message": "New Task Event"
+          "source": "New task event",
+          "message": "New task event"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
           "source": "Watch for new tasks",
@@ -2916,8 +2916,8 @@
           "message": "Poll for new tasks created in Freshsales"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment Event",
-          "message": "New Appointment Event"
+          "source": "New appointment event",
+          "message": "New appointment event"
         },
         "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
           "source": "Watch for new appointments",

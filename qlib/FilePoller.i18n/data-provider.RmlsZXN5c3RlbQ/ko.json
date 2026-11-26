@@ -16,7 +16,7 @@
           "message": "서버 파일 시스템에 대한 액세스"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
-          "source": "New File Created",
+          "source": "New file created",
           "message": "새 파일 생성됨"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {

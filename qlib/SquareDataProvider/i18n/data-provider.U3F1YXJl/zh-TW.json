@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "建立客戶"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -436,7 +436,7 @@
           "message": "顧客的外部參考 ID"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "更新客戶"
         },
         "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -504,7 +504,7 @@
           "message": "顧客備註"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
-          "source": "Add Customer to Group",
+          "source": "Add customer to group",
           "message": "將客戶新增至群組"
         },
         "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
@@ -536,7 +536,7 @@
           "message": "客戶群組的 ID"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
-          "source": "Remove Customer From Group",
+          "source": "Remove customer from group",
           "message": "從群組中移除客戶"
         },
         "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
@@ -568,7 +568,7 @@
           "message": "客戶群組的 ID"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -640,7 +640,7 @@
           "message": "遞減排序"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "取得客戶"
         },
         "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -660,7 +660,7 @@
           "message": "客戶 ID"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "刪除客戶"
         },
         "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -692,7 +692,7 @@
           "message": "客戶設定檔的目前版本（用於開放式並行控制）"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "建立訂單"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -792,7 +792,7 @@
           "message": "要套用的付款 ID 列表。若為空，則使用外部付款。"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
-          "source": "Get Orders",
+          "source": "Get orders",
           "message": "獲取訂單"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
@@ -824,7 +824,7 @@
           "message": "依位置篩選"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
-          "source": "Search Orders",
+          "source": "Search orders",
           "message": "搜尋訂單"
         },
         "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
@@ -928,7 +928,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "取得訂單"
         },
         "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
@@ -948,7 +948,7 @@
           "message": "訂單 ID"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
-          "source": "Cancel an Order",
+          "source": "Cancel an order",
           "message": "取消訂單"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
@@ -1108,7 +1108,7 @@
           "message": "用於並行控制的版本權杖"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
+          "source": "Refund payment",
           "message": "退還款項"
         },
         "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
@@ -1160,7 +1160,7 @@
           "message": "退款原因"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
+          "source": "List payments",
           "message": "列出付款"
         },
         "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
@@ -1236,7 +1236,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get a Payment",
+          "source": "Get a payment",
           "message": "獲取付款"
         },
         "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
@@ -1256,7 +1256,7 @@
           "message": "付款 ID"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
+          "source": "Create invoice",
           "message": "建立發票"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
@@ -1372,7 +1372,7 @@
           "message": "發票描述"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
+          "source": "List invoices",
           "message": "列出發票"
         },
         "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
@@ -1404,7 +1404,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get an Invoice",
+          "source": "Get an invoice",
           "message": "取得發票"
         },
         "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
@@ -1424,7 +1424,7 @@
           "message": "發票 ID"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
-          "source": "Send Invoice",
+          "source": "Send invoice",
           "message": "傳送發票"
         },
         "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
@@ -1456,7 +1456,7 @@
           "message": "發票的目前版本（用於開放式並行存取控制）"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
-          "source": "Cancel Invoice",
+          "source": "Cancel invoice",
           "message": "取消發票"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "發票的目前版本（用於開放式並行存取控制）"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
-          "source": "Create Appointment",
+          "source": "Create appointment",
           "message": "建立預約"
         },
         "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
@@ -1560,7 +1560,7 @@
           "message": "來自顧客的備註"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
-          "source": "List Bookings",
+          "source": "List bookings",
           "message": "列出預訂"
         },
         "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
-          "source": "Get a Booking",
+          "source": "Get a booking",
           "message": "獲取預訂"
         },
         "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
@@ -1648,7 +1648,7 @@
           "message": "預訂 ID"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
-          "source": "Cancel Booking",
+          "source": "Cancel booking",
           "message": "取消預約"
         },
         "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
@@ -1680,7 +1680,7 @@
           "message": "預約的目前版本（用於開放式並行控制）"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
-          "source": "Change Inventory",
+          "source": "Change inventory",
           "message": "變更庫存"
         },
         "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
@@ -1800,7 +1800,7 @@
           "message": "無狀態"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
-          "source": "Get Inventory Count",
+          "source": "Get inventory count",
           "message": "獲取庫存計數"
         },
         "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
@@ -1836,7 +1836,7 @@
           "message": "用於篩選計數的地點 ID 選填列表"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
-          "source": "Search Catalog",
+          "source": "Search catalog",
           "message": "搜尋目錄"
         },
         "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
-          "source": "Find Service",
+          "source": "Find service",
           "message": "尋找服務"
         },
         "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
@@ -1912,7 +1912,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
-          "source": "List Refunds",
+          "source": "List refunds",
           "message": "列出退款"
         },
         "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
@@ -2040,7 +2040,7 @@
           "message": "最大結果數"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
-          "source": "Get a Refund",
+          "source": "Get a refund",
           "message": "獲取退款"
         },
         "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
@@ -2060,7 +2060,7 @@
           "message": "退款 ID"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
-          "source": "New Customer",
+          "source": "New customer",
           "message": "新增客戶"
         },
         "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
-          "source": "Order Created/Updated",
+          "source": "Order created/updated",
           "message": "訂單已建立/已更新"
         },
         "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
-          "source": "Payment Created/Updated",
+          "source": "Payment created/updated",
           "message": "付款已建立/已更新"
         },
         "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
@@ -2132,7 +2132,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
+          "source": "New appointment",
           "message": "新預約"
         },
         "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
@@ -2156,7 +2156,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
-          "source": "New Catalog Item",
+          "source": "New catalog item",
           "message": "新目錄項目"
         },
         "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
@@ -2180,7 +2180,7 @@
           "message": "檢查新記錄的頻率（至少 30 秒）"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
+          "source": "New invoice",
           "message": "新發票"
         },
         "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {

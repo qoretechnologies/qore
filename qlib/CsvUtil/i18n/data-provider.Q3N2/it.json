@@ -16,7 +16,7 @@
           "message": "Lettura e scrittura di dati di file CSV"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "Leggi file CSV"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "se `true` (predefinito `false`), se una riga viene analizzata con un numero di colonne o campi diverso dalle altre righe, viene generata un'eccezione `CSVFILEITERATOR-DATA-ERROR`\n\nTenere presente che l'abilitazione di questa opzione comporterà un calo delle prestazioni"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "Leggi dati CSV inline"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "se `true` (predefinito `false`), se una riga viene analizzata con un numero di colonne o campi diverso dalle altre righe, viene generata un'eccezione `CSVFILEITERATOR-DATA-ERROR`\n\nTenere presente che l'abilitazione di questa opzione comporterà un calo delle prestazioni"
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "Profila dati CSV"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "Se `True` (predefinito), i valori di esempio e i controesempi vengono oscurati secondo la loro forma: le lettere diventano `x` o `X` e le cifre `9`, così un profilo può essere condiviso senza i dati"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "Scrivi dati CSV"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "Impostare su `false` per sopprimere l'output delle intestazioni; il valore predefinito è `true`, ovvero emettere le intestazioni se presenti"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "Crea dati CSV"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

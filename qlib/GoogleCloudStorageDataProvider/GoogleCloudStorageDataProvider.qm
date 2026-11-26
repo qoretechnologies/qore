@@ -269,7 +269,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/upload-object",
             "action": "upload-object",
-            "display_name": "Upload Object",
+            "display_name": "Upload object",
             "short_desc": "Upload content to a bucket",
             "desc": "Uploads content to a bucket as an object of any size.\n\n"
                 "Large content, and any upload that also sets metadata, is sent as a resumable upload "
@@ -303,7 +303,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/download-object",
             "action": "download-object",
-            "display_name": "Download Object",
+            "display_name": "Download object",
             "short_desc": "Download an object's content",
             "desc": "Downloads an object's content and returns it as raw bytes in `content`, together "
                 "with the content type, size, and the checksums Google Cloud Storage reports.\n\n"
@@ -328,7 +328,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/delete-object",
             "action": "delete-object",
-            "display_name": "Delete Object",
+            "display_name": "Delete object",
             "short_desc": "Delete an object",
             "desc": "Deletes an object.\n\n"
                 "In a bucket with versioning enabled, deleting without a `generation` removes the live "
@@ -352,7 +352,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/copy-object",
             "action": "copy-object",
-            "display_name": "Copy Object",
+            "display_name": "Copy object",
             "short_desc": "Copy an object without downloading it",
             "desc": "Copies an object to another name or bucket entirely within Google Cloud Storage, "
                 "without transferring the content through the caller.\n\n"
@@ -379,7 +379,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/compose",
             "action": "compose",
-            "display_name": "Compose Objects",
+            "display_name": "Compose objects",
             "short_desc": "Concatenate objects into one object",
             "desc": "Concatenates up to 32 objects into a single new object, entirely within Google "
                 "Cloud Storage and without transferring any content through the caller.\n\n"
@@ -407,7 +407,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/create-signed-url",
             "action": "create-signed-url",
-            "display_name": "Create Signed URL",
+            "display_name": "Create signed URL",
             "short_desc": "Create a time-limited URL granting access to one object",
             "desc": "Creates a V4 signed URL granting access to a single object for a single HTTP "
                 "method until it expires. Anyone holding the URL can use it with no credentials, "

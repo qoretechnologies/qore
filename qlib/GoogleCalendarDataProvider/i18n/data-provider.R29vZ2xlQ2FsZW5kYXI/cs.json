@@ -340,7 +340,7 @@
           "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.display_name": {
-          "source": "Add Event From Text",
+          "source": "Add event from text",
           "message": "Přidat událost z textu"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.cXVpY2stYWRkLWV2ZW50.short_desc": {
@@ -400,7 +400,7 @@
           "message": "Nejsou odesílána žádná oznámení. Pro úlohy migrace kalendáře zvažte raději použití metody `Events.import`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.display_name": {
-          "source": "Create Event",
+          "source": "Create event",
           "message": "Vytvořit událost"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Y3JlYXRlLWV2ZW50.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Kalendář, do kterého se má událost přidat"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.display_name": {
-          "source": "Update Event",
+          "source": "Update event",
           "message": "Aktualizovat událost"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.dXBkYXRlLWV2ZW50.short_desc": {
@@ -448,7 +448,7 @@
           "message": "Kalendář, do kterého se má událost přidat"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.display_name": {
-          "source": "Delete Event",
+          "source": "Delete event",
           "message": "Smazat událost"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
@@ -600,7 +600,7 @@
           "message": "Pokud je `True`, jsou do výsledku zahrnuty smazané události (se `status` rovným `cancelled`). Zrušené instance opakujících se událostí (nikoli však samotná opakující se událost) jsou zahrnuty i tehdy, když jsou `showDeleted` i `singleEvents` obě `False`; pokud jsou obě `True`, vráceny jsou pouze jednotlivé instance smazaných událostí. Výchozí hodnota je `False`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
-          "source": "Get Event",
+          "source": "Get event",
           "message": "Získat událost"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
@@ -636,7 +636,7 @@
           "message": "ID události, která se má načíst; ID událostí jsou vracena v poli `id` událostí vrácených akcí `list-events`"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
-          "source": "List Calendars",
+          "source": "List calendars",
           "message": "Vypsat kalendáře"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {

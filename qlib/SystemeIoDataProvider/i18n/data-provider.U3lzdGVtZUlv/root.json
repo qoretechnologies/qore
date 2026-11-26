@@ -592,8 +592,8 @@
           "message": "The unique identifier of the contact to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List contacts with pagination",
@@ -656,8 +656,8 @@
           "message": "The contact ID"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Assign Tag to Contact",
-          "message": "Assign Tag to Contact"
+          "source": "Assign tag to Contact",
+          "message": "Assign tag to Contact"
         },
         "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Assign a tag to a contact",
@@ -692,8 +692,8 @@
           "message": "The unique identifier of the tag to assign to the contact"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Remove Tag from Contact",
-          "message": "Remove Tag from Contact"
+          "source": "Remove tag from Contact",
+          "message": "Remove tag from Contact"
         },
         "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
           "source": "Remove a tag from a contact",
@@ -728,8 +728,8 @@
           "message": "The unique identifier of the tag to remove from the contact"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create Tag",
-          "message": "Create Tag"
+          "source": "Create tag",
+          "message": "Create tag"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
           "source": "Create a new tag",
@@ -752,8 +752,8 @@
           "message": "The name of the tag to create"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update Tag",
-          "message": "Update Tag"
+          "source": "Update tag",
+          "message": "Update tag"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
           "source": "Update an existing tag",
@@ -788,8 +788,8 @@
           "message": "The new name for the tag"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete Tag",
-          "message": "Delete Tag"
+          "source": "Delete tag",
+          "message": "Delete tag"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
           "source": "Delete a tag",
@@ -812,8 +812,8 @@
           "message": "The unique identifier of the tag to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
-          "message": "List Tags"
+          "source": "List tags",
+          "message": "List tags"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
           "source": "List tags with pagination",
@@ -856,8 +856,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
-          "source": "Get Tag",
-          "message": "Get Tag"
+          "source": "Get tag",
+          "message": "Get tag"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
           "source": "Get a single tag by ID",
@@ -876,8 +876,8 @@
           "message": "The tag ID"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Create Contact Field",
-          "message": "Create Contact Field"
+          "source": "Create Contact field",
+          "message": "Create Contact field"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Create a custom contact field",
@@ -912,8 +912,8 @@
           "message": "The unique slug identifier for the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Update Contact Field",
-          "message": "Update Contact Field"
+          "source": "Update Contact field",
+          "message": "Update Contact field"
         },
         "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Update a custom contact field",
@@ -948,8 +948,8 @@
           "message": "The new display name for the custom contact field"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Delete Contact Field",
-          "message": "Delete Contact Field"
+          "source": "Delete Contact field",
+          "message": "Delete Contact field"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Delete a custom contact field",
@@ -972,8 +972,8 @@
           "message": "The unique slug identifier of the custom contact field to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
-          "source": "List Contact Fields",
-          "message": "List Contact Fields"
+          "source": "List Contact fields",
+          "message": "List Contact fields"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
           "source": "List custom contact fields",
@@ -1016,8 +1016,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
-          "source": "Get Contact Field",
-          "message": "Get Contact Field"
+          "source": "Get Contact field",
+          "message": "Get Contact field"
         },
         "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
           "source": "Get a single contact field by slug",
@@ -1036,8 +1036,8 @@
           "message": "The contact field slug"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
-          "message": "List Courses"
+          "source": "List courses",
+          "message": "List courses"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
           "source": "List courses",
@@ -1080,8 +1080,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create Enrollment",
-          "message": "Create Enrollment"
+          "source": "Create enrollment",
+          "message": "Create enrollment"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
           "source": "Enroll a contact in a course",
@@ -1152,8 +1152,8 @@
           "message": "List of module IDs to grant access to. Required when `accessType` is `partial_access`"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Delete Enrollment",
-          "message": "Delete Enrollment"
+          "source": "Delete enrollment",
+          "message": "Delete enrollment"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
           "source": "Remove a course enrollment",
@@ -1176,8 +1176,8 @@
           "message": "The unique identifier of the enrollment to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
-          "message": "List Enrollments"
+          "source": "List enrollments",
+          "message": "List enrollments"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
           "source": "List course enrollments",
@@ -1220,8 +1220,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
-          "source": "List Communities",
-          "message": "List Communities"
+          "source": "List communities",
+          "message": "List communities"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
           "source": "List communities",
@@ -1264,8 +1264,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Create Membership",
-          "message": "Create Membership"
+          "source": "Create membership",
+          "message": "Create membership"
         },
         "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
           "source": "Add a contact to a community",
@@ -1300,8 +1300,8 @@
           "message": "The unique identifier of the contact to add as a member"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
-          "source": "Delete Membership",
-          "message": "Delete Membership"
+          "source": "Delete membership",
+          "message": "Delete membership"
         },
         "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
           "source": "Remove a community membership",
@@ -1324,8 +1324,8 @@
           "message": "The unique identifier of the membership to delete"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
-          "source": "List Memberships",
-          "message": "List Memberships"
+          "source": "List memberships",
+          "message": "List memberships"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
           "source": "List community memberships",
@@ -1368,8 +1368,8 @@
           "message": "Descending"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
-          "source": "Cancel Subscription",
-          "message": "Cancel Subscription"
+          "source": "Cancel subscription",
+          "message": "Cancel subscription"
         },
         "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Cancel a subscription",
@@ -1392,8 +1392,8 @@
           "message": "The unique identifier of the subscription to cancel"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
-          "source": "List Subscriptions",
-          "message": "List Subscriptions"
+          "source": "List subscriptions",
+          "message": "List subscriptions"
         },
         "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
           "source": "List subscriptions",
@@ -1448,8 +1448,8 @@
           "message": "Fires when a new contact is created in Systeme.io"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
-          "source": "New Tag",
-          "message": "New Tag"
+          "source": "New tag",
+          "message": "New tag"
         },
         "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {
           "source": "Trigger when a new tag is created",

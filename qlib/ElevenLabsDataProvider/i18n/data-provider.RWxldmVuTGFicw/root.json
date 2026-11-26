@@ -1080,8 +1080,8 @@
           "message": "The audio data to isolate voice from. Background noise will be removed and only the voice will be preserved"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
-          "source": "Speech to Text",
-          "message": "Speech to Text"
+          "source": "Speech to text",
+          "message": "Speech to text"
         },
         "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
           "source": "Transcribe audio to text",
@@ -1236,8 +1236,8 @@
           "message": "PCM 16-bit, 16kHz mono, little-endian — lower latency"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
-          "source": "Voice Design",
-          "message": "Voice Design"
+          "source": "Voice design",
+          "message": "Voice design"
         },
         "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
           "source": "Design a new voice from a text description",
@@ -1476,8 +1476,8 @@
           "message": "The unique identifier of the voice to retrieve"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
-          "source": "Create Voice",
-          "message": "Create Voice"
+          "source": "Create voice",
+          "message": "Create voice"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
           "source": "Create a new voice",
@@ -1536,8 +1536,8 @@
           "message": "Key-value labels to associate with the voice"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
-          "source": "Edit Voice",
-          "message": "Edit Voice"
+          "source": "Edit voice",
+          "message": "Edit voice"
         },
         "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
           "source": "Edit an existing voice",
@@ -1596,8 +1596,8 @@
           "message": "Key-value labels to associate with the voice"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
-          "source": "Delete Voice",
-          "message": "Delete Voice"
+          "source": "Delete voice",
+          "message": "Delete voice"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
           "source": "Delete a voice",
@@ -1692,8 +1692,8 @@
           "message": "The unique identifier of the history item to retrieve"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
-          "source": "Delete History Item",
-          "message": "Delete History Item"
+          "source": "Delete history item",
+          "message": "Delete history item"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
           "source": "Delete a history item",
@@ -1956,8 +1956,8 @@
           "message": "The language code for the dubbed audio to download (e.g., `es`, `fr`, `de`)"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
-          "source": "Delete Dubbing",
-          "message": "Delete Dubbing"
+          "source": "Delete dubbing",
+          "message": "Delete dubbing"
         },
         "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
           "source": "Delete a dubbing project",
@@ -2088,8 +2088,8 @@
           "message": "Show only others' dubbing projects"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
-          "source": "Create Pronunciation Dictionary",
-          "message": "Create Pronunciation Dictionary"
+          "source": "Create pronunciation dictionary",
+          "message": "Create pronunciation dictionary"
         },
         "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
           "source": "Create a pronunciation dictionary",
@@ -2212,8 +2212,8 @@
           "message": "The unique identifier of the pronunciation dictionary to retrieve"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
-          "source": "Add Pronunciation Rules",
-          "message": "Add Pronunciation Rules"
+          "source": "Add pronunciation rules",
+          "message": "Add pronunciation rules"
         },
         "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {
           "source": "Add rules to a pronunciation dictionary",

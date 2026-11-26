@@ -16,8 +16,8 @@
           "message": "Redis in-memory data structure store, used as a database, cache, message broker, and queue"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
-          "source": "Set String",
-          "message": "Set String"
+          "source": "Set string",
+          "message": "Set string"
         },
         "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
           "source": "Set the string value of a key",
@@ -28,8 +28,8 @@
           "message": "Set the string value of a key in Redis"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
-          "source": "Get String",
-          "message": "Get String"
+          "source": "Get string",
+          "message": "Get string"
         },
         "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
           "source": "Get the string value of a key",
@@ -40,8 +40,8 @@
           "message": "Get the string value of a key from Redis"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
-          "source": "Set Hash Field",
-          "message": "Set Hash Field"
+          "source": "Set hash field",
+          "message": "Set hash field"
         },
         "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
           "source": "Set a hash field value",
@@ -52,8 +52,8 @@
           "message": "Set the value of a hash field in Redis"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
-          "source": "Get Hash Fields",
-          "message": "Get Hash Fields"
+          "source": "Get hash fields",
+          "message": "Get hash fields"
         },
         "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
           "source": "Get hash field values",
@@ -64,8 +64,8 @@
           "message": "Get the values of hash fields from Redis"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
-          "source": "Push to List",
-          "message": "Push to List"
+          "source": "Push to list",
+          "message": "Push to list"
         },
         "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
           "source": "Push elements to a list",
@@ -76,8 +76,8 @@
           "message": "Push elements to a list in Redis"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
-          "source": "Pop from List",
-          "message": "Pop from List"
+          "source": "Pop from list",
+          "message": "Pop from list"
         },
         "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
           "source": "Pop elements from a list",
@@ -88,8 +88,8 @@
           "message": "Pop elements from a list in Redis"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
-          "source": "Publish Message",
-          "message": "Publish Message"
+          "source": "Publish message",
+          "message": "Publish message"
         },
         "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {
           "source": "Publish a message to a channel",

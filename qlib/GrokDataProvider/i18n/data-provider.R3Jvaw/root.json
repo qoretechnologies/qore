@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
-          "source": "Multi Chat",
-          "message": "Multi Chat"
+          "source": "Multi chat",
+          "message": "Multi chat"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
           "source": "Chat with Grok using multiple messages with multi-reply support",
@@ -1756,8 +1756,8 @@
           "message": "A unique identifier representing your end-user for abuse monitoring"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
-          "source": "Process Request With a Model",
-          "message": "Process Request With a Model"
+          "source": "Process request with a model",
+          "message": "Process request with a model"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a Grok model via the Responses API",
@@ -2680,8 +2680,8 @@
           "message": "Do not truncate; return an error if the context exceeds the limit"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
-          "source": "Stream Response",
-          "message": "Stream Response"
+          "source": "Stream response",
+          "message": "Stream response"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a Grok model with Server-Sent Events",
@@ -3604,8 +3604,8 @@
           "message": "Do not truncate; return an error if the context exceeds the limit"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
-          "source": "Create Response",
-          "message": "Create Response"
+          "source": "Create response",
+          "message": "Create response"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
           "source": "Create a response via the Responses API without model context",
@@ -4564,8 +4564,8 @@
           "message": "The unique identifier of the response to retrieve"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
-          "source": "Delete Response",
-          "message": "Delete Response"
+          "source": "Delete response",
+          "message": "Delete response"
         },
         "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
           "source": "Delete a stored response by ID",
@@ -4600,8 +4600,8 @@
           "message": "The unique identifier of the response to delete"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
-          "source": "Get Deferred Completion",
-          "message": "Get Deferred Completion"
+          "source": "Get deferred completion",
+          "message": "Get deferred completion"
         },
         "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {
           "source": "Retrieve a deferred chat completion result by request ID",

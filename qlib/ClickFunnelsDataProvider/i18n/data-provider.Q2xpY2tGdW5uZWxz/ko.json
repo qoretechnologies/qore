@@ -892,7 +892,7 @@
           "message": "연락처의 사용자 정의 키-값 속성입니다. 키와 값은 모두 문자열이어야 합니다. 특수 문자가 포함된 키는 자동으로 `snake_case`(으)로 변환됩니다"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
+          "source": "List contacts",
           "message": "연락처 목록"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
@@ -988,7 +988,7 @@
           "message": "연락처 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Create a Contact Tag",
+          "source": "Create a Contact tag",
           "message": "연락처 태그 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "태그의 색상 코드"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Update a Contact Tag",
+          "source": "Update a Contact tag",
           "message": "연락처 태그 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1096,7 +1096,7 @@
           "message": "태그의 새 색상 코드"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
-          "source": "Delete a Contact Tag",
+          "source": "Delete a Contact tag",
           "message": "연락처 태그 삭제"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
@@ -1132,7 +1132,7 @@
           "message": "삭제할 태그의 고유 식별자"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
-          "source": "List Contact Tags",
+          "source": "List Contact tags",
           "message": "연락처 태그 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
@@ -1200,7 +1200,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
-          "source": "Get a Contact Tag",
+          "source": "Get a Contact tag",
           "message": "연락처 태그 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "조회할 태그 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
-          "source": "Apply Tag to Contact",
+          "source": "Apply tag to Contact",
           "message": "연락처에 태그 적용"
         },
         "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
@@ -1276,7 +1276,7 @@
           "message": "연락처에 적용할 태그의 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
-          "source": "Remove Tag from Contact",
+          "source": "Remove tag from Contact",
           "message": "연락처에서 태그 제거"
         },
         "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
@@ -1320,7 +1320,7 @@
           "message": "연락처에서 제거할 적용된 태그"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
-          "source": "Create an Order",
+          "source": "Create an order",
           "message": "주문 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
@@ -1472,7 +1472,7 @@
           "message": "발생 채널의 유형"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
-          "source": "Update an Order",
+          "source": "Update an order",
           "message": "주문 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
@@ -1532,7 +1532,7 @@
           "message": "주문의 새 상태"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
-          "source": "List Orders",
+          "source": "List orders",
           "message": "주문 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
@@ -1600,7 +1600,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
-          "source": "Get an Order",
+          "source": "Get an order",
           "message": "주문 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
@@ -1628,7 +1628,7 @@
           "message": "조회할 주문 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create a Product",
+          "source": "Create a product",
           "message": "상품 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "제휴 수수료 적용 대상 여부"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update a Product",
+          "source": "Update a product",
           "message": "제품 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "제휴 수수료 적용 대상 여부"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
+          "source": "List products",
           "message": "제품 목록"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
@@ -1940,7 +1940,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get a Product",
+          "source": "Get a product",
           "message": "상품 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
@@ -1968,7 +1968,7 @@
           "message": "조회할 제품 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
-          "source": "Update a Funnel",
+          "source": "Update a funnel",
           "message": "퍼널 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
@@ -2016,7 +2016,7 @@
           "message": "퍼널의 새 이름"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
-          "source": "List Funnels",
+          "source": "List funnels",
           "message": "퍼널 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
-          "source": "Get a Funnel",
+          "source": "Get a funnel",
           "message": "퍼널 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
@@ -2104,7 +2104,7 @@
           "message": "조회할 퍼널 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
-          "source": "List Courses",
+          "source": "List courses",
           "message": "강좌 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
@@ -2164,7 +2164,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
-          "source": "Get a Course",
+          "source": "Get a course",
           "message": "코스 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
@@ -2192,7 +2192,7 @@
           "message": "조회할 코스 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Create an Enrollment",
+          "source": "Create an enrollment",
           "message": "등록 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2264,7 +2264,7 @@
           "message": "등록 일시 중단 사유"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
-          "source": "Update an Enrollment",
+          "source": "Update an enrollment",
           "message": "등록 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
@@ -2324,7 +2324,7 @@
           "message": "등록 완료 여부"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
-          "source": "List Enrollments",
+          "source": "List enrollments",
           "message": "등록 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
@@ -2392,7 +2392,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
-          "source": "Get an Enrollment",
+          "source": "Get an enrollment",
           "message": "등록 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
@@ -2420,7 +2420,7 @@
           "message": "조회할 등록 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Create a Fulfillment",
+          "source": "Create a fulfillment",
           "message": "이행 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2564,7 +2564,7 @@
           "message": "이행 생성 시 재고 부족 검사를 무시할지 여부"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Update a Fulfillment",
+          "source": "Update a fulfillment",
           "message": "이행 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2648,7 +2648,7 @@
           "message": "이행 업데이트에 대해 고객에게 이메일 알림을 보낼지 여부"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Delete a Fulfillment",
+          "source": "Delete a fulfillment",
           "message": "이행 삭제"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
@@ -2684,7 +2684,7 @@
           "message": "삭제할 이행의 고유 식별자"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
-          "source": "Cancel a Fulfillment",
+          "source": "Cancel a fulfillment",
           "message": "이행 취소"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
@@ -2720,7 +2720,7 @@
           "message": "취소할 이행의 고유 식별자"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
-          "source": "List Fulfillments",
+          "source": "List fulfillments",
           "message": "이행 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
@@ -2788,7 +2788,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
-          "source": "Get a Fulfillment",
+          "source": "Get a fulfillment",
           "message": "이행 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
@@ -2816,7 +2816,7 @@
           "message": "조회할 이행 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
-          "source": "Create a Form",
+          "source": "Create a form",
           "message": "양식 생성"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
@@ -2864,7 +2864,7 @@
           "message": "양식 제출 후 리디렉션할 URL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
-          "source": "Update a Form",
+          "source": "Update a form",
           "message": "양식 업데이트"
         },
         "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
@@ -2924,7 +2924,7 @@
           "message": "새 리디렉션 URL"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
-          "source": "Delete a Form",
+          "source": "Delete a form",
           "message": "양식 삭제"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
@@ -2960,7 +2960,7 @@
           "message": "삭제할 양식의 고유 식별자"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
-          "source": "List Forms",
+          "source": "List forms",
           "message": "양식 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
@@ -3020,7 +3020,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
-          "source": "Get a Form",
+          "source": "Get a form",
           "message": "양식 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
@@ -3048,7 +3048,7 @@
           "message": "조회할 양식 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
-          "source": "List Form Submissions",
+          "source": "List form submissions",
           "message": "양식 제출 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
@@ -3116,7 +3116,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
-          "source": "Get a Form Submission",
+          "source": "Get a form submission",
           "message": "양식 제출 가져오기"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
@@ -3144,7 +3144,7 @@
           "message": "조회할 제출 ID"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
-          "source": "List Applied Tags",
+          "source": "List applied tags",
           "message": "적용된 태그 목록 조회"
         },
         "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
@@ -3220,7 +3220,7 @@
           "message": "최대 결과 수"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
-          "source": "Contact Created",
+          "source": "Contact created",
           "message": "연락처 생성됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "ClickFunnels에서 새 연락처가 생성될 때 실행됩니다"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
-          "source": "Contact Updated",
+          "source": "Contact updated",
           "message": "연락처 업데이트됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "ClickFunnels에서 연락처가 업데이트될 때 실행됩니다"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
-          "source": "Order Created",
+          "source": "Order created",
           "message": "주문 생성됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "ClickFunnels에서 새 주문이 생성될 때 트리거됩니다."
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
-          "source": "Order Updated",
+          "source": "Order updated",
           "message": "주문 업데이트됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
@@ -3268,7 +3268,7 @@
           "message": "ClickFunnels에서 주문이 업데이트될 때 트리거됩니다."
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
-          "source": "Order Completed",
+          "source": "Order completed",
           "message": "주문 완료됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "ClickFunnels에서 주문이 완료될 때 트리거됩니다."
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
-          "source": "Form Submission Created",
+          "source": "Form submission created",
           "message": "양식 제출 생성됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
@@ -3292,7 +3292,7 @@
           "message": "ClickFunnels에서 양식이 제출될 때 트리거됩니다."
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
-          "source": "Enrollment Created",
+          "source": "Enrollment created",
           "message": "등록 생성됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
@@ -3304,7 +3304,7 @@
           "message": "ClickFunnels에서 새 강좌 등록이 생성될 때 트리거됩니다."
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
-          "source": "Fulfillment Created",
+          "source": "Fulfillment created",
           "message": "이행 생성됨"
         },
         "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {

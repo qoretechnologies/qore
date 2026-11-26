@@ -340,7 +340,7 @@
           "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
-          "source": "Create a Ticket",
+          "source": "Create a ticket",
           "message": "建立工單"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
@@ -964,7 +964,7 @@
           "message": "是否將工單標記為垃圾郵件。預設值：`False`"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
-          "source": "Update a Ticket",
+          "source": "Update a ticket",
           "message": "更新工單"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
@@ -1228,7 +1228,7 @@
           "message": "延後工單處理的 ISO 8601 時間戳記截止時間"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
-          "source": "Delete a Ticket",
+          "source": "Delete a ticket",
           "message": "刪除工單"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "要刪除的工單 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
-          "source": "List Tickets",
+          "source": "List tickets",
           "message": "列出工單"
         },
         "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "最多結果數"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
-          "source": "Get a Ticket",
+          "source": "Get a ticket",
           "message": "取得工單"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
@@ -1388,7 +1388,7 @@
           "message": "工單 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Create a Customer",
+          "source": "Create a customer",
           "message": "建立客戶"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
@@ -1584,7 +1584,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
-          "source": "Update a Customer",
+          "source": "Update a customer",
           "message": "更新客戶"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
@@ -1792,7 +1792,7 @@
           "message": "WhatsApp"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
-          "source": "Delete a Customer",
+          "source": "Delete a customer",
           "message": "刪除客戶"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
@@ -1816,7 +1816,7 @@
           "message": "要刪除的客戶 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
-          "source": "List Customers",
+          "source": "List customers",
           "message": "列出客戶"
         },
         "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
@@ -1852,7 +1852,7 @@
           "message": "最多結果數"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
-          "source": "Get a Customer",
+          "source": "Get a customer",
           "message": "取得客戶"
         },
         "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
@@ -1872,7 +1872,7 @@
           "message": "客戶 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
-          "source": "Create a Tag",
+          "source": "Create a tag",
           "message": "建立標籤"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
@@ -1932,7 +1932,7 @@
           "message": "標籤的十六進位顏色代碼（例如 `#F58D86`）"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
-          "source": "Update a Tag",
+          "source": "Update a tag",
           "message": "更新標籤"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
@@ -2004,7 +2004,7 @@
           "message": "標籤的十六進位顏色代碼（例如 `#F58D86`）"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
-          "source": "Delete a Tag",
+          "source": "Delete a tag",
           "message": "刪除標籤"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
@@ -2028,7 +2028,7 @@
           "message": "要刪除的標籤 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
-          "source": "List Tags",
+          "source": "List tags",
           "message": "列出標籤"
         },
         "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
@@ -2056,7 +2056,7 @@
           "message": "最多結果數"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
-          "source": "Get a Tag",
+          "source": "Get a tag",
           "message": "取得標籤"
         },
         "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
@@ -2076,7 +2076,7 @@
           "message": "標籤 ID"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Create a Message",
+          "source": "Create a message",
           "message": "建立訊息"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
@@ -2412,7 +2412,7 @@
           "message": "附件檔案的網址"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
-          "source": "List Messages",
+          "source": "List messages",
           "message": "列出訊息"
         },
         "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
@@ -2448,7 +2448,7 @@
           "message": "最多結果數"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
-          "source": "Get a Message",
+          "source": "Get a message",
           "message": "取得訊息"
         },
         "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
@@ -2476,7 +2476,7 @@
           "message": "訊息 ID"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
-          "source": "Update a Message",
+          "source": "Update a message",
           "message": "更新訊息"
         },
         "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
@@ -2836,7 +2836,7 @@
           "message": "附件檔案的網址"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "刪除訊息"
         },
         "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -2872,7 +2872,7 @@
           "message": "要刪除的訊息 ID"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "列出使用者"
         },
         "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
@@ -2900,7 +2900,7 @@
           "message": "最多結果數"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
-          "source": "Get a User",
+          "source": "Get a user",
           "message": "取得使用者"
         },
         "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
@@ -2920,7 +2920,7 @@
           "message": "使用者 ID"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
-          "source": "New Ticket",
+          "source": "New ticket",
           "message": "新工單"
         },
         "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
@@ -2932,7 +2932,7 @@
           "message": "在 Gorgias 中建立新工單時觸發"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
-          "source": "Ticket Updated",
+          "source": "Ticket updated",
           "message": "工單已更新"
         },
         "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {

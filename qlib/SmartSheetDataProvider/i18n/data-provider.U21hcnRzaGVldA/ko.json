@@ -340,7 +340,7 @@
           "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
-          "source": "Create a Sheet",
+          "source": "Create a sheet",
           "message": "시트 생성"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
@@ -604,7 +604,7 @@
           "message": "열의 표시 너비 (픽셀)"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
-          "source": "Update a Sheet",
+          "source": "Update a sheet",
           "message": "시트 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
@@ -640,7 +640,7 @@
           "message": "시트의 새 이름"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
-          "source": "Delete a Sheet",
+          "source": "Delete a sheet",
           "message": "시트 삭제"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
@@ -664,7 +664,7 @@
           "message": "삭제할 시트의 고유 식별자"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
-          "source": "List Sheets",
+          "source": "List sheets",
           "message": "시트 나열"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
@@ -684,7 +684,7 @@
           "message": "특정 시트 가져오기"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create a Workspace",
+          "source": "Create a workspace",
           "message": "워크스페이스 생성"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "새 워크스페이스의 이름"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update a Workspace",
+          "source": "Update a workspace",
           "message": "워크스페이스 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "워크스페이스의 새 이름"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete a Workspace",
+          "source": "Delete a workspace",
           "message": "워크스페이스 삭제"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "삭제할 워크스페이스의 고유 식별자"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "워크스페이스 목록 조회"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
@@ -788,7 +788,7 @@
           "message": "특정 워크스페이스 가져오기"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create a Folder",
+          "source": "Create a folder",
           "message": "폴더 생성"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -812,7 +812,7 @@
           "message": "새 폴더의 이름"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
-          "source": "Update a Folder",
+          "source": "Update a folder",
           "message": "폴더 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
@@ -848,7 +848,7 @@
           "message": "폴더의 새 이름"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
-          "source": "Delete a Folder",
+          "source": "Delete a folder",
           "message": "폴더 삭제"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
@@ -872,7 +872,7 @@
           "message": "삭제할 폴더의 고유 식별자"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
-          "source": "List Folders",
+          "source": "List folders",
           "message": "폴더 목록 조회"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
@@ -892,7 +892,7 @@
           "message": "특정 폴더 가져오기"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "보고서 목록 조회"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
@@ -912,7 +912,7 @@
           "message": "특정 보고서 가져오기"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Add a User",
+          "source": "Add a user",
           "message": "사용자 추가"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
@@ -1008,7 +1008,7 @@
           "message": "새 사용자의 성"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
+          "source": "Update a user",
           "message": "사용자 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "사용자가 리소스 조회자여야 하는지 여부"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Remove a User",
+          "source": "Remove a user",
           "message": "사용자 제거"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "`True`(이)면 조직에서 사용자를 제거하고 모든 조직 및 요금제 자산에 대한 접근 권한을 취소합니다"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "사용자 목록"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "이메일로 필터링"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
-          "source": "Create a Group",
+          "source": "Create a group",
           "message": "그룹 생성"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "추가할 그룹 구성원의 이메일 주소"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "그룹 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "그룹의 새 설명"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
-          "source": "Delete a Group",
+          "source": "Delete a group",
           "message": "그룹 삭제"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "삭제할 그룹의 고유 식별자"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "그룹 목록 조회"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
@@ -1344,7 +1344,7 @@
           "message": "특정 그룹 가져오기"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
-          "source": "Create Row",
+          "source": "Create row",
           "message": "행 생성"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "새 행을 생성할 Smartsheet 시트 선택"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
-          "source": "Find Rows",
+          "source": "Find rows",
           "message": "행 찾기"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "행을 검색할 Smartsheet 시트 선택"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
-          "source": "Update Rows",
+          "source": "Update rows",
           "message": "행 업데이트"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "행을 업데이트할 Smartsheet 시트를 선택합니다"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
-          "source": "Delete Rows",
+          "source": "Delete rows",
           "message": "행 삭제"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "행을 삭제할 Smartsheet 시트 선택"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
-          "source": "Sheet Updated",
+          "source": "Sheet updated",
           "message": "시트 업데이트됨"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Smartsheet 계정에서 시트가 업데이트될 때 실행됩니다"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
-          "source": "Row Created",
+          "source": "Row created",
           "message": "행 생성됨"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Smartsheet 시트에 새 행이 생성될 때 실행됩니다"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
-          "source": "Row Updated",
+          "source": "Row updated",
           "message": "행 업데이트됨"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Smartsheet 시트에서 행이 업데이트될 때 실행됩니다"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
-          "source": "Row Deleted",
+          "source": "Row deleted",
           "message": "행 삭제됨"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {

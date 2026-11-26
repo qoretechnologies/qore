@@ -88,7 +88,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/search",
             "action": "search-index",
-            "display_name": "Search Index",
+            "display_name": "Search index",
             "short_desc": "Search for data in an OpenSearch index",
             "desc": "Search an OpenSearch index with the query DSL and optional query-string parameters. Use this "
                 "action for precise document lookup, log search, analytics inputs, and pagination through ordinary "
@@ -111,7 +111,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/knn-search",
             "action": "knn-search",
-            "display_name": "k-NN Search",
+            "display_name": "k-NN search",
             "short_desc": "Search an OpenSearch index with a query vector",
             "desc": "Search an OpenSearch index with a raw query vector against a `knn_vector` field. Use optional "
                 "filters, method parameters, or radial-search thresholds when supported by the target index and "
@@ -134,7 +134,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/neural-search",
             "action": "neural-search",
-            "display_name": "Neural Search",
+            "display_name": "Neural search",
             "short_desc": "Search an OpenSearch index with text or sparse tokens",
             "desc": "Search an OpenSearch vector or semantic field with OpenSearch neural search. Use this action "
                 "when the cluster is configured with the required model, semantic field, or neural-search plugin "
@@ -157,7 +157,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/hybrid-search",
             "action": "hybrid-search",
-            "display_name": "Hybrid Search",
+            "display_name": "Hybrid search",
             "short_desc": "Combine multiple OpenSearch query clauses",
             "desc": "Search an OpenSearch index with a hybrid query that combines keyword, vector, neural, or "
                 "other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is "
@@ -180,7 +180,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/vector-index/create",
             "action": "create-vector-index",
-            "display_name": "Create Vector Index",
+            "display_name": "Create Vector index",
             "short_desc": "Create an OpenSearch vector index",
             "desc": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add "
                 "optional text and keyword metadata fields for combined lexical, structured, and vector search.",
@@ -201,7 +201,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/document/create",
             "action": "create-document",
-            "display_name": "Add Document",
+            "display_name": "Add document",
             "short_desc": "Add a document to OpenSearch",
             "desc": "Create or index a document in OpenSearch. Use optional pipeline and refresh controls when "
                 "ingested data must be transformed or made immediately visible to search.",
@@ -222,7 +222,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/document/bulk",
             "action": "bulk-operations",
-            "display_name": "Bulk Operations",
+            "display_name": "Bulk operations",
             "short_desc": "Perform bulk document operations",
             "desc": "Perform bulk `index`, `create`, `update`, and `delete` operations with OpenSearch's NDJSON "
                 "bulk API. Use this action for high-throughput ingestion and batch maintenance workloads.",
@@ -243,7 +243,7 @@ module OpenSearchDataProvider {
             "app": OpenSearchDataProvider::AppName,
             "path": "/index/scroll-search",
             "action": "scroll-search",
-            "display_name": "Scroll Search",
+            "display_name": "Scroll search",
             "short_desc": "Search with scroll API for large result sets",
             "desc": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. "
                 "Use this action when ordinary `from` and `size` pagination is not appropriate.",

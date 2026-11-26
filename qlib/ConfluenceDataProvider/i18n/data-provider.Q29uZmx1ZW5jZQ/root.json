@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.display_name": {
-          "source": "List Pages",
-          "message": "List Pages"
+          "source": "List pages",
+          "message": "List pages"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.short_desc": {
           "source": "List the pages on the site",
@@ -432,8 +432,8 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -508,8 +508,8 @@
           "message": "page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.display_name": {
-          "source": "Create Page",
-          "message": "Create Page"
+          "source": "Create page",
+          "message": "Create page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.short_desc": {
           "source": "Create a page in a space",
@@ -592,8 +592,8 @@
           "message": "Body of the page, in the format found in the representation field."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
-          "message": "Atlas Doc Format"
+          "source": "Atlas doc format",
+          "message": "Atlas doc format"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
@@ -712,8 +712,8 @@
           "message": "Tag the content as embedded and content will be created in NCS."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.display_name": {
-          "source": "Root Level",
-          "message": "Root Level"
+          "source": "Root level",
+          "message": "Root level"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
           "source": "The page will be created at the root level of the space…",
@@ -748,8 +748,8 @@
           "message": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -800,8 +800,8 @@
           "message": "Allows you to retrieve a previously published version. Specify the previous version's number to retrieve its details."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
-          "message": "Get Draft"
+          "source": "Get draft",
+          "message": "Get draft"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.short_desc": {
           "source": "Retrieve the draft version of this page",
@@ -812,8 +812,8 @@
           "message": "Retrieve the draft version of this page."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
-          "message": "Include Labels"
+          "source": "Include labels",
+          "message": "Include labels"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
           "source": "Includes labels associated with this page in the response",
@@ -836,8 +836,8 @@
           "message": "Filter the page being retrieved by its status."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
-          "message": "Include Properties"
+          "source": "Include properties",
+          "message": "Include properties"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
           "source": "Includes content properties associated with this page in the response",
@@ -848,8 +848,8 @@
           "message": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
-          "message": "Include Operations"
+          "source": "Include operations",
+          "message": "Include operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
           "source": "Includes operations associated with this page in the response, as defined in…",
@@ -860,8 +860,8 @@
           "message": "Includes operations associated with this page in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
-          "message": "Include Likes"
+          "source": "Include likes",
+          "message": "Include likes"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1saWtlcw.short_desc": {
           "source": "Includes likes associated with this page in the response",
@@ -872,8 +872,8 @@
           "message": "Includes likes associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
-          "message": "Include Versions"
+          "source": "Include versions",
+          "message": "Include versions"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
           "source": "Includes versions associated with this page in the response",
@@ -884,8 +884,8 @@
           "message": "Includes versions associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
-          "message": "Include Version"
+          "source": "Include version",
+          "message": "Include version"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
           "source": "Includes the current version associated with this page in the response",
@@ -896,8 +896,8 @@
           "message": "Includes the current version associated with this page in the response.\nBy default this is included and can be omitted by setting the value to `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
-          "message": "Include Favorited by Current User Status"
+          "source": "Include favorited by current user status",
+          "message": "Include favorited by current user status"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
           "source": "Includes whether this page has been favorited by the current user",
@@ -908,8 +908,8 @@
           "message": "Includes whether this page has been favorited by the current user."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
-          "message": "Include Webresources"
+          "source": "Include webresources",
+          "message": "Include webresources"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
@@ -920,8 +920,8 @@
           "message": "Includes web resources that can be used to render page content on a client."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
-          "message": "Include Collaborators"
+          "source": "Include collaborators",
+          "message": "Include collaborators"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
           "source": "Includes collaborators on the page",
@@ -932,8 +932,8 @@
           "message": "Includes collaborators on the page."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
-          "source": "Include Direct Children",
-          "message": "Include Direct Children"
+          "source": "Include direct children",
+          "message": "Include direct children"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
           "source": "Includes direct children of the page, as defined in the 'ChildrenResponse'…",
@@ -1028,8 +1028,8 @@
           "message": "Body of the page, in the format found in the representation field."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
-          "message": "Atlas Doc Format"
+          "source": "Atlas doc format",
+          "message": "Atlas doc format"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
@@ -1364,8 +1364,8 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -1508,8 +1508,8 @@
           "message": "-title"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -1552,8 +1552,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.display_name": {
-          "source": "List Blog Posts",
-          "message": "List Blog Posts"
+          "source": "List blog posts",
+          "message": "List blog posts"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.short_desc": {
           "source": "List the blog posts on the site",
@@ -1636,8 +1636,8 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -1692,8 +1692,8 @@
           "message": "Filter the results based on blog post ids. Multiple blog post ids can be specified as a comma-separated list."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.display_name": {
-          "source": "Create Blog Post",
-          "message": "Create Blog Post"
+          "source": "Create blog post",
+          "message": "Create blog post"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.short_desc": {
           "source": "Create a blog post in a space",
@@ -1776,8 +1776,8 @@
           "message": "Body of the blog post, in the format found in the representation field."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
-          "message": "Atlas Doc Format"
+          "source": "Atlas doc format",
+          "message": "Atlas doc format"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
@@ -1856,8 +1856,8 @@
           "message": "The blog post will be private. Only the user who creates this blog post will have permission to view and edit one."
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
           "source": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"",
@@ -1892,8 +1892,8 @@
           "message": "The ID of the blog post to be returned. If you don't know the blog post ID, use Get blog posts and filter the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -1944,8 +1944,8 @@
           "message": "Allows you to retrieve a previously published version. Specify the previous version's number to retrieve its details."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
-          "message": "Include Labels"
+          "source": "Include labels",
+          "message": "Include labels"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
           "source": "Includes labels associated with this blog post in the response",
@@ -1956,8 +1956,8 @@
           "message": "Includes labels associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.display_name": {
-          "source": "Get Draft",
-          "message": "Get Draft"
+          "source": "Get draft",
+          "message": "Get draft"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.short_desc": {
           "source": "Retrieve the draft version of this blog post",
@@ -1980,8 +1980,8 @@
           "message": "Filter the blog post being retrieved by its status."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
-          "message": "Include Properties"
+          "source": "Include properties",
+          "message": "Include properties"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
           "source": "Includes content properties associated with this blog post in the response",
@@ -1992,8 +1992,8 @@
           "message": "Includes content properties associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
-          "message": "Include Operations"
+          "source": "Include operations",
+          "message": "Include operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
           "source": "Includes operations associated with this blog post in the response, as defined…",
@@ -2004,8 +2004,8 @@
           "message": "Includes operations associated with this blog post in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.display_name": {
-          "source": "Include Likes",
-          "message": "Include Likes"
+          "source": "Include likes",
+          "message": "Include likes"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1saWtlcw.short_desc": {
           "source": "Includes likes associated with this blog post in the response",
@@ -2016,8 +2016,8 @@
           "message": "Includes likes associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.display_name": {
-          "source": "Include Versions",
-          "message": "Include Versions"
+          "source": "Include versions",
+          "message": "Include versions"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9ucw.short_desc": {
           "source": "Includes versions associated with this blog post in the response",
@@ -2028,8 +2028,8 @@
           "message": "Includes versions associated with this blog post in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.display_name": {
-          "source": "Include Version",
-          "message": "Include Version"
+          "source": "Include version",
+          "message": "Include version"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS12ZXJzaW9u.short_desc": {
           "source": "Includes the current version associated with this blog post in the response",
@@ -2040,8 +2040,8 @@
           "message": "Includes the current version associated with this blog post in the response.\nBy default this is included and can be omitted by setting the value to `false`."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited by Current User Status",
-          "message": "Include Favorited by Current User Status"
+          "source": "Include favorited by current user status",
+          "message": "Include favorited by current user status"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
           "source": "Includes whether this blog post has been favorited by the current user",
@@ -2052,8 +2052,8 @@
           "message": "Includes whether this blog post has been favorited by the current user."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.display_name": {
-          "source": "Include Webresources",
-          "message": "Include Webresources"
+          "source": "Include webresources",
+          "message": "Include webresources"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render blog post content on a client",
@@ -2064,8 +2064,8 @@
           "message": "Includes web resources that can be used to render blog post content on a client."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.display_name": {
-          "source": "Include Collaborators",
-          "message": "Include Collaborators"
+          "source": "Include collaborators",
+          "message": "Include collaborators"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.short_desc": {
           "source": "Includes collaborators on the blog post",
@@ -2160,8 +2160,8 @@
           "message": "Body of the blog post, in the format found in the representation field."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
-          "source": "Atlas Doc Format",
-          "message": "Atlas Doc Format"
+          "source": "Atlas doc format",
+          "message": "Atlas doc format"
         },
         "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
@@ -2276,8 +2276,8 @@
           "message": "ID of the containing space.\n\nThis currently **does not support moving the blog post to a different space**."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Y3JlYXRlZEF0.short_desc": {
           "source": "Created date of the blog post in the format of \"yyyy-MM-ddTHH:mm:ss.SSSZ\"",
@@ -2420,8 +2420,8 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -2536,8 +2536,8 @@
           "message": "-modified-date"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -2580,8 +2580,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.display_name": {
-          "source": "List Spaces",
-          "message": "List Spaces"
+          "source": "List spaces",
+          "message": "List spaces"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.short_desc": {
           "source": "List the spaces on the site",
@@ -2748,8 +2748,8 @@
           "message": "Filter the results to spaces based on their labels. Multiple labels can be specified as a comma-separated list."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.display_name": {
-          "source": "Favorited By",
-          "message": "Favorited By"
+          "source": "Favorited by",
+          "message": "Favorited by"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID",
@@ -2760,8 +2760,8 @@
           "message": "Filter the results to spaces favorited by the user with the specified account ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.display_name": {
-          "source": "Not Favorited By",
-          "message": "Not Favorited By"
+          "source": "Not favorited by",
+          "message": "Not favorited by"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
           "source": "Filter the results to spaces NOT favorited by the user with the specified…",
@@ -2772,8 +2772,8 @@
           "message": "Filter the results to spaces NOT favorited by the user with the specified account ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
-          "message": "Description Format"
+          "source": "Description format",
+          "message": "Description format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
           "source": "The content format type to be returned in the 'description' field of the…",
@@ -2792,8 +2792,8 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
-          "message": "Include Icon"
+          "source": "Include icon",
+          "message": "Include icon"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.aW5jbHVkZS1pY29u.short_desc": {
           "source": "If the icon for the space should be fetched or not",
@@ -2828,8 +2828,8 @@
           "message": "The ID of the space to be returned."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.display_name": {
-          "source": "Description Format",
-          "message": "Description Format"
+          "source": "Description format",
+          "message": "Description format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
           "source": "The content format type to be returned in the 'description' field of the…",
@@ -2848,8 +2848,8 @@
           "message": "view"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.display_name": {
-          "source": "Include Icon",
-          "message": "Include Icon"
+          "source": "Include icon",
+          "message": "Include icon"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.short_desc": {
           "source": "If the icon for the space should be fetched or not",
@@ -2860,8 +2860,8 @@
           "message": "If the icon for the space should be fetched or not."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
-          "source": "Include Operations",
-          "message": "Include Operations"
+          "source": "Include operations",
+          "message": "Include operations"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
           "source": "Includes operations associated with this space in the response, as defined in…",
@@ -2872,8 +2872,8 @@
           "message": "Includes operations associated with this space in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.display_name": {
-          "source": "Include Properties",
-          "message": "Include Properties"
+          "source": "Include properties",
+          "message": "Include properties"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.short_desc": {
           "source": "Includes space properties associated with this space in the response",
@@ -2884,8 +2884,8 @@
           "message": "Includes space properties associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.display_name": {
-          "source": "Include Permissions",
-          "message": "Include Permissions"
+          "source": "Include permissions",
+          "message": "Include permissions"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.short_desc": {
           "source": "Includes space permissions associated with this space in the response",
@@ -2896,8 +2896,8 @@
           "message": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.display_name": {
-          "source": "Include Role Assignments",
-          "message": "Include Role Assignments"
+          "source": "Include role assignments",
+          "message": "Include role assignments"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1yb2xlLWFzc2lnbm1lbnRz.short_desc": {
           "source": "Includes role assignments associated with this space in the response",
@@ -2908,8 +2908,8 @@
           "message": "Includes role assignments associated with this space in the response. This parameter is only accepted for EAP sites.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.display_name": {
-          "source": "Include Labels",
-          "message": "Include Labels"
+          "source": "Include labels",
+          "message": "Include labels"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1sYWJlbHM.short_desc": {
           "source": "Includes labels associated with this space in the response",
@@ -2920,8 +2920,8 @@
           "message": "Includes labels associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks on the site",
@@ -2976,8 +2976,8 @@
           "message": "incomplete"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.display_name": {
-          "source": "Assigned To",
-          "message": "Assigned To"
+          "source": "Assigned to",
+          "message": "Assigned to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YXNzaWduZWQtdG8.short_desc": {
           "source": "Filters on the Account ID of the user to whom this task is assigned",
@@ -3012,8 +3012,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -3032,8 +3032,8 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.display_name": {
-          "source": "Include Blank Tasks",
-          "message": "Include Blank Tasks"
+          "source": "Include blank tasks",
+          "message": "Include blank tasks"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.aW5jbHVkZS1ibGFuay10YXNrcw.short_desc": {
           "source": "Specifies whether to include blank tasks in the response",
@@ -3068,8 +3068,8 @@
           "message": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.display_name": {
-          "source": "Created By",
-          "message": "Created By"
+          "source": "Created by",
+          "message": "Created by"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.short_desc": {
           "source": "Filters on the Account ID of the user who created this task",
@@ -3080,8 +3080,8 @@
           "message": "Filters on the Account ID of the user who created this task. Multiple IDs can be specified."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.display_name": {
-          "source": "Completed By",
-          "message": "Completed By"
+          "source": "Completed by",
+          "message": "Completed by"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.short_desc": {
           "source": "Filters on the Account ID of the user who completed this task",
@@ -3092,8 +3092,8 @@
           "message": "Filters on the Account ID of the user who completed this task. Multiple IDs can be specified."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created at From",
-          "message": "Created at From"
+          "source": "Created at from",
+          "message": "Created at from"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
           "source": "Filters on start of date-time range of task based on creation date (inclusive)",
@@ -3104,8 +3104,8 @@
           "message": "Filters on start of date-time range of task based on creation date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created at To",
-          "message": "Created at To"
+          "source": "Created at to",
+          "message": "Created at to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
           "source": "Filters on end of date-time range of task based on creation date (inclusive)",
@@ -3116,8 +3116,8 @@
           "message": "Filters on end of date-time range of task based on creation date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due at From",
-          "message": "Due at From"
+          "source": "Due at from",
+          "message": "Due at from"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
           "source": "Filters on start of date-time range of task based on due date (inclusive)",
@@ -3128,8 +3128,8 @@
           "message": "Filters on start of date-time range of task based on due date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due at To",
-          "message": "Due at To"
+          "source": "Due at to",
+          "message": "Due at to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
           "source": "Filters on end of date-time range of task based on due date (inclusive)",
@@ -3140,8 +3140,8 @@
           "message": "Filters on end of date-time range of task based on due date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed at From",
-          "message": "Completed at From"
+          "source": "Completed at from",
+          "message": "Completed at from"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
           "source": "Filters on start of date-time range of task based on completion date (inclusive)",
@@ -3152,8 +3152,8 @@
           "message": "Filters on start of date-time range of task based on completion date (inclusive). Input is epoch time in milliseconds."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed at To",
-          "message": "Completed at To"
+          "source": "Completed at to",
+          "message": "Completed at to"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
           "source": "Filters on end of date-time range of task based on completion date (inclusive)",
@@ -3188,8 +3188,8 @@
           "message": "The ID of the task to be returned. If you don't know the task ID, use Get tasks and filter the results."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -3288,8 +3288,8 @@
           "message": "ID of the page the task is in."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post ID",
-          "message": "Blog Post ID"
+          "source": "Blog post ID",
+          "message": "Blog post ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
           "source": "ID of the blog post the task is in",
@@ -3300,8 +3300,8 @@
           "message": "ID of the blog post the task is in."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.display_name": {
-          "source": "Created By",
-          "message": "Created By"
+          "source": "Created by",
+          "message": "Created by"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.short_desc": {
           "source": "Account ID of the user who created this task",
@@ -3312,8 +3312,8 @@
           "message": "Account ID of the user who created this task."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.display_name": {
-          "source": "Assigned To",
-          "message": "Assigned To"
+          "source": "Assigned to",
+          "message": "Assigned to"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YXNzaWduZWRUbw.short_desc": {
           "source": "Account ID of the user to whom this task is assigned",
@@ -3324,8 +3324,8 @@
           "message": "Account ID of the user to whom this task is assigned."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.display_name": {
-          "source": "Completed By",
-          "message": "Completed By"
+          "source": "Completed by",
+          "message": "Completed by"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.short_desc": {
           "source": "Account ID of the user who completed this task",
@@ -3336,8 +3336,8 @@
           "message": "Account ID of the user who completed this task."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.display_name": {
-          "source": "Created At",
-          "message": "Created At"
+          "source": "Created at",
+          "message": "Created at"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEF0.short_desc": {
           "source": "Date and time when the task was created",
@@ -3348,8 +3348,8 @@
           "message": "Date and time when the task was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.display_name": {
-          "source": "Updated At",
-          "message": "Updated At"
+          "source": "Updated at",
+          "message": "Updated at"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.dXBkYXRlZEF0.short_desc": {
           "source": "Date and time when the task was updated",
@@ -3360,8 +3360,8 @@
           "message": "Date and time when the task was updated. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.display_name": {
-          "source": "Due At",
-          "message": "Due At"
+          "source": "Due at",
+          "message": "Due at"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.ZHVlQXQ.short_desc": {
           "source": "Date and time when the task is due",
@@ -3372,8 +3372,8 @@
           "message": "Date and time when the task is due. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.display_name": {
-          "source": "Completed At",
-          "message": "Completed At"
+          "source": "Completed at",
+          "message": "Completed at"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQXQ.short_desc": {
           "source": "Date and time when the task was completed",
@@ -3384,8 +3384,8 @@
           "message": "Date and time when the task was completed. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\"."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
-          "source": "Body Format",
-          "message": "Body Format"
+          "source": "Body format",
+          "message": "Body format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
           "source": "The content format types to be returned in the 'body' field of the response",
@@ -3404,8 +3404,8 @@
           "message": "atlas_doc_format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.display_name": {
-          "source": "List Labels",
-          "message": "List Labels"
+          "source": "List labels",
+          "message": "List labels"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.short_desc": {
           "source": "List the labels on the site",
@@ -3476,8 +3476,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.display_name": {
-          "source": "List Attachments",
-          "message": "List Attachments"
+          "source": "List attachments",
+          "message": "List attachments"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.short_desc": {
           "source": "List the attachments on the site",
@@ -3500,8 +3500,8 @@
           "message": "Filter the results to attachments based on their status. By default, `current` and `archived` are used."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.display_name": {
-          "source": "Media Type",
-          "message": "Media Type"
+          "source": "Media type",
+          "message": "Media type"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.bWVkaWFUeXBl.short_desc": {
           "source": "Filters on the mediaType of attachments",
@@ -3576,8 +3576,8 @@
           "message": "The pagination cursor: take the `cursor` query argument out of the `_links.next` URL in the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand."
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
-          "message": "Search Records"
+          "source": "Search records",
+          "message": "Search records"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNo.short_desc": {
           "source": "Search for matching records in the given table",
@@ -3600,8 +3600,8 @@
           "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
-          "message": "Find a Single Record"
+          "source": "Find a single record",
+          "message": "Find a single record"
         },
         "app.Q29uZmx1ZW5jZQ.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
           "source": "Search for a single matching record in the given table",
@@ -3624,8 +3624,8 @@
           "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
-          "message": "Create Records"
+          "source": "Create records",
+          "message": "Create records"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRl.short_desc": {
           "source": "Create new records in the given table",
@@ -3648,8 +3648,8 @@
           "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRl.short_desc": {
           "source": "Update the records matching the search criteria",
@@ -3672,8 +3672,8 @@
           "message": "The table to work with: `pages`, `blogposts`, `tasks`, `spaces`, `labels` or `attachments`"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.Q29uZmx1ZW5jZQ.action.ZGVsZXRl.short_desc": {
           "source": "Delete the records matching the search criteria",

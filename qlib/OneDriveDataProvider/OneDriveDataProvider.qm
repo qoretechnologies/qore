@@ -376,7 +376,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/events/" + EVENT_FILE_CHANGE,
             "action": EVENT_FILE_CHANGE,
-            "display_name": "File or Folder Changed",
+            "display_name": "File or folder changed",
             "short_desc": "Trigger when a file or folder is created, modified, or deleted",
             "desc": "Fires when a file or folder is created, modified, or deleted in OneDrive. Uses "
                 "delta queries to track changes efficiently",

@@ -726,7 +726,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/indexes",
                 "operation_id": "list_indexes",
-                "display_name": "List Indexes",
+                "display_name": "List indexes",
                 "short_desc": "List the indexes in the project",
                 "desc": "Lists every index in the project the API key belongs to, with the host, the "
                     "schema and the current state of each.\n\n"
@@ -756,7 +756,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/indexes",
                 "operation_id": "create_index",
-                "display_name": "Create Index",
+                "display_name": "Create index",
                 "short_desc": "Create an index from a field schema",
                 "desc": "Creates an index, defining the fields it searches over: dense vectors, sparse "
                     "vectors and full-text search fields.\n\n"
@@ -839,7 +839,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/indexes/create-for-model",
                 "operation_id": "create_index_for_model",
-                "display_name": "Create Index with Integrated Embedding",
+                "display_name": "Create index with integrated embedding",
                 "short_desc": "Create an index that embeds text for you",
                 "desc": "Creates an index tied to one of Pinecone's hosted embedding models, so you "
                     "upsert and search with **text** and Pinecone produces the vectors.\n\n"
@@ -975,7 +975,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/backups",
                 "operation_id": "list_project_backups",
-                "display_name": "List Backups",
+                "display_name": "List backups",
                 "short_desc": "List every backup in the project",
                 "desc": "Lists every backup in the project, across all indexes.  Use **List Index "
                     "Backups** for the backups of one index.",
@@ -1251,7 +1251,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/restore-jobs",
                 "operation_id": "list_restore_jobs",
-                "display_name": "List Restore Jobs",
+                "display_name": "List restore jobs",
                 "short_desc": "List the project's restore jobs",
                 "desc": "Lists the restore jobs in the project, with the progress of each.",
                 "groups": (GroupBackups,),
@@ -1282,7 +1282,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/collections",
                 "operation_id": "list_collections",
-                "display_name": "List Collections",
+                "display_name": "List collections",
                 "short_desc": "List the project's collections (pod-based indexes only)",
                 "desc": "Lists the collections in the project.\n\n"
                     "**Collections are legacy.**  They are supported only for pod-based indexes, and a "
@@ -1297,7 +1297,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/collections",
                 "operation_id": "create_collection",
-                "display_name": "Create Collection",
+                "display_name": "Create collection",
                 "short_desc": "Snapshot a pod-based index into a collection",
                 "desc": "Creates a collection from a pod-based index — a static snapshot of its "
                     "records.\n\n"
@@ -1372,7 +1372,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/describe_index_stats",
                 "operation_id": "describeIndexStats",
-                "display_name": "Get Index Statistics",
+                "display_name": "Get index statistics",
                 "short_desc": "Count the records in an index, by namespace",
                 "desc": "Returns statistics about what an index holds: the record count per namespace, "
                     "the vector dimension and — for a pod-based index — how full it is.\n\n"
@@ -1471,7 +1471,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/vectors/upsert",
                 "operation_id": "upsertVectors",
-                "display_name": "Upsert Vectors",
+                "display_name": "Upsert vectors",
                 "short_desc": "Write records with their vectors into a namespace",
                 "desc": "Writes records into a namespace.  A record whose ID already exists is "
                     "**overwritten**.\n\n"
@@ -1496,7 +1496,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/vectors/update",
                 "operation_id": "updateVector",
-                "display_name": "Update Vectors",
+                "display_name": "Update vectors",
                 "short_desc": "Change one record by ID, or many by metadata filter",
                 "desc": "Updates records in place.\n\n"
                     "- by **ID**: changes that one record's vector and/or metadata\n"
@@ -1558,7 +1558,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/vectors/delete",
                 "operation_id": "deleteVectors",
-                "display_name": "Delete Vectors",
+                "display_name": "Delete vectors",
                 "short_desc": "Delete records by ID, by filter, or the whole namespace",
                 "desc": "Deletes records from one namespace, selected in exactly one of three ways:\n\n"
                     "- **Record IDs** — delete those records\n"
@@ -1599,7 +1599,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/vectors/fetch",
                 "operation_id": "fetchVectors",
-                "display_name": "Fetch Vectors",
+                "display_name": "Fetch vectors",
                 "short_desc": "Read records by ID",
                 "desc": "Reads records by ID, returning their vectors and metadata.\n\n"
                     "On an on-demand index the vectors come from object storage, so this can be slow.  "
@@ -1623,7 +1623,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/vectors/fetch_by_metadata",
                 "operation_id": "fetch_vectors_by_metadata",
-                "display_name": "Fetch Vectors by Metadata",
+                "display_name": "Fetch vectors by metadata",
                 "short_desc": "Read every record matching a metadata filter",
                 "desc": "Reads every record matching a metadata filter, a page at a time, returning "
                     "their vectors and metadata.\n\n"
@@ -1644,7 +1644,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/vectors/list",
                 "operation_id": "listVectors",
-                "display_name": "List Record IDs",
+                "display_name": "List record IDs",
                 "short_desc": "List the record IDs in a namespace",
                 "desc": "Lists the IDs of the records in a namespace, in sorted order, without reading "
                     "their vectors — so it is much cheaper than fetching them.\n\n"
@@ -1670,7 +1670,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/namespaces",
                 "operation_id": "listNamespacesOperation",
-                "display_name": "List Namespaces",
+                "display_name": "List namespaces",
                 "short_desc": "List the namespaces in an index",
                 "desc": "Lists the namespaces in an index, with the record count of each.\n\n"
                     "Serverless indexes only.",
@@ -1691,7 +1691,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/namespaces",
                 "operation_id": "createNamespace",
-                "display_name": "Create Namespace",
+                "display_name": "Create namespace",
                 "short_desc": "Create a namespace in an index",
                 "desc": "Creates a namespace in an index.\n\n"
                     "A namespace does not normally have to be created — writing to one brings it into "
@@ -2137,7 +2137,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/bulk/imports",
                 "operation_id": "listBulkImports",
-                "display_name": "List Imports",
+                "display_name": "List imports",
                 "short_desc": "List an index's bulk imports",
                 "desc": "Lists the recent and running bulk imports of an index, with the progress of "
                     "each.",
@@ -2154,7 +2154,7 @@ public class PineconeManifest {
                 "method": "POST",
                 "path": "/bulk/imports",
                 "operation_id": "startBulkImport",
-                "display_name": "Start Import",
+                "display_name": "Start import",
                 "short_desc": "Import records into an index from object storage",
                 "desc": "Starts an asynchronous import of records from object storage into an index — "
                     "the way to load a large dataset without sending it through this API record by "
@@ -2249,7 +2249,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/embed",
                 "operation_id": "embed",
-                "display_name": "Generate Embeddings",
+                "display_name": "Generate embeddings",
                 "short_desc": "Turn text into vectors with a hosted model",
                 "desc": "Turns text into vectors using one of Pinecone's hosted embedding models.\n\n"
                     "This is the standalone form: it writes nothing to an index, so it is what to use "
@@ -2293,7 +2293,7 @@ public class PineconeManifest {
                 "mutates_state": False,
                 "path": "/rerank",
                 "operation_id": "rerank",
-                "display_name": "Rerank Results",
+                "display_name": "Rerank results",
                 "short_desc": "Re-order documents by relevance to a query",
                 "desc": "Re-orders a list of documents by how relevant each is to a query, using a "
                     "hosted reranking model.\n\n"
@@ -2357,7 +2357,7 @@ public class PineconeManifest {
                 "method": "GET",
                 "path": "/models",
                 "operation_id": "list_models",
-                "display_name": "List Models",
+                "display_name": "List models",
                 "short_desc": "List the embedding and reranking models Pinecone hosts",
                 "desc": "Lists the models Pinecone hosts, with the vector type, dimensions and "
                     "parameters each supports.\n\n"

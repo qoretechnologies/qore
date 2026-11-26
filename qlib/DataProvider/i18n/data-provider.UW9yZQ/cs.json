@@ -16,7 +16,7 @@
           "message": "Vestavěné procesory datových pipeline Qore pro filtrování, transformaci a manipulaci se záznamy v datových pipeline"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
-          "source": "Filter Records",
+          "source": "Filter records",
           "message": "Filtrovat záznamy"
         },
         "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
@@ -52,7 +52,7 @@
           "message": "Řetězcový výraz DPQL pro filtrování záznamů; tuto možnost použijte při psaní predikátu přímo jako text namísto použití tvůrce výrazů"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
-          "source": "Select Fields",
+          "source": "Select fields",
           "message": "Vybrat pole"
         },
         "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
@@ -76,7 +76,7 @@
           "message": "Seznam specifikací polí; použijte `name` pro zachování pole beze změny nebo `new_name=old_name` pro přejmenování pole (např. `name`, `email`, `customer_name=name`)"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
-          "source": "Set Fields",
+          "source": "Set fields",
           "message": "Nastavit pole"
         },
         "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
@@ -100,7 +100,7 @@
           "message": "Hash názvů polí a hodnot, které se mají nastavit u každého záznamu; existující pole budou přepsána, nová pole budou přidána"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
-          "source": "Remove Fields",
+          "source": "Remove fields",
           "message": "Odebrat pole"
         },
         "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
@@ -124,7 +124,7 @@
           "message": "Seznam názvů polí k odebrání z každého záznamu; podporuje tečkovou notaci pro vnořená pole (např. `address.city`)"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
-          "source": "Search and Replace",
+          "source": "Search and replace",
           "message": "Hledat a nahradit"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
@@ -268,7 +268,7 @@
           "message": "Najít všechny výskyty, nejen první"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
-          "source": "Record Limit",
+          "source": "Record limit",
           "message": "Limit záznamů"
         },
         "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
@@ -292,7 +292,7 @@
           "message": "Maximální počet záznamů, které projdou přes pipeline; po dosažení limitu jsou všechny následující záznamy zahozeny"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
-          "source": "Running Statistics",
+          "source": "Running statistics",
           "message": "Průběžné statistiky"
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
@@ -328,7 +328,7 @@
           "message": "Počet záznamů, které se mají shromáždit v každém analytickém okně; u procesorů na úrovni oken se událost vygeneruje po zaplnění okna; u procesorů na úrovni záznamů toto určuje velikost plovoucího okna.\n\n**Doporučení k velikosti**: použijte `20`–`50` pro upozorňování v reálném čase, kde záleží na rychlé reakci, `100`–`500` pro obecnou analýzu trendů a statistiku, nebo `1000`+ pro vysokofrekvenční data, kde potřebujete stabilní dlouhodobé statistiky; okno musí být dostatečně velké, aby zachytilo alespoň jeden celý cyklus jakéhokoli vzoru, který chcete detekovat"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
-          "source": "Moving Average",
+          "source": "Moving average",
           "message": "Klouzavý průměr"
         },
         "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
@@ -376,7 +376,7 @@
           "message": "Určuje, jaká váha je při výpočtu exponenciálního klouzavého průměru (EMA) přiřazena nejnovější hodnotě oproti historickým hodnotám; vyšší hodnoty způsobují, že průměr reaguje na nedávné změny rychleji, ale zároveň je náchylnější k šumu.\n\n**Typické hodnoty**: `0.1` (hladký, pomalá reakce), `0.2` (vyvážený, dobrá výchozí hodnota), `0.5` (citlivý, rychle sleduje změny); musí být v intervalu mezi `0.0` a `1.0` (mimo tyto mezní hodnoty); výchozí: `0.2`"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
-          "source": "Trend Analysis",
+          "source": "Trend analysis",
           "message": "Analýza trendu"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
@@ -424,7 +424,7 @@
           "message": "Minimální velikost směrnice, aby byl trend klasifikován jako `rising` nebo `falling`; směrnice pod touto prahovou hodnotou jsou klasifikovány jako `flat`.\n\n**Typické hodnoty**: `0.001` (citlivé – detekuje velmi pozvolné trendy), `0.01` (střední), `0.1` (pouze silné trendy); menší hodnoty použijte, pokud mají vaše data velký rozsah a smysluplné trendy mají malé směrnice; musí být >= `0`; výchozí hodnota: `0.001`"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
-          "source": "Anomaly Detection",
+          "source": "Anomaly detection",
           "message": "Detekce anomálií"
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
@@ -472,7 +472,7 @@
           "message": "Kolik směrodatných odchylek od průměru musí hodnota mít, aby byla považována za anomální (tzv. *z-skóre*); například prahová hodnota `3.0` znamená, že hodnota musí být vzdálena více než 3 směrodatné odchylky od průměru, aby byla označena.\n\n**Typické hodnoty**: `2.0` (citlivé — označí ~5 % náhodných dat), `3.0` (standardní — označí ~0,3 %), `4.0` (konzervativní — pouze extrémní odlehlé hodnoty); musí být větší než `0`; výchozí: `3.0`"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
-          "source": "Calculate Data Distribution",
+          "source": "Calculate data distribution",
           "message": "Vypočítat rozdělení dat"
         },
         "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
@@ -520,7 +520,7 @@
           "message": "Čárkami oddělený seznam hodnot percentilů k výpočtu (`0`–`100`); například `50` je medián, `25` a `75` jsou dolní a horní kvartily; výchozí hodnota: `\"25,50,75,90,95,99\"`"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
-          "source": "Find Related Fields",
+          "source": "Find related fields",
           "message": "Najít související pole"
         },
         "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
@@ -556,7 +556,7 @@
           "message": "Počet záznamů, které se mají shromáždit před výpočtem korelační matice; po každém výpočtu se okno vymaže.\n\n**Doporučení k velikosti**: korelace vyžaduje dostatek dat pro stabilní výsledky; použijte alespoň `30` pro základní korelaci, `100`+ pro spolehlivé výsledky"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
-          "source": "Find Delayed Relationships",
+          "source": "Find delayed relationships",
           "message": "Najít zpožděné vztahy"
         },
         "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
@@ -616,7 +616,7 @@
           "message": "Maximální počet časových kroků pro posun jednoho pole vůči druhému; nastavte na `0` pro automatické použití `window_size / 4`; výchozí: `0` (automaticky)"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
+          "source": "Count value ranges",
           "message": "Spočítat rozsahy hodnot"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Kvantil (intervaly se stejným počtem)"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
-          "source": "Measure Speed of Change",
+          "source": "Measure speed of change",
           "message": "Měřit rychlost změny"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
@@ -732,7 +732,7 @@
           "message": "Při povolení aplikuje před výpočtem derivací na okno jednoduchý klouzavý průměr, což snižuje šum v rychlosti změny; zakažte pro nezpracované bodové rychlosti; výchozí hodnota: `True`"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
-          "source": "Monitor Process Stability",
+          "source": "Monitor process Stability",
           "message": "Sledovat stabilitu procesu"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
@@ -804,7 +804,7 @@
           "message": "Očekávaná střední/cílová hodnota procesu; pokud není nastavena, automaticky se použije průměr z historie plovoucího okna; nastavením na libovolnou hodnotu (včetně `0`) použijete pevnou střední osu; výchozí: auto (použít průměr okna)"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
-          "source": "Detect Repeating Patterns",
+          "source": "Detect repeating patterns",
           "message": "Detekovat opakující se vzorce"
         },
         "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
@@ -864,7 +864,7 @@
           "message": "Minimální síla opakujícího se vzorce (měřená jako autokorelace, `0`–`1`), aby byl nahlášen; autokorelace měří, jak podobná je datová řada své posunuté kopii.\n\n**Typické hodnoty**: `0.2` (detekovat slabé/zašuměné vzorce), `0.3` (vyvážená výchozí hodnota), `0.5` (hlásit pouze silné, jasné vzorce); výchozí: `0.3`"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
-          "source": "Group By and Aggregate",
+          "source": "Group by and aggregate",
           "message": "Seskupit a agregovat"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {

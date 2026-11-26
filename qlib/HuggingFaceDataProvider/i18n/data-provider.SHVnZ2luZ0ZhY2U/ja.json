@@ -524,7 +524,7 @@
           "message": "`namespace/name`形式のモデルリポジトリID（例: `meta-llama/Llama-3.1-8B`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "モデルの作成"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -572,7 +572,7 @@
           "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "モデルを更新"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -652,7 +652,7 @@
           "message": "このリポジトリのディスカッション機能を無効にするかどうか"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "モデルを削除"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -824,7 +824,7 @@
           "message": "`namespace/name`形式のデータセットリポジトリID（例: `stanfordnlp/imdb`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "データセットの作成"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "データセットを更新"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -952,7 +952,7 @@
           "message": "このリポジトリのディスカッション機能を無効にするかどうか"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "データセットを削除"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "`namespace/name`形式のSpaceリポジトリID（例: `gradio/chatbot`）"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create Space",
+          "source": "Create space",
           "message": "Space の作成"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update Space",
+          "source": "Update space",
           "message": "Spaceを更新"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "このSpaceのディスカッション機能を無効にするかどうか"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete Space",
+          "source": "Delete space",
           "message": "Spaceを削除"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {

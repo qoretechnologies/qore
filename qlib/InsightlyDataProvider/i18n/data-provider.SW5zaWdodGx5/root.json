@@ -1632,8 +1632,8 @@
           "message": "The unique identifier of the contact to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List contacts with optional pagination",
@@ -1756,8 +1756,8 @@
           "message": "The contact ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Create Organisation",
-          "message": "Create Organisation"
+          "source": "Create organisation",
+          "message": "Create organisation"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
           "source": "Create a new organisation",
@@ -2276,8 +2276,8 @@
           "message": "The name of the occasion (e.g., `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Update Organisation",
-          "message": "Update Organisation"
+          "source": "Update organisation",
+          "message": "Update organisation"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
           "source": "Update an existing organisation",
@@ -2808,8 +2808,8 @@
           "message": "The name of the occasion (e.g., `Birthday`, `Anniversary`)"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Delete Organisation",
-          "message": "Delete Organisation"
+          "source": "Delete organisation",
+          "message": "Delete organisation"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9yZ2FuaXNhdGlvbg.short_desc": {
           "source": "Delete an organisation",
@@ -2832,8 +2832,8 @@
           "message": "The unique identifier of the organisation to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.display_name": {
-          "source": "List Organisations",
-          "message": "List Organisations"
+          "source": "List organisations",
+          "message": "List organisations"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcmdhbmlzYXRpb25z.short_desc": {
           "source": "List organisations with optional pagination",
@@ -2936,8 +2936,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "Get Organisation",
-          "message": "Get Organisation"
+          "source": "Get organisation",
+          "message": "Get organisation"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9yZ2FuaXNhdGlvbg.short_desc": {
           "source": "Get a single organisation by ID",
@@ -2956,8 +2956,8 @@
           "message": "The organisation ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.display_name": {
-          "source": "Create Lead",
-          "message": "Create Lead"
+          "source": "Create lead",
+          "message": "Create lead"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWxlYWQ.short_desc": {
           "source": "Create a new lead",
@@ -3448,8 +3448,8 @@
           "message": "The name of the tag"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.display_name": {
-          "source": "Update Lead",
-          "message": "Update Lead"
+          "source": "Update lead",
+          "message": "Update lead"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWxlYWQ.short_desc": {
           "source": "Update an existing lead",
@@ -3952,8 +3952,8 @@
           "message": "The name of the tag"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.display_name": {
-          "source": "Delete Lead",
-          "message": "Delete Lead"
+          "source": "Delete lead",
+          "message": "Delete lead"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWxlYWQ.short_desc": {
           "source": "Delete a lead",
@@ -3976,8 +3976,8 @@
           "message": "The unique identifier of the lead to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.display_name": {
-          "source": "List Leads",
-          "message": "List Leads"
+          "source": "List leads",
+          "message": "List leads"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1sZWFkcw.short_desc": {
           "source": "List leads with optional pagination",
@@ -4080,8 +4080,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.display_name": {
-          "source": "Get Lead",
-          "message": "Get Lead"
+          "source": "Get lead",
+          "message": "Get lead"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWxlYWQ.short_desc": {
           "source": "Get a single lead by ID",
@@ -4100,8 +4100,8 @@
           "message": "The lead ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create Opportunity",
-          "message": "Create Opportunity"
+          "source": "Create opportunity",
+          "message": "Create opportunity"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Create a new opportunity",
@@ -4536,8 +4536,8 @@
           "message": "The role describing the relationship between the objects"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update Opportunity",
-          "message": "Update Opportunity"
+          "source": "Update opportunity",
+          "message": "Update opportunity"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Update an existing opportunity",
@@ -4984,8 +4984,8 @@
           "message": "The role describing the relationship between the objects"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete Opportunity",
-          "message": "Delete Opportunity"
+          "source": "Delete opportunity",
+          "message": "Delete opportunity"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Delete an opportunity",
@@ -5008,8 +5008,8 @@
           "message": "The unique identifier of the opportunity to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
-          "source": "List Opportunities",
-          "message": "List Opportunities"
+          "source": "List opportunities",
+          "message": "List opportunities"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
           "source": "List opportunities with optional pagination",
@@ -5112,8 +5112,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get Opportunity",
-          "message": "Get Opportunity"
+          "source": "Get opportunity",
+          "message": "Get opportunity"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
           "source": "Get a single opportunity by ID",
@@ -5132,8 +5132,8 @@
           "message": "The opportunity ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
-          "message": "Create Project"
+          "source": "Create project",
+          "message": "Create project"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
           "source": "Create a new project",
@@ -5508,8 +5508,8 @@
           "message": "The role describing the relationship between the objects"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
-          "message": "Update Project"
+          "source": "Update project",
+          "message": "Update project"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2plY3Q.short_desc": {
           "source": "Update an existing project",
@@ -5896,8 +5896,8 @@
           "message": "The role describing the relationship between the objects"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.display_name": {
-          "source": "Delete Project",
-          "message": "Delete Project"
+          "source": "Delete project",
+          "message": "Delete project"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
           "source": "Delete a project",
@@ -5920,8 +5920,8 @@
           "message": "The unique identifier of the project to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
-          "message": "List Projects"
+          "source": "List projects",
+          "message": "List projects"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9qZWN0cw.short_desc": {
           "source": "List projects with optional pagination",
@@ -6024,8 +6024,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
-          "message": "Get Project"
+          "source": "Get project",
+          "message": "Get project"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2plY3Q.short_desc": {
           "source": "Get a single project by ID",
@@ -6044,8 +6044,8 @@
           "message": "The project ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create Task",
-          "message": "Create Task"
+          "source": "Create task",
+          "message": "Create task"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a new task",
@@ -6404,8 +6404,8 @@
           "message": "The unique identifier of the task link"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update Task",
-          "message": "Update Task"
+          "source": "Update task",
+          "message": "Update task"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update an existing task",
@@ -6776,8 +6776,8 @@
           "message": "The unique identifier of the task link"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete Task",
-          "message": "Delete Task"
+          "source": "Delete task",
+          "message": "Delete task"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a task",
@@ -6800,8 +6800,8 @@
           "message": "The unique identifier of the task to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.SW5zaWdodGx5.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List tasks with optional pagination",
@@ -6904,8 +6904,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get Task",
-          "message": "Get Task"
+          "source": "Get task",
+          "message": "Get task"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -6924,8 +6924,8 @@
           "message": "The task ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.display_name": {
-          "source": "Create Note",
-          "message": "Create Note"
+          "source": "Create note",
+          "message": "Create note"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLW5vdGU.short_desc": {
           "source": "Create a new note",
@@ -7052,8 +7052,8 @@
           "message": "Visible to the owner's team"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.display_name": {
-          "source": "Update Note",
-          "message": "Update Note"
+          "source": "Update note",
+          "message": "Update note"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLW5vdGU.short_desc": {
           "source": "Update an existing note",
@@ -7192,8 +7192,8 @@
           "message": "Visible to the owner's team"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.display_name": {
-          "source": "Delete Note",
-          "message": "Delete Note"
+          "source": "Delete note",
+          "message": "Delete note"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLW5vdGU.short_desc": {
           "source": "Delete a note",
@@ -7216,8 +7216,8 @@
           "message": "The unique identifier of the note to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.display_name": {
-          "source": "List Notes",
-          "message": "List Notes"
+          "source": "List notes",
+          "message": "List notes"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1ub3Rlcw.short_desc": {
           "source": "List notes with optional pagination",
@@ -7320,8 +7320,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.display_name": {
-          "source": "Get Note",
-          "message": "Get Note"
+          "source": "Get note",
+          "message": "Get note"
         },
         "app.SW5zaWdodGx5.action.Z2V0LW5vdGU.short_desc": {
           "source": "Get a single note by ID",
@@ -7340,8 +7340,8 @@
           "message": "The note ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Create Calendar Event",
-          "message": "Create Calendar Event"
+          "source": "Create calendar event",
+          "message": "Create calendar event"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
           "source": "Create a new calendar event",
@@ -7460,8 +7460,8 @@
           "message": "The ID of the user who owns this event"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Update Calendar Event",
-          "message": "Update Calendar Event"
+          "source": "Update calendar event",
+          "message": "Update calendar event"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
           "source": "Update an existing calendar event",
@@ -7592,8 +7592,8 @@
           "message": "The ID of the user who owns this event"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Delete Calendar Event",
-          "message": "Delete Calendar Event"
+          "source": "Delete calendar event",
+          "message": "Delete calendar event"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWNhbGVuZGFyLWV2ZW50.short_desc": {
           "source": "Delete a calendar event",
@@ -7616,8 +7616,8 @@
           "message": "The unique identifier of the calendar event to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.display_name": {
-          "source": "List Calendar Events",
-          "message": "List Calendar Events"
+          "source": "List calendar Events",
+          "message": "List calendar Events"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1jYWxlbmRhci1ldmVudHM.short_desc": {
           "source": "List calendar events with optional pagination",
@@ -7720,8 +7720,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.display_name": {
-          "source": "Get Calendar Event",
-          "message": "Get Calendar Event"
+          "source": "Get calendar event",
+          "message": "Get calendar event"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWNhbGVuZGFyLWV2ZW50.short_desc": {
           "source": "Get a single calendar event by ID",
@@ -7740,8 +7740,8 @@
           "message": "The event ID"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Create Product",
-          "message": "Create Product"
+          "source": "Create product",
+          "message": "Create product"
         },
         "app.SW5zaWdodGx5.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Create a new product",
@@ -7944,8 +7944,8 @@
           "message": "The value of the custom field. Can be a string, number, boolean, or date depending on the field configuration"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
-          "source": "Update Product",
-          "message": "Update Product"
+          "source": "Update product",
+          "message": "Update product"
         },
         "app.SW5zaWdodGx5.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
           "source": "Update an existing product",
@@ -8160,8 +8160,8 @@
           "message": "The value of the custom field. Can be a string, number, boolean, or date depending on the field configuration"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
-          "source": "Delete Product",
-          "message": "Delete Product"
+          "source": "Delete product",
+          "message": "Delete product"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
           "source": "Delete a product",
@@ -8184,8 +8184,8 @@
           "message": "The unique identifier of the product to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.display_name": {
-          "source": "List Products",
-          "message": "List Products"
+          "source": "List products",
+          "message": "List products"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List products with optional pagination",
@@ -8288,8 +8288,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.display_name": {
-          "source": "Get Product",
-          "message": "Get Product"
+          "source": "Get product",
+          "message": "Get product"
         },
         "app.SW5zaWdodGx5.action.Z2V0LXByb2R1Y3Q.short_desc": {
           "source": "Get a single product by ID",
@@ -8308,8 +8308,8 @@
           "message": "The product ID"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.display_name": {
-          "source": "Delete Email",
-          "message": "Delete Email"
+          "source": "Delete email",
+          "message": "Delete email"
         },
         "app.SW5zaWdodGx5.action.ZGVsZXRlLWVtYWls.short_desc": {
           "source": "Delete an email record",
@@ -8332,8 +8332,8 @@
           "message": "The unique identifier of the email to delete"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.display_name": {
-          "source": "List Emails",
-          "message": "List Emails"
+          "source": "List emails",
+          "message": "List emails"
         },
         "app.SW5zaWdodGx5.action.bGlzdC1lbWFpbHM.short_desc": {
           "source": "List email records with optional pagination",
@@ -8436,8 +8436,8 @@
           "message": "Value to match against `field_name`. Must be paired with `field_name`. Routes the request through Insightly's `/Search` endpoint."
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.display_name": {
-          "source": "Get Email",
-          "message": "Get Email"
+          "source": "Get email",
+          "message": "Get email"
         },
         "app.SW5zaWdodGx5.action.Z2V0LWVtYWls.short_desc": {
           "source": "Get a single email by ID",
@@ -8468,8 +8468,8 @@
           "message": "Fires when a new contact is created in Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.display_name": {
-          "source": "New Organisation",
-          "message": "New Organisation"
+          "source": "New organisation",
+          "message": "New organisation"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9yZ2FuaXNhdGlvbg.short_desc": {
           "source": "Trigger when a new organisation is created",
@@ -8480,8 +8480,8 @@
           "message": "Fires when a new organisation is created in Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.display_name": {
-          "source": "New Lead",
-          "message": "New Lead"
+          "source": "New lead",
+          "message": "New lead"
         },
         "app.SW5zaWdodGx5.action.bmV3LWxlYWQ.short_desc": {
           "source": "Trigger when a new lead is created",
@@ -8492,8 +8492,8 @@
           "message": "Fires when a new lead is created in Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.display_name": {
-          "source": "New Opportunity",
-          "message": "New Opportunity"
+          "source": "New opportunity",
+          "message": "New opportunity"
         },
         "app.SW5zaWdodGx5.action.bmV3LW9wcG9ydHVuaXR5.short_desc": {
           "source": "Trigger when a new opportunity is created",
@@ -8504,8 +8504,8 @@
           "message": "Fires when a new opportunity is created in Insightly"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.display_name": {
-          "source": "New Task",
-          "message": "New Task"
+          "source": "New task",
+          "message": "New task"
         },
         "app.SW5zaWdodGx5.action.bmV3LXRhc2s.short_desc": {
           "source": "Trigger when a new task is created",

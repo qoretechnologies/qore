@@ -340,7 +340,7 @@
           "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
+          "source": "Search for messages",
           "message": "Buscar mensajes"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
@@ -412,7 +412,7 @@
           "message": "Token de página para recuperar una página específica de resultados en la lista"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
+          "source": "Retrieve a message",
           "message": "Recuperar un mensaje"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
@@ -436,7 +436,7 @@
           "message": "El ID del mensaje a obtener"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
+          "source": "Retrieve an attachment",
           "message": "Recuperar un archivo adjunto"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
@@ -472,7 +472,7 @@
           "message": "El ID del archivo adjunto a recuperar"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
+          "source": "New email",
           "message": "Nuevo correo electrónico"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
@@ -632,7 +632,7 @@
           "message": "El número máximo de mensajes entregados en un ciclo de sondeo; sin configurar o `0` significa sin límite.\n\nEl límite se aplica a partir de los elementos más **antiguos** del trabajo acumulado, por lo que el cursor de supervisión sigue avanzando de forma continua y los mensajes restantes se entregan en los ciclos siguientes en lugar de omitirse. Utilícelo para delimitar el trabajo que un solo ciclo puede realizar cuando pueda acumularse un gran volumen de trabajo pendiente"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
+          "source": "New email attachments",
           "message": "Nuevos archivos adjuntos de correo electrónico"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
@@ -804,7 +804,7 @@
           "message": "El número máximo de mensajes entregados en un ciclo de sondeo; sin configurar o `0` significa sin límite.\n\nEl límite se aplica a partir de los elementos más **antiguos** del trabajo acumulado, por lo que el cursor de supervisión sigue avanzando de forma continua y los mensajes restantes se entregan en los ciclos siguientes en lugar de omitirse. Utilícelo para delimitar el trabajo que un solo ciclo puede realizar cuando pueda acumularse un gran volumen de trabajo pendiente"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
+          "source": "Move a message to the trash",
           "message": "Mover un mensaje a la papelera"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
@@ -828,7 +828,7 @@
           "message": "El ID del mensaje a mover a la papelera; los eventos de observación portan este valor como `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
+          "source": "Delete a message",
           "message": "Eliminar un mensaje"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
@@ -1296,7 +1296,7 @@
           "message": "El valor de la cabecera `References`: los valores `Message-ID` de los mensajes de la conversación a la que se responde, del más antiguo al más reciente, separados por espacios e incluidos los corchetes angulares. Si no se establece, se usa `in_reply_to`. Los eventos de observación portan la cabecera `References` del mensaje original"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
+          "source": "Search for messages with metadata",
           "message": "Buscar mensajes con metadatos"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Las cabeceras del mensaje a recuperar para cada mensaje coincidente; se ignora a menos que `format` sea `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
+          "source": "Restore a message from the trash",
           "message": "Restaurar un mensaje desde la papelera"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "El ID del mensaje a restaurar desde la papelera; los eventos de observación portan este valor como `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
+          "source": "Change a message's labels",
           "message": "Cambiar las etiquetas de un mensaje"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
@@ -1488,7 +1488,7 @@
           "message": "Los ID de las etiquetas a quitar del mensaje; una etiqueta se identifica por su ID (p. ej. `INBOX`, `UNREAD`, `Label_12`), no por su nombre"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
+          "source": "List labels",
           "message": "Listar etiquetas"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
@@ -1500,7 +1500,7 @@
           "message": "Lista todas las etiquetas de la cuenta, tanto las etiquetas del sistema de Gmail (`INBOX`, `UNREAD`, `STARRED`, etc.) como las creadas por el usuario, cada una con el ID que aceptan `modify-message-labels` y la opción de búsqueda `labelIds`"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
+          "source": "Create a label",
           "message": "Crear una etiqueta"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
@@ -1588,7 +1588,7 @@
           "message": "No mostrar los mensajes con la etiqueta en la lista de mensajes"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
+          "source": "Create a draft",
           "message": "Crear un borrador"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
@@ -2032,7 +2032,7 @@
           "message": "El valor de la cabecera `References`: los valores `Message-ID` de los mensajes de la conversación a la que se responde, del más antiguo al más reciente, separados por espacios e incluidos los corchetes angulares. Si no se establece, se usa `in_reply_to`. Los eventos de observación portan la cabecera `References` del mensaje original"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
+          "source": "Search for drafts",
           "message": "Buscar borradores"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
@@ -2092,7 +2092,7 @@
           "message": "Token de página para recuperar una página específica de resultados en la lista"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
+          "source": "Retrieve a draft",
           "message": "Recuperar un borrador"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "El mensaje completo como datos MIME codificados en base64url en `raw`; el cuerpo no se analiza"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
+          "source": "Send a draft",
           "message": "Enviar un borrador"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
@@ -2200,7 +2200,7 @@
           "message": "El ID del borrador a enviar; `list-drafts` y `create-draft` devuelven este valor como `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
+          "source": "Delete a draft",
           "message": "Eliminar un borrador"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {

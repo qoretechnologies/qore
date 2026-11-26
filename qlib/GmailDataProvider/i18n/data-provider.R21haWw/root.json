@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R21haWw.action.bGlzdA.display_name": {
-          "source": "Search for Messages",
-          "message": "Search for Messages"
+          "source": "Search for messages",
+          "message": "Search for messages"
         },
         "app.R21haWw.action.bGlzdA.short_desc": {
           "source": "Search for messages",
@@ -412,8 +412,8 @@
           "message": "Page token to retrieve a specific page of results in the list"
         },
         "app.R21haWw.action.Z2V0.display_name": {
-          "source": "Retrieve a Message",
-          "message": "Retrieve a Message"
+          "source": "Retrieve a message",
+          "message": "Retrieve a message"
         },
         "app.R21haWw.action.Z2V0.short_desc": {
           "source": "Retrieve a message",
@@ -436,8 +436,8 @@
           "message": "The ID of the message to retrieve"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
-          "source": "Retrieve an Attachment",
-          "message": "Retrieve an Attachment"
+          "source": "Retrieve an attachment",
+          "message": "Retrieve an attachment"
         },
         "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
           "source": "Retrieve an attachment",
@@ -472,8 +472,8 @@
           "message": "The ID of the attachment to retrieve"
         },
         "app.R21haWw.action.d2F0Y2g.display_name": {
-          "source": "New Email",
-          "message": "New Email"
+          "source": "New email",
+          "message": "New email"
         },
         "app.R21haWw.action.d2F0Y2g.short_desc": {
           "source": "React to new emails",
@@ -632,8 +632,8 @@
           "message": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
-          "source": "New Email Attachments",
-          "message": "New Email Attachments"
+          "source": "New email attachments",
+          "message": "New email attachments"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
           "source": "React to new email attachments",
@@ -804,8 +804,8 @@
           "message": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
-          "source": "Move a Message to the Trash",
-          "message": "Move a Message to the Trash"
+          "source": "Move a message to the trash",
+          "message": "Move a message to the trash"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
           "source": "Place an existing stored Gmail message in the recoverable trash folder",
@@ -828,8 +828,8 @@
           "message": "The ID of the message to move to the trash; watch events carry this value as `message_id`"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
-          "source": "Delete a Message",
-          "message": "Delete a Message"
+          "source": "Delete a message",
+          "message": "Delete a message"
         },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
           "source": "Permanently delete a message; this cannot be undone",
@@ -1296,8 +1296,8 @@
           "message": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
-          "source": "Search for Messages with Metadata",
-          "message": "Search for Messages with Metadata"
+          "source": "Search for messages with metadata",
+          "message": "Search for messages with metadata"
         },
         "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
           "source": "Search for messages and return each match with its headers",
@@ -1416,8 +1416,8 @@
           "message": "The message headers to retrieve for each matching message; ignored unless `format` is `metadata`"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
-          "source": "Restore a Message from the Trash",
-          "message": "Restore a Message from the Trash"
+          "source": "Restore a message from the trash",
+          "message": "Restore a message from the trash"
         },
         "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
           "source": "Move a message from the trash back into the mailbox",
@@ -1440,8 +1440,8 @@
           "message": "The ID of the message to restore from the trash; watch events carry this value as `message_id`"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
-          "source": "Change a Message's Labels",
-          "message": "Change a Message's Labels"
+          "source": "Change a message's labels",
+          "message": "Change a message's labels"
         },
         "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
           "source": "Add labels to and remove labels from a message",
@@ -1488,8 +1488,8 @@
           "message": "The IDs of the labels to remove from the message; a label is identified by its ID (ex: `INBOX`, `UNREAD`, `Label_12`), not its name"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
-          "source": "List Labels",
-          "message": "List Labels"
+          "source": "List labels",
+          "message": "List labels"
         },
         "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
           "source": "List all labels in the account",
@@ -1500,8 +1500,8 @@
           "message": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, and so on) and user-created labels, each with the ID that `modify-message-labels` and the `labelIds` search option take"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
-          "source": "Create a Label",
-          "message": "Create a Label"
+          "source": "Create a label",
+          "message": "Create a label"
         },
         "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
           "source": "Create a new user label in the account",
@@ -1588,8 +1588,8 @@
           "message": "Do not show messages with the label in the message list"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
-          "source": "Create a Draft",
-          "message": "Create a Draft"
+          "source": "Create a draft",
+          "message": "Create a draft"
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
           "source": "Create a new draft email in Gmail without sending it",
@@ -2032,8 +2032,8 @@
           "message": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
-          "source": "Search for Drafts",
-          "message": "Search for Drafts"
+          "source": "Search for drafts",
+          "message": "Search for drafts"
         },
         "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
           "source": "Search for drafts",
@@ -2092,8 +2092,8 @@
           "message": "Page token to retrieve a specific page of results in the list"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
-          "source": "Retrieve a Draft",
-          "message": "Retrieve a Draft"
+          "source": "Retrieve a draft",
+          "message": "Retrieve a draft"
         },
         "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
           "source": "Retrieve a draft",
@@ -2176,8 +2176,8 @@
           "message": "The complete message as base64url-encoded MIME data in `raw`; the body is not parsed"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
-          "source": "Send a Draft",
-          "message": "Send a Draft"
+          "source": "Send a draft",
+          "message": "Send a draft"
         },
         "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
           "source": "Send an existing draft as it is",
@@ -2200,8 +2200,8 @@
           "message": "The ID of the draft to send; `list-drafts` and `create-draft` return this value as `id`"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
-          "source": "Delete a Draft",
-          "message": "Delete a Draft"
+          "source": "Delete a draft",
+          "message": "Delete a draft"
         },
         "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {
           "source": "Permanently delete a draft; this cannot be undone",

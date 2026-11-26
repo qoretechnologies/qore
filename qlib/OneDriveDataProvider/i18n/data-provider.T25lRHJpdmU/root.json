@@ -1076,8 +1076,8 @@
           "message": "The date and time when the sharing link expires"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
-          "source": "File or Folder Changed",
-          "message": "File or Folder Changed"
+          "source": "File or folder changed",
+          "message": "File or folder changed"
         },
         "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {
           "source": "Trigger when a file or folder is created, modified, or deleted",

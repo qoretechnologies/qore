@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.display_name": {
-          "source": "Create Invoice",
-          "message": "Create Invoice"
+          "source": "Create invoice",
+          "message": "Create invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a new invoice",
@@ -496,8 +496,8 @@
           "message": "ID of the PDF template to use for this invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.display_name": {
-          "source": "Update Invoice",
-          "message": "Update Invoice"
+          "source": "Update invoice",
+          "message": "Update invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an existing invoice",
@@ -652,8 +652,8 @@
           "message": "ID of the PDF template to use for this invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.display_name": {
-          "source": "Delete Invoice",
-          "message": "Delete Invoice"
+          "source": "Delete invoice",
+          "message": "Delete invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWludm9pY2U.short_desc": {
           "source": "Delete an invoice",
@@ -680,8 +680,8 @@
           "message": "The invoice to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.display_name": {
-          "source": "Get Invoice",
-          "message": "Get Invoice"
+          "source": "Get invoice",
+          "message": "Get invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWludm9pY2U.short_desc": {
           "source": "Get invoice details",
@@ -708,8 +708,8 @@
           "message": "The invoice to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.display_name": {
-          "source": "List Invoices",
-          "message": "List Invoices"
+          "source": "List invoices",
+          "message": "List invoices"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pbnZvaWNlcw.short_desc": {
           "source": "List all invoices",
@@ -808,8 +808,8 @@
           "message": "Search invoices by invoice number"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.display_name": {
-          "source": "Email Invoice",
-          "message": "Email Invoice"
+          "source": "Email invoice",
+          "message": "Email invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.ZW1haWwtaW52b2ljZQ.short_desc": {
           "source": "Send an invoice by email",
@@ -864,8 +864,8 @@
           "message": "Email body"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.display_name": {
-          "source": "Mark Invoice Status",
-          "message": "Mark Invoice Status"
+          "source": "Mark invoice status",
+          "message": "Mark invoice status"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1pbnZvaWNl.short_desc": {
           "source": "Change invoice status",
@@ -912,8 +912,8 @@
           "message": "Mark as draft"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Create Recurring Invoice",
-          "message": "Create Recurring Invoice"
+          "source": "Create recurring invoice",
+          "message": "Create recurring invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
           "source": "Create a new recurring invoice",
@@ -1020,8 +1020,8 @@
           "message": "ID of the PDF template to use for generated invoices"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Update Recurring Invoice",
-          "message": "Update Recurring Invoice"
+          "source": "Update recurring invoice",
+          "message": "Update recurring invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1pbnZvaWNl.short_desc": {
           "source": "Update an existing recurring invoice",
@@ -1128,8 +1128,8 @@
           "message": "ID of the PDF template to use for generated invoices"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.display_name": {
-          "source": "Get Recurring Invoice",
-          "message": "Get Recurring Invoice"
+          "source": "Get recurring invoice",
+          "message": "Get recurring invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1pbnZvaWNl.short_desc": {
           "source": "Get recurring invoice details",
@@ -1156,8 +1156,8 @@
           "message": "The recurring invoice to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.display_name": {
-          "source": "List Recurring Invoices",
-          "message": "List Recurring Invoices"
+          "source": "List recurring invoices",
+          "message": "List recurring invoices"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctaW52b2ljZXM.short_desc": {
           "source": "List all recurring invoices",
@@ -1184,8 +1184,8 @@
           "message": "Filter by customer"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.display_name": {
-          "source": "Mark Recurring Invoice Status",
-          "message": "Mark Recurring Invoice Status"
+          "source": "Mark recurring invoice status",
+          "message": "Mark recurring invoice status"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1yZWN1cnJpbmctaW52b2ljZQ.short_desc": {
           "source": "Change recurring invoice status",
@@ -1628,8 +1628,8 @@
           "message": "The contact to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.display_name": {
-          "source": "List Contacts",
-          "message": "List Contacts"
+          "source": "List contacts",
+          "message": "List contacts"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1jb250YWN0cw.short_desc": {
           "source": "List all contacts",
@@ -1700,8 +1700,8 @@
           "message": "Search contacts by email address"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.display_name": {
-          "source": "Mark Contact Status",
-          "message": "Mark Contact Status"
+          "source": "Mark Contact status",
+          "message": "Mark Contact status"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1jb250YWN0.short_desc": {
           "source": "Change contact status",
@@ -1744,8 +1744,8 @@
           "message": "Mark as inactive"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
-          "source": "Create Expense",
-          "message": "Create Expense"
+          "source": "Create expense",
+          "message": "Create expense"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
           "source": "Create a new expense",
@@ -1876,8 +1876,8 @@
           "message": "Receipt number or other reference"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.display_name": {
-          "source": "Update Expense",
-          "message": "Update Expense"
+          "source": "Update expense",
+          "message": "Update expense"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
           "source": "Update an existing expense",
@@ -2000,8 +2000,8 @@
           "message": "Receipt number or other reference"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
-          "source": "Delete Expense",
-          "message": "Delete Expense"
+          "source": "Delete expense",
+          "message": "Delete expense"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
           "source": "Delete an expense",
@@ -2028,8 +2028,8 @@
           "message": "The expense to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.display_name": {
-          "source": "Get Expense",
-          "message": "Get Expense"
+          "source": "Get expense",
+          "message": "Get expense"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWV4cGVuc2U.short_desc": {
           "source": "Get expense details",
@@ -2056,8 +2056,8 @@
           "message": "The expense to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.display_name": {
-          "source": "List Expenses",
-          "message": "List Expenses"
+          "source": "List expenses",
+          "message": "List expenses"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1leHBlbnNlcw.short_desc": {
           "source": "List all expenses",
@@ -2140,8 +2140,8 @@
           "message": "Filter expenses on or before this date (`YYYY-MM-DD`)"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Create Recurring Expense",
-          "message": "Create Recurring Expense"
+          "source": "Create recurring expense",
+          "message": "Create recurring expense"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
           "source": "Create a new recurring expense",
@@ -2248,8 +2248,8 @@
           "message": "Whether this expense should be billed to a customer"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Update Recurring Expense",
-          "message": "Update Recurring Expense"
+          "source": "Update recurring expense",
+          "message": "Update recurring expense"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
           "source": "Update an existing recurring expense",
@@ -2348,8 +2348,8 @@
           "message": "Whether this expense should be billed to a customer"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Delete Recurring Expense",
-          "message": "Delete Recurring Expense"
+          "source": "Delete recurring expense",
+          "message": "Delete recurring expense"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXJlY3VycmluZy1leHBlbnNl.short_desc": {
           "source": "Delete a recurring expense",
@@ -2376,8 +2376,8 @@
           "message": "The recurring expense to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.display_name": {
-          "source": "Get Recurring Expense",
-          "message": "Get Recurring Expense"
+          "source": "Get recurring expense",
+          "message": "Get recurring expense"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXJlY3VycmluZy1leHBlbnNl.short_desc": {
           "source": "Get recurring expense details",
@@ -2404,8 +2404,8 @@
           "message": "The recurring expense to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.display_name": {
-          "source": "List Recurring Expenses",
-          "message": "List Recurring Expenses"
+          "source": "List recurring expenses",
+          "message": "List recurring expenses"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1yZWN1cnJpbmctZXhwZW5zZXM.short_desc": {
           "source": "List all recurring expenses",
@@ -2424,8 +2424,8 @@
           "message": "Zoho Invoice organization"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
-          "source": "Create Payment",
-          "message": "Create Payment"
+          "source": "Create payment",
+          "message": "Create payment"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
           "source": "Create a new payment",
@@ -2556,8 +2556,8 @@
           "message": "Exchange rate if payment is in different currency"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.display_name": {
-          "source": "Update Payment",
-          "message": "Update Payment"
+          "source": "Update payment",
+          "message": "Update payment"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
           "source": "Update an existing payment",
@@ -2680,8 +2680,8 @@
           "message": "Exchange rate if payment is in different currency"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
-          "source": "Delete Payment",
-          "message": "Delete Payment"
+          "source": "Delete payment",
+          "message": "Delete payment"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
           "source": "Delete a payment",
@@ -2708,8 +2708,8 @@
           "message": "The payment to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.display_name": {
-          "source": "Get Payment",
-          "message": "Get Payment"
+          "source": "Get payment",
+          "message": "Get payment"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXBheW1lbnQ.short_desc": {
           "source": "Get payment details",
@@ -2736,8 +2736,8 @@
           "message": "The payment to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.display_name": {
-          "source": "List Payments",
-          "message": "List Payments"
+          "source": "List payments",
+          "message": "List payments"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wYXltZW50cw.short_desc": {
           "source": "List all payments",
@@ -2832,8 +2832,8 @@
           "message": "Search payments by check number, transaction ID, or other reference"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.display_name": {
-          "source": "Refund Payment",
-          "message": "Refund Payment"
+          "source": "Refund payment",
+          "message": "Refund payment"
         },
         "app.Wm9ob0ludm9pY2U.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
           "source": "Refund a payment",
@@ -2868,8 +2868,8 @@
           "message": "Refund amount"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
-          "source": "Create Estimate",
-          "message": "Create Estimate"
+          "source": "Create estimate",
+          "message": "Create estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
           "source": "Create a new estimate",
@@ -3024,8 +3024,8 @@
           "message": "ID of the PDF template to use for this estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.display_name": {
-          "source": "Update Estimate",
-          "message": "Update Estimate"
+          "source": "Update estimate",
+          "message": "Update estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
           "source": "Update an existing estimate",
@@ -3180,8 +3180,8 @@
           "message": "ID of the PDF template to use for this estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
-          "source": "Delete Estimate",
-          "message": "Delete Estimate"
+          "source": "Delete estimate",
+          "message": "Delete estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
           "source": "Delete an estimate",
@@ -3208,8 +3208,8 @@
           "message": "The estimate to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.display_name": {
-          "source": "Get Estimate",
-          "message": "Get Estimate"
+          "source": "Get estimate",
+          "message": "Get estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWVzdGltYXRl.short_desc": {
           "source": "Get estimate details",
@@ -3236,8 +3236,8 @@
           "message": "The estimate to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
-          "source": "List Estimates",
-          "message": "List Estimates"
+          "source": "List estimates",
+          "message": "List estimates"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
           "source": "List all estimates",
@@ -3292,8 +3292,8 @@
           "message": "Filter by customer"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.display_name": {
-          "source": "Mark Estimate Status",
-          "message": "Mark Estimate Status"
+          "source": "Mark estimate status",
+          "message": "Mark estimate status"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1lc3RpbWF0ZQ.short_desc": {
           "source": "Change estimate status",
@@ -3340,8 +3340,8 @@
           "message": "Mark as declined"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.display_name": {
-          "source": "Create Project",
-          "message": "Create Project"
+          "source": "Create project",
+          "message": "Create project"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
           "source": "Create a new project",
@@ -3468,8 +3468,8 @@
           "message": "Budget value (amount or hours depending on budget type)"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.display_name": {
-          "source": "Update Project",
-          "message": "Update Project"
+          "source": "Update project",
+          "message": "Update project"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLXByb2plY3Q.short_desc": {
           "source": "Update an existing project",
@@ -3588,8 +3588,8 @@
           "message": "Budget value (amount or hours depending on budget type)"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.display_name": {
-          "source": "Get Project",
-          "message": "Get Project"
+          "source": "Get project",
+          "message": "Get project"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LXByb2plY3Q.short_desc": {
           "source": "Get project details",
@@ -3616,8 +3616,8 @@
           "message": "The project to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.display_name": {
-          "source": "List Projects",
-          "message": "List Projects"
+          "source": "List projects",
+          "message": "List projects"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1wcm9qZWN0cw.short_desc": {
           "source": "List all projects",
@@ -3672,8 +3672,8 @@
           "message": "Search projects by name (partial match)"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.display_name": {
-          "source": "Mark Project Status",
-          "message": "Mark Project Status"
+          "source": "Mark project status",
+          "message": "Mark project status"
         },
         "app.Wm9ob0ludm9pY2U.action.bWFyay1wcm9qZWN0.short_desc": {
           "source": "Change project status",
@@ -3716,8 +3716,8 @@
           "message": "Mark as inactive"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.display_name": {
-          "source": "Create Item",
-          "message": "Create Item"
+          "source": "Create item",
+          "message": "Create item"
         },
         "app.Wm9ob0ludm9pY2U.action.Y3JlYXRlLWl0ZW0.short_desc": {
           "source": "Create a new item",
@@ -3820,8 +3820,8 @@
           "message": "Services"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.display_name": {
-          "source": "Update Item",
-          "message": "Update Item"
+          "source": "Update item",
+          "message": "Update item"
         },
         "app.Wm9ob0ludm9pY2U.action.dXBkYXRlLWl0ZW0.short_desc": {
           "source": "Update an existing item",
@@ -3916,8 +3916,8 @@
           "message": "Services"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.display_name": {
-          "source": "Delete Item",
-          "message": "Delete Item"
+          "source": "Delete item",
+          "message": "Delete item"
         },
         "app.Wm9ob0ludm9pY2U.action.ZGVsZXRlLWl0ZW0.short_desc": {
           "source": "Delete an item",
@@ -3944,8 +3944,8 @@
           "message": "The item to delete"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.display_name": {
-          "source": "Get Item",
-          "message": "Get Item"
+          "source": "Get item",
+          "message": "Get item"
         },
         "app.Wm9ob0ludm9pY2U.action.Z2V0LWl0ZW0.short_desc": {
           "source": "Get item details",
@@ -3972,8 +3972,8 @@
           "message": "The item to retrieve"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.display_name": {
-          "source": "List Items",
-          "message": "List Items"
+          "source": "List items",
+          "message": "List items"
         },
         "app.Wm9ob0ludm9pY2U.action.bGlzdC1pdGVtcw.short_desc": {
           "source": "List all items",
@@ -3992,8 +3992,8 @@
           "message": "Zoho Invoice organization"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.display_name": {
-          "source": "New Invoice",
-          "message": "New Invoice"
+          "source": "New invoice",
+          "message": "New invoice"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWludm9pY2U.short_desc": {
           "source": "Trigger when a new invoice is created",
@@ -4048,8 +4048,8 @@
           "message": "How often to check for new contacts (seconds)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.display_name": {
-          "source": "New Estimate",
-          "message": "New Estimate"
+          "source": "New estimate",
+          "message": "New estimate"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWVzdGltYXRl.short_desc": {
           "source": "Trigger when a new estimate is created",
@@ -4076,8 +4076,8 @@
           "message": "How often to check for new estimates (seconds)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.display_name": {
-          "source": "New Expense",
-          "message": "New Expense"
+          "source": "New expense",
+          "message": "New expense"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWV4cGVuc2U.short_desc": {
           "source": "Trigger when a new expense is created",
@@ -4104,8 +4104,8 @@
           "message": "How often to check for new expenses (seconds)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.display_name": {
-          "source": "New Item",
-          "message": "New Item"
+          "source": "New item",
+          "message": "New item"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LWl0ZW0.short_desc": {
           "source": "Trigger when a new item is created",
@@ -4132,8 +4132,8 @@
           "message": "How often to check for new items (seconds)"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.display_name": {
-          "source": "New Project",
-          "message": "New Project"
+          "source": "New project",
+          "message": "New project"
         },
         "app.Wm9ob0ludm9pY2U.action.bmV3LXByb2plY3Q.short_desc": {
           "source": "Trigger when a new project is created",

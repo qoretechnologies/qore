@@ -712,7 +712,7 @@
           "message": "메타데이터를 업데이트할 콘텐츠 세대. 생략하면 라이브 버전이 사용됩니다"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
-          "source": "Upload Object",
+          "source": "Upload object",
           "message": "객체 업로드"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
@@ -988,7 +988,7 @@
           "message": "객체의 현재 세대가 이 값과 일치하는 경우에만 쓰기를 수행합니다. 아직 객체가 존재하지 않는 경우에만 쓰기를 수행하여 업로드가 덮어쓰기가 아닌 안전한 생성이 되도록 하려면 `0`을(를) 전달하세요"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
-          "source": "Download Object",
+          "source": "Download object",
           "message": "객체 다운로드"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
@@ -1036,7 +1036,7 @@
           "message": "다운로드할 콘텐츠 세대입니다. 생략하면 라이브 버전이 사용됩니다."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
-          "source": "Delete Object",
+          "source": "Delete object",
           "message": "객체 삭제"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
@@ -1084,7 +1084,7 @@
           "message": "삭제할 콘텐츠 세대입니다. 생략하면 라이브 버전이 삭제됩니다. 버전 관리가 활성화된 버킷에서 라이브 버전을 삭제하면 이전 세대는 그대로 유지되며, 영구적으로 제거하려면 특정 세대를 지정해야 합니다."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
-          "source": "Copy Object",
+          "source": "Copy object",
           "message": "객체 복사"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "키/값 쌍 형태의 복사본에 대한 사용자 정의 메타데이터입니다. 생략하면 소스의 메타데이터가 유지됩니다."
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
-          "source": "Compose Objects",
+          "source": "Compose objects",
           "message": "객체 결합"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
@@ -1264,7 +1264,7 @@
           "message": "키/값 쌍 형태의 결합된 객체에 대한 사용자 정의 메타데이터"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
-          "source": "Create Signed URL",
+          "source": "Create signed URL",
           "message": "서명된 URL 생성"
         },
         "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {

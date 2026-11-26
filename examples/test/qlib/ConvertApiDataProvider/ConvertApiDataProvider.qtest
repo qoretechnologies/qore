@@ -1270,8 +1270,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertEq(("even",), tf.Pages.acceptsValue("even"));
         assertThrows("FIELD-VALUE-ERROR", \tf.Pages.acceptsValue(), (("odd", "all"),));
         # labels in title case; descriptions with the range, default and file types; markdown descriptions preferred
-        assertEq("Data to Encode", fields.Data.display_name);
-        assertEq("Image Quality", fields.Quality.display_name);
+        assertEq("Data to encode", fields.Data.display_name);
+        assertEq("Image quality", fields.Quality.display_name);
         assertEq("Set image quality.\n\nFrom `10` to `100`. The default is `75`.", fields.Quality.desc);
         assertEq("Create PDF/A.\n\nThe default is `False`.", fields.Pdfa.desc);
         assertEq("The overlay.\n\nFile types: `pdf`.", fields.OverlayFile.desc);
@@ -1337,7 +1337,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertTrue(opts.IncludeMarkup.preselected);
         assertTrue(opts.Password.sensitive);
         assertEq(("none", "headings", "bookmarks"), (map $1.value, opts.BookmarkMode.allowed_values));
-        assertEq("Page Range", opts.PageRange.display_name);
+        assertEq("Page range", opts.PageRange.display_name);
         assertEq("Set page range to convert. Example 1-10.\n\nThe default is `1-6000`.", opts.PageRange.desc);
         # the converter's description is cached
         assertEq(("info/docx/to/pdf",), (map $1.path, handler.requests));

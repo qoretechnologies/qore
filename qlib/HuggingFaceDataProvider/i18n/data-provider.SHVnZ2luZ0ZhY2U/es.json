@@ -524,7 +524,7 @@
           "message": "El ID del repositorio del modelo en formato `namespace/name` (p. ej., `meta-llama/Llama-3.1-8B`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
-          "source": "Create Model",
+          "source": "Create model",
           "message": "Crear modelo"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
@@ -572,7 +572,7 @@
           "message": "Indica si el repositorio debe ser privado. Valor predeterminado: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
-          "source": "Update Model",
+          "source": "Update model",
           "message": "Actualizar modelo"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
@@ -652,7 +652,7 @@
           "message": "Indica si se debe deshabilitar la función de debates en este repositorio"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
-          "source": "Delete Model",
+          "source": "Delete model",
           "message": "Eliminar modelo"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
@@ -824,7 +824,7 @@
           "message": "El ID del repositorio del conjunto de datos en formato `namespace/name` (p. ej., `stanfordnlp/imdb`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Create Dataset",
+          "source": "Create dataset",
           "message": "Crear conjunto de datos"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
@@ -872,7 +872,7 @@
           "message": "Indica si el repositorio debe ser privado. Valor predeterminado: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
-          "source": "Update Dataset",
+          "source": "Update dataset",
           "message": "Actualizar conjunto de datos"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
@@ -952,7 +952,7 @@
           "message": "Indica si se debe deshabilitar la función de debates en este repositorio"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
-          "source": "Delete Dataset",
+          "source": "Delete dataset",
           "message": "Eliminar conjunto de datos"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
@@ -1120,7 +1120,7 @@
           "message": "El ID del repositorio del Space en formato `namespace/name` (p. ej., `gradio/chatbot`)"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
-          "source": "Create Space",
+          "source": "Create space",
           "message": "Crear Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "Indica si el repositorio debe ser privado. Valor predeterminado: `False`"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
-          "source": "Update Space",
+          "source": "Update space",
           "message": "Actualizar Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
@@ -1384,7 +1384,7 @@
           "message": "Indica si se debe deshabilitar la función de debates en este Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
-          "source": "Delete Space",
+          "source": "Delete space",
           "message": "Eliminar Space"
         },
         "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {

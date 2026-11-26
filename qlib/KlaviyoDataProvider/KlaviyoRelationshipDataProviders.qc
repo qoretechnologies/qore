@@ -90,7 +90,7 @@ public const KlaviyoRelationshipActions = {
         "action": "add_profile_to_list",
         "method": "POST",
         "path": "/api/lists/%s/relationships/profiles",
-        "display_name": "Add Profile to List",
+        "display_name": "Add profile to list",
         "short_desc": "Adds an existing profile to a list",
         "desc": "Adds a profile that already exists to a list.\n\n"
             "The profile is **not** subscribed by this: membership and marketing consent are separate in "
@@ -112,7 +112,7 @@ public const KlaviyoRelationshipActions = {
         "action": "remove_profile_from_list",
         "method": "DELETE",
         "path": "/api/lists/%s/relationships/profiles",
-        "display_name": "Remove Profile from List",
+        "display_name": "Remove profile from list",
         "short_desc": "Removes a profile from a list",
         "desc": "Removes a profile from a list.\n\n"
             "The profile itself is not deleted, and its marketing consent is unchanged - use "
@@ -134,7 +134,7 @@ public const KlaviyoRelationshipActions = {
         "action": "add_tag_to_list",
         "method": "POST",
         "path": "/api/tags/%s/relationships/lists",
-        "display_name": "Add Tag to List",
+        "display_name": "Add tag to list",
         "short_desc": "Adds an existing tag to a list",
         "desc": "Applies a tag that already exists to a list.\n\n"
             "Klaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
@@ -154,7 +154,7 @@ public const KlaviyoRelationshipActions = {
         "action": "remove_tag_from_list",
         "method": "DELETE",
         "path": "/api/tags/%s/relationships/lists",
-        "display_name": "Remove Tag from List",
+        "display_name": "Remove tag from list",
         "short_desc": "Removes a tag from a list",
         "desc": "Removes a tag from a list.\n\nThe tag itself is not deleted.",
         "group": KlaviyoManifest::GroupTags,
@@ -173,7 +173,7 @@ public const KlaviyoRelationshipActions = {
         "action": "add_tag_to_segment",
         "method": "POST",
         "path": "/api/tags/%s/relationships/segments",
-        "display_name": "Add Tag to Segment",
+        "display_name": "Add tag to Segment",
         "short_desc": "Adds an existing tag to a segment",
         "desc": "Applies a tag that already exists to a segment.\n\n"
             "Klaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
@@ -193,7 +193,7 @@ public const KlaviyoRelationshipActions = {
         "action": "remove_tag_from_segment",
         "method": "DELETE",
         "path": "/api/tags/%s/relationships/segments",
-        "display_name": "Remove Tag from Segment",
+        "display_name": "Remove tag from Segment",
         "short_desc": "Removes a tag from a segment",
         "desc": "Removes a tag from a segment.\n\nThe tag itself is not deleted.",
         "group": KlaviyoManifest::GroupTags,

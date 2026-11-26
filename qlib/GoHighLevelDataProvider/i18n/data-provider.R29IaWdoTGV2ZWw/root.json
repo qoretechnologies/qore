@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
-          "source": "Search Contacts",
-          "message": "Search Contacts"
+          "source": "Search contacts",
+          "message": "Search contacts"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
           "source": "Search for contacts",
@@ -940,8 +940,8 @@
           "message": "The contact to delete"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
-          "source": "Add a Contact to a Campaign",
-          "message": "Add a Contact to a Campaign"
+          "source": "Add a Contact to a campaign",
+          "message": "Add a Contact to a campaign"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
           "source": "Add a contact to a campaign",
@@ -972,8 +972,8 @@
           "message": "The ID of the campaign to add the contact to"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
-          "source": "Remove a Contact from a Campaign",
-          "message": "Remove a Contact from a Campaign"
+          "source": "Remove a Contact from a campaign",
+          "message": "Remove a Contact from a campaign"
         },
         "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
           "source": "Remove a contact from a campaign",
@@ -1004,8 +1004,8 @@
           "message": "The ID of the campaign to remove the contact from"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
-          "source": "Add a Note to the Contact",
-          "message": "Add a Note to the Contact"
+          "source": "Add a note to the Contact",
+          "message": "Add a note to the Contact"
         },
         "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
           "source": "Add a note to a contact",
@@ -1048,8 +1048,8 @@
           "message": "The user ID of the note author"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
-          "source": "Search Opportunities",
-          "message": "Search Opportunities"
+          "source": "Search opportunities",
+          "message": "Search opportunities"
         },
         "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
           "source": "Search for opportunities",
@@ -1176,8 +1176,8 @@
           "message": "Maximum number of results to return"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
-          "source": "Get an Opportunity",
-          "message": "Get an Opportunity"
+          "source": "Get an opportunity",
+          "message": "Get an opportunity"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
           "source": "Get a single opportunity by ID",
@@ -1196,8 +1196,8 @@
           "message": "The opportunity ID"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Create an Opportunity",
-          "message": "Create an Opportunity"
+          "source": "Create an opportunity",
+          "message": "Create an opportunity"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Create a new opportunity",
@@ -1308,8 +1308,8 @@
           "message": "User ID to assign the opportunity to"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Update an Opportunity",
-          "message": "Update an Opportunity"
+          "source": "Update an opportunity",
+          "message": "Update an opportunity"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Update an existing opportunity",
@@ -1404,8 +1404,8 @@
           "message": "User ID to assign the opportunity to"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
-          "source": "Delete an Opportunity",
-          "message": "Delete an Opportunity"
+          "source": "Delete an opportunity",
+          "message": "Delete an opportunity"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
           "source": "Delete an opportunity",
@@ -1424,8 +1424,8 @@
           "message": "The opportunity to delete"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
-          "source": "List Tasks",
-          "message": "List Tasks"
+          "source": "List tasks",
+          "message": "List tasks"
         },
         "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
           "source": "List tasks for a contact",
@@ -1472,8 +1472,8 @@
           "message": "Maximum number of results to return"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
-          "source": "Get a Task",
-          "message": "Get a Task"
+          "source": "Get a task",
+          "message": "Get a task"
         },
         "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
           "source": "Get a single task by ID",
@@ -1508,8 +1508,8 @@
           "message": "The ID of the task to retrieve"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
-          "source": "Create a Task",
-          "message": "Create a Task"
+          "source": "Create a task",
+          "message": "Create a task"
         },
         "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
           "source": "Create a new task",
@@ -1592,8 +1592,8 @@
           "message": "Whether the task is completed (`True` or `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
-          "source": "Update a Task",
-          "message": "Update a Task"
+          "source": "Update a task",
+          "message": "Update a task"
         },
         "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
           "source": "Update an existing task",
@@ -1688,8 +1688,8 @@
           "message": "Whether the task is completed (`True` or `False`)"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
-          "source": "Delete a Task",
-          "message": "Delete a Task"
+          "source": "Delete a task",
+          "message": "Delete a task"
         },
         "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
           "source": "Delete a task",
@@ -1748,8 +1748,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
-          "source": "New Appointment",
-          "message": "New Appointment"
+          "source": "New appointment",
+          "message": "New appointment"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
           "source": "Trigger when a new appointment is created",
@@ -1772,8 +1772,8 @@
           "message": "How often to check for new records (minimum 30 seconds)"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
-          "source": "New Message",
-          "message": "New Message"
+          "source": "New message",
+          "message": "New message"
         },
         "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {
           "source": "Trigger when a new message is received",

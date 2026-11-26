@@ -340,7 +340,7 @@
           "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
-          "source": "Create a Sheet",
+          "source": "Create a sheet",
           "message": "Crea un foglio"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
@@ -604,7 +604,7 @@
           "message": "La larghezza visualizzata della colonna in pixel"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
-          "source": "Update a Sheet",
+          "source": "Update a sheet",
           "message": "Aggiorna un foglio"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
@@ -640,7 +640,7 @@
           "message": "Il nuovo nome per il foglio"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
-          "source": "Delete a Sheet",
+          "source": "Delete a sheet",
           "message": "Elimina un foglio"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
@@ -664,7 +664,7 @@
           "message": "L'identificatore univoco del foglio da eliminare"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
-          "source": "List Sheets",
+          "source": "List sheets",
           "message": "Elenca fogli"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
@@ -684,7 +684,7 @@
           "message": "Ottieni un foglio specifico"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Create a Workspace",
+          "source": "Create a workspace",
           "message": "Crea un'area di lavoro"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -708,7 +708,7 @@
           "message": "Il nome per la nuova area di lavoro"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Update a Workspace",
+          "source": "Update a workspace",
           "message": "Aggiorna uno workspace"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -744,7 +744,7 @@
           "message": "Il nuovo nome per lo spazio di lavoro"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
-          "source": "Delete a Workspace",
+          "source": "Delete a workspace",
           "message": "Elimina un'area di lavoro"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
@@ -768,7 +768,7 @@
           "message": "L'identificatore univoco dell'area di lavoro da eliminare"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
-          "source": "List Workspaces",
+          "source": "List workspaces",
           "message": "Elenca workspace"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
@@ -788,7 +788,7 @@
           "message": "Ottieni un'area di lavoro specifica"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
-          "source": "Create a Folder",
+          "source": "Create a folder",
           "message": "Crea una cartella"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
@@ -812,7 +812,7 @@
           "message": "Il nome della nuova cartella"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
-          "source": "Update a Folder",
+          "source": "Update a folder",
           "message": "Aggiorna una cartella"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
@@ -848,7 +848,7 @@
           "message": "Il nuovo nome per la cartella"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
-          "source": "Delete a Folder",
+          "source": "Delete a folder",
           "message": "Elimina una cartella"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
@@ -872,7 +872,7 @@
           "message": "L'identificatore univoco della cartella da eliminare"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
-          "source": "List Folders",
+          "source": "List folders",
           "message": "Elenca cartelle"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
@@ -892,7 +892,7 @@
           "message": "Ottieni una cartella specifica"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
-          "source": "List Reports",
+          "source": "List reports",
           "message": "Elenca report"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
@@ -912,7 +912,7 @@
           "message": "Ottieni un report specifico"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
-          "source": "Add a User",
+          "source": "Add a user",
           "message": "Aggiungi un utente"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
@@ -1008,7 +1008,7 @@
           "message": "Il cognome del nuovo utente"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
-          "source": "Update a User",
+          "source": "Update a user",
           "message": "Aggiorna un utente"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
@@ -1104,7 +1104,7 @@
           "message": "Indica se l'utente deve essere un visualizzatore di risorse"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
-          "source": "Remove a User",
+          "source": "Remove a user",
           "message": "Rimuovi un utente"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
@@ -1164,7 +1164,7 @@
           "message": "Se `True`, rimuove l'utente dall'organizzazione e revoca il relativo accesso a tutte le risorse dell'organizzazione e del piano"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
-          "source": "List Users",
+          "source": "List users",
           "message": "Elenca utenti"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
@@ -1192,7 +1192,7 @@
           "message": "Filtra per email"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
-          "source": "Create a Group",
+          "source": "Create a group",
           "message": "Crea un gruppo"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
@@ -1252,7 +1252,7 @@
           "message": "L'indirizzo email del membro del gruppo da aggiungere"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
-          "source": "Update a Group",
+          "source": "Update a group",
           "message": "Aggiorna un gruppo"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
@@ -1300,7 +1300,7 @@
           "message": "La nuova descrizione per il gruppo"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
-          "source": "Delete a Group",
+          "source": "Delete a group",
           "message": "Elimina un gruppo"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
@@ -1324,7 +1324,7 @@
           "message": "L'identificatore univoco del gruppo da eliminare"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
-          "source": "List Groups",
+          "source": "List groups",
           "message": "Elenca gruppi"
         },
         "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
@@ -1344,7 +1344,7 @@
           "message": "Ottieni un gruppo specifico"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
-          "source": "Create Row",
+          "source": "Create row",
           "message": "Crea riga"
         },
         "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
@@ -1368,7 +1368,7 @@
           "message": "Seleziona il foglio Smartsheet in cui verrà creata la nuova riga"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
-          "source": "Find Rows",
+          "source": "Find rows",
           "message": "Trova righe"
         },
         "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
@@ -1392,7 +1392,7 @@
           "message": "Seleziona il foglio Smartsheet in cui cercare le righe"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
-          "source": "Update Rows",
+          "source": "Update rows",
           "message": "Aggiorna righe"
         },
         "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
@@ -1416,7 +1416,7 @@
           "message": "Seleziona il foglio Smartsheet in cui verranno aggiornate le righe"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
-          "source": "Delete Rows",
+          "source": "Delete rows",
           "message": "Elimina righe"
         },
         "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
@@ -1440,7 +1440,7 @@
           "message": "Seleziona il foglio Smartsheet da cui eliminare le righe"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
-          "source": "Sheet Updated",
+          "source": "Sheet updated",
           "message": "Foglio aggiornato"
         },
         "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
@@ -1452,7 +1452,7 @@
           "message": "Si attiva quando un foglio viene aggiornato nell'account Smartsheet"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
-          "source": "Row Created",
+          "source": "Row created",
           "message": "Riga creata"
         },
         "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
@@ -1464,7 +1464,7 @@
           "message": "Si attiva quando viene creata una nuova riga in un foglio Smartsheet"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
-          "source": "Row Updated",
+          "source": "Row updated",
           "message": "Riga aggiornata"
         },
         "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
@@ -1476,7 +1476,7 @@
           "message": "Si attiva quando una riga viene aggiornata in un foglio Smartsheet"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
-          "source": "Row Deleted",
+          "source": "Row deleted",
           "message": "Riga eliminata"
         },
         "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {

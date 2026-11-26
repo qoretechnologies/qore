@@ -16,7 +16,7 @@
           "message": "CSV 파일 데이터 읽기 및 쓰기"
         },
         "app.Q3N2.action.cmVhZA.display_name": {
-          "source": "Read CSV File",
+          "source": "Read CSV file",
           "message": "CSV 파일 읽기"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
@@ -440,7 +440,7 @@
           "message": "`true`(기본값 `false`)인 경우, 다른 행과 다른 열 또는 필드 개수로 행이 파싱되면 `CSVFILEITERATOR-DATA-ERROR` 예외가 발생합니다.\n\n이 옵션을 활성화하면 성능 저하가 발생할 수 있습니다."
         },
         "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
-          "source": "Read CSV Inline Data",
+          "source": "Read CSV inline data",
           "message": "CSV 인라인 데이터 읽기"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
@@ -864,7 +864,7 @@
           "message": "`true`(기본값 `false`)인 경우, 다른 행과 다른 열 또는 필드 개수로 행이 파싱되면 `CSVFILEITERATOR-DATA-ERROR` 예외가 발생합니다.\n\n이 옵션을 활성화하면 성능 저하가 발생할 수 있습니다."
         },
         "app.Q3N2.action.cHJvZmlsZQ.display_name": {
-          "source": "Profile CSV Data",
+          "source": "Profile CSV data",
           "message": "CSV 데이터 프로파일링"
         },
         "app.Q3N2.action.cHJvZmlsZQ.short_desc": {
@@ -972,7 +972,7 @@
           "message": "`True`(기본값)이면 샘플 값과 반례를 형태만 남기고 가림: 문자는 `x` 또는 `X`, 숫자는 `9`가 되므로 데이터 없이 프로필을 공유할 수 있음"
         },
         "app.Q3N2.action.d3JpdGU.display_name": {
-          "source": "Write CSV Data",
+          "source": "Write CSV data",
           "message": "CSV 데이터 쓰기"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
@@ -1196,7 +1196,7 @@
           "message": "헤더 출력을 억제하려면 `false`(으)로 설정합니다. 기본값은 `true`이며, 헤더가 있는 경우 출력함을 의미합니다."
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.display_name": {
-          "source": "Create CSV Data",
+          "source": "Create CSV data",
           "message": "CSV 데이터 만들기"
         },
         "app.Q3N2.action.d3JpdGUtZGF0YQ.short_desc": {

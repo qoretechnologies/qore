@@ -340,8 +340,8 @@
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.display_name": {
-          "source": "List Indexes",
-          "message": "List Indexes"
+          "source": "List indexes",
+          "message": "List indexes"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbmRleGVz.short_desc": {
           "source": "List the indexes in the project",
@@ -376,8 +376,8 @@
           "message": "The index this applies to, by name."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.display_name": {
-          "source": "Create Index",
-          "message": "Create Index"
+          "source": "Create index",
+          "message": "Create index"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.short_desc": {
           "source": "Create an index from a field schema",
@@ -472,8 +472,8 @@
           "message": "Microsoft Azure."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
-          "message": "Deployment Type"
+          "source": "Deployment type",
+          "message": "Deployment type"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a managed (serverless) deployment",
@@ -564,8 +564,8 @@
           "message": "Azure `eastus2`, in Virginia."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
-          "source": "Deployment Type",
-          "message": "Deployment Type"
+          "source": "Deployment type",
+          "message": "Deployment type"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a BYOC deployment",
@@ -732,8 +732,8 @@
           "message": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
-          "message": "Node Type"
+          "source": "Node type",
+          "message": "Node type"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
@@ -784,8 +784,8 @@
           "message": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.display_name": {
-          "source": "Create Index with Integrated Embedding",
-          "message": "Create Index with Integrated Embedding"
+          "source": "Create index with integrated embedding",
+          "message": "Create index with integrated embedding"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.short_desc": {
           "source": "Create an index that embeds text for you",
@@ -1132,8 +1132,8 @@
           "message": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
-          "message": "Node Type"
+          "source": "Node type",
+          "message": "Node type"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
@@ -1296,8 +1296,8 @@
           "message": "Deployment update parameters for pod-based indexes. Specify `replicas`, `pod_type`, or both. Deployment type, cloud/region, and environment cannot be changed after creation. Do not include a `deployment_type` field; it is not accepted."
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.display_name": {
-          "source": "Pod Type",
-          "message": "Pod Type"
+          "source": "Pod type",
+          "message": "Pod type"
         },
         "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.ZGVwbG95bWVudA.field.cG9kX3R5cGU.short_desc": {
           "source": "The type of pod to use",
@@ -1432,8 +1432,8 @@
           "message": "The number of shards."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
-          "message": "Node Type"
+          "source": "Node type",
+          "message": "Node type"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
@@ -1508,8 +1508,8 @@
           "message": "The index this applies to, by name."
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.display_name": {
-          "source": "List Backups",
-          "message": "List Backups"
+          "source": "List backups",
+          "message": "List backups"
         },
         "app.UGluZWNvbmU.action.bGlzdC1iYWNrdXBz.short_desc": {
           "source": "List every backup in the project",
@@ -1864,8 +1864,8 @@
           "message": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage."
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
-          "source": "Node Type",
-          "message": "Node Type"
+          "source": "Node type",
+          "message": "Node type"
         },
         "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
@@ -2080,8 +2080,8 @@
           "message": "How long each backup is kept, as `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
-          "message": "Expire After Days"
+          "source": "Expire after days",
+          "message": "Expire after days"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
           "source": "Number of days to retain each backup created by this schedule",
@@ -2200,8 +2200,8 @@
           "message": "How long each backup is kept, as `{\"expire_after_days\": 30}`."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.display_name": {
-          "source": "Expire After Days",
-          "message": "Expire After Days"
+          "source": "Expire after days",
+          "message": "Expire after days"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWJhY2t1cC1zY2hlZHVsZQ.option.cmV0ZW50aW9u.field.ZXhwaXJlX2FmdGVyX2RheXM.short_desc": {
           "source": "Number of days to retain each backup created by this schedule",
@@ -2284,8 +2284,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.display_name": {
-          "source": "List Restore Jobs",
-          "message": "List Restore Jobs"
+          "source": "List restore jobs",
+          "message": "List restore jobs"
         },
         "app.UGluZWNvbmU.action.bGlzdC1yZXN0b3JlLWpvYnM.short_desc": {
           "source": "List the project's restore jobs",
@@ -2344,8 +2344,8 @@
           "message": "The ID of the restore job to describe."
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
-          "source": "List Collections",
-          "message": "List Collections"
+          "source": "List collections",
+          "message": "List collections"
         },
         "app.UGluZWNvbmU.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
           "source": "List the project's collections (pod-based indexes only)",
@@ -2356,8 +2356,8 @@
           "message": "Lists the collections in the project.\n\n**Collections are legacy.**  They are supported only for pod-based indexes, and a pod-based index cannot be created at this API version — so this applies only to a project that still has one from an earlier version.  For anything current, use **backups** instead."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
-          "source": "Create Collection",
-          "message": "Create Collection"
+          "source": "Create collection",
+          "message": "Create collection"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
           "source": "Snapshot a pod-based index into a collection",
@@ -2440,8 +2440,8 @@
           "message": "The name of the collection."
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.display_name": {
-          "source": "Get Index Statistics",
-          "message": "Get Index Statistics"
+          "source": "Get index statistics",
+          "message": "Get index statistics"
         },
         "app.UGluZWNvbmU.action.ZGVzY3JpYmUtaW5kZXgtc3RhdHM.short_desc": {
           "source": "Count the records in an index, by namespace",
@@ -2644,8 +2644,8 @@
           "message": "An optimization parameter that controls the maximum number of candidate dense vectors to rerank. Reranking computes exact distances to improve recall but increases query latency. Range: top_k – 100000.\nKeep the default for a balance of recall and latency. Increase this value if recall is too low, or decrease it to reduce latency at the cost of accuracy. This parameter is only supported for dedicated (DRN) dense indexes."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.display_name": {
-          "source": "Upsert Vectors",
-          "message": "Upsert Vectors"
+          "source": "Upsert vectors",
+          "message": "Upsert vectors"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.short_desc": {
           "source": "Write records with their vectors into a namespace",
@@ -2716,8 +2716,8 @@
           "message": "This is the metadata included in the request. Field names may not begin with `$`, which is reserved for filter operators. Every other name is accepted, including names that are empty, non-ASCII, or begin with `_`."
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.display_name": {
-          "source": "Sparse Values",
-          "message": "Sparse Values"
+          "source": "Sparse values",
+          "message": "Sparse values"
         },
         "app.UGluZWNvbmU.action.dXBzZXJ0LXZlY3RvcnM.option.dmVjdG9ycw.field.c3BhcnNlVmFsdWVz.short_desc": {
           "source": "Vector sparse data",
@@ -2764,8 +2764,8 @@
           "message": "This is the vector data. On a request it must be non-empty, and at least one value must have a magnitude of `1e-8` or greater — a vector whose values are all smaller than that is rejected as containing only zeros.\n\nOn a response this is an empty array whenever the record has no dense data to return: on a sparse index, and on any index when values were not requested. The array is therefore not constrained here, because this schema describes both directions."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.display_name": {
-          "source": "Update Vectors",
-          "message": "Update Vectors"
+          "source": "Update vectors",
+          "message": "Update vectors"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLXZlY3Rvcg.short_desc": {
           "source": "Change one record by ID, or many by metadata filter",
@@ -2896,8 +2896,8 @@
           "message": "The corresponding values of the sparse data, which must be with the same length as the indices."
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.display_name": {
-          "source": "Delete Vectors",
-          "message": "Delete Vectors"
+          "source": "Delete vectors",
+          "message": "Delete vectors"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRlLXZlY3RvcnM.short_desc": {
           "source": "Delete records by ID, by filter, or the whole namespace",
@@ -2968,8 +2968,8 @@
           "message": "Delete every record in the namespace.  Cannot be combined with **Record IDs** or a **Metadata Filter**."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.display_name": {
-          "source": "Fetch Vectors",
-          "message": "Fetch Vectors"
+          "source": "Fetch vectors",
+          "message": "Fetch vectors"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycw.short_desc": {
           "source": "Read records by ID",
@@ -3016,8 +3016,8 @@
           "message": "The vector IDs to fetch."
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.display_name": {
-          "source": "Fetch Vectors by Metadata",
-          "message": "Fetch Vectors by Metadata"
+          "source": "Fetch vectors by metadata",
+          "message": "Fetch vectors by metadata"
         },
         "app.UGluZWNvbmU.action.ZmV0Y2gtdmVjdG9ycy1ieS1tZXRhZGF0YQ.short_desc": {
           "source": "Read every record matching a metadata filter",
@@ -3088,8 +3088,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.display_name": {
-          "source": "List Record IDs",
-          "message": "List Record IDs"
+          "source": "List record IDs",
+          "message": "List record IDs"
         },
         "app.UGluZWNvbmU.action.bGlzdC12ZWN0b3ItaWRz.short_desc": {
           "source": "List the record IDs in a namespace",
@@ -3160,8 +3160,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.display_name": {
-          "source": "List Namespaces",
-          "message": "List Namespaces"
+          "source": "List namespaces",
+          "message": "List namespaces"
         },
         "app.UGluZWNvbmU.action.bGlzdC1uYW1lc3BhY2Vz.short_desc": {
           "source": "List the namespaces in an index",
@@ -3220,8 +3220,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.display_name": {
-          "source": "Create Namespace",
-          "message": "Create Namespace"
+          "source": "Create namespace",
+          "message": "Create namespace"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRlLW5hbWVzcGFjZQ.short_desc": {
           "source": "Create a namespace in an index",
@@ -3544,8 +3544,8 @@
           "message": "The query to rerank documents against. If a specific rerank query is specified, it overwrites the query input that was provided at the top level. Required when the search uses `vector` or `id`, since there is no query text to rerank against; omitting it in that case is rejected with `400`."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.display_name": {
-          "source": "Rank Fields",
-          "message": "Rank Fields"
+          "source": "Rank fields",
+          "message": "Rank fields"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.cmFua19maWVsZHM.short_desc": {
           "source": "The field(s) to consider for reranking",
@@ -3556,8 +3556,8 @@
           "message": "The field(s) to consider for reranking. Every returned record must contain each\nlisted field; otherwise the request is rejected with `400`.\n\nThe number of fields supported is [model-specific](https://docs.pinecone.io/guides/search/rerank-results#reranking-models).\n"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.display_name": {
-          "source": "Top N",
-          "message": "Top N"
+          "source": "Top n",
+          "message": "Top n"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.cmVyYW5r.field.dG9wX24.short_desc": {
           "source": "The number of top results to return after reranking",
@@ -3580,8 +3580,8 @@
           "message": "A vector to search with instead of text, for an index without integrated embedding — or when the embedding is computed elsewhere.\n\nDense values go in `values`; a sparse vector is given as `sparse_values` with the matching `sparse_indices`."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.display_name": {
-          "source": "Sparse Indices",
-          "message": "Sparse Indices"
+          "source": "Sparse indices",
+          "message": "Sparse indices"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX2luZGljZXM.short_desc": {
           "source": "The sparse embedding indices",
@@ -3592,8 +3592,8 @@
           "message": "The sparse embedding indices."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
-          "message": "Sparse Values"
+          "source": "Sparse values",
+          "message": "Sparse values"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXJlY29yZHM.option.dmVjdG9y.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
           "source": "The sparse embedding values",
@@ -3816,8 +3816,8 @@
           "message": "The text query to use for `text` and `query_string` scoring types. Leading and trailing whitespace is trimmed; a query that is empty after trimming is rejected. At most 10 KB."
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.display_name": {
-          "source": "Sparse Values",
-          "message": "Sparse Values"
+          "source": "Sparse values",
+          "message": "Sparse values"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLWRvY3VtZW50cw.option.c2NvcmVfYnk.field.c3BhcnNlX3ZhbHVlcw.short_desc": {
           "source": "Vector sparse data",
@@ -4100,8 +4100,8 @@
           "message": "The unique identifier of the document to update."
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.display_name": {
-          "source": "Remove Fields",
-          "message": "Remove Fields"
+          "source": "Remove fields",
+          "message": "Remove fields"
         },
         "app.UGluZWNvbmU.action.dXBkYXRlLWRvY3VtZW50cw.option.ZG9jdW1lbnRz.field.X3JlbW92ZV9maWVsZHM.short_desc": {
           "source": "A list of field names to delete from the document",
@@ -4292,8 +4292,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.display_name": {
-          "source": "List Imports",
-          "message": "List Imports"
+          "source": "List imports",
+          "message": "List imports"
         },
         "app.UGluZWNvbmU.action.bGlzdC1pbXBvcnRz.short_desc": {
           "source": "List an index's bulk imports",
@@ -4340,8 +4340,8 @@
           "message": "The `pagination.next` value from the previous response.  A response that carries no `pagination` is the last page."
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.display_name": {
-          "source": "Start Import",
-          "message": "Start Import"
+          "source": "Start import",
+          "message": "Start import"
         },
         "app.UGluZWNvbmU.action.c3RhcnQtaW1wb3J0.short_desc": {
           "source": "Import records into an index from object storage",
@@ -4500,8 +4500,8 @@
           "message": "Unique identifier for the import operation."
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.display_name": {
-          "source": "Generate Embeddings",
-          "message": "Generate Embeddings"
+          "source": "Generate embeddings",
+          "message": "Generate embeddings"
         },
         "app.UGluZWNvbmU.action.ZW1iZWQ.short_desc": {
           "source": "Turn text into vectors with a hosted model",
@@ -4560,8 +4560,8 @@
           "message": "Model-specific parameters, such as `{\"input_type\": \"query\", \"truncate\": \"END\"}`.  Which ones a model accepts is reported by **Describe Model**.\n\n`input_type` matters: several models embed a **query** differently from a **passage**, and using the wrong one quietly costs relevance."
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.display_name": {
-          "source": "Rerank Results",
-          "message": "Rerank Results"
+          "source": "Rerank results",
+          "message": "Rerank results"
         },
         "app.UGluZWNvbmU.action.cmVyYW5r.short_desc": {
           "source": "Re-order documents by relevance to a query",
@@ -4656,8 +4656,8 @@
           "message": "Additional model-specific parameters. Refer to the [model guide](https://docs.pinecone.io/guides/search/rerank-results#reranking-models) for available model parameters."
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.display_name": {
-          "source": "List Models",
-          "message": "List Models"
+          "source": "List models",
+          "message": "List models"
         },
         "app.UGluZWNvbmU.action.bGlzdC1tb2RlbHM.short_desc": {
           "source": "List the embedding and reranking models Pinecone hosts",
@@ -4748,8 +4748,8 @@
           "message": "The name of the model to look up."
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.display_name": {
-          "source": "Search Records",
-          "message": "Search Records"
+          "source": "Search records",
+          "message": "Search records"
         },
         "app.UGluZWNvbmU.action.c2VhcmNo.short_desc": {
           "source": "Search for matching records in the given table",
@@ -4772,8 +4772,8 @@
           "message": "The table to work with: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` or `documents`"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.display_name": {
-          "source": "Find a Single Record",
-          "message": "Find a Single Record"
+          "source": "Find a single record",
+          "message": "Find a single record"
         },
         "app.UGluZWNvbmU.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
           "source": "Search for a single matching record in the given table",
@@ -4796,8 +4796,8 @@
           "message": "The table to work with: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` or `documents`"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.display_name": {
-          "source": "Create Records",
-          "message": "Create Records"
+          "source": "Create records",
+          "message": "Create records"
         },
         "app.UGluZWNvbmU.action.Y3JlYXRl.short_desc": {
           "source": "Create new records in the given table",
@@ -4820,8 +4820,8 @@
           "message": "The table to work with: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` or `documents`"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.display_name": {
-          "source": "Update Records",
-          "message": "Update Records"
+          "source": "Update records",
+          "message": "Update records"
         },
         "app.UGluZWNvbmU.action.dXBkYXRl.short_desc": {
           "source": "Update the records matching the search criteria",
@@ -4844,8 +4844,8 @@
           "message": "The table to work with: `indexes`, `collections`, `backups`, `backup-schedules`, `restore-jobs`, `models`, `namespaces`, `imports`, `vectors` or `documents`"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.display_name": {
-          "source": "Delete Records",
-          "message": "Delete Records"
+          "source": "Delete records",
+          "message": "Delete records"
         },
         "app.UGluZWNvbmU.action.ZGVsZXRl.short_desc": {
           "source": "Delete the records matching the search criteria",

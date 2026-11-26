@@ -16,8 +16,8 @@
           "message": "Access to the server filesystem"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
-          "source": "Copy File",
-          "message": "Copy File"
+          "source": "Copy file",
+          "message": "Copy file"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
           "source": "Copy a file on the server filesystem",
@@ -64,8 +64,8 @@
           "message": "Should existing target files be overwritten?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
-          "source": "Follow Symlinks",
-          "message": "Follow Symlinks"
+          "source": "Follow symlinks",
+          "message": "Follow symlinks"
         },
         "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
           "source": "Should symbolic links be followed?",
@@ -76,8 +76,8 @@
           "message": "Should symbolic links be followed?"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
-          "source": "Create File",
-          "message": "Create File"
+          "source": "Create file",
+          "message": "Create file"
         },
         "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
           "source": "Create a file on the server filesystem",
@@ -124,8 +124,8 @@
           "message": "The mode for the new file (default `0664`)"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
-          "source": "Delete File",
-          "message": "Delete File"
+          "source": "Delete file",
+          "message": "Delete file"
         },
         "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
           "source": "Delete a file on the server filesystem",
@@ -148,8 +148,8 @@
           "message": "The file path"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
-          "source": "Get File",
-          "message": "Get File"
+          "source": "Get file",
+          "message": "Get file"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
@@ -196,8 +196,8 @@
           "message": "The string encoding to use if `text` = `True` (default: `UTF-8`)"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
-          "source": "Encoding Errors",
-          "message": "Encoding Errors"
+          "source": "Encoding errors",
+          "message": "Encoding errors"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
           "source": "What text that is not valid in its character encoding gives",
@@ -208,8 +208,8 @@
           "message": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
-          "source": "Max Len",
-          "message": "Max Len"
+          "source": "Max len",
+          "message": "Max len"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
           "source": "The maximum length of the data returned in bytes",
@@ -220,8 +220,8 @@
           "message": "The maximum length of the data returned in bytes"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
-          "source": "List Files",
-          "message": "List Files"
+          "source": "List files",
+          "message": "List files"
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
           "source": "List files and subdirectories in a folder on the server filesystem",
@@ -244,8 +244,8 @@
           "message": "The file path"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
-          "source": "Create Directory",
-          "message": "Create Directory"
+          "source": "Create directory",
+          "message": "Create directory"
         },
         "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
           "source": "Create a directory on the server filesystem",
@@ -280,8 +280,8 @@
           "message": "The mode for the new file (default `0775`)"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
-          "source": "Move File",
-          "message": "Move File"
+          "source": "Move file",
+          "message": "Move file"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
           "source": "Move a file or directory on the server filesystem",
@@ -328,8 +328,8 @@
           "message": "Should existing target files be overwritten?"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
-          "source": "Get Info",
-          "message": "Get Info"
+          "source": "Get info",
+          "message": "Get info"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
           "source": "Get details about a file or directory on the server filesystem",
