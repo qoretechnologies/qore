@@ -7148,6 +7148,23 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             if (typeInfo.unionAcceptsExactly(n, typespec == QTS_TYPE && u.t != NT_ALL ? u.t : n.getType())) {
                 return true;
             }
+            // a deleted object accepted as no value is converted as no value: the conversion of no value (ex: to the
+            // empty list of softlist) replaces the value without releasing it, so the reference to the object is
+            // released here, or it would be leaked (qore#7759)
+            if (typespec == QTS_TYPE && u.t == NT_NOTHING && n.getType() == NT_OBJECT) {
+                assert(!n.get<const QoreObject>()->isValid());
+                QoreValue old = n;
+                n = QoreValue();
+                if (lvhelper) {
+                    // released after the lvalue's lock, as other values that a conversion replaces
+                    lvhelper->saveTemp(old);
+                } else {
+                    old.discard(xsink);
+                    if (xsink && *xsink) {
+                        return true;
+                    }
+                }
+            }
             policy.map(accept, n, xsink);
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while converting types for type '%s')",

@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# converts references to deleted objects to soft list types; run by weak-object-soft-list.qtest
+
+/** An object that has been deleted, held by a weak or a strong reference, reads as no value, so a soft list type
+    converts it as it converts no value: softlist and softlist<T> give an empty list (qore#7759).  Each check prints
+    "name=result", where the result is the full type and size of the list stored, or the error raised.
+*/
+
+%allow-weak-references
+
+class Obj {
+    public {
+        int a = 1;
+    }
+}
+
+hashdecl SoftListHolder {
+    softlist l = (0,);
+}
+
+class SoftListMember {
+    public {
+        softlist l = (0,);
+        softlist<int> li = (0,);
+    }
+}
+
+string sub desc(auto v) {
+    if (v.typeCode() != NT_LIST) {
+        return v.fullType();
+    }
+    return sprintf("%s:%d", v.fullType(), v.size());
+}
+
+sub check(string name, code c) {
+    string result;
+    try {
+        result = c();
+    } catch (hash<ExceptionInfo> ex) {
+        result = ex.err;
+    }
+    printf("%s=%s\n", name, result);
+}
+
+string sub param_softlist(softlist l) {
+    return desc(l);
+}
+
+string sub param_softlist_int(softlist<int> l) {
+    return desc(l);
+}
+
+string sub param_softlist_obj(softlist<Obj> l) {
+    return desc(l);
+}
+
+string sub param_union_softlist_nothing(union<softlist, nothing> l) {
+    return desc(l);
+}
+
+union<softlist, nothing> sub return_union_softlist_nothing(any v) {
+    return v;
+}
+
+softlist sub return_softlist(any v) {
+    return v;
+}
+
+softlist<int> sub return_softlist_int(any v) {
+    return v;
+}
+
+#! the checks with the reference in a parameter of type any; the name of each check starts with the prefix
+sub checks(string pfx, any v) {
+    {
+        softlist x = (0,);
+        x = v;
+        printf("%slocal-softlist=%s\n", pfx, desc(x));
+    }
+    {
+        softlist x = (0,);
+        x := v;
+        printf("%slocal-softlist-weak-assign=%s\n", pfx, desc(x));
+    }
+    {
+        softlist<int> x = (0,);
+        x = v;
+        printf("%slocal-softlist-int=%s\n", pfx, desc(x));
+    }
+    {
+        softlist<Obj> x = ();
+        x = v;
+        printf("%slocal-softlist-class=%s\n", pfx, desc(x));
+    }
+    check(pfx + "closure-softlist", string sub () { softlist x = (0,); x = v; return desc(x); });
+    check(pfx + "param-softlist", string sub () { return param_softlist(v); });
+    check(pfx + "param-softlist-int", string sub () { return param_softlist_int(v); });
+    check(pfx + "param-softlist-class", string sub () { return param_softlist_obj(v); });
+    check(pfx + "return-softlist", string sub () { return desc(return_softlist(v)); });
+    check(pfx + "return-softlist-int", string sub () { return desc(return_softlist_int(v)); });
+    check(pfx + "hashdecl-softlist", string sub () { hash<SoftListHolder> h(); h.l = v; return desc(h.l); });
+    check(pfx + "member-softlist", string sub () { SoftListMember m(); m.l = v; return desc(m.l); });
+    check(pfx + "member-softlist-int", string sub () { SoftListMember m(); m.li = v; return desc(m.li); });
+    check(pfx + "list-element-softlist", string sub () {
+        list<softlist> l = ((0,),);
+        l[0] = v;
+        return desc(l[0]);
+    });
+    check(pfx + "hash-value-softlist", string sub () {
+        hash<string, softlist> h = {"a": (0,)};
+        h.a = v;
+        return desc(h.a);
+    });
+    check(pfx + "union-softlist-nothing", string sub () {
+        union<softlist, nothing> x = (0,);
+        x = v;
+        return desc(x);
+    });
+    check(pfx + "param-union-softlist-nothing", string sub () { return param_union_softlist_nothing(v); });
+    check(pfx + "return-union-softlist-nothing", string sub () { return desc(return_union_softlist_nothing(v)); });
+    check(pfx + "softlist-object",string sub () { softlist<object> x = (); x = v; return desc(x); });
+    check(pfx + "list", string sub () { list x = (0,); x = v; return desc(x); });
+    check(pfx + "softint", string sub () { softint x = 1; x = v; return desc(x); });
+}
+
+# a weak reference to a deleted object
+{
+    any wo;
+    {
+        Obj o();
+        wo := o;
+        delete o;
+    }
+    checks("weak-", wo);
+    {
+        softlist x = (0,);
+        x = wo;
+        printf("weak-top-level-softlist=%s\n", desc(x));
+    }
+    {
+        softlist<int> x = (0,);
+        x = wo;
+        printf("weak-top-level-softlist-int=%s\n", desc(x));
+    }
+}
+
+# a strong reference to a deleted object
+{
+    Obj o();
+    any so = o;
+    delete o;
+    checks("strong-", so);
+    {
+        softlist x = (0,);
+        x = so;
+        printf("strong-top-level-softlist=%s\n", desc(x));
+    }
+    {
+        softlist<int> x = (0,);
+        x = so;
+        printf("strong-top-level-softlist-int=%s\n", desc(x));
+    }
+}
