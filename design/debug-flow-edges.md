@@ -539,6 +539,39 @@ the frame's exits) is gone.
   (`getScopeFlowPaths()`); otherwise a join block after the handler, where the exit goes on (one extra `Br` in debug code
   with two or more inline handlers at an exit).  Out-of-line handler: the handler frame reports the request
   (`qore_ir_set_handler_flow()`), and the ScopeExit that ran it takes the scope's paths.
+- **Returns that a handler compiled as a function of its own hands over** (qore#7625).  The return statements of such
+  a handler hand their values to the function that it runs for when they execute (`QoreIROpcode::HandlerReturn`).  The
+  AST releases a return that a break or a continue abandons in the block that the request leaves, when the block's
+  handlers have run and before its locals and the blocks around it are left (`StatementBlock::execExitHandlers()`,
+  `StatementBlock::requestTakenInFunction()`), so the code of the request releases what the run handed over there
+  (`QoreIROpcode::HandlerAbandonReturn`, format v54), through the run's context (`qore_handler_abandon_return()`,
+  `QoreHandlerRunContext::abandon`), and rolls the run's hand-over count back to where the run started:
+  - where the block decides: the end of the request of the last handler lowered inline at the block's exit in the
+    cleanups of a return statement (`getInlineHandlerFlowEndAt()`), and the paths of a ScopeExit past the inline cap
+    in those cleanups (`setReplacingScopeExitFlowTargets()`);
+  - without an operand where a loop or a switch statement of the handler's body takes the request; with the request as
+    its operand where the request leaves the handler's function: the run decides (`QoreHandlerRunContext::takes_request`,
+    `qore_ir_handler_run_takes_request()`): a handler that is not the last of its exit (`qore_ir_handler_last_run()`,
+    the AST's `last_run`, never at an error exit, computed only when a request asks), a loop or a switch statement of
+    the function around the block that declares the handler (the paths of the ScopeExit that runs it), or the run that
+    a run of the handlers of a block of a handler body forwards to; such a request ends the handler with the scope's
+    return path, not by going on with the return (the value of a handler's function is not used), after the release
+    of the handler's own value of the return, and the instruction gives the request to the frame that runs the
+    handler (`qore_ir_set_handler_flow()`), as its path is not that of a return request;
+  - `executeHandlerBody()` asks the run the same when a request ends the handler whose code did not decide it (the
+    paths of a ScopeExit outside the cleanups of a return statement), when the handler has ended; a return request
+    after a return of the handler that handed its value over ends the handler as that return does;
+  - a return of a handler on the code of the request that hands its value over replaces the request
+    (`qore_ir_handler_return()` clears it, and the run around it does not restore it), as the AST's block takes the
+    return of its handler;
+  - `QoreIRDebugFlowTargets::leavesFunction()` also sees a path that leaves the function in the entries of a ScopeExit
+    past the inline cap whose handlers can hand a value over (one conditional branch on the ScopeExit's result to the
+    same blocks as the return request's) and in the code of a request that releases with the run's decision (the
+    instruction with an operand), so that the run of a handler that the ScopeExit runs does not take such a request
+    as one that a loop takes; and such a ScopeExit at the normal end of a block in the body of a handler lowered inline
+    has the paths of the block (`setHandOverScopeExitFlowTargets()`), so that a loop of the function takes the request
+    of its handlers.
+  Native code has no paths: the instruction does not occur there.
 - **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases.  Native
   code has no paths (see "Which code has paths"): its step hooks (`qore_rt_dbg_step()`,
   `qore_rt_dbg_synthetic_block_step()`) report the events and honour an exception that the debugger raises, and

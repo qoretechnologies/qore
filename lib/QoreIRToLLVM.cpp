@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 446,
+static_assert(QORE_IR_MAX_OPCODE == 447,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -40601,6 +40601,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
             builder->CreateCall(helper, {handler_return_hold, handler_return_handed, xsink_arg});
             return true;
+        }
+        case QoreIROpcode::HandlerAbandonReturn: {
+            // debug IR only (qore#7625): the instruction is on the paths of a debugger's requests, which native code
+            // does not have (the AOT pipeline detaches them before the code is made)
+            assert(false && "HandlerAbandonReturn is on a debugger's flow path only");
+            error = "HandlerAbandonReturn: the instruction is on the path of a debugger's request only";
+            return false;
         }
         case QoreIROpcode::HandlerReturn: {
             // the value of a return statement of a handler run out of line is handed to the function that the handler

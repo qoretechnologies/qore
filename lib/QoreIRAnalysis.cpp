@@ -1305,8 +1305,9 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ScopeExit:
-        // the release of a value that a handler handed over can run a destructor (#6137)
+        // the release of a value that a handler handed over can run a destructor (#6137, qore#7625)
         case QoreIROpcode::ReleaseHandedOverReturn:
+        case QoreIROpcode::HandlerAbandonReturn:
         case QoreIROpcode::Backquote:
             return true;
 
@@ -7203,8 +7204,9 @@ static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ScopeExit:
-        // the release of a value that a handler handed over can run a destructor (#6137)
+        // the release of a value that a handler handed over can run a destructor (#6137, qore#7625)
         case QoreIROpcode::ReleaseHandedOverReturn:
+        case QoreIROpcode::HandlerAbandonReturn:
         case QoreIROpcode::Backquote:
         case QoreIROpcode::StoreLValue:
         case QoreIROpcode::PreIncLValue:

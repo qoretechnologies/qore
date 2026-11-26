@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 446,
+static_assert(QORE_IR_MAX_OPCODE == 447,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -9763,6 +9763,21 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
     h.frame->locals_slot_cache.handOverReturn(value.refSelf(), xsink);
 }
 
+// The release of what the hand-overs of a handler run left in the frame that takes them (qore_ir_handler_hand_over():
+// the values that it holds), when a debugger's request abandons the handler's return (QoreHandlerRunContext::abandon,
+// qore#7625); \a data is an IRHandlerHandOver
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handler_abandon(void* data, ExceptionSink* xsink) {
+    static_cast<IRHandlerHandOver*>(data)->frame->locals_slot_cache.releaseHeldReturns(xsink);
+}
+
+// The same for a run in the block cleanups of a return statement past the inline cap (qore_ir_handler_hand_over_return():
+// the handed-over return, which the return then does not take); the values of the return that the first hand-over
+// released are not restored, as with a request in a later handler (qore#7531, qore#7625)
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handler_abandon_return(void* data,
+        ExceptionSink* xsink) {
+    static_cast<IRHandlerHandOver*>(data)->frame->locals_slot_cache.releaseHandedOverReturn(xsink);
+}
+
 // The IR interpreter's QoreIROpcode::TakeHandedOverReturn and ReleaseHandedOverReturn (#6137): the value that handlers
 // run out of line past the inline cap handed over to the return, if any, or the value of the return, is its result;
 // a return in a handler replaces the value handed over, which is released, and an exception that a destructor raises
@@ -9802,11 +9817,92 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_scope_exit_handed
     }
 }
 
+// Returns true if the handler at \a i of \a handlers is the last that runs at the exit of its scope, whose handlers
+// start at \a start, as the AST interpreter decides it (StatementBlock::execExitHandlers()'s last_run, qore#7022): no
+// later handler runs in the state of the exit, and the exit is not an error exit (qore#7625)
+static bool qore_ir_handler_last_run(const std::vector<IROnBlockExitHandler>& handlers, size_t i, size_t start,
+        bool error) {
+    if (error) {
+        return false;
+    }
+    for (size_t j = i; j > start; --j) {
+        const IROnBlockExitHandler& h = handlers[j - 1];
+        if ((h.code || h.handler_ir) && (h.type == OBE_Unconditional || h.type == OBE_Success)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The run of a handler out of line by the IR interpreter, for the decision whether it takes a debugger's break or
+// continue request that ends the handler (QoreHandlerRunContext::takes_request, qore#7625)
+struct IRHandlerRunInfo {
+    //! the handlers of the scope, the index of the handler and the index of the scope's first handler
+    const std::vector<IROnBlockExitHandler>& handlers;
+    size_t index;
+    size_t start;
+    //! true if the handlers run at an error exit
+    bool error;
+    //! the ScopeExit that runs the handler, whose paths take a request of its handlers, if any
+    const QoreIRScopeExitInstruction* scope_exit = nullptr;
+    //! the run that this one forwards the values that its handlers hand over to, if any (executeHandlerBody())
+    const QoreHandlerRunContext* forwarded = nullptr;
+    //! whether the handler is the last of its exit: computed when a request asks (-1 before)
+    mutable int8_t last = -1;
+
+    bool lastRun() const {
+        if (last < 0) {
+            last = qore_ir_handler_last_run(handlers, index, start, error) ? 1 : 0;
+        }
+        return last;
+    }
+};
+
+// Returns true if the run of a handler takes a debugger's break or continue request (\a rc) that ends the handler, as
+// the AST interpreter's walk of the handler runs decides it (StatementBlock::requestTakenInFunction()): a handler that
+// is not the last of its exit takes it, and so does a loop or a switch statement of the function around the block that
+// declares the handler (the paths of the ScopeExit that runs it), or, if the request leaves that function too, the run
+// that this one forwards to; \a info is an IRHandlerRunInfo (qore#7625)
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_handler_run_takes_request(const void* info, int rc) {
+    const IRHandlerRunInfo& run = *static_cast<const IRHandlerRunInfo*>(info);
+    if (!run.lastRun()) {
+        return true;
+    }
+    if (run.scope_exit && run.scope_exit->flow && run.scope_exit->flow->getTarget(rc)
+            && !run.scope_exit->flow->leavesFunction(rc)) {
+        return true;
+    }
+    return run.forwarded && run.forwarded->takes_request
+        && run.forwarded->takes_request(run.forwarded->run_info, rc);
+}
+
+// The IR interpreter's QoreIROpcode::HandlerAbandonReturn: releases what the handler run handed over, at once (\a rc
+// 0) or if the run takes the request \a rc (qore_handler_abandon_return(), qore#7625); returns true if the release
+// raised an exception.  Out of line and cold: only a debugger's request runs it
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_handler_abandon_return_op(int rc,
+        ExceptionSink* xsink) {
+    // a request that leaves the handler's function, whose path is not the return path of its event: it is the
+    // request of the handler, for the frame that runs it (see executeHandlerBody())
+    if (rc) {
+        qore_ir_set_handler_flow(rc);
+    }
+    qore_handler_abandon_return(rc, xsink);
+    return xsink && *xsink;
+}
+
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
 // to the function that it runs for (see QoreHandlerRunContext); returns true if the release of a replaced value
 // raised an exception
 static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, ExceptionSink* xsink) {
+    const uint64_t count = qore_handler_run_hand_over_count();
     qore_handler_return(value, xsink);
+    // a return that hands its value over on the code of a debugger's request that ends the handler (in a handler of
+    // a block that the request leaves) replaces the request, as the AST interpreter's block takes the return of its
+    // handler (StatementBlock::execExitHandlers()): the handler ends with the return, whose value the run keeps
+    // (qore#7625)
+    if (qore_handler_run_hand_over_count() != count) [[unlikely]] {
+        qore_ir_set_handler_flow(0);
+    }
     return xsink && *xsink;
 }
 
@@ -9817,10 +9913,13 @@ static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, Excepti
 // runs during an unwind (\a unwinding: an exception or a thread_exit), or, if \a scope_exit, the ScopeExit that runs it,
 // is one in the block cleanups of a return statement past the inline cap (hand_over_return), to the return (see
 // qore_ir_handler_hand_over_return(), #6137); \a try_returns does not apply then
+// \a run_info: the run of the handler, which decides whether it takes a debugger's break or continue request that ends
+// the handler and abandons the return of the handler (qore_ir_handler_run_takes_request(), qore#7625); without it, the
+// run takes none
 static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr,
-        const QoreIRScopeExitInstruction* scope_exit = nullptr) {
+        const QoreIRScopeExitInstruction* scope_exit = nullptr, IRHandlerRunInfo* run_info = nullptr) {
     const QoreIRScopeExitInstruction* returning = scope_exit && scope_exit->hand_over_return ? scope_exit : nullptr;
     if (returning) {
         try_returns = nullptr;
@@ -9861,15 +9960,25 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
         // go to the function that the handler runs for; where a try statement of the handler catches it, they replace
         // the value of its try block's return (#6074)
         run_ctx.forwardFrom(*outer);
+        if (run_info) {
+            run_info->forwarded = outer;
+        }
     } else {
         run_ctx.unwinding = unwinding;
         run_ctx.returning = returning != nullptr;
         if (parent_frame) {
             run_ctx.hand_over = returning ? qore_ir_handler_hand_over_return : qore_ir_handler_hand_over;
+            run_ctx.abandon = returning ? qore_ir_handler_abandon_return : qore_ir_handler_abandon;
             run_ctx.data = &hand_over;
             run_ctx.hand_over_count = &hand_over.count;
         }
     }
+    // a debugger's request that ends the handler or abandons its return asks the run (qore#7625)
+    if (run_info) {
+        run_ctx.takes_request = qore_ir_handler_run_takes_request;
+        run_ctx.run_info = run_info;
+    }
+    run_ctx.run_start_count = run_ctx.hand_over_count ? *run_ctx.hand_over_count : 0;
     // the frame that execute() pushes for the handler
     run_ctx.ir_frame_index = pool.top;
     // the locals that the handler declares in the root block of its function are released at the caller's statement
@@ -9893,10 +10002,33 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
                                &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
                                false, nullptr, parent_slot_cache, true);
     int flow = qore_ir_take_handler_flow();
-    if (outer_flow) [[unlikely]] {
+    // the request of the handler that ran this one goes on, unless a value that this run handed over to the same
+    // function replaced it (see qore_ir_handler_return(), qore#7625)
+    if (outer_flow && !(run_ctx.hand_over_count && *run_ctx.hand_over_count != run_ctx.run_start_count
+            && outer && run_ctx.hand_over_count == outer->hand_over_count)) [[unlikely]] {
         qore_ir_set_handler_flow(outer_flow);
     }
     rv.discard(obe_xsink);
+    // a break or a continue request that ends the handler and that the run takes abandons the return of the handler,
+    // whose value was handed over to the function that the handler runs for when the return statement executed
+    // (qore_ir_handler_hand_over(), qore_ir_handler_hand_over_return()): the code of the request in the handler's
+    // body released it where the block that the request left decided it, as the AST interpreter's block does
+    // (StatementBlock::requestTakenInFunction(), QoreIROpcode::HandlerAbandonReturn); a request whose code does not
+    // decide it (the paths of a ScopeExit outside the cleanups of a return statement) releases it here, when the
+    // handler has ended; the count of the run goes back, so that a ScopeExit with a result does not see a value handed
+    // over (qore#7625)
+    if (flow == RC_BREAK || flow == RC_CONTINUE) [[unlikely]] {
+        // the run's context is still the thread's innermost one (run_guard)
+        assert(qore_handler_run_context() == &run_ctx);
+        qore_handler_abandon_return(flow, obe_xsink);
+    } else if (flow == RC_RETURN && run_ctx.hand_over_count && *run_ctx.hand_over_count != run_ctx.run_start_count)
+            [[unlikely]] {
+        // a return request after a return of the handler that handed its value over goes on with that return, as the
+        // AST interpreter's return request keeps the return value: the handler ends with its return, as with a
+        // return statement, and not with a request that the paths of the ScopeExit that ran it would take as one
+        // that replaces the value handed over (qore#7625)
+        flow = 0;
+    }
     if (count && parent_frame && *count - count_before) {
         qore_ir_scope_exit_handed_over(*parent_frame, scope_exit->result.id);
     }
@@ -9933,8 +10065,9 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                     }
                     // the block takes the request of the last handler run, except that a handler that ends normally
                     // keeps a return request, as with the AST interpreter (StatementBlock::execIntern(), qore#6999)
+                    IRHandlerRunInfo run_info{handlers, static_cast<size_t>(i), 0, error};
                     const int hrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements,
-                        dbg_pgm, error || (xsink && xsink->isThreadExit()));
+                        dbg_pgm, error || (xsink && xsink->isThreadExit()), nullptr, nullptr, &run_info);
                     if (hrc || nrc != RC_RETURN) {
                         nrc = hrc;
                     }
@@ -12127,9 +12260,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         except->makeExceptionObject(), xsink));
                                 }
                             }
+                            IRHandlerRunInfo run_info{on_block_exit_handlers, i - 1, scope_start, error};
                             executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
                                         dbgHandlerStatements(), dbgHandlerProgram(),
-                                        error || (xsink && xsink->isThreadExit()));
+                                        error || (xsink && xsink->isThreadExit()), nullptr, nullptr, &run_info);
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -14827,12 +14961,13 @@ dbg_dismissed_exit:
                                                 except->makeExceptionObject(), xsink));
                                         }
                                     }
+                                    IRHandlerRunInfo run_info{on_block_exit_handlers, i - 1, scope_start, error};
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
                                         dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
                                         // the try statement of this landing pad catches the exception: a handler's
                                         // return replaces the value of its try block's return (#6074)
-                                        qore_ir_exception_catch_returns(func, block));
+                                        qore_ir_exception_catch_returns(func, block), nullptr, &run_info);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -19829,6 +19964,22 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::HandlerAbandonReturn: {
+                // debug IR only (qore#7625): on the path of a debugger's request that abandons the return of the block
+                // that it leaves, the release of what the handler run handed over: at once, or, with the request as
+                // the operand, if the run takes it
+                if (qore_ir_handler_abandon_return_op(inst->operands.empty() ? 0
+                        : static_cast<int>(getIRValue(values, inst->operands.front()).getAsBigInt()), xsink)) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::CheckCallTarget: {
                 // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
                 // it (issue #5784)
@@ -20059,6 +20210,9 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
+                                    // the run decides a request of the handler (qore#7625)
+                                    IRHandlerRunInfo run_info{on_block_exit_handlers, i - 1, scope_start, error,
+                                        scope_inst};
                                     const int hrc = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink,
                                         &frame, dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
@@ -20067,7 +20221,7 @@ load_local_done:
                                         // cleanups of a return past the inline cap, the value of the return (#6137,
                                         // see executeHandlerBody())
                                         qore_ir_exception_catch_returns(func, scope_inst->exception_target),
-                                        scope_inst);
+                                        scope_inst, &run_info);
                                     // a handler that ends normally keeps a return request of a handler before it, and
                                     // replaces a break or a continue, as with the AST interpreter (qore#6999)
                                     if (hrc || handler_flow != RC_RETURN) {

@@ -552,6 +552,10 @@ public:
     //! With a valid \a result, the form that only clears the result of a ScopeExit past the cap (#6552)
     QoreIRInstruction* createReleaseHandedOverReturn(const QoreProgramLocation* loc = nullptr,
         QoreIRValue result = QoreIRValue());
+    //! Releases what the handler run has handed over, on the path of a debugger's request that abandons the return
+    //! (QoreIROpcode::HandlerAbandonReturn, qore#7625): with \a rc (RC_BREAK or RC_CONTINUE) only if the run of the
+    //! handler takes the request, with 0 at once
+    QoreIRInstruction* createHandlerAbandonReturn(int rc, const QoreProgramLocation* loc = nullptr);
 
     //! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions)
     QoreIRInstruction* createSetCodeParseOptions(const QoreParseOptions& po, const QoreProgramLocation* loc = nullptr);
