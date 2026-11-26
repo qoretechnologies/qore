@@ -135,8 +135,10 @@ class DeclarationInitializerScopeTest inherits QUnit::Test {
     string run(string cmd) {
         int rc;
         string out = backquote(cmd + " 2>&1", \rc);
-        # an unhandled exception ends the script with its code only (the rest names the time and the file)
-        if (*string err = (out =~ x/(?:^|\n)([A-Z-]+-ERROR):/)[0]) {
+        # an unhandled exception ends the script with its code only (the rest names the time and the file); an
+        # exception raised while the program is parsed, such as by a static variable's initializer, is a parse
+        # error, written as one line (<location>: error: CODE: ...) in the default format of parse diagnostics
+        if (*string err = (out =~ x/(?:^|\n)(?:\S+: error: )?([A-Z-]+-ERROR):/)[0]) {
             return err + "\n";
         }
         if (rc) {
