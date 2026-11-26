@@ -4012,13 +4012,13 @@ public:
             state.stop = true;
         }
         if (state.stop) {
-            yy_scan_bytes("", 0, lexer);
+            qore_scanner_scan_bytes("", 0, lexer);
         } else if (final_directive) {
             std::string terminated(code);
             terminated += '\n';
-            yy_scan_bytes(terminated.data(), terminated.size(), lexer);
+            qore_scanner_scan_bytes(terminated.data(), terminated.size(), lexer);
         } else {
-            yy_scan_bytes(code.data(), code.size(), lexer);
+            qore_scanner_scan_bytes(code.data(), code.size(), lexer);
         }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position

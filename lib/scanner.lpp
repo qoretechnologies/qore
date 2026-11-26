@@ -4304,6 +4304,12 @@ hash\<{WORD}\>\{                        {
 .                                       { return scanner_return_char_token(yytext[0]); }
 %%
 
+void qore_scanner_scan_bytes(const char* bytes, int len, yyscan_t yyscanner) {
+    // flex's return type is not the same in every release of flex (see ParserSupport.h), and the buffer is the
+    // scanner's current one
+    yy_scan_bytes(bytes, len, yyscanner);
+}
+
 void qore_scanner_end_input(yyscan_t yyscanner) {
     struct yyguts_t* yyg = (struct yyguts_t*)yyscanner;
     if (yyextra->ended) {
