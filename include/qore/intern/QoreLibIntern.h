@@ -1643,6 +1643,18 @@ DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 */
 DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink);
 
+//! Raises SHARED-OBJECT-ERROR and returns -1 if code that a sandbox governs, or that acts for sandboxed code, calls a
+//! method that changes the state of a process-wide standard I/O object (qore#7670)
+/** The objects stdin, stdout and stderr are shared by every Program of the process, so they behave like an object that
+    trusted code marked with SandboxManager::shareObject(): sandboxed code, also code that may use terminal I/O, can read
+    and write through them but cannot change them (reopen, close, redirect, change their encoding, position, locks,
+    terminal attributes, owner or event queue).  Fails closed: the check refuses if the governing sandbox cannot be
+    resolved.
+
+    @param what the method that changes the object, such as \c "File::open"
+*/
+DLLLOCAL int qore_check_system_object_change(const char* what, ExceptionSink* xsink);
+
 //! The most bytes read or written with one read(2) or write(2) call of a File, a file stream, or the standard streams
 /** macOS refuses a read or write of more than \c INT_MAX bytes with \c EINVAL, and Linux reads or writes at most
     about 2 GiB at once; a longer read or write is made in parts of this size

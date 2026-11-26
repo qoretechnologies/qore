@@ -1,0 +1,668 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - async I/O controller streams, the I/O-thread decoding of AWS event streams, executor threads
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../LiveProviderTest.qm
+%requires BedrockRestClient
+%requires AwsEventStream
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires DataProvider
+%requires HttpClientStreamingIo
+%requires json
+
+%exec-class BedrockAsyncChatTest
+
+#! A wire fixture that answers every request with the same response
+/** The response is sent in the given pieces; with a gate, the fixture waits after the piece with the index given
+    (-1: after the headers, before the body) until the gate is opened, so that a test sees what the client has
+    delivered before the rest of the response exists
+*/
+class BedrockAsyncWireFixture {
+    public {
+        int port;
+        #! The requests received: hashes with \c hdr and \c body
+        Queue requests();
+        #! Opened (pushed) once per gated response
+        Queue gate();
+    }
+    private {
+        Socket listener();
+        Counter running();
+        list<binary> chunks;
+        *int gate_after;
+        int status;
+        string content_type;
+        bool stopping = False;
+    }
+
+    #! Creates the fixture
+    /** @param chunks the pieces of the response body
+        @param gate_after the index of the piece after which the response waits for the gate (-1: before the body);
+        @ref nothing for no gate
+        @param status the HTTP status
+        @param content_type the Content-Type of the response; an empty string for none
+    */
+    constructor(list<binary> chunks, *int gate_after, int status = 200,
+            string content_type = "application/vnd.amazon.eventstream") {
+        self.chunks = chunks;
+        self.gate_after = gate_after;
+        self.status = status;
+        self.content_type = content_type;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background serve();
+    }
+
+    #! Stops the fixture: the gates are opened and the listener is woken and closed
+    stop() {
+        stopping = True;
+        for (int i = 0; i < 4; ++i) {
+            gate.push(True);
+        }
+        try {
+            Socket wake();
+            wake.connect("127.0.0.1:" + port, 5s);
+            wake.close();
+        } catch () {}
+        running.waitForZero();
+        listener.close();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket conn;
+            try {
+                conn = listener.accept();
+            } catch () {
+                return;
+            }
+            if (stopping) {
+                conn.close();
+                return;
+            }
+            try {
+                on_exit conn.close();
+                hash<auto> hdr = conn.readHTTPHeader(30s);
+                binary body = binary();
+                if (hdr."content-length") {
+                    body = binary(conn.recv(hdr."content-length".toInt(), 30s));
+                } else if (hdr."transfer-encoding" =~ /chunked/i) {
+                    body = binary(conn.readHTTPChunkedBody(30s).body);
+                }
+                requests.push({"hdr": hdr, "body": body});
+                if (gate_after === -1) {
+                    gate.get(30s);
+                }
+                conn.send(sprintf("HTTP/1.1 %d Test\r\n%sx-amzn-requestid: async-fixture\r\nConnection: close\r\n\r\n",
+                    status, content_type.val() ? sprintf("Content-Type: %s\r\n", content_type) : ""));
+                int index = 0;
+                foreach binary chunk in (chunks) {
+                    conn.send(chunk);
+                    if (index++ === gate_after) {
+                        gate.get(30s);
+                    }
+                }
+            } catch () {
+                # a cancelled or failed client may close the connection
+            }
+        }
+    }
+}
+
+#! Records the events of an observable
+class BedrockAsyncTestObserver inherits DataProvider::Observer {
+    private {
+        Queue events;
+    }
+
+    constructor(Queue events) {
+        self.events = events;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events.push({"event_id": event_id, "data": data_});
+    }
+}
+
+#! The asynchronous chat calls of BedrockLlmProvider (qore#7648)
+/** chatAsync() and chatStreamAsync() hold no thread while they wait for Bedrock: the Converse request and the
+    ConverseStream are sent and read by the async I/O controller, and the frames of the stream are decoded on the I/O
+    thread (qore#7247).  Every case runs the synchronous call against the same wire bytes: the events, the response
+    and the errors of the asynchronous call are those of chat() and chatStream().
+*/
+class BedrockAsyncChatTest inherits QUnit::Test {
+    private {
+        QoreLlmUtils::LlmThreadPoolExecutor executor(2);
+    }
+
+    constructor() : Test("Bedrock asynchronous chat", "1.0", \ARGV) {
+        addTestCase("supportsAsyncChat()", \supportsTest());
+        addTestCase("the events of chatStream(), frames split at every boundary", \streamEventsTest());
+        addTestCase("tool calls and usage after messageStop", \toolStreamTest());
+        addTestCase("the structured-output tool route", \structuredOutputTest());
+        addTestCase("chatAsync() gives the response of chat()", \chatTest());
+        addTestCase("the requests are signed for the encoded path sent", \signatureTest());
+        addTestCase("HTTP errors and responses that are not event streams", \httpErrorTest());
+        addTestCase("a response without a Content-Type", \noContentTypeTest());
+        addTestCase("service exceptions, CRC, format and truncation errors", \streamErrorTest());
+        addTestCase("the idle timeout", \timeoutTest());
+        addTestCase("the request timeout bounds the wait for the response", \startTimeoutTest());
+        addTestCase("the deadline of the call", \deadlineTest());
+        addTestCase("a Content-Type with parameters", \contentTypeParamsTest());
+        addTestCase("the connected event gives the response", \connectedEventTest());
+        addTestCase("a caller's Accept-Encoding is replaced", \acceptEncodingTest());
+        addTestCase("a callback failure keeps its exception", \callbackFailureTest());
+        addTestCase("chatAsync() errors are those of chat()", \chatErrorTest());
+        addTestCase("cancellation", \cancellationTest());
+        addTestCase("the start of a stream is not retried, as in chatStream()", \noStreamRetryTest());
+        addTestCase("the calls hold no thread while they wait", \noThreadHeldTest());
+        on_exit executor.shutdown();
+        set_return_value(main());
+    }
+
+    private static binary event(string name, hash<auto> body, string type = "event") {
+        return AwsEventStreamEncoder::encode({":message-type": type,
+            (type == "exception" ? ":exception-type" : ":event-type"): name,
+            ":content-type": "application/json"}, binary(make_json(body)));
+    }
+
+    private static hash<auto> options(int port) {
+        return {"url": "http://127.0.0.1:" + port, "aws_region": "us-east-1",
+            "aws_keyid": "test-key", "aws_secret": "test-secret", "aws_imds_disabled": True};
+    }
+
+    private static BedrockLlmProvider provider(int port, string model = "test:model:0", int max_retries = 0) {
+        return new BedrockLlmProvider(<LlmBackendConfig>{"mode": "bedrock", "model": model,
+            "url": BedrockAsyncChatTest::options(port).url, "provider_options": BedrockAsyncChatTest::options(port),
+            "max_retries": max_retries, "retry_delay_ms": 10, "timeout_ms": 10000});
+    }
+
+    private static list<hash<ChatMessage>> messages() {
+        return (<ChatMessage>{"role": "user", "content": "hi"},);
+    }
+
+    private hash<LlmAsyncCallOptions> asyncOpts(*QoreLlmUtils::LlmAsyncExecutor exec) {
+        return <LlmAsyncCallOptions>{"executor": exec ?? executor};
+    }
+
+    #! The events of chatStream() for the response, then its error if any
+    private hash<auto> syncStream(list<binary> chunks, *hash<LlmRequestOptions> opts, *code cb,
+            *int gate_after, int status = 200, string content_type = "application/vnd.amazon.eventstream") {
+        BedrockAsyncWireFixture server(chunks, gate_after, status, content_type);
+        on_exit server.stop();
+        list<hash<ChatStreamEvent>> events = ();
+        hash<auto> rv;
+        try {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> e) {
+                events += e;
+                if (cb) {
+                    cb(e, server);
+                }
+            }, NOTHING, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            rv = {"err": ex.err, "desc": ex.desc};
+        }
+        return rv + {"events": events, "requests": server.requests.size()};
+    }
+
+    #! The events of chatStreamAsync() for the response, then its error if any
+    private hash<auto> asyncStream(list<binary> chunks, *hash<LlmRequestOptions> opts, *code cb,
+            *int gate_after, int status = 200, string content_type = "application/vnd.amazon.eventstream",
+            int max_retries = 0) {
+        BedrockAsyncWireFixture server(chunks, gate_after, status, content_type);
+        on_exit server.stop();
+        list<hash<ChatStreamEvent>> events = ();
+        hash<auto> rv;
+        try {
+            provider(server.port, "test:model:0", max_retries).chatStreamAsync(messages(),
+                sub (hash<ChatStreamEvent> e) {
+                    events += e;
+                    if (cb) {
+                        cb(e, server);
+                    }
+                }, NOTHING, opts, asyncOpts()).get(60000);
+        } catch (hash<ExceptionInfo> ex) {
+            rv = {"err": ex.err, "desc": ex.desc};
+        }
+        return rv + {"events": events, "requests": server.requests.size()};
+    }
+
+    #! Checks that the asynchronous stream gives what the synchronous stream gives
+    private hash<auto> checkParity(list<binary> chunks, string name, *hash<LlmRequestOptions> opts, *code cb,
+            *int gate_after, int status = 200, string content_type = "application/vnd.amazon.eventstream") {
+        hash<auto> sync = syncStream(chunks, opts, cb, gate_after, status, content_type);
+        hash<auto> async = asyncStream(chunks, opts, cb, gate_after, status, content_type);
+        assertEq(sync, async, name);
+        return sync;
+    }
+
+    #! Cuts bytes into pieces at the given offsets
+    private static list<binary> cut(binary b, list<int> offsets) {
+        list<binary> rv = ();
+        int start = 0;
+        foreach int o in (offsets) {
+            if (o > start && o < b.size()) {
+                push rv, b.substr(start, o - start);
+                start = o;
+            }
+        }
+        push rv, b.substr(start);
+        return rv;
+    }
+
+    private static binary textStream() {
+        return BedrockAsyncChatTest::event("messageStart", {"role": "assistant"})
+            + BedrockAsyncChatTest::event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "Hello "}})
+            + BedrockAsyncChatTest::event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "日本"}})
+            + BedrockAsyncChatTest::event("contentBlockStop", {"contentBlockIndex": 0})
+            + BedrockAsyncChatTest::event("messageStop", {"stopReason": "end_turn"})
+            + BedrockAsyncChatTest::event("metadata", {"usage": {"inputTokens": 2, "outputTokens": 3,
+                "totalTokens": 5}, "metrics": {"latencyMs": 12}});
+    }
+
+    supportsTest() {
+        assertTrue(provider(1).supportsAsyncChat());
+    }
+
+    streamEventsTest() {
+        binary stream = textStream();
+        int first = BedrockAsyncChatTest::event("messageStart", {"role": "assistant"}).size();
+        # in the prelude, its CRC, the headers, the payload and the message CRC of the frames, and whole frames
+        list<int> offsets = (3, 9, 13, 30, first - 2, first + 7, first + 40, stream.size() - 30, stream.size() - 1);
+        hash<auto> r = checkParity(cut(stream, offsets), "pieces");
+        assertNothing(r.err);
+        assertEq("Hello 日本", (map $1.delta ?? "", r.events).join(""));
+        assertEq(1, (select r.events, $1.done).size());
+        assertTrue(r.events[-1].done);
+        assertEq("async-fixture", r.events[0].raw.requestId);
+        assertEq(("messageStart", "contentBlockDelta", "contentBlockDelta", "contentBlockStop", "messageStop",
+            "metadata"), (map $1.event, r.events, !$1.done));
+        # 23 bytes at a time
+        list<int> every = ();
+        for (int i = 23; i < stream.size(); i += 23) {
+            push every, i;
+        }
+        assertEq(r, checkParity(cut(stream, every), "23-byte pieces"));
+        # the whole stream in one piece
+        assertEq(r, checkParity((stream,), "one piece"));
+    }
+
+    toolStreamTest() {
+        binary stream = event("messageStart", {"role": "assistant"})
+            + event("contentBlockStart", {"contentBlockIndex": 0, "start": {"toolUse": {"toolUseId": "t1",
+                "name": "get_weather"}}})
+            + event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"toolUse": {"input": "{\"city\":"}}})
+            + event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"toolUse": {"input": "\"Prague\"}"}}})
+            + event("contentBlockStop", {"contentBlockIndex": 0})
+            + event("messageStop", {"stopReason": "tool_use"})
+            + event("metadata", {"usage": {"inputTokens": 7, "outputTokens": 9, "totalTokens": 16}});
+        hash<auto> r = checkParity(cut(stream, (50, 200)), "tool call");
+        assertNothing(r.err);
+        assertEq({"inputTokens": 7, "outputTokens": 9, "totalTokens": 16}, r.events[-2].raw.metadata.usage,
+            "the metadata after messageStop is delivered");
+        assertEq("t1", r.events[1].raw.contentBlockStart.start.toolUse.toolUseId);
+    }
+
+    structuredOutputTest() {
+        hash<LlmRequestOptions> opts = <LlmRequestOptions>{"output_schema": {"type": "object",
+            "properties": {"answer": {"type": "string"}}, "required": ("answer",)}};
+        binary stream = event("messageStart", {"role": "assistant"})
+            + event("contentBlockStart", {"contentBlockIndex": 0, "start": {"toolUse": {"toolUseId": "s1",
+                "name": StructuredOutputToolName}}})
+            + event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"toolUse": {"input": "{\"answer\":"}}})
+            + event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"toolUse": {"input": "\"42\"}"}}})
+            + event("contentBlockStop", {"contentBlockIndex": 0})
+            + event("messageStop", {"stopReason": "tool_use"});
+        hash<auto> r = checkParity((stream,), "structured output", opts);
+        assertNothing(r.err);
+        assertEq("{\"answer\":\"42\"}", (map $1.delta ?? "", r.events).join(""));
+    }
+
+    chatTest() {
+        hash<auto> response = {
+            "output": {"message": {"role": "assistant", "content": ({"text": "Hello"}, {"toolUse": {
+                "toolUseId": "t1", "name": "get_weather", "input": {"city": "Prague"}}})}},
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 3, "outputTokens": 4, "totalTokens": 7},
+        };
+        binary json = binary(make_json(response));
+        hash<ChatResponse> sync;
+        {
+            BedrockAsyncWireFixture server((json,), NOTHING, 200, "application/json");
+            on_exit server.stop();
+            sync = provider(server.port).chat(messages());
+        }
+        BedrockAsyncWireFixture server(cut(json, (10, 40)), NOTHING, 200, "application/json");
+        on_exit server.stop();
+        hash<ChatResponse> async = provider(server.port).chatAsync(messages(), NOTHING, NOTHING, asyncOpts())
+            .get(60000);
+        assertEq(sync, async);
+        assertEq("Hello", async.content);
+        assertEq("get_weather", async.tool_calls[0].name);
+    }
+
+    #! Checks the SigV4 signature of a request received by a fixture
+    private checkSignature(hash<auto> request, string name) {
+        hash<auto> headers = request.hdr;
+        headers."content-type" = headers."_qore_orig_content_type" ?? headers."content-type";
+        list<string> parts = headers.authorization.split("SignedHeaders=")[1].split(", Signature=");
+        string header_lines = "";
+        foreach string hname in (parts[0].split(";")) {
+            header_lines += hname + ":" + trim(headers{hname}) + "\n";
+        }
+        # the canonical URI of a path sent with encoded variables encodes it once more
+        string canonical = "POST\n" + encode_url(headers.path, False) + "\n\n" + header_lines + "\n"
+            + parts[0] + "\n" + digest("sha256", request.body).toHex();
+        string timestamp = headers."x-amz-date";
+        string day = timestamp.substr(0, 8);
+        binary key = hmac("sha256", day, "AWS4test-secret");
+        foreach string part in ("us-east-1", "bedrock", "aws4_request") {
+            key = hmac("sha256", part, key);
+        }
+        string signed_text = "AWS4-HMAC-SHA256\n" + timestamp + "\n" + day
+            + "/us-east-1/bedrock/aws4_request\n" + digest("sha256", canonical).toHex();
+        assertEq(hmac("sha256", signed_text, key).toHex(), parts[1], name);
+    }
+
+    signatureTest() {
+        # a model ARN whose ':', '/', '+' and non-ASCII characters are percent-encoded in the path
+        string model = "arn:aws:bedrock:us-east-1:123:inference-profile/us.test+ü";
+        {
+            BedrockAsyncWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+            on_exit server.stop();
+            provider(server.port, model).chatStreamAsync(messages(), sub (hash<ChatStreamEvent> e) {}, NOTHING,
+                NOTHING, asyncOpts()).get(60000);
+            hash<auto> request = server.requests.get(30s);
+            assertEq("/model/" + encode_url(model, True) + "/converse-stream", request.hdr.path);
+            assertEq("application/vnd.amazon.eventstream", request.hdr.accept);
+            assertEq("identity", request.hdr."accept-encoding");
+            checkSignature(request, "ConverseStream");
+        }
+        BedrockAsyncWireFixture server((binary(make_json({"output": {"message": {"role": "assistant",
+            "content": ({"text": "ok"},)}}, "stopReason": "end_turn"})),), NOTHING, 200, "application/json");
+        on_exit server.stop();
+        provider(server.port, model).chatAsync(messages(), NOTHING, NOTHING, asyncOpts()).get(60000);
+        hash<auto> request = server.requests.get(30s);
+        assertEq("/model/" + encode_url(model, True) + "/converse", request.hdr.path);
+        checkSignature(request, "Converse");
+    }
+
+    httpErrorTest() {
+        hash<auto> r = checkParity((binary("{\"message\": \"denied\"}"),), "403", NOTHING, NOTHING, NOTHING, 403,
+            "application/json");
+        assertEq("LLM-ERROR", r.err);
+        assertEq("Bedrock ConverseStream failed: AWS event stream returned HTTP 403", r.desc);
+        r = checkParity((binary("{}"),), "429", NOTHING, NOTHING, NOTHING, 429, "application/json");
+        assertEq("Bedrock ConverseStream failed: AWS event stream returned HTTP 429", r.desc);
+        r = checkParity((binary("{}"),), "200 JSON", NOTHING, NOTHING, NOTHING, 200, "application/json");
+        assertEq("Bedrock ConverseStream failed: expected application/vnd.amazon.eventstream; got application/json",
+            r.desc);
+        assertEq((), r.events);
+    }
+
+    noContentTypeTest() {
+        # the synchronous stream raised PSEUDO-METHOD-DOES-NOT-EXIST for a response without a Content-Type
+        {
+            BedrockAsyncWireFixture server((binary("{}"),), NOTHING, 200, "");
+            on_exit server.stop();
+            BedrockEventStream stream = new BedrockRestClientIo(options(server.port)).openConverseStream("test", {});
+            on_exit stream.close();
+            assertThrows("AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got $",
+                \stream.readEvent());
+        }
+        hash<auto> r = checkParity((binary("{}"),), "no Content-Type", NOTHING, NOTHING, NOTHING, 200, "");
+        assertEq("Bedrock ConverseStream failed: expected application/vnd.amazon.eventstream; got ", r.desc);
+    }
+
+    streamErrorTest() {
+        binary start = event("messageStart", {"role": "assistant"});
+        binary stop = event("messageStop", {"stopReason": "end_turn"});
+        binary bad_crc = stop.substr(0, stop.size() - 1) + binary(chr(get_byte(stop, stop.size() - 1) ^ 1));
+        foreach hash<auto> c in ((
+            {"name": "service exception", "body": start + event("throttlingException", {"message": "slow down"},
+                "exception"), "err": "LLM-ERROR", "desc": "Bedrock ConverseStream failed: throttlingException: slow down"},
+            {"name": "message CRC", "body": start + bad_crc, "err": "LLM-ERROR",
+                "desc": "^Bedrock ConverseStream failed: message CRC mismatch"},
+            {"name": "truncated", "body": start + stop.substr(0, 10), "err": "LLM-ERROR",
+                "desc": "^Bedrock ConverseStream failed: stream ended with 10 unconsumed frame bytes"},
+            {"name": "invalid JSON", "body": start + AwsEventStreamEncoder::encode({":message-type": "event",
+                ":event-type": "messageStop"}, binary("{")), "err": "LLM-ERROR",
+                "desc": "Bedrock ConverseStream failed: event payload is not valid JSON"},
+            {"name": "no messageStop", "body": start, "err": "LLM-ERROR",
+                "desc": "Bedrock ConverseStream ended without messageStop"},
+            {"name": "failure after messageStop", "body": stop + event("internalServerException",
+                {"message": "late failure"}, "exception"), "err": "LLM-ERROR",
+                "desc": "Bedrock ConverseStream failed: internalServerException: late failure"},
+        )) {
+            hash<auto> r = checkParity(cut(c.body, (start.size() + 3,)), c.name);
+            assertEq(c.err, r.err, c.name);
+            assertRegex(c.desc, r.desc, c.name);
+            assertEq(0, (select r.events, $1.done).size(), c.name + ": no successful end");
+        }
+    }
+
+    timeoutTest() {
+        # the response is held open after the first event
+        hash<auto> r = checkParity((event("messageStart", {"role": "assistant"}),), "idle timeout",
+            <LlmRequestOptions>{"timeout_ms": 200}, NOTHING, 0);
+        assertEq("LLM-ERROR", r.err);
+        assertEq("Bedrock ConverseStream failed: " + BedrockLlmProvider::StreamTimeoutDesc, r.desc);
+        assertEq(1, r.events.size());
+    }
+
+    startTimeoutTest() {
+        # the response is held before it is sent (the fixture waits for its gate after the request)
+        hash<auto> r = checkParity((event("messageStop", {"stopReason": "end_turn"}),), "start timeout",
+            <LlmRequestOptions>{"timeout_ms": 200}, NOTHING, -1);
+        assertEq("LLM-ERROR", r.err);
+        assertEq("Bedrock ConverseStream failed: " + BedrockLlmProvider::StreamTimeoutDesc, r.desc);
+        assertEq((), r.events);
+    }
+
+    deadlineTest() {
+        # the deadline has passed when the call starts: the error of chatStream(), which sends its request first,
+        # while the asynchronous call sends nothing
+        hash<LlmRequestOptions> passed = <LlmRequestOptions>{"deadline": now_us() - 1s};
+        hash<auto> sync = syncStream((event("messageStop", {"stopReason": "end_turn"}),), passed);
+        hash<auto> r = asyncStream((event("messageStop", {"stopReason": "end_turn"}),), passed);
+        assertEq(sync - "requests", r - "requests");
+        assertEq("LLM-ERROR", r.err);
+        assertEq("Bedrock ConverseStream failed: LLM call deadline exhausted", r.desc);
+        assertEq(0, r.requests, "the asynchronous call sends nothing");
+        # the deadline arrives while the stream is held open after its first event; the deadline leaves time for the
+        # stream to start also on a loaded host, and the request timeout is much longer
+        int started = clock_getmillis();
+        r = asyncStream((event("messageStart", {"role": "assistant"}),), <LlmRequestOptions>{"timeout_ms": 120000,
+            "deadline": now_us() + 5s}, NOTHING, 0);
+        assertEq("LLM-ERROR", r.err);
+        assertEq("Bedrock ConverseStream failed: " + BedrockLlmProvider::StreamTimeoutDesc, r.desc);
+        assertEq(1, r.events.size());
+        assertLt(60000, clock_getmillis() - started, "the deadline ends the stream, not the 120 s request timeout");
+    }
+
+    contentTypeParamsTest() {
+        # the media type is compared without parameters and case
+        hash<auto> r = checkParity((textStream(),), "parameters", NOTHING, NOTHING, NOTHING, 200,
+            "Application/Vnd.Amazon.EventStream; charset=binary");
+        assertNothing(r.err);
+        assertEq(1, (select r.events, $1.done).size());
+    }
+
+    acceptEncodingTest() {
+        # a caller's Accept-Encoding header, in any case, is replaced: the frames are decoded as they arrive
+        BedrockAsyncWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        BedrockRestClientIo rc(options(server.port));
+        HttpClientStreamingIo::SseObservable obs = rc.observeEncodedEventStreamTarget("POST",
+            <RestClient::RestRequestTarget>{"path": "/model/test/converse-stream"}, binary("{}"),
+            {"Accept-Encoding": "gzip", "content-type": "application/json"});
+        Queue events();
+        obs.registerObserver(new BedrockAsyncTestObserver(events));
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, events.get(30s).event_id);
+        assertEq("identity", server.requests.get(30s).hdr."accept-encoding");
+    }
+
+    connectedEventTest() {
+        BedrockAsyncWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        BedrockRestClientIo rc(options(server.port));
+        HttpClientStreamingIo::SseObservable obs = rc.observeConverseStream("test", {});
+        Queue events();
+        obs.registerObserver(new BedrockAsyncTestObserver(events));
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        hash<auto> connected = events.get(30s);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, connected.event_id);
+        assertEq(200, connected.data.status_code);
+        assertEq("Test", connected.data.status_message);
+        assertEq("async-fixture", connected.data.headers."x-amzn-requestid");
+        hash<auto> frame = events.get(30s);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, frame.event_id);
+        assertEq({"messageStop": {"stopReason": "end_turn"}}, BedrockEventStream::decodeFrame(frame.data));
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, events.get(30s).event_id);
+    }
+
+    callbackFailureTest() {
+        hash<auto> r = checkParity((event("messageStart", {"role": "assistant"}),), "callback failure", NOTHING,
+            sub (hash<ChatStreamEvent> e, BedrockAsyncWireFixture server) {
+                throw "CALLBACK-FAILURE", "caller cancelled";
+            }, 0);
+        assertEq("CALLBACK-FAILURE", r.err);
+        assertEq("caller cancelled", r.desc);
+        assertEq(1, r.events.size());
+    }
+
+    chatErrorTest() {
+        binary body = binary(make_json({"message": "`temperature` is deprecated for this model."}));
+        hash<auto> sync;
+        {
+            BedrockAsyncWireFixture server((body,), NOTHING, 400, "application/json");
+            on_exit server.stop();
+            try {
+                provider(server.port).chat(messages());
+            } catch (hash<ExceptionInfo> ex) {
+                sync = {"err": ex.err, "desc": ex.desc};
+            }
+        }
+        BedrockAsyncWireFixture server((body,), NOTHING, 400, "application/json");
+        on_exit server.stop();
+        hash<auto> async;
+        try {
+            provider(server.port).chatAsync(messages(), NOTHING, NOTHING, asyncOpts()).get(60000);
+        } catch (hash<ExceptionInfo> ex) {
+            async = {"err": ex.err, "desc": ex.desc};
+        }
+        assertEq(sync, async);
+        assertEq("LLM-ERROR", async.err);
+        assertRegex("`temperature` is deprecated for this model\\.$", async.desc);
+    }
+
+    cancellationTest() {
+        # a call cancelled before it starts sends nothing
+        {
+            BedrockAsyncWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+            on_exit server.stop();
+            LlmCancellation cancellation();
+            cancellation.cancel("cancelled before");
+            assertThrows("LLM-CANCELLED", sub () {
+                provider(server.port).chatStreamAsync(messages(), sub (hash<ChatStreamEvent> e) {}, NOTHING,
+                    <LlmRequestOptions>{"cancellation": cancellation}, asyncOpts()).get(60000);
+            });
+            assertEq(0, server.requests.size(), "nothing is sent");
+        }
+        # a call cancelled in flight, while the response is held open after its first event
+        BedrockAsyncWireFixture server((event("contentBlockDelta", {"contentBlockIndex": 0,
+            "delta": {"text": "first"}}),), 0);
+        on_exit server.stop();
+        LlmCancellation cancellation();
+        list<string> deltas = ();
+        assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+            provider(server.port).chatStreamAsync(messages(), sub (hash<ChatStreamEvent> e) {
+                deltas += e.delta ?? "";
+                cancellation.cancel("stopped by the user");
+            }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation}, asyncOpts()).get(60000);
+        });
+        assertEq(("first",), deltas);
+    }
+
+    noStreamRetryTest() {
+        # a throttled start is retried by neither call, while a Converse request is retried
+        BedrockAsyncWireFixture sync_server((binary("{}"),), NOTHING, 429, "application/json");
+        on_exit sync_server.stop();
+        assertThrows("LLM-ERROR", sub () {
+            provider(sync_server.port, "test:model:0", 2).chatStream(messages(), sub (hash<ChatStreamEvent> e) {});
+        });
+        assertEq(1, sync_server.requests.size());
+        hash<auto> r = asyncStream((binary("{}"),), NOTHING, NOTHING, NOTHING, 429, "application/json", 2);
+        assertEq("LLM-ERROR", r.err);
+        assertEq(1, r.requests, "the start of the stream is sent once");
+        BedrockAsyncWireFixture server((binary("{}"),), NOTHING, 429, "application/json");
+        on_exit server.stop();
+        assertThrows("LLM-ERROR", sub () {
+            provider(server.port, "test:model:0", 2).chatAsync(messages(), NOTHING, NOTHING, asyncOpts())
+                .get(60000);
+        });
+        assertEq(3, server.requests.size(), "the Converse request is retried, as chat() retries it");
+    }
+
+    noThreadHeldTest() {
+        # two calls in a one-thread executor, each waiting for its response: both are in flight at once
+        QoreLlmUtils::LlmThreadPoolExecutor one(1);
+        on_exit one.shutdown();
+        {
+            BedrockAsyncWireFixture s1((textStream(),), 0);
+            on_exit s1.stop();
+            BedrockAsyncWireFixture s2((textStream(),), 0);
+            on_exit s2.stop();
+            Queue first();
+            code cb = sub (hash<ChatStreamEvent> e) {
+                if (e.event == "messageStart") {
+                    first.push(True);
+                }
+            };
+            # each response is held after its first piece (the whole stream: the gate holds the end of the body);
+            # the providers are held while their calls are in flight
+            BedrockLlmProvider p1 = provider(s1.port);
+            BedrockLlmProvider p2 = provider(s2.port);
+            LlmAsyncOperation op1 = p1.chatStreamAsync(messages(), cb, NOTHING, NOTHING, asyncOpts(one));
+            LlmAsyncOperation op2 = p2.chatStreamAsync(messages(), cb, NOTHING, NOTHING, asyncOpts(one));
+            assertTrue(first.get(30s), "the first stream delivers events");
+            assertTrue(first.get(30s), "the second stream delivers events while the first is open");
+            assertFalse(op1.isDone());
+            assertFalse(op2.isDone());
+            s1.gate.push(True);
+            s2.gate.push(True);
+            assertNothing(op1.get(60000));
+            assertNothing(op2.get(60000));
+        }
+        binary json = binary(make_json({"output": {"message": {"role": "assistant", "content": ({"text": "ok"},)}},
+            "stopReason": "end_turn"}));
+        BedrockAsyncWireFixture s1((json,), -1, 200, "application/json");
+        on_exit s1.stop();
+        BedrockAsyncWireFixture s2((json,), -1, 200, "application/json");
+        on_exit s2.stop();
+        BedrockLlmProvider p1 = provider(s1.port);
+        BedrockLlmProvider p2 = provider(s2.port);
+        LlmAsyncOperation op1 = p1.chatAsync(messages(), NOTHING, NOTHING, asyncOpts(one));
+        LlmAsyncOperation op2 = p2.chatAsync(messages(), NOTHING, NOTHING, asyncOpts(one));
+        # both requests are sent while neither response has been sent
+        assertEq(Type::Hash, s1.requests.get(30s).type());
+        assertEq(Type::Hash, s2.requests.get(30s).type());
+        s1.gate.push(True);
+        s2.gate.push(True);
+        assertEq("ok", op1.get(60000).content);
+        assertEq("ok", op2.get(60000).content);
+    }
+}

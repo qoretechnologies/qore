@@ -51,7 +51,17 @@ public class SalesforceWorkerOutputTest inherits QUnit::Test {
             assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(Results + warning + "\n", Worker), feature);
             assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(warning + "\n" + Results, Worker),
                 feature + " first");
+            # the default one-line format of parse diagnostics
+            string one_line = "examples/test/qlib/SalesforceRestDataProvider//" + Worker + ":9:1: warning: "
+                + ChildFailed + "LOAD-MODULE-ERROR: feature '" + feature + "'" + ModulePath;
+            assertEq({"a-b": "1/2", "c": "x y"}, parse_worker_output(Results + one_line + "\n", Worker),
+                feature + " one-line");
         }
+        # a one-line warning of another file, or another warning of the worker, is unexpected
+        assertThrows("UNEXPECTED-WORKER-OUTPUT", \parse_worker_output(), (Results + "other.qr:9:1: warning: "
+            + ChildFailed + "LOAD-MODULE-ERROR: feature 'grpc'" + ModulePath + "\n", Worker), "another file");
+        assertThrows("UNEXPECTED-WORKER-OUTPUT", \parse_worker_output(), (Results + Worker
+            + ":9:1: warning: UNREACHABLE-CODE: x\n", Worker), "another warning");
     }
 
     otherOutput() {

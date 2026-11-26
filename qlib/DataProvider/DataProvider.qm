@@ -1821,6 +1821,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref dpql_list_functions "DPQL list functions" for grouping, sorting, selecting distinct values,
       flattening nested lists, counting matches, selecting records by extreme keys, and computing percentiles
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
+    - @ref DataProvider::DataProvider::listKnownFactories() "factory discovery" includes the optional native
+      PDF provider and its installed actions
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
 

@@ -336,6 +336,9 @@ nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::open", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::open", xsink))
+        return QoreValue();
+
     if (q_check_path(*path, "READONLYFILE-OPEN-ERROR", xsink)) {
         return QoreValue();
     }
@@ -363,6 +366,10 @@ if (f.close())
 */
 int ReadOnlyFile::close() {
     if (check_terminal_io(self, "ReadOnlyFile::close", xsink)) {
+        return QoreValue();
+    }
+
+    if (check_system_object_change(self, "ReadOnlyFile::close", xsink)) {
         return QoreValue();
     }
 
@@ -893,6 +900,9 @@ nothing ReadOnlyFile::setEncoding(*string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEncoding", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::setEncoding", xsink))
+        return QoreValue();
+
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
     f->setEncoding(qe, xsink);
 }
@@ -930,6 +940,9 @@ f.setEncodingErrors(ENCODING_ERRORS_LATIN1);
  */
 nothing ReadOnlyFile::setEncodingErrors(*string encoding_errors) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEncodingErrors", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setEncodingErrors", xsink))
         return QoreValue();
 
     qore_encoding_errors_t ee;
@@ -972,6 +985,9 @@ f.setPos(0); # go to the beginning of the file
  */
 int ReadOnlyFile::setPos(int position = 0) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setPos", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setPos", xsink))
         return QoreValue();
 
     return f->setPos(position, xsink);
@@ -1080,6 +1096,9 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto argument, *bool wit
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
+    if (check_system_object_change(self, "ReadOnlyFile::setEventQueue", xsink))
+        return QoreValue();
+
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, "
             "which could cause internal I/O to freeze in the File object if used; use a Queue object with no maximum "
@@ -1101,6 +1120,9 @@ f.setEventQueue();
  */
 nothing ReadOnlyFile::setEventQueue() {
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
+        return QoreValue();
+
+    if (check_system_object_change(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
     qore_file_ops(f).setEventQueue(xsink, nullptr, QoreValue(), false);

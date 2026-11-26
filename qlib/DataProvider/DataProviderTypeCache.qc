@@ -495,12 +495,20 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @throw PROVIDER-ERROR the given data provider type path is unknown; only thrown if the \a throw_exception
         argument is @ref True
 
-        @note types are stored based on the path provided which may differ from their type names (which may be generic
-        and therefore not suitable for indexing)
+        @note
+        - types are stored based on the path provided which may differ from their type names (which may be generic
+          and therefore not suitable for indexing)
+        - for code that is sandboxed or acts for sandboxed code, which cannot change the process-wide cache of the
+          module (see DataProvider::getTypeCache()), \a type_loader is called without the lock of the cache held, so
+          that it cannot block the other callers of the cache; the cache is searched again after it returns nothing
     */
     *AbstractDataProviderType getTypeImpl(string path, bool throw_exception, *code type_loader) {
         # we have to grab the write lock if there is a type_loader
         bool need_lock = !rwlock.lockOwner();
+        # the loader of code that cannot change the process-wide cache runs without its lock (issue #7679)
+        if (type_loader && need_lock && shared && !DataProvider::mayRegisterShared()) {
+            return getTypeWithUnlockedLoader(path, throw_exception, type_loader);
+        }
         if (need_lock) {
             if (type_loader) {
                 rwlock.writeLock();
@@ -550,6 +558,47 @@ public class DataProviderTypeCache inherits Qore::Serializable {
                 "intermediate node with children: %y", path, type_entry.getChildNames());
         }
         return type;
+    }
+
+    #! Returns the given type for code that cannot change the process-wide cache; the loader runs without the lock
+    /** The lock of the process-wide cache is held only to search it, so that a loader that sandboxed code gives cannot
+        block the other callers of the cache, which every %Program shares (issue #7679); a loader that returns nothing
+        is followed by a new search, as the cache can have changed while it ran
+    */
+    private:internal *AbstractDataProviderType getTypeWithUnlockedLoader(string path, bool throw_exception,
+            code type_loader) {
+        list<string> type_path = DataProvider::getPathList(\path);
+        if (hasEntry(type_path)) {
+            return getTypeImpl(path, throw_exception);
+        }
+        # the loader runs without the lock held
+        *DataProviderTypeEntry type_entry = type_loader(type_path);
+        if (!type_entry) {
+            # searched again with the lock held: the cache can have changed while the loader ran
+            return getTypeImpl(path, throw_exception);
+        }
+        *AbstractDataProviderType type = type_entry.getType();
+        if (!type && throw_exception) {
+            throw "PROVIDER-ERROR", sprintf("data provider type path %y does not contain a type but rather is an "
+                "intermediate node with children: %y", path, type_entry.getChildNames());
+        }
+        return type;
+    }
+
+    #! Returns @ref True if the cache has an entry for every element of the path
+    private:internal bool hasEntry(list<string> type_path) {
+        rwlock.readLock();
+        on_exit rwlock.readUnlock();
+
+        DataProviderTypeEntry type_entry = root;
+        foreach string node in (type_path) {
+            *DataProviderTypeEntry next_entry = type_entry.getChild(node);
+            if (!next_entry) {
+                return False;
+            }
+            type_entry = next_entry;
+        }
+        return True;
     }
 
     #! Returns information for the given data provider type and either throws an exception if not present or returns @ref NOTHING

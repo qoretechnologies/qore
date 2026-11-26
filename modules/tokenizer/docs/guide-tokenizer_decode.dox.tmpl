@@ -14,6 +14,18 @@ string clean = tok.decode(enc.input_ids, True);
 # "hello , world !"
     @endcode
 
+    A \c Sequence passes the token list from each decoder to the next. In the TinyLlama tokenizer,
+    \c Replace changes each SentencePiece word marker to a space, \c ByteFallback decodes consecutive byte
+    tokens as UTF-8, \c Fuse joins the pieces, and \c Strip removes the initial space. Both
+    @ref Qore::Tokenizer::HFTokenizer::decode() "decode()" and
+    @ref Qore::Tokenizer::HFTokenizer::decodeBatch() "decodeBatch()" apply the configured sequence.
+
+    @code{.py}
+# TinyLlama token IDs for a word, a space, and four bytes encoding a fox emoji
+string text = tok.decode((1, 904, 6468, 29871, 243, 162, 169, 141), True);
+# "élan 🦊"
+    @endcode
+
     Decoded text is UTF-8.  IDs that give only a part of a character, as when the IDs of a text are decoded in
     parts, give the replacement character U+FFFD for the part, as in Hugging Face tokenizers (see
     @ref tokenizer_text_encoding):
