@@ -122,6 +122,11 @@ hash<auto> members = {
     "cl": int sub (int a, int b = 2) { return a * 1000 + b; },
 };
 
+# a hash whose code member is a closure of an object
+hash<string, code> object_members = {
+    "ocl": dc.getClosure(),
+};
+
 hash<string, code> refs = {
     "function": \f(),
     "static method": \C::s(),
@@ -142,6 +147,7 @@ hash<string, code> refs = {
     "pseudo-method, method member": \members.m(),
     # a named call through it binds the names as a named call through the closure does (qore#7748)
     "pseudo-method, closure member": \members.cl(),
+    "pseudo-method, object closure member": \object_members.ocl(),
 };
 
 foreach hash<auto> i in (refs.pairIterator()) {

@@ -43,6 +43,9 @@ pseudo-method, method member: equal to itself True, to its bound callback False,
 pseudo-method, closure member: loop 190020 try 190040 named 1005/3004 args 4007, background 6003
 pseudo-method, closure member, bound: loop 190020 try 190040 named 1005/3004 args 4007, background 6003
 pseudo-method, closure member: equal to itself True, to its bound callback False, bound to itself True
+pseudo-method, object closure member: loop 29020 try 29040 named 605/804 args 907, background 1103
+pseudo-method, object closure member, bound: loop 29020 try 29040 named 605/804 args 907, background 1103
+pseudo-method, object closure member: equal to itself True, to its bound callback False, bound to itself True
 function references to the same function: True, to another function: False
 static method references to the same method: True, to a function: False
 references by a scoped path to the same function: True, to another function: False, to the same static method: True, to another static method: False
