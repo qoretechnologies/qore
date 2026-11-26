@@ -1,0 +1,342 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 client streams and the I/O-thread decoding of their bodies, EventNotifier wakeups
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpClientIo
+# AwsEventStream is an AWS module: credentials are removed unless live calls are enabled
+%requires ../../LiveProviderTest.qm
+%requires AwsEventStream
+
+%exec-class AwsEventStreamQueueTest
+
+#! The AWS binary event stream of a response is decoded on the I/O thread into a Queue (qore#7247)
+/** HttpClientStreamHandle::installEventStreamState() installs a decoder of the AWS binary event stream
+    (\c application/vnd.amazon.eventstream) on a streaming response, as installSseState() does for server-sent events:
+    each frame is pushed to the Queue as a hash with \c headers and \c payload, and the EventNotifier is signaled.  A
+    local server sends the response in pieces that split the frames at their prelude, headers, payload and CRC, and
+    several frames in a piece; the frames, the errors and their messages are those of AwsEventStreamDecoder for the
+    same bytes.
+*/
+class AwsEventStreamQueueTest inherits QUnit::Test {
+    private {
+        Socket server();
+        int port;
+    }
+
+    constructor() : Test("AwsEventStreamQueue", "1.0") {
+        server.bind("127.0.0.1:0");
+        server.listen();
+        port = server.getSocketInfo().port;
+
+        addTestCase("frames split across reads", \framesTest());
+        addTestCase("the header types that the encoder does not write", \headerTypesTest());
+        addTestCase("the notifier is signaled", \notifierTest());
+        addTestCase("a prelude CRC mismatch", \preludeCrcTest());
+        addTestCase("a message CRC mismatch", \messageCrcTest());
+        addTestCase("malformed frames", \formatTest());
+        addTestCase("a stream that ends inside a frame", \truncatedTest());
+        addTestCase("the decoder installed after the response ended", \afterEndTest());
+        addTestCase("a string initial body", \stringInitialBodyTest());
+        set_return_value(main());
+    }
+
+    #! the frames of the stream: the header types of AwsEventStreamEncoder, and payloads of 0 bytes, a few bytes and
+    #! 70 KB
+    static list<binary> frames() {
+        return (
+            AwsEventStreamEncoder::encode({
+                ":message-type": "event",
+                ":event-type": "contentBlockDelta",
+                "flag": True,
+                "off": False,
+                "i8": -5,
+                "i64": 1234567890123,
+                "bytes": <00ff10>,
+                "when": 2026-11-25T10:20:30.123Z,
+            }, binary("{\"delta\": {\"text\": \"Hello\"}}")),
+            AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": "ping"}, binary()),
+            AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": "big"},
+                binary(strmul("0123456789", 7000))),
+        );
+    }
+
+    #! cuts the stream into pieces at the given offsets
+    static list<binary> cut(binary stream, list<int> offsets) {
+        list<binary> rv = ();
+        int start = 0;
+        foreach int o in (offsets) {
+            if (o > start && o < stream.size()) {
+                push rv, stream.substr(start, o - start);
+                start = o;
+            }
+        }
+        push rv, stream.substr(start);
+        return rv;
+    }
+
+    #! serves one connection with the given body pieces (chunked); done when the client has closed it
+    private Counter serve(list<binary> pieces, *Counter sent) {
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            Socket s = server.accept(30s);
+            on_exit s.close();
+            s.readHTTPHeader(30s);
+            s.send("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.amazon.eventstream\r\n"
+                "Transfer-Encoding: chunked\r\n\r\n");
+            foreach binary piece in (pieces) {
+                s.send(sprintf("%x\r\n", piece.size()));
+                s.send(piece);
+                s.send("\r\n");
+            }
+            s.send("0\r\n\r\n");
+            if (sent) {
+                sent.dec();
+            }
+            # waits for the client to close the connection
+            try {
+                s.recv(1, 30s);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        return done;
+    }
+
+    #! the frames that AwsEventStreamDecoder makes of the stream, then its error if any
+    static list<auto> decoderItems(binary stream) {
+        list<auto> rv = ();
+        AwsEventStreamDecoder dec();
+        try {
+            dec.feed(stream);
+            while (*hash<AwsEventStreamFrame> f = dec.nextFrame()) {
+                push rv, {"headers": f.headers, "payload": f.payload};
+            }
+            dec.finish();
+        } catch (hash<ExceptionInfo> ex) {
+            push rv, {"err": ex.err, "desc": ex.desc};
+        }
+        return rv;
+    }
+
+    #! starts the stream, installs the decoder and returns the items of the queue until the sentinel
+    /** @param pieces the pieces of the body that the server sends
+        @param notifier the notifier given to the decoder
+        @param wait_sent if @ref True, the decoder is installed after the whole response has been sent
+        @param initial_body the initial body given to the decoder instead of the body read with the response headers
+    */
+    private list<auto> queueItems(list<binary> pieces, *EventNotifier notifier, bool wait_sent = False,
+            *data initial_body) {
+        Counter sent(1);
+        Counter served = serve(pieces, sent);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        # the server waits for the client to close the connection
+        on_exit {
+            mgr.closeAll();
+            served.waitForZero(30s);
+        }
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + port);
+        on_exit {
+            try {
+                stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        # the decoder can be installed after the response ended (sse_install_eligible)
+        stream.startStreaming("GET", "/", NOTHING, False, NOTHING, NOTHING, True);
+        auto item = stream.readData(30s);
+        assertEq(200, item.status_code, "the response headers");
+        if (wait_sent) {
+            # the whole response has been sent before the decoder is installed
+            sent.waitForZero(30s);
+        }
+        Queue queue();
+        stream.installEventStreamState(queue, notifier, initial_body ?? item.body);
+        list<auto> rv = ();
+        while (exists (auto v = queue.get(30s))) {
+            push rv, v;
+        }
+        return rv;
+    }
+
+    framesTest() {
+        binary stream;
+        map stream += $1, frames();
+        list<auto> expected = decoderItems(stream);
+        assertEq(3, expected.size());
+        # pieces cut inside the prelude, a header name, a header value, the payload and the CRC of a frame, and
+        # pieces with several frames
+        int f1 = frames()[0].size();
+        int f2 = f1 + frames()[1].size();
+        list<int> offsets = (3, 9, 14, 20, 27, f1 - 2, f1 + 5, f2 + 100, f2 + 30000, stream.size() - 3);
+        assertEq(expected, queueItems(cut(stream, offsets)), "cut pieces");
+        # one byte at a time through the first frame
+        list<int> bytes = ();
+        for (int i = 1; i < f1 + 1; ++i) {
+            push bytes, i;
+        }
+        assertEq(expected, queueItems(cut(stream, bytes)), "one byte at a time");
+        # the whole stream in one piece
+        assertEq(expected, queueItems((stream,)), "one piece");
+        # the decoded values of the headers
+        hash<auto> h = expected[0].headers;
+        assertEq(True, h.flag);
+        assertEq(False, h.off);
+        assertEq(-5, h.i8);
+        assertEq(1234567890123, h.i64);
+        assertEq(<00ff10>, h.bytes);
+        assertEq(2026-11-25T10:20:30.123Z, h.when);
+        assertEq("contentBlockDelta", h.":event-type");
+    }
+
+    #! int8, int16, int32 (negative), a timestamp before 1970 and a uuid, which AwsEventStreamEncoder does not write
+    headerTypesTest() {
+        # "a": int8 -5, "b": int16 -300, "c": int32 -70000, "d": timestamp -1500 ms, "e": uuid
+        binary h = <016102fb016203fed4016304fffeee90016408fffffffffffffa24016509>
+            + <00112233445566778899aabbccddeeff>;
+        binary f = AwsEventStreamQueueTest::frame(16 + h.size() + 1, h.size(), h + binary("x"));
+        binary stream = frames()[0] + f + frames()[1];
+        list<auto> expected = decoderItems(stream);
+        assertEq(3, expected.size());
+        assertEq(expected, queueItems(cut(stream, (frames()[0].size() + 15, frames()[0].size() + 30))));
+        hash<auto> hdrs = expected[1].headers;
+        assertEq(-5, hdrs.a);
+        assertEq(-300, hdrs.b);
+        assertEq(-70000, hdrs.c);
+        assertEq(1969-12-31T23:59:58.500Z, hdrs.d);
+        assertEq("00112233-4455-6677-8899-aabbccddeeff", hdrs.e);
+        assertEq(binary("x"), expected[1].payload);
+    }
+
+    notifierTest() {
+        binary stream;
+        map stream += $1, frames();
+        EventNotifier notifier();
+        EventLoop loop();
+        loop.add(notifier, SOCK_POLLIN);
+        on_exit loop.del(notifier);
+        list<auto> items = queueItems((stream,), notifier);
+        assertEq(3, items.size());
+        *list<hash<EventPollInfo>> events = loop.poll(5s);
+        assertTrue(exists events, "the notifier fired");
+        notifier.acknowledge();
+    }
+
+    #! the stream with a byte of the second frame changed; returns the items of the queue and those of the decoder
+    private list<list<auto>> corrupt(int offset_in_second) {
+        list<binary> f = frames();
+        binary second = f[1];
+        int b = get_byte(second, offset_in_second);
+        second = second.substr(0, offset_in_second) + binary(chr(b ^ 1)) + second.substr(offset_in_second + 1);
+        binary stream = f[0] + second + f[2];
+        return (queueItems(cut(stream, (5, f[0].size() + 3))), decoderItems(stream));
+    }
+
+    preludeCrcTest() {
+        # the 9th byte is in the prelude CRC
+        list<list<auto>> r = corrupt(8);
+        assertEq(r[1], r[0]);
+        assertEq(2, r[0].size());
+        assertEq("AWS-EVENT-STREAM-CRC-ERROR", r[0][1].err);
+        assertRegex("^prelude CRC mismatch", r[0][1].desc);
+    }
+
+    messageCrcTest() {
+        # the last byte is in the message CRC
+        list<list<auto>> r = corrupt(frames()[1].size() - 1);
+        assertEq(r[1], r[0]);
+        assertEq("AWS-EVENT-STREAM-CRC-ERROR", r[0][1].err);
+        assertRegex("^message CRC mismatch", r[0][1].desc);
+    }
+
+    #! a frame of the given total and headers lengths and body, with a valid prelude CRC and message CRC
+    static binary frame(int total, int headers_len, binary rest) {
+        binary prelude = AwsEventStreamQueueTest::u32(total) + AwsEventStreamQueueTest::u32(headers_len);
+        binary f = prelude + AwsEventStreamQueueTest::u32(AwsEventStreamDecoder::crc32(prelude)) + rest;
+        return f + AwsEventStreamQueueTest::u32(AwsEventStreamDecoder::crc32(f));
+    }
+
+    #! a prelude with a valid CRC
+    static binary prelude(int total, int headers_len) {
+        binary b = AwsEventStreamQueueTest::u32(total) + AwsEventStreamQueueTest::u32(headers_len);
+        return b + AwsEventStreamQueueTest::u32(AwsEventStreamDecoder::crc32(b));
+    }
+
+    static binary u32(int v) {
+        return binary(chr((v >> 24) & 0xff) + chr((v >> 16) & 0xff) + chr((v >> 8) & 0xff) + chr(v & 0xff));
+    }
+
+    formatTest() {
+        # a duplicate header name: two "a" headers of type bool true
+        binary dup_headers = <016100016100>;
+        list<binary> malformed = (
+            # a total length below the minimum
+            AwsEventStreamQueueTest::u32(15) + AwsEventStreamQueueTest::u32(0) + <00000000>,
+            # a headers length beyond the frame
+            AwsEventStreamQueueTest::frame(20, 8, <00>),
+            # a duplicate header
+            AwsEventStreamQueueTest::frame(16 + dup_headers.size(), dup_headers.size(), dup_headers),
+            # an unknown header value type (10)
+            AwsEventStreamQueueTest::frame(19, 3, <01610a>),
+            # a string header that extends past the headers
+            AwsEventStreamQueueTest::frame(21, 5, <0161070009>),
+            # a byte-array header that extends past the headers
+            AwsEventStreamQueueTest::frame(21, 5, <0161060009>),
+            # a header name that extends past the headers
+            AwsEventStreamQueueTest::frame(18, 2, <0561>),
+            # an int32 header value cut short
+            AwsEventStreamQueueTest::frame(21, 5, <0161040000>),
+            # a payload beyond the protocol limit (24 MiB): only the prelude is sent
+            AwsEventStreamQueueTest::prelude(16 + 24 * 1024 * 1024 + 1, 0),
+            # headers beyond the protocol limit (128 KiB)
+            AwsEventStreamQueueTest::prelude(16 + 128 * 1024 + 1, 128 * 1024 + 1),
+            # two malformed frames in one piece: the first one fails the stream
+            AwsEventStreamQueueTest::frame(19, 3, <01610a>) + AwsEventStreamQueueTest::frame(18, 2, <0561>),
+        );
+        foreach binary m in (malformed) {
+            binary stream = frames()[0] + m;
+            list<auto> expected = decoderItems(stream);
+            assertEq(expected, queueItems(cut(stream, (frames()[0].size() + 1,))), sprintf("malformed %d", $#));
+            assertEq("AWS-EVENT-STREAM-FORMAT-ERROR", expected[1].err, sprintf("malformed %d", $#));
+        }
+    }
+
+    truncatedTest() {
+        binary stream = frames()[0] + frames()[1].substr(0, 10);
+        list<auto> expected = decoderItems(stream);
+        assertEq(expected, queueItems(cut(stream, (7,))));
+        assertEq("AWS-EVENT-STREAM-FORMAT-ERROR", expected[1].err);
+        assertEq("stream ended with 10 unconsumed frame bytes", expected[1].desc);
+    }
+
+    #! an initial body given as a string is taken as its bytes
+    /** The binding of installEventStreamState() gives the decoder a string node also for a short string, so these
+        cases do not reach the inline short string path (issue #7038) that the decoder handles as SseAction does;
+        examples/test/runner/test_short_string_access.py checks that
+    */
+    stringInitialBodyTest() {
+        # shorter than a prelude
+        foreach string initial in (("abc", strmul("x", 11))) {
+            list<auto> items = queueItems((), NOTHING, True, initial);
+            assertEq(({"err": "AWS-EVENT-STREAM-FORMAT-ERROR",
+                "desc": sprintf("stream ended with %d unconsumed frame bytes", initial.size())},), items,
+                sprintf("%d bytes", initial.size()));
+        }
+        # a whole frame given as the initial body in a string
+        binary frame = AwsEventStreamEncoder::encode({":event-type": "a"}, binary("{}"));
+        list<auto> items = queueItems((), NOTHING, True, frame.toString("ISO-8859-1"));
+        assertEq(decoderItems(frame), items, "a frame in a string");
+    }
+
+    afterEndTest() {
+        binary stream;
+        map stream += $1, frames();
+        assertEq(decoderItems(stream), queueItems(cut(stream, (100, 200)), NOTHING, True));
+    }
+}

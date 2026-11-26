@@ -1,0 +1,14 @@
+registered schema, version: SHARED-OBJECT-ERROR, unchanged
+cached schema, version: SHARED-OBJECT-ERROR, unchanged
+registered schema, meta: SHARED-OBJECT-ERROR, unchanged
+cached schema, meta: SHARED-OBJECT-ERROR, unchanged
+registered schema, segment definition: SHARED-OBJECT-ERROR, unchanged
+cached schema, segment definition: SHARED-OBJECT-ERROR, unchanged
+registered schema, new segment: SHARED-OBJECT-ERROR, unchanged
+cached schema, new segment: SHARED-OBJECT-ERROR, unchanged
+registered schema, remove segment: SHARED-OBJECT-ERROR, unchanged
+cached schema, remove segment: SHARED-OBJECT-ERROR, unchanged
+registered schema, delete: SHARED-OBJECT-ERROR, unchanged
+cached schema, delete: SHARED-OBJECT-ERROR, unchanged
+the tenant's own schema: changed, shared: False
+trusted code changes a registered schema: "host"

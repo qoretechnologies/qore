@@ -444,6 +444,24 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 5: a namespace is attached empty, then a class is added to it one at a time (addSystemClass()), then a
+    // function whose parameter names the class (qore#7649)
+    if (variant == 5) {
+        if (sep != std::string::npos) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
+        }
+        RootQoreNamespace* root = getProgram()->getRootNS();
+        root->addNamespace(new QoreNamespace(inner.c_str()));
+        QoreNamespace* ans = getProgram()->findNamespace(QoreString(inner.c_str()));
+        if (!ans) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
+        }
+        QoreClass* one = new QoreClass("DbgRtOne", (path + "::DbgRtOne").c_str());
+        ans->addSystemClass(one);
+        ans->addBuiltinVariant("dbg_rt_one", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            one->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        return QoreValue();
+    }
     // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
     bool fail_refresh = variant == 4;
     if (fail_refresh) {
@@ -5571,6 +5589,11 @@ public:
             ctrl.io_waiting = false;
         }
         return 0;
+    }
+
+    //! Returns the index of the I/O thread that the operations on the pollable object are routed to
+    static int routeThread(AsyncIoControllerPriv& ctrl, const AbstractPollableIoObjectBase* sock) {
+        return ctrl.getThreadIndex(AsyncIoControllerPriv::getRouteKey(sock));
     }
 
     static void resize(UnitTestCounters& c) {
@@ -24456,6 +24479,39 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: returns the index of the I/O thread of the global async I/O controller that the operations on a pollable object are routed to (qore#7624)
+/** Operations are routed by the socket, not by their key: a test of keys that collide on different I/O threads needs
+    two objects that are routed to different threads.  DEBUG builds only.
+
+    @param sock the pollable I/O object (an EventNotifier, a Socket)
+
+    @return the I/O thread index
+
+    @throw DBG-ARGUMENT-ERROR the object is not a pollable I/O object
+*/
+static QoreValue f_dbg_async_io_route_thread(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* sock_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AbstractPollableIoObjectBase> sock(static_cast<AbstractPollableIoObjectBase*>(
+        const_cast<QoreObject*>(sock_obj)->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!sock) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the object is not a pollable I/O object");
+        return QoreValue();
+    }
+    return static_cast<int64>(AsyncIoCloseTest::routeThread(**ctrl, *sock));
+}
+
 //! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
 static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -37922,6 +37978,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_route_thread", f_dbg_async_io_route_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        objectTypeInfo, QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

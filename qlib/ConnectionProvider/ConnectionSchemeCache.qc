@@ -781,6 +781,10 @@ public class ConnectionSchemeCache {
         resolved and the \a throw_exception argument is @ref False
 
         @throw SCHEME-ERROR the scheme is unknown; only thrown if the \a throw_exception argument is @ref True
+
+        @note for code that is sandboxed or acts for sandboxed code, which cannot register schemes in the
+        process-wide registry, \a scheme_loader is called without the lock of the registry held, so that it cannot
+        block the other callers of the registry, and the scheme that it returns is not registered
     */
     static *hash<ConnectionSchemeInfo> getSchemeImpl(string scheme, bool throw_exception, *code scheme_loader) {
         # we have to grab the write lock if there is a scheme_loader
@@ -843,14 +847,35 @@ public class ConnectionSchemeCache {
                 return rv;
             }
         }
-        if (scheme_loader && (rv = scheme_loader(scheme))) {
+        if (scheme_loader) {
             # the loader of a sandboxed caller gives the scheme to that caller only: the process-wide registry keeps
             # the schemes of trusted code (qore#6747)
             if (Priv::_trusted_scheme_init || DataProvider::mayRegisterShared()) {
-                cache{scheme} = rv;
-                ++registry_revision;
+                if (rv = scheme_loader(scheme)) {
+                    cache{scheme} = rv;
+                    ++registry_revision;
+                    return rv;
+                }
+            } else if (needs_lock) {
+                # the loader of a caller that cannot register schemes runs without the lock, so that it cannot block
+                # the other callers of the registry (issue #7679); the registry is checked again afterwards, as it
+                # can have changed while the loader ran
+                lck.unlock();
+                on_exit lck.lock();
+                rv = scheme_loader(scheme);
+                {
+                    lck.lock();
+                    on_exit lck.unlock();
+                    if (*hash<ConnectionSchemeInfo> registered = cache{scheme}) {
+                        return registered;
+                    }
+                }
+                if (rv) {
+                    return rv;
+                }
+            } else if (rv = scheme_loader(scheme)) {
+                return rv;
             }
-            return rv;
         }
         if (throw_exception) {
             throw "SCHEME-ERROR", sprintf("Connection provider scheme %y is not registered", scheme);

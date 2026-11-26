@@ -529,6 +529,27 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         }
     }
 
+    #! Returns the data of the @ref EVENT_SSE_CONNECTED event: the status and the headers of the response
+    private hash<auto> getConnectedInfo() {
+        *HttpClientIo::HttpClientStreamHandle s;
+        {
+            AutoLock al(m);
+            s = stream;
+        }
+        *hash<auto> response = s ? s.getResponse() : NOTHING;
+        if (!response) {
+            return {};
+        }
+        hash<auto> rv = {
+            "status_code": response.status_code,
+            "headers": response.headers ?? {},
+        };
+        if (exists response.status_message) {
+            rv.status_message = response.status_message;
+        }
+        return rv;
+    }
+
     #! Starts the notifier poll operation after the SSE stream is active
     private startNotifierPoll() {
         # Pin @c m across this method: see @ref sse_lock_pin
@@ -544,7 +565,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             notifyClosed();
             return;
         }
-        notifyObservers(EVENT_SSE_CONNECTED, {});
+        notifyObservers(EVENT_SSE_CONNECTED, getConnectedInfo());
 
         bool stopped_reentrantly;
         {

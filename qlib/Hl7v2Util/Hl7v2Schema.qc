@@ -445,6 +445,10 @@ public namespace Hl7v2Util {
             string contents = FileLocationHandler::getTextFileFromLocation(path);
             hash data = cast<hash>(Util::parse_to_qore_value(contents));
             Hl7v2Schema schema(data);
+            # a cached schema is used by every caller: sandboxed code cannot change it (issue #7683)
+            if (SandboxManager::createsSharedObjects()) {
+                SandboxManager::shareObject(schema);
+            }
 
             AutoLock al(schema_mutex);
             schema_cache{key} = schema;
@@ -463,9 +467,18 @@ public namespace Hl7v2Util {
         }
 
         #! Registers a schema object in memory by version
+        /** The schema is marked as shared by every %Program (see
+            @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), as
+            getRegisteredSchema() returns it to every caller: code that is sandboxed or acts for sandboxed code cannot
+            change it
+        */
         public static registerSchema(Hl7v2Schema schema) {
             # a schema that sandboxed code registered would be used by other callers (qore#6747)
             DataProvider::checkSharedRegistration("HL7 v2 schema registry", "schema", schema.version);
+            # a registered schema is returned to every caller: sandboxed code cannot change it (issue #7683)
+            if (SandboxManager::createsSharedObjects()) {
+                SandboxManager::shareObject(schema);
+            }
             AutoLock al(schema_mutex);
             schema_cache{"version:" + schema.version} = schema;
         }

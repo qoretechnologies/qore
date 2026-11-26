@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "CACHED-BINDING-TEST", sprintf("expected %y (%s), got %y (%s)",
+            expected, expected.fullType(), actual, actual.fullType());
+    }
+}
+
+# Accessing self keeps these bodies on the generic method entry.
+class CachedBindingInt {
+    public { int calls = 0; }
+    int take(int value) { ++calls; return value; }
+}
+class CachedBindingFloat {
+    public { int calls = 0; }
+    float take(float value) { ++calls; return value; }
+}
+class CachedBindingBool {
+    public { int calls = 0; }
+    bool take(bool value) { ++calls; return value; }
+}
+class CachedBindingOther {
+    int take(softint value = 31) { return value; }
+    synchronized int locked(int value) { return value + 1; }
+    auto optional(*int value) { return value; }
+    int extras(int value, ...) { return value + int(argv[0]); }
+    int referenceValue(reference<softint> value) { return value; }
+    hash<auto!> container(hash<auto!> value) { value.text = "ok"; return value; }
+}
+class CachedBindingGeneric<T> {
+    T take(T value) { return value; }
+}
+class CachedBindingMany {
+    public { int calls = 0; }
+    int eight(int a, int b, int c, int d, int e, int f, int g, int h) {
+        ++calls;
+        return a + b + c + d + e + f + g + h;
+    }
+    int nine(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+        ++calls;
+        return a + b + c + d + e + f + g + h + i;
+    }
+    list<auto> mixed(int a, string b, float c, bool d) {
+        ++calls;
+        return (a, b, c, d);
+    }
+    int fail(int value) {
+        ++calls;
+        if (value < 0) { throw "EXPECTED-BINDING-FAILURE", "negative"; }
+        return value;
+    }
+}
+enum CachedBindingEnum : int { Value = 7, Wide = 1125899906842624, }
+
+auto sub take(auto receiver, auto value) { return receiver.take(value); }
+auto sub genericTake(auto receiver, auto value) { return receiver.take(value); }
+sub checkOther(auto receiver) {
+    expect(31, receiver.take());
+    expect(19, receiver.take("19"));
+    expect(8, receiver.locked(7));
+    expect(NOTHING, receiver.optional(NOTHING));
+    expect(9, receiver.optional(9));
+    expect(10, receiver.extras(4, 6));
+    auto referenceTarget = "23";
+    expect(23, receiver.referenceValue(\referenceTarget));
+    expect(23, referenceTarget);
+    hash<string, int> input = {"value": 7};
+    expect({"value": 7, "text": "ok"}, receiver.container(input));
+    expect({"value": 7}, input);
+}
+sub checkMany(auto receiver) {
+    expect(36, receiver.eight(1, 2, 3, 4, 5, 6, 7, 8));
+    expect(45, receiver.nine(1, 2, 3, 4, 5, 6, 7, 8, 9));
+    expect((1125899906842624, "long string argument", -3.0e307, True),
+        receiver.mixed(1125899906842624, "long string argument", -3.0e307, True));
+    expect(7, receiver.fail(7));
+    try {
+        receiver.fail(-1);
+        throw "CACHED-BINDING-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "EXPECTED-BINDING-FAILURE") { rethrow; }
+    }
+}
+
+CachedBindingInt integers();
+CachedBindingFloat floats();
+CachedBindingBool booleans();
+CachedBindingOther other();
+CachedBindingMany many();
+CachedBindingGeneric<int> genericInt();
+CachedBindingGeneric<string> genericString();
+for (int round = 0; round < 12; ++round) {
+    foreach int value in ((0, -1, 140737488355327, 140737488355328,
+            -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, take(integers, value));
+        expect(value, take(integers, \value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -3.0e307, @inf@, -@inf@, @nan@)) {
+        expect(sprintf("%g", value), sprintf("%g", take(floats, value)));
+    }
+    expect(7.0, take(floats, 7));
+    expect(True, take(booleans, True));
+    expect(False, take(booleans, False));
+    expect(True, take(booleans, c'A'));
+    expect(7, genericTake(genericInt, 7));
+    expect("text", genericTake(genericString, "text"));
+    checkOther(other);
+    checkMany(many);
+}
+# Enum coercion must not reuse an earlier canonical-int binding proof.
+expect(7, take(integers, CachedBindingEnum::Value));
+expect(1125899906842624, take(integers, CachedBindingEnum::Wide));
+try {
+    take(integers, "not an integer");
+    throw "CACHED-BINDING-TEST", "invalid integer accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "RUNTIME-OVERLOAD-ERROR" && ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+}
+expect(170, integers.calls);
+expect(96, floats.calls);
+expect(36, booleans.calls);
+expect(60, many.calls);
+printf("cached-method-binding: ok\n");
