@@ -445,14 +445,15 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     - a function whose native code was compiled from IR that the AOT
       optimizations rewrote, or with calls that the debug IR cannot express,
       has debug IR of its own, which the IR interpreter runs while a debugger
-      is attached, so that it can be stepped like any other function;
+      is attached, so that it can be stepped like any other function, and
+      top-level code makes such calls as calls;
     - at \c -O0, the calls that a debugger can step into are kept as calls.
 
     Code compiled without \c -g has none of these costs.  A debugger attached
     to it gets the events of the functions that it runs in the IR interpreter,
     but can miss the entry and exit of calls that native code makes directly,
-    and the functions without debug IR of their own run their native code, with
-    no statement events.  When a debugger attaches while code compiled without
+    and the functions and top-level code without debug IR run their native
+    code, with no statement events.  When a debugger attaches while code compiled without
     \c -g is loaded, or such code is loaded while a debugger is attached, %Qore
     prints a warning once to standard error:
     @verbatim
