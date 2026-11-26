@@ -2957,6 +2957,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
+      destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
+      (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
