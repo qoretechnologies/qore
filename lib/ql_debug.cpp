@@ -31377,6 +31377,16 @@ static QoreValue f_dbg_closure_call_cache_program_misses(const QoreListNode* par
     return qore_dbg_closure_call_cache_program_misses.load(std::memory_order_relaxed);
 }
 
+// defined in JITRuntime.cpp
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_function_reference_fast_calls;
+
+//! returns the number of calls through references to user functions that the runtime made without the generic call
+//! path (qore#5578; see qore_rt_try_call_function_reference())
+static QoreValue f_dbg_function_reference_fast_calls(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_function_reference_fast_calls.load(std::memory_order_relaxed);
+}
+
 //! runs the return analysis of a function's IR in a native thread without Qore thread data, as the background JIT
 //! compilation thread runs it, and returns its result (qore#5750)
 /** The analysis (qore_ir_function_returns_pass_through()) checks the types of the function's returned values against
@@ -38173,6 +38183,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_jit_recompile_native_code", f_dbg_jit_recompile_native_code, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_function_reference_fast_calls", f_dbg_function_reference_fast_calls,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",

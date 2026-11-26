@@ -92,6 +92,55 @@ map and select, background expressions and modules compiled with
 closures; closures made outside a class called from methods) compare this with the AST
 interpreter in every execution mode, on the IR tier and in AOT code.
 
+### Calls through function references
+
+Compiled code and the IR interpreter call a call reference or closure value through
+`qore_rt_call_closure_0()`, `qore_rt_call_closure_1()` and `qore_rt_call_closure_fast_impl()`
+(`JITRuntime.cpp`). A closure takes `execClosureDirect()`; a reference to a user function
+whose class is exactly `FunctionCallReferenceNode` or `LocalFunctionCallReferenceNode`
+(`qore_get_exact_function_call_reference()`: never a subclass, so a sandbox-bound
+reference keeps its own dispatch) takes `qore_rt_try_call_function_reference_t()`
+(qore#5578), which makes the call as `qore_rt_call_fast()` makes a call of the function
+(`qore_rt_call_fast_entered_t()`, shared with it): no argument list, no
+`ResolvedCallReferenceNode::invoke()` or `dispatchValue()`, no variant search or argument
+processing (`CodeEvaluationHelper`). It does so only if all of these hold, and otherwise
+does nothing and leaves the call to the generic path:
+
+- the facts that the reference keeps (`LocalFunctionCallReferenceNode::FastCallInfo`,
+  taken by the first such call, published with a release store of its state and read
+  after an acquire load, as threads share a reference) allow it: no explicit type
+  arguments, a single variant, a user variant for which
+  `UserVariantBase::isStaticallyFastCallEligible()` holds (no default arguments, no type
+  parameters, no declared functional domain, not synchronized); every call checks that the
+  function still has that single variant;
+- an argument for each parameter, which it accepts as it is
+  (`closureDirectArgsNeedNoBinding()`, as for a closure);
+- no debugger attached to the callee's Program (the global count of Programs with a
+  debugger, `qore_aot_direct_call_mode`, first);
+- the reference's Program, the explicit Program of its generic call, is the caller's
+  current Program, and its creator context is the current one
+  (`ResolvedCallReferenceNodeIntern::creatorContextIsCurrent()`: the same effective parse
+  options as the creator recorded, the same kind of Program, and no sandbox provenance or
+  origin restrictions recorded for the reference), so that the generic path would apply
+  nothing of the creator (`QoreCallReferenceCallHelper`, `QoreSandboxProvenanceHelper`);
+  a reference made by sandboxed code, one called by code other than its creator's
+  Program's (a Program lent to sandboxed code, a module calling the script's
+  reference), and one that is bound to the sandbox therefore take the generic path;
+- the callee's Program is not being deleted (`UserVariantBase::pgm_deleted`), which is
+  tested once the thread holds a count of it: the running Program's for a call within it,
+  or the one that `ProgramThreadCountContextHelper` takes for a module's or another
+  Program's function (the variant's signature is read only after this, qore#5822).
+
+The refusal of a reference created by code that may not control threads, called by the
+expression of the background operator (`checkBackgroundCreator()`, qore#7087), and the
+reference's (empty) provenance are applied as by the generic path. The frame, the
+exceptions, the callee's Program entry and call Program context (qore#7394) and its
+promotion are those of `qore_rt_call_fast()`. `QORE_DISABLE_FUNCTION_REFERENCE_FAST_CALLS`
+disables it (testing only); debug builds count its calls
+(`dbg_function_reference_fast_calls()`). `function-reference-fast-path.qtest` compares
+the results, exceptions and call stacks with the AST interpreter in every execution mode,
+on the IR tier and in AOT code, and checks which cases take it.
+
 ## Tiered Execution
 
 Tiered mode lowers `%modern` functions to IR when their Program is committed, so

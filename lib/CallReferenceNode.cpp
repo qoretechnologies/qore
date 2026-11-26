@@ -482,23 +482,53 @@ static int check_background_creator(const ResolvedCallReferenceNodeIntern* r, Ex
     return po && (*po & QoreParseOptions(QDOM_THREAD_CONTROL)) ? qore_check_background_direct_call(xsink) : 0;
 }
 
-void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
-    creator_po = runtime_get_effective_program_parse_options();
+//! returns the effective parse options that a reference created now by the code of \a pgm, the thread's current
+//! Program, records as its creator's (see ResolvedCallReferenceNodeIntern::captureCreatorParseOptions())
+static QoreParseOptions qore_current_creator_parse_options(const QoreProgram* pgm) {
+    QoreParseOptions po = runtime_get_effective_program_parse_options();
     // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
     // permissions of that code, which uses the domains that its module declares (see
     // qore_relieve_module_declared_domains()); only module code runs with the module's override, so a reference that
     // the caller's code creates to the module's code is not relieved (the caller's code clears the module's
     // override); the Program running the code is tested, not the Program of the reference, which is the object's for
     // a method reference
-    const QoreProgram* pgm = ::getProgram();
     if (pgm && runtime_get_module_call_program() == pgm) {
-        creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
+        po = qore_relieve_module_declared_domains(po, pgm);
     }
+    return po;
+}
+
+void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
+    const QoreProgram* pgm = ::getProgram();
+    creator_po = qore_current_creator_parse_options(pgm);
     has_creator_po = true;
     creator_non_module = pgm && !qore_program_is_module_inline(pgm);
     // the run-time call reference classes call this from their constructors, when the reference is complete: a
     // reference to library module code records the restrictions of the code that creates it (qore#6520)
     qore_capture_call_reference_origin(this, getOriginCodeProgram());
+}
+
+bool ResolvedCallReferenceNodeIntern::creatorContextIsCurrent(const QoreProgram* pgm) const {
+    assert(pgm == ::getProgram());
+    // a reference that its own code calls in place applies no creator context
+    if (!has_creator_po) {
+        return true;
+    }
+    if (creator_non_module != (pgm && !qore_program_is_module_inline(pgm))
+            || creator_po != qore_current_creator_parse_options(pgm)) {
+        return false;
+    }
+    // the sandbox provenance and the origin restrictions recorded for the reference, which a call applies
+    // (QoreSandboxProvenanceHelper); a reference has them from its construction on, or never
+    if (QoreSandboxContext* context = qore_get_call_reference_provenance(this)) {
+        context->deref();
+        return false;
+    }
+    return true;
+}
+
+int ResolvedCallReferenceNodeIntern::checkBackgroundCreator(ExceptionSink* xsink) const {
+    return check_background_creator(this, xsink);
 }
 
 //! returns the Program whose code a user function runs, or nullptr for a builtin function
@@ -2591,6 +2621,33 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
         rv->holdExplicitTypeArgDecls();
     }
     return rv;
+}
+
+const LocalFunctionCallReferenceNode::FastCallInfo* LocalFunctionCallReferenceNode::takeFastCallInfo() const {
+    uint8_t state = FCS_UNKNOWN;
+    // one thread takes the facts; the acquire of a failed exchange pairs with the release store of the facts
+    if (!fast_call_state.compare_exchange_strong(state, FCS_TAKING, std::memory_order_acquire,
+            std::memory_order_acquire)) {
+        return state == FCS_ELIGIBLE ? &fast_call_info : nullptr;
+    }
+    bool eligible = false;
+    // a reference with explicit type arguments instantiates the function when it is called; a function with more
+    // than one variant resolves its variant with the arguments, also later, when a parse commit added a variant
+    if (!explicit_inst && uf->hasSingleCallVariant()) {
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        // the variant's code is entered without the generic call path only if it needs nothing of it: see
+        // UserVariantBase::isStaticallyFastCallEligible() (also a variant that declares a functional domain, whose
+        // check against the caller's restrictions the generic call path makes, is excluded, qore#6337)
+        if (uvb && uvb->isStaticallyFastCallEligible() && uvb->getUserSignature()) {
+            fast_call_info.variant = variant;
+            fast_call_info.uvb = uvb;
+            fast_call_info.num_params = uvb->getUserSignature()->numParams();
+            eligible = true;
+        }
+    }
+    fast_call_state.store(eligible ? FCS_ELIGIBLE : FCS_NOT_ELIGIBLE, std::memory_order_release);
+    return eligible ? &fast_call_info : nullptr;
 }
 
 void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
