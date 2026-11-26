@@ -9132,7 +9132,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             QoreHashNode* ex_hash;        // Refed or nullptr
             bool timed_out;
             bool completed;
-            bool was_ready;  // true if triggered by a ready event (kqueue/epoll)
             bool socket_wait_generation_changed;
         };
         std::vector<PollResult> poll_results;
@@ -9183,7 +9182,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             result.ex_hash = nullptr;
             result.timed_out = op.timed_out;
             result.completed = false;
-            result.was_ready = op.was_ready;
             result.socket_wait_generation_changed = false;
 
             result.ex_hash = makeSocketWaitGenerationException(node->second, xsink);
@@ -9415,7 +9413,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 OpCache::node_t* node = t.cache.findId(result.op_id);
                 if (!node || node->second.spop_obj != result.spop_obj) {
                     // Operation was canceled (or replaced by another poll operation) during Phase 2; the result
-                    // is read again after this loop (the POLLOUT re-queue), so it must not keep what is freed here
+                    // must not keep what is freed here
                     if (result.new_poll_info) {
                         result.new_poll_info->deref(xsink);
                         result.new_poll_info = nullptr;
@@ -9790,46 +9788,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
             }
 
-            // Re-queue ready sockets that returned poll_info (try again).
-            // On macOS/BSD, kqueue's EVFILT_WRITE for non-blocking connect is
-            // effectively edge-triggered: the event fires once when the
-            // connect completes, then won't re-fire.  The poll operation's
-            // internal check (asyncIoWait with a separate kqueue instance +
-            // zero-byte send) may not confirm the connection due to the
-            // macOS ENOTCONN race (send() returns ENOTCONN even when kqueue
-            // reported the socket as writable).  Without re-queuing, the
-            // next kqueue poll blocks indefinitely.  Use wake_socket_hashes
-            // (not ssl_deferred_hashes) to bypass the already_deferred
-            // guard — the connect will succeed within a few iterations,
-            // making this self-terminating.
-            //
-            // On Linux (epoll level-triggered), this re-queue is
-            // counterproductive: epoll reliably fires again whenever the fd
-            // is still writable, so manually re-queuing just causes a busy
-            // loop.  Concretely: QUIC server ops routinely return
-            // events=POLLIN|POLLOUT because they always want to try sending
-            // queued packets; re-queuing them every iteration tight-spins
-            // until the packet batch drains.  Level-triggered epoll already
-            // does the right thing for POLLOUT on Linux, so skip the
-            // workaround there.
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-            for (auto& result : poll_results) {
-                if (result.was_ready && result.new_poll_info && !result.completed
-                        && !result.ex_hash) {
-                    // Only re-queue for POLLOUT-only (non-blocking connect
-                    // completion).  Ops that also want POLLIN will be
-                    // re-triggered by the POLLIN side; re-queuing them here
-                    // starves other operations.
-                    int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
-                    if ((events & SOCK_POLLOUT) && !(events & SOCK_POLLIN)) {
-                        OpCache::node_t* node = t.cache.findId(result.op_id);
-                        if (node && !node->second.cached_sock_hash.empty()) {
-                            t.wake_socket_hashes.insert(node->second.cached_sock_hash);
-                        }
-                    }
-                }
-            }
-#endif
+            // A result that waits again is not re-queued here: the event loop's readiness is level-triggered on
+            // every platform (epoll without EPOLLET; kqueue filters without EV_CLEAR, see QoreEventLoop), so it
+            // reports the descriptor again for as long as it is ready, also the writability of a socket whose
+            // non-blocking connect completed, whose check reads the pending error (SO_ERROR) and confirms the
+            // connection with a zero-byte send (qore_socket_check_connect_ready()).  A re-queue of a wait for
+            // writability stepped a send to a peer that does not read continuously: a woken operation counts as
+            // ready, so its step, which found the buffer still full, was re-queued in turn (qore#7721)
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock.
@@ -9971,8 +9936,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // Deferred data discovered in Phase 3 — don't block in
             // kqueue/epoll, just check for new kernel events and return
             // immediately so the next iteration processes the deferred
-            // hashes.  wake_socket_hashes is set by the connect-retry
-            // re-queue (macOS kqueue edge-triggered EVFILT_WRITE).
+            // hashes.  wake_socket_hashes is set by WakeSocket commands,
+            // close wakes and the results of steps on workers that left
+            // application-level data buffered (hasPendingData()).
             // new_entry_ids is set in this iteration by a submit made on the I/O thread (a continuePoll() of Phase 2)
             // or by a result with no poll info: no event comes for such an operation before its first step
             timeout_ms = 0;
@@ -11660,16 +11626,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // immediate re-poll only when there is work that the
                             // OS readiness API may not deliver: application-level
                             // data buffered in SSL/HTTP/2 layers (not the kernel
-                            // buffer), and on macOS/BSD a wait for writability, as
-                            // for the I/O thread's own steps (see the re-queue of
-                            // POLLOUT results after Phase 2: kqueue reports a
-                            // non-blocking connect's completion only once).
+                            // buffer).
                             //
-                            // Elsewhere the event loop's level-triggered readiness
-                            // reports a writable descriptor whenever it is waited
-                            // for, so a wait for writability sleeps on the fd like
-                            // a read wait: re-polling it at once steps the op
-                            // continuously while its peer does not read (qore#7707).
+                            // The event loop's level-triggered readiness (epoll and
+                            // kqueue) reports a writable descriptor whenever it is
+                            // waited for, also a socket whose non-blocking connect
+                            // completed, so a wait for writability sleeps on the fd
+                            // like a read wait: re-polling it at once steps the op
+                            // continuously while its peer does not read (qore#7707,
+                            // qore#7721).
                             //
                             // Plain read waits, including EventNotifier waits, must
                             // sleep on the fd. Re-queuing them here turns an event
@@ -11708,13 +11673,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                         pd_xsink.clear();
                                     }
                                 }
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-                                bool rewake_write_wait = (ev & SOCK_POLLOUT) != 0;
-#else
-                                bool rewake_write_wait = false;
-#endif
-                                if (!event_notifier && !sh.empty()
-                                        && (rewake_write_wait || has_pending_data)) {
+                                if (!event_notifier && !sh.empty() && has_pending_data) {
                                     t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {

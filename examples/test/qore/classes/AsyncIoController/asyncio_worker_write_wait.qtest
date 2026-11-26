@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - the async I/O thread's waits for the writability of sockets of operations stepped on workers
+# test-platform: macos - the async I/O thread's kqueue waits for socket writability: sends and non-blocking connects
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -13,9 +13,6 @@
 
 #! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
 const HangGuard = 60s;
-
-#! the platforms whose event loop uses kqueue (as in lib/AsyncIoControllerPriv.cpp)
-const KqueuePlatforms = {"Darwin": True, "FreeBSD": True, "NetBSD": True, "OpenBSD": True, "DragonFly": True};
 
 #! A poll operation implemented in Qore, so stepped on a worker thread, that runs another operation and counts its steps
 class CountingWrapperOperation inherits AbstractPollOperation<auto> {
@@ -66,12 +63,18 @@ class CountingWrapperOperation inherits AbstractPollOperation<auto> {
     }
 }
 
-#! An operation stepped on a worker thread that waits for its socket to become writable sleeps until it is writable
-/** The async I/O thread polled such an operation again at once, without waiting for its socket, every time that it
-    returned a wait for writability: while the peer did not read, the operation ran continuously, about 17,000 to
-    38,000 times per second, and took a CPU core.  The I/O thread waits for the socket instead (the readiness of the
-    event loop is level-triggered), except with kqueue (macOS and BSD), where it still polls the operation again at
-    once for the completion of a non-blocking connect, which kqueue reports only once (qoretechnologies/qore#7707)
+#! An operation that waits for its socket to become writable sleeps until it is writable
+/** The async I/O thread polled an operation stepped on a worker thread again at once, without waiting for its socket,
+    every time that it returned a wait for writability: while the peer did not read, the operation ran continuously,
+    about 17,000 to 38,000 times per second, and took a CPU core (qoretechnologies/qore#7707).  On macOS (kqueue) and
+    the BSDs it still did so, and it also re-queued an operation stepped on the I/O thread whose step, run for readiness or
+    such a re-queue, returned a wait for writability alone, so a send to a peer that read once and then stopped ran
+    continuously as well (qoretechnologies/qore#7721).  Both were meant for the completion of a non-blocking connect;
+    the event loop's readiness is level-triggered on every platform, so the operation waits for its socket instead, and
+    the connect cases check that a connect completes, is refused or times out without them.
+
+    The steps of an operation stepped on the I/O thread are counted with a debug-only function, so those cases need a
+    debug build of the library.
 */
 class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
     public {
@@ -80,20 +83,35 @@ class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
 
         #! the size of the data sent: far larger than the socket buffers
         const DataSize = 16 * 1024 * 1024;
+
+        #! the data that the peer reads in the I/O thread case before it stops reading: more than the socket buffers
+        const ReadSize = 1024 * 1024;
+
+        #! the timeout of the I/O thread case, which the peer's read must take far less than (it takes milliseconds)
+        const ReadTimeout = 5s;
+
+        #! the most steps of the I/O thread case after the peer stopped reading
+        /** The step that runs when the read ends and the steps for the room that the read's last part made, which
+            fill the buffer again
+        */
+        const MaxStepsAfterRead = 8;
+
+        #! the number of connects made in the connect case
+        const ConnectRepeats = 20;
     }
 
     constructor() : QUnit::Test("AsyncIoWorkerWriteWait", "1.0") {
         addTestCase("a send to a peer that does not read sleeps", \stalledSendTest());
         addTestCase("a send to a peer that reads completes", \readingPeerSendTest());
         addTestCase("a connect completes", \connectTest());
+        addTestCase("a send stepped on the I/O thread to a peer that stops reading sleeps", \ioThreadStalledSendTest());
+        addTestCase("a connect stepped on the I/O thread completes", \ioThreadConnectTest());
+        addTestCase("a refused connect fails", \refusedConnectTest());
+        addTestCase("a connect that gets no answer sleeps until its timeout", \connectTimeoutTest());
         set_return_value(main());
     }
 
     stalledSendTest() {
-        if (KqueuePlatforms{PlatformOS}) {
-            testSkip("with kqueue, a wait for writability that a step on a worker thread returns is polled again at "
-                "once, for the completion of a non-blocking connect");
-        }
         # a UNIX domain socket: its buffers have a fixed size, and the data sent counts against the sender's buffer
         # until the peer reads it, so the first step fills it whatever the speed of the process (the buffers of a TCP
         # connection grow while it sends, so it can take more steps)
@@ -166,6 +184,156 @@ class AsyncIoWorkerWriteWaitTest inherits QUnit::Test {
         on_exit server.close();
         client.send("ping", HangGuard);
         assertEq("ping", server.recv(4, HangGuard), "the connection carries data");
+    }
+
+    #! A C++ send operation stepped on the I/O thread sleeps once its peer stops reading
+    /** The peer reads part of the data, more than the socket buffers hold, and then stops reading: while it reads,
+        the socket becomes writable, and the steps run for that fill the buffer again.  The I/O thread re-queued such a
+        step's wait for writability with kqueue, and the step run for the re-queue counted as run for readiness, so the
+        operation ran continuously until its timeout (about 10,000 steps per second on macOS).
+    */
+    ioThreadStalledSendTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_counting_poll_operation() is only registered in a library-debug build");
+        }
+        TmpDir tmp("qore-asyncio-write-wait-");
+        hash<auto> pair = makeConnection(tmp.path + "/sock");
+        on_exit {
+            pair.client.close();
+            pair.server.close();
+        }
+        # the operation that the counting operation runs is kept here (see dbg_counting_poll_operation())
+        SocketPollOperation inner = pair.client.startPollSend(binary(strmul("x", DataSize)));
+        SocketPollOperation op = call_function("dbg_counting_poll_operation", inner);
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": pair.client,
+            "spop": op,
+            "to": ReadTimeout,
+            "owner": "asyncio-worker-write-wait-test",
+        });
+        # the read ends before the operation's timeout, or the operation stops sending and the read times out
+        assertEq(ReadSize, pair.server.recvBinary(ReadSize, ReadTimeout).size(), "the peer read part of the data");
+        int read_steps = call_function("dbg_counting_poll_operation_steps", op);
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertEq("SOCKET-TIMEOUT", result.ex.err, "the send to a peer that stopped reading times out");
+        # the data read is more than the buffers hold, so the operation sent it in more than one step
+        assertGt(1, read_steps, "the operation ran again when the socket became writable");
+        assertLe(MaxStepsAfterRead, call_function("dbg_counting_poll_operation_steps", op) - read_steps,
+            "the operation slept once the buffer was full again");
+    }
+
+    #! A C++ connect operation stepped on the I/O thread completes
+    ioThreadConnectTest() {
+        for (int i = 0; i < ConnectRepeats; ++i) {
+            Socket listener();
+            listener.bind("127.0.0.1:0");
+            listener.listen();
+            on_exit listener.close();
+            Socket client();
+            on_exit client.close();
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": client.startPollConnect("127.0.0.1:" + listener.getSocketInfo().port),
+                "to": HangGuard,
+                "owner": "asyncio-worker-write-wait-test",
+            });
+            assertNothing(result.ex, "the connect completed");
+            Socket server = listener.accept(HangGuard);
+            on_exit server.close();
+            client.send("ping", HangGuard);
+            assertEq("ping", server.recv(4, HangGuard), "the connection carries data");
+        }
+    }
+
+    #! A refused connect fails, stepped on a worker thread or on the I/O thread
+    refusedConnectTest() {
+        # a port on which no socket listens, held by a connection to a listener that is then closed: a connection
+        # request to it is refused, and no concurrent program can take it, as it could take a port that is released
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        string target = "127.0.0.1:" + listener.getSocketInfo().port;
+        Socket holder();
+        on_exit holder.close();
+        holder.connect(target, HangGuard);
+        Socket held = listener.accept(HangGuard);
+        on_exit held.close();
+        listener.close();
+
+        {
+            Socket client();
+            on_exit client.close();
+            CountingWrapperOperation op(client.startPollConnect(target));
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": op,
+                "to": HangGuard,
+                "owner": "asyncio-worker-write-wait-test",
+            });
+            assertEq("SOCKET-CONNECT-ERROR", result.ex.err, "the connect stepped on a worker thread was refused");
+        }
+        {
+            Socket client();
+            on_exit client.close();
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": client.startPollConnect(target),
+                "to": HangGuard,
+                "owner": "asyncio-worker-write-wait-test",
+            });
+            assertEq("SOCKET-CONNECT-ERROR", result.ex.err, "the connect stepped on the I/O thread was refused");
+        }
+    }
+
+    #! A connect whose request gets no answer sleeps until its timeout, stepped on a worker thread or the I/O thread
+    /** A step on a worker thread that waited for the connect was polled again at once with kqueue, so it ran
+        continuously until its timeout.
+    */
+    connectTimeoutTest() {
+        if (PlatformOS != "Darwin") {
+            # Linux refuses a connection request to a socket that is bound and not listening, and a full listener
+            # queue can take a connection later (see Socket/io-closed.qtest)
+            testSkip("a connection request that gets no answer is made only on macOS here");
+        }
+        # macOS drops a connection request to a socket that is bound and not listening
+        Socket bound();
+        bound.bindINET("127.0.0.1", "0", True);
+        on_exit bound.close();
+        string target = "127.0.0.1:" + bound.getSocketInfo().port;
+
+        {
+            Socket client();
+            on_exit client.close();
+            CountingWrapperOperation op(client.startPollConnect(target));
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": op,
+                "to": WaitTimeout,
+                "owner": "asyncio-worker-write-wait-test",
+            });
+            assertEq("SOCKET-TIMEOUT", result.ex.err, "the connect stepped on a worker thread timed out");
+            assertLe(2, op.calls, "the connect stepped on a worker thread ran when it was submitted and at its timeout "
+                "only");
+        }
+        {
+            Socket client();
+            on_exit client.close();
+            SocketPollOperation inner = client.startPollConnect(target);
+            SocketPollOperation op = Option::HAVE_LIBRARY_DEBUGGING
+                ? call_function("dbg_counting_poll_operation", inner)
+                : inner;
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": op,
+                "to": WaitTimeout,
+                "owner": "asyncio-worker-write-wait-test",
+            });
+            assertEq("SOCKET-TIMEOUT", result.ex.err, "the connect stepped on the I/O thread timed out");
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                assertLe(2, call_function("dbg_counting_poll_operation_steps", op), "the connect stepped on the I/O "
+                    "thread ran when it was submitted and at its timeout only");
+            }
+        }
     }
 
     #! Returns a connected socket pair: {"client": Socket, "server": Socket}, over TCP or the given UNIX socket path
