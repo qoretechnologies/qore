@@ -25,7 +25,9 @@
     SharedObjectCopy.q checks these copies; SharedObjectCopyModules.q checks that the tenant copies the shared objects
     of each class of the standard modules that guards its state with SandboxManager::isSharedObject(self), and that
     its copy has none of that state.  Their output must be the one in the .expected files in every execution mode,
-    and in programs compiled with qcc -O0 and -O3.
+    and in programs compiled with qcc -O0 and -O3 (the tenant's code is parsed at run time, so the compiled copies
+    there are those of the trusted code: the deputies and the code of the object's class).  A copy with the copy
+    method of a base class is refused too, as it would not run the copy() method of the object's class.
 */
 class SharedObjectCopyTest inherits QUnit::Test {
     private {

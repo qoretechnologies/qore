@@ -787,8 +787,10 @@ authenticate();
     for sandboxed code (as decided for a change of the object, see
     @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()", with no update
     scope exemption) cannot copy a shared object: \c copy() raises \c SHARED-OBJECT-ERROR before anything is made, also
-    when called with Reflection or by the code of the object's class, unless the class of the copy, or one of its base
-    classes, declares a \c copy() method in %Qore code (a builtin copy method does not count).  Such a \c copy() method
+    when called with Reflection or by the code of the object's class, unless the object's class, or one of its base
+    classes, declares a \c copy() method in %Qore code (a builtin copy method does not count); a copy with the copy
+    method of another class than the object's (a base class's, with Reflection) is refused, as it would not run the
+    \c copy() methods of the object's class.  Such a \c copy() method
     takes responsibility for what the copy keeps: the members are copied before the copy methods run (those of the base
     classes first), and the method resets the state that its class guards for a shared object, such as its caches and
     the locks and records of its builds.  A base class's \c copy() method cannot know the members of a subclass, so a

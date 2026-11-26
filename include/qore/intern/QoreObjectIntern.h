@@ -400,7 +400,9 @@ public:
         code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
         (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
         of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
-        copy method is where a class resets them.  The copy is never marked as shared here.
+        copy method is where a class resets them.  Such code is also refused a copy with the copy method of another
+        class than the object's (Reflection's CopyMethod of a base class), which would not run the copy methods of
+        the object's subclasses.  The copy is never marked as shared here.
 
         @param copy_cls the class whose copy runs
         @param xsink for the exception

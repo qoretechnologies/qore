@@ -10,5 +10,7 @@ tenant copies a shared object with an inherited copy(): copied GuardedInheritedC
 tenant copies a shared object with a builtin copy only: SHARED-OBJECT-ERROR
 trusted deputy copies it with Reflection for the tenant: SHARED-OBJECT-ERROR
 trusted deputy copies one with copy() with Reflection for the tenant: copied GuardedOwnCopy, shared: False, secret: no secret
+trusted deputy copies a subclass object with the base class copy method for the tenant: SHARED-OBJECT-ERROR
+trusted deputy copies it with its own class copy method for the tenant: copied GuardedOwnCopyChild, shared: False, secret: no child secret
 trusted code copies it with Reflection: shared: False
 trusted code copies it: shared: False, secret: secret

@@ -2436,8 +2436,8 @@ static bool SandboxManager::createsSharedObjects() [flags=RET_VALUE_ONLY] {
     - cannot copy the object (\c SHARED-OBJECT-ERROR), also not with Reflection, unless a class of the copy (the
       object's class or one of its base classes) declares a \c copy() method in %Qore code, which resets what its
       class guards for a shared object: the copy has copies of all members, also the private ones; a class that guards
-      members of its own with isSharedObject() therefore declares its own \c copy() method (see
-      @ref sandbox_shared_objects)
+      members of its own with isSharedObject() therefore declares its own \c copy() method; a copy with the copy
+      method of a base class (with Reflection) is refused (see @ref sandbox_shared_objects)
 
     This applies to every code that runs for sandboxed code, also to the methods of the object's own class and to
     Reflection.  A class whose objects maintain state that they build from themselves, such as caches that they build

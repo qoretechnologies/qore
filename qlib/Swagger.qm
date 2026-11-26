@@ -1492,7 +1492,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! Returns a field definition from an abstract schema object
     /** This method provides polymorphic access to getFieldFromSchema()
-        @since Swagger 2.6
+        @since Swagger 2.4
     */
     AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
             bool required = True, *object rest) {
@@ -4711,16 +4711,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     #! Copies the schema object
     /** What the schema object guards when it is shared (the caches of its types, see getDataType()) is kept by its
-        base class, whose copy method resets it
-        (\c AbstractRestSchemaObject::copy()); code that is
-        sandboxed or acts for sandboxed code can copy a shared schema object because this class declares a copy method
-        (qore#7667)
+        base class, whose copy method resets it for a copy of a shared object that is not shared itself
+        (\c AbstractRestSchemaObject::copy()); code that is sandboxed or acts for sandboxed code can copy a shared
+        schema object because this class declares a copy method (qore#7667)
 
         @param old the object copied
 
         @since Swagger 2.6
     */
     copy(SchemaObject old) {
+        # no own guarded state: the caches that getDataType() guards are the base class's
     }
 
     #! Creates the type of an object, which records its read-only properties if it has any; see SwaggerHashDataType

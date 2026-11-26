@@ -2221,7 +2221,10 @@ public namespace RestSchemaValidator {
             A copy is a new object: it is shared only if code that no sandbox governs makes it, whatever the object
             copied was (see @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"); code that
             is sandboxed or acts for sandboxed code can copy a shared object because this class declares a copy
-            method, which resets what the class guards for a shared object (qore#7667).
+            method, which resets what the class guards for a shared object (qore#7667): a copy of a shared object that
+            is not shared itself caches none of the types and fields of the object copied, as a shared object that is
+            deserialized restores none (see deserializeMembers()), and builds its own.  Its document is the document of
+            the object copied, as for a schema object that such code creates for the document.
 
             @param old the object copied
 
@@ -2229,7 +2232,7 @@ public namespace RestSchemaValidator {
         */
         copy(AbstractRestSchemaObject old) {
             shared_object = SandboxManager::createsSharedObjects();
-            if (holds_opaque_type_caches) {
+            if (holds_opaque_type_caches || (!shared_object && SandboxManager::isSharedObject(old))) {
                 releaseTypeCaches();
             }
         }

@@ -1074,15 +1074,27 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
 int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
     assert(isShared());
     // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
-    if (!qore_caller_is_sandboxed() || copy_cls.hasUserCopyMethod()) {
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    // the copy methods of the object's own class must run: a copy with the copy method of a base class (with
+    // Reflection) would skip the copy() methods of the subclasses, which reset what they guard
+    bool own_class = &copy_cls == qore_class_private::get(*theclass);
+    if (own_class && copy_cls.hasUserCopyMethod()) {
         return 0;
     }
     if (qore_shared_object_trace()) {
         fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: copy of class '%s'\n", theclass->getName());
     }
-    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy an "
-        "object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is shared "
-        "by every Program of the process", copy_cls.name.c_str());
+    if (!own_class) {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s' with the copy method of class '%s': the object is shared by every Program of "
+            "the process", theclass->getName(), copy_cls.name.c_str());
+    } else {
+        xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy "
+            "an object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is "
+            "shared by every Program of the process", copy_cls.name.c_str());
+    }
     return -1;
 }
 

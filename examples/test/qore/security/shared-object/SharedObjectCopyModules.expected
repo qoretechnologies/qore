@@ -7,8 +7,8 @@ QoreDataField: the tenant copies a shared one (shared: True): its copy is shared
 OpenApi3Schema: the tenant copies a shared one (shared: True): its copy is shared: False
   the document's type build lock is its own: True, its type cache is empty: True (the document's: False)
 SchemaObject: the tenant copies a shared one (shared: True): its copy is shared: False
-  the schema object's guarded state: shared_object: False
+  the schema object's guarded state: shared_object: False, cached type: False (the object's: True)
 SwaggerSchema: the tenant copies a shared one (shared: True): its copy is shared: False
   the document's type build lock is its own: True, its type cache is empty: True (the document's: False)
 SchemaObject: the tenant copies a shared one (shared: True): its copy is shared: False
-  the schema object's guarded state: shared_object: False
+  the schema object's guarded state: shared_object: False, cached type: False (the object's: True)

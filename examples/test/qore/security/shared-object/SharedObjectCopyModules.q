@@ -95,8 +95,10 @@ sub check_document(object doc, object so) {
             != member(doc, "AbstractRestSchemaValidator", "type_build_lock"),
         !member(dc, doc.className(), "typemap"), !member(doc, doc.className(), "typemap"));
     object sc = tenant_copy(so);
-    printf("  the schema object's guarded state: shared_object: %y\n",
-        member(sc, "AbstractRestSchemaObject", "shared_object"));
+    printf("  the schema object's guarded state: shared_object: %y, cached type: %y (the object's: %y)\n",
+        member(sc, "AbstractRestSchemaObject", "shared_object"),
+        exists member(sc, "AbstractRestSchemaObject", "dataType"),
+        exists member(so, "AbstractRestSchemaObject", "dataType"));
 }
 
 {

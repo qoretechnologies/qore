@@ -55,6 +55,21 @@ public class GuardedOwnCopy {
 public class GuardedInheritedCopy inherits GuardedOwnCopy {
 }
 
+#! guards a private member of its own and resets it in its own copy() method, as its base class does
+public class GuardedOwnCopyChild inherits GuardedOwnCopy {
+    private {
+        *string child_secret = "child secret";
+    }
+
+    copy() {
+        remove child_secret;
+    }
+
+    string useSecret() {
+        return SandboxManager::isSharedObject(self) ? "refused" : (child_secret ?? "no child secret");
+    }
+}
+
 #! inherits only the builtin copy method of Counter
 public class GuardedCounter inherits Qore::Thread::Counter {
     private {
@@ -141,6 +156,11 @@ printf("trusted deputy copies it with Reflection for the tenant: %s\n", p.callFu
     reflection_deputy("Counter"), shared(new GuardedCounter())));
 printf("trusted deputy copies one with copy() with Reflection for the tenant: %s\n", p.callFunction("copy_deputy",
     reflection_deputy("GuardedOwnCopy"), shared(new GuardedOwnCopy())));
+# the copy method of a base class would not run the copy() method of the object's class
+printf("trusted deputy copies a subclass object with the base class copy method for the tenant: %s\n",
+    p.callFunction("copy_deputy", reflection_deputy("GuardedOwnCopy"), shared(new GuardedOwnCopyChild())));
+printf("trusted deputy copies it with its own class copy method for the tenant: %s\n",
+    p.callFunction("copy_deputy", reflection_deputy("GuardedOwnCopyChild"), shared(new GuardedOwnCopyChild())));
 {
     GuardedCounter o = shared(new GuardedCounter());
     printf("trusted code copies it with Reflection: shared: %y\n",
