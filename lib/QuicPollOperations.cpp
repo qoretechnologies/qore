@@ -645,7 +645,7 @@ static int quic_client_send_packets(QuicSession& session, int fd, QuicPacketBatc
 
     // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
     // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, nullptr, 0);
     ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
         fd, count, static_cast<int>(rc));
@@ -2488,7 +2488,7 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 
         // the datagrams not sent are kept by the session for its next write: all sessions share the socket, and
         // each keeps its own, so that none is dropped by another session's write (qore#7414)
-        int count = pkt_batch_.size();
+        [[maybe_unused]] int count = pkt_batch_.size();
         QuicSendResult rc = session->sendPackets(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
@@ -3348,7 +3348,7 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
 static int sendKeepingUnsent(QuicSession& session, int fd, QuicPacketBatch& batch,
         const struct sockaddr_storage& peer_addr, socklen_t peer_addrlen, const struct sockaddr_storage& local_addr,
         socklen_t local_addrlen, ngtcp2_tstamp& next_expiry, const char* op, ExceptionSink* xsink) {
-    int count = batch.size();
+    [[maybe_unused]] int count = batch.size();
     QuicSendResult rc = session.sendPackets(fd, batch, reinterpret_cast<const struct sockaddr*>(&peer_addr),
         peer_addrlen, reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
     switch (rc) {
