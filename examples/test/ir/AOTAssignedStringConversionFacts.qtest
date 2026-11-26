@@ -27,7 +27,10 @@ string cleanup_disabled = root + "/cleanup-disabled";
 
 File source_file();
 source_file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+# the probe cannot be debugged (%no-debugging), so its calls have no debugger check (qore#7676), whose runtime path
+# would be counted as fallback calls below
 source_file.write("%modern
+%no-debugging
 int sub consume(string value) {
     return value.size();
 }
