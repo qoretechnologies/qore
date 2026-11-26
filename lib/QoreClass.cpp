@@ -9686,10 +9686,8 @@ bool qore_class_private::isSandboxedCode() const {
 }
 
 bool qore_class_private::isRestrictedCode() const {
-    // builtin classes are trusted, also when a module created them while a sandboxed Program was current
-    if (sys) {
-        return false;
-    }
+    // a builtin class is judged by its source Program like any other class: a builtin class without one (as most are)
+    // has no released state either and is not restricted; one that a module created for a Program has that Program's
     QoreProgram* p = spgm.load();
     if (!p) {
         // the state of a released Program is not known: the sandbox state is true whenever it would be

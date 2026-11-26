@@ -2270,41 +2270,7 @@ public class AwsSignedEventStream {
                 if (frame) {
                     return frame;
                 }
-                auto item = stream.readData(timeout_ms);
-                if (!exists item) {
-                    throw "AWS-EVENT-STREAM-TIMEOUT", "timed out waiting for AWS event-stream data";
-                }
-                if (item.typeCode() == NT_HASH && item.error) {
-                    throw item.error.err ?? "AWS-EVENT-STREAM-ERROR", item.error.desc ?? "HTTP stream failed";
-                }
-                if (!checked_response) {
-                    hash<auto> response = stream.getResponse() ?? {};
-                    if (exists response.status_code) {
-                        if (response.status_code < 200 || response.status_code >= 300) {
-                            throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d",
-                                response.status_code), response - "body";
-                        }
-                        # the media type, without parameters; an empty string for a response without a Content-Type
-                        string content_type = (((response.headers."content-type" ?? "").split(";"))[0] ?? "").lwr();
-                        if (trim(content_type) != "application/vnd.amazon.eventstream") {
-                            throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
-                                + content_type;
-                        }
-                        checked_response = True;
-                    }
-                }
-                if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
-                    if (!checked_response) {
-                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "event data arrived without response headers";
-                    }
-                    decoder.feed(binary(item));
-                } else if (item.typeCode() == NT_HASH && item.end_stream) {
-                    if (!checked_response) {
-                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "stream ended without response headers";
-                    }
-                    decoder.finish();
-                    AutoLock sl(state_lock);
-                    finished = True;
+                if (readItemLocked(timeout_ms)) {
                     return NOTHING;
                 }
             }
@@ -2312,6 +2278,90 @@ public class AwsSignedEventStream {
             close();
             rethrow;
         }
+    }
+
+    #! Waits until the response has started the event stream, without reading an event
+    /** The response's status and media type are checked as @ref readFrame() checks them; the event data that arrives
+        with the response is kept for @ref readFrame().  A caller can retry a request whose response did not start
+        the stream, as no event was delivered from it.
+
+        @param timeout_ms idle timeout; omitted to use the HTTP client's configured timeout
+
+        @return the HTTP response metadata (see @ref getResponseInfo())
+
+        @throw AWS-EVENT-STREAM-TIMEOUT no response arrived before the timeout
+        @throw AWS-EVENT-STREAM-HTTP-ERROR unsuccessful HTTP status (the response is the argument, with its
+        \c status_code and \c headers) or wrong response media type
+        @throw AWS-EVENT-STREAM-CLOSED this session was explicitly closed
+        @note A transport or timeout error closes the stream.
+
+        @since AwsRestClient 1.4
+    */
+    hash<auto> waitForResponse(*timeout timeout_ms) {
+        AutoLock al(read_lock);
+        try {
+            while (!checked_response) {
+                {
+                    AutoLock sl(state_lock);
+                    if (closed) {
+                        throw "AWS-EVENT-STREAM-CLOSED", "event stream was closed";
+                    }
+                }
+                if (readItemLocked(timeout_ms)) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            close();
+            rethrow;
+        }
+        return getResponseInfo();
+    }
+
+    #! Reads one item of the HTTP stream: checks the response, and feeds its event data to the decoder
+    /** Called with \c read_lock held
+
+        @return @ref True if the stream has ended (it is then finished)
+    */
+    private bool readItemLocked(*timeout timeout_ms) {
+        auto item = stream.readData(timeout_ms);
+        if (!exists item) {
+            throw "AWS-EVENT-STREAM-TIMEOUT", "timed out waiting for AWS event-stream data";
+        }
+        if (item.typeCode() == NT_HASH && item.error) {
+            throw item.error.err ?? "AWS-EVENT-STREAM-ERROR", item.error.desc ?? "HTTP stream failed";
+        }
+        if (!checked_response) {
+            hash<auto> response = stream.getResponse() ?? {};
+            if (exists response.status_code) {
+                if (response.status_code < 200 || response.status_code >= 300) {
+                    throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d",
+                        response.status_code), response - "body";
+                }
+                # the media type, without parameters; an empty string for a response without a Content-Type
+                string content_type = (((response.headers."content-type" ?? "").split(";"))[0] ?? "").lwr();
+                if (trim(content_type) != "application/vnd.amazon.eventstream") {
+                    throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
+                        + content_type;
+                }
+                checked_response = True;
+            }
+        }
+        if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
+            if (!checked_response) {
+                throw "AWS-EVENT-STREAM-HTTP-ERROR", "event data arrived without response headers";
+            }
+            decoder.feed(binary(item));
+        } else if (item.typeCode() == NT_HASH && item.end_stream) {
+            if (!checked_response) {
+                throw "AWS-EVENT-STREAM-HTTP-ERROR", "stream ended without response headers";
+            }
+            decoder.finish();
+            AutoLock sl(state_lock);
+            finished = True;
+            return True;
+        }
+        return False;
     }
 
     #! Sends one signed event on a bidirectional upload

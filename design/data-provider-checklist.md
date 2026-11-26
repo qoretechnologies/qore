@@ -95,7 +95,7 @@ its overlay, not by module code).
       regenerate with the newer Qore rather than editing the catalogs. A stale catalog in a directory of the
       installed Qore, or without a record, is drift (2). A write over the catalogs of a newer Qore is refused. The
       order of two Qores is their git ancestry in the Qore checkout named by `QORE_SRC_DIR` (or the checkout the tool
-      is run from); two Qores that cannot be ordered there (another branch, a commit the checkout does not have, no
+      is in); two Qores that cannot be ordered there (another branch, a commit the checkout does not have, no
       checkout) are refused unless `--allow-other-qore` is given. Tests:
       `examples/test/qlib/DataProvider/I18nGeneratorRecord.qtest`.
 - [ ] `registerApp()` called with correct fields
