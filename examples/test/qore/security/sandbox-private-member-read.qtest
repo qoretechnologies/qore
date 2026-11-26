@@ -109,6 +109,21 @@ public class HashTarget {
     }
 }
 
+#! a class with a serialization hook that gives a transient private member, which the automatic serialization omits
+public class HookTarget inherits Serializable {
+    public {
+        int pub = 1;
+    }
+
+    private {
+        transient string token = \"secret-token\";
+    }
+
+    private:internal hash<auto> serializeMembers(hash<auto> members) {
+        return members + {\"token\": token};
+    }
+}
+
 #! creates a child Program that shares the classes of this Program and that a sandbox of its own governs
 Program sub child(string src, Qore::ExecMode mode, int level) {
     Program b(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -254,6 +269,20 @@ string sub held_merge(HashTarget w) {
 
 HashTarget sub make_hash_target() {
     return new HashTarget();
+}
+
+#! serializes an object of a class with a serialization hook: \"token\" if the serialization has its transient private
+#! member, \"no-token\" if not, or the exception code
+string sub serialize_hook(HookTarget w) {
+    try {
+        return sprintf(\"%y\", Serializable::serializeToData(w)) =~ /secret-token/ ? \"token\" : \"no-token\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+HookTarget sub make_hook_target() {
+    return new HookTarget();
 }
 ";
 
@@ -479,6 +508,12 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         assertEq("hidden", b.callFunction("format_object", a_obj), mode + ": B formats A's object");
         assertEq("pub|1|1", b.callFunction("names_object", a_obj), mode + ": B on A's object's names");
         assertEq("pub", b.callFunction("merge_object", a_obj), mode + ": B merges A's object");
+        # the serialization hook of a class is not called for code that may not read the object's non-public members:
+        # the automatic members are serialized then, without the transient private member that the hook gives
+        assertEq("no-token", b.callFunction("serialize_hook", a.callFunction("make_hook_target")),
+            mode + ": B serializes A's object with a serialization hook");
+        assertEq("token", b.callFunction("serialize_hook", b.callFunction("make_hook_target")),
+            mode + ": B serializes its own object with a serialization hook");
         # outside of a class, the public members only, also of its own object (qore#7048)
         assertEq("pub|1|1", b.callFunction("names_object", b.callFunction("make_target")),
             mode + ": B on its own object's names");

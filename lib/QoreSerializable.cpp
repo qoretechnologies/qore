@@ -702,9 +702,12 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             bool protect = current_priv->sandboxSerializationProtected();
 
             // see if the local class has a serializeMembers() method defined; the method of a protected class is not
-            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146)
-            const QoreMethod* serializeMembers = protect && context.caller.restricts(*current_priv, true) ? nullptr
-                : current_cls.findLocalMethod("serializeMembers");
+            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146), nor
+            // for code that may not read the non-public members of the object as a whole (qore#7033): the automatic
+            // members are serialized then, with the rule of each
+            const QoreMethod* serializeMembers = !non_public
+                || (protect && context.caller.restricts(*current_priv, true))
+                ? nullptr : current_cls.findLocalMethod("serializeMembers");
 
             // iterate all nornal members in the class
             QoreClassMemberIterator mi(ci.get());

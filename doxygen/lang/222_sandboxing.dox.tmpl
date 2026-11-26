@@ -848,7 +848,9 @@ authenticate();
     object with \c %%y, which does not depend on a class context, shows the non-public members only to trusted code and
     to sandboxed code whose sandbox created the object, and serializing it for other sandboxed code raises
     \c SERIALIZATION-ERROR if a non-public member has a value, as for the non-public state of the classes that trusted
-    code declared (see @ref sandbox_serialization).  A copy of an object (\c copy()) keeps the
+    code declared (see @ref sandbox_serialization); the \c serializeMembers() method of a class is not called for such
+    code, whose serialization has the automatic members only (a transient member is not serialized), and the
+    serializers of builtin classes, whose state is their own, are not affected.  A copy of an object (\c copy()) keeps the
     creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
     an object of its own with the state of an object that its sandbox did not create.
 
