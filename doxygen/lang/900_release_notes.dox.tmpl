@@ -4895,6 +4895,9 @@
       \c SHARED-OBJECT-ERROR for it, as for an object marked with
       @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
       affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
+    - converting a deleted object, held by a strong or a @ref weak_assignment_operator "weak reference", to
+      \c softlist or \c softlist<T> gives an empty list as before but no longer leaks the object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7759">issue 7759</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -7115,6 +7115,22 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             }
             if (u.t == NT_ALL || u.t == t) {
                 ok = true;
+                // a deleted object accepted as no value is converted as no value: the conversion of no value (ex: to
+                // the empty list of softlist) replaces the value without releasing it, so the reference to the object
+                // is released here, or it would be leaked (qore#7759)
+                if (u.t == NT_NOTHING && accept.map && n.getType() == NT_OBJECT) {
+                    QoreValue old = n;
+                    n = QoreValue();
+                    if (lvhelper) {
+                        // released after the lvalue's lock, as other values that a conversion replaces
+                        lvhelper->saveTemp(old);
+                    } else {
+                        old.discard(xsink);
+                        if (xsink && *xsink) {
+                            return true;
+                        }
+                    }
+                }
             }
             break;
         }
