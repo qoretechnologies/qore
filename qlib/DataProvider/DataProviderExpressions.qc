@@ -142,22 +142,26 @@ bool sub dp_field_exists_intern(hash<auto> rec, auto operand, reference<auto> va
     return True;
 }
 
-#! Returns True if a record has the field that the operand of exists names
-/** @param rec the record
+#! Returns True if a record has the field that the operand of exists names, with a value
+/** A field whose value is @ref nothing counts as missing, as with Qore's \c exists operator, so that a record that
+    lacks a field and the same record in a block (where every row has every field of the block, with no value where
+    the record lacks it) give the same result; @ref NULL is a value
+
+    @param rec the record
     @param operand the operand of exists
 
-    @return True if the record has the field, also when its value is @ref nothing
+    @return True if the record has the field with a value other than @ref nothing (also @ref NULL)
 
     @throw DATA-PROVIDER-EXPRESSION-ERROR the operand is not a field reference with key and index accessors
 
-    @since DataProvider 3.11
+    @since DataProvider 3.11; DataProvider 3.13: a field with no value counts as missing
 */
 bool sub dp_field_exists(hash<auto> rec, auto operand) {
     if (*string issue = dp_exists_operand_issue(operand)) {
         throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("exists %s; got %y", issue, operand);
     }
     auto value;
-    return dp_field_exists_intern(rec, operand, \value);
+    return dp_field_exists_intern(rec, operand, \value) && exists value;
 }
 
 #! Returns the steps of a findIn location
@@ -3515,9 +3519,11 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "type": DET_Operator,
             "name": DP_OP_EXISTS,
             "display_name": "exists",
-            "short_desc": "Returns True if the record has the field, also when the field has no value",
-            "desc": "Returns `True` if the record has the field, also when its value is `null`, and `False` if it does "
-                "not have it; it is written `exists @field`.  A field that a record does not have raises an error "
+            "short_desc": "Returns True if the record has the field with a value",
+            "desc": "Returns `True` if the record has the field with a value, and `False` if it does not have it or "
+                "its value is `null`; an SQL `NULL` is a value; it is written `exists @field`.  A field whose value "
+                "is `null` counts as missing so that a record gives the same result on its own and in a block, where "
+                "every record has every field.  A field that a record does not have raises an error "
                 "everywhere else, so `exists` is how records of different shapes are told apart: "
                 "`exists @type && @type == \"return\"` is `False` for a record without `type`, while "
                 "`@type == \"return\"` raises an error for it.\n\n"
@@ -3526,9 +3532,9 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 "with a character there; a negative position counts from the end\n"
                 "- a wildcard (`[*]`, `{*}`), a range, or several positions or keys are not accepted; test each item "
                 "with `any` or `all` instead, such as `any exists @id, @orders`\n\n"
-                "Whether a field has a value is tested with `isNotNull(@field)`, which needs the record to have the "
-                "field.  Databases cannot search with `exists`, as every row has every column: it is evaluated on "
-                "the records read",
+                "`isNotNull(@field)` is also `False` for an SQL `NULL`, and needs the record to have the field.  "
+                "Databases cannot search with `exists`, as every row has every column: it is evaluated on the "
+                "records read",
             "symbol": "exists",
             "groups": "Comparison",
             "args": (DataProviderSignatureAnyType,),
