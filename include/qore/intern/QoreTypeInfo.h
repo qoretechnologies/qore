@@ -1034,6 +1034,35 @@ public:
         }
     }
 
+    //! As acceptAssignment(), for the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
+    /** The conversion itself refuses to wrap a value that is not a list in a new list (a softlist lvalue), or to
+        convert no value (NOTHING or NULL) to a new empty list: it raises RUNTIME-TYPE-ERROR, as the weak or opaque
+        reference would designate the new list, a temporary, instead of the value assigned.  A value that needs no
+        conversion is accepted as by acceptAssignment(), at the same cost.
+
+        @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    */
+    DLLLOCAL static void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, bool weak, LValueHelper* lvhelper = nullptr) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputInternWeak(xsink, text, n, weak, lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
+    //! As above, with the immutable compatibility policy of the operation
+    DLLLOCAL static void acceptAssignmentWeak(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, bool weak, LValueHelper* lvhelper = nullptr) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputInternWeak(xsink, text, n, weak, policy, lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
     //! As above, for a caller that knows the container kind but has no LValueHelper
     /** compiled code stores container elements through runtime helpers instead of an LValueHelper, and must report
         the same diagnostic as the AST interpreter for the same assignment
@@ -1470,6 +1499,17 @@ public:
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
             const char* param_name, QoreValue& n, LexicalSemanticPolicy policy, LValueHelper* lvhelper = nullptr,
             q_lvalue_vts_e vts = QLVTS_None) const;
+
+    //! As acceptInputIntern() for the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
+    /** The conversion of a value that is not a list that gives a list (a softlist type wraps the value in a new list,
+        or converts no value to a new empty list) raises RUNTIME-TYPE-ERROR, as the reference would designate the new
+        list; see acceptAssignmentWeak()
+    */
+    DLLLOCAL void acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+            q_lvalue_vts_e vts) const;
+
+    DLLLOCAL void acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+            LexicalSemanticPolicy policy, q_lvalue_vts_e vts) const;
 
     template <typename FilterPolicy>
     DLLLOCAL void acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,

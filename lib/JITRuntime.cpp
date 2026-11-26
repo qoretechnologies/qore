@@ -3035,14 +3035,16 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
     // the container that a weak assignment assigns, with a reference of its own, which the conversion cannot consume
     // (qore#7237, qore#7572; see LValueHelper::assign())
     ValueHolder weak_source(xsink);
-    // any other value of a weak assignment, borrowed, as the caller holds it: a conversion that makes a new container
-    // of it (a softlist local wraps it in a new list) is refused (qore#7619)
-    const uint64_t weak_value = toBits(val);
-    const qore_type_t weak_value_type = weak ? val.getType() : NT_ALL;
-    if (weak && (weak_value_type == NT_LIST || weak_value_type == NT_HASH)) [[unlikely]] {
+    if (weak && (val.getType() == NT_LIST || val.getType() == NT_HASH)) [[unlikely]] {
         weak_source = val.refSelf();
     }
-    QoreTypeInfo::acceptAssignment(ti, desc, val, xsink);
+    // the conversion of a weak assignment refuses to wrap the value in a new list, as LValueHelper::assign() refuses it
+    // (qore#7619)
+    if (weak) {
+        QoreTypeInfo::acceptAssignmentWeak(ti, desc, val, xsink, true);
+    } else {
+        QoreTypeInfo::acceptAssignment(ti, desc, val, xsink);
+    }
     if (!xsink || !*xsink) {
         // Keep StoreLocal coercion aligned with LValueHelper::assign(): no-narrow
         // lvalues store plain auto containers
@@ -3055,13 +3057,6 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
             // assigned, or the container assigned takes the place of a copy that only tagged it
             val.discard(xsink);
             val = rc > 0 ? weak_source.release() : QoreValue();
-        }
-    } else if (weak && toBits(val) != weak_value && (!xsink || !*xsink)) [[unlikely]] {
-        // the conversion gave another value, which is refused if it is a new container (qore#7619)
-        assert(xsink);
-        if (qore_weak_assignment_wrap(fromBits(weak_value), weak_value_type, val, true, ti, xsink)) {
-            val.discard(xsink);
-            val = QoreValue();
         }
     }
     uint64_t result = toBits(val);
@@ -3112,20 +3107,19 @@ static void qore_rt_check_weak_store_conversion_impl(const QoreTypeInfo* ti, uin
         o = *target;
     }
     const AbstractQoreNode* node = qore_rt_container_node(o);
-    if (!node) {
-        // a value that is not a container: a new container that the conversion made of it is refused (qore#7619)
-        qore_weak_assignment_wrap(o, o.getType(), fromBits(stored), weak, ti, xsink);
+    // a list that the conversion made of a value that is not a list (a softlist local wraps it) is refused with the
+    // error that the conversion of a weak store raises (QoreTypeInfo::acceptAssignmentWeak(); qore#7619)
+    QoreValue s = fromBits(stored);
+    if (s.getType() == NT_LIST && (node ? node->getType() == NT_HASH : qore_weak_value_may_wrap(o.getType()))) {
+        qore_weak_store_wrap_raise(weak, o.getTypeInfo(), o.getType() == NT_NOTHING || o.getType() == NT_NULL, ti,
+            xsink);
         return;
     }
-    const AbstractQoreNode* stored_node = qore_rt_container_node(fromBits(stored));
-    if (stored_node == node) {
+    if (!node || qore_rt_container_node(s) == node) {
         return;
     }
-    // a hash that a softlist local wrapped in a new list is refused as any other value that it wraps (qore#7619)
-    xsink->raiseException("RUNTIME-TYPE-ERROR", stored_node && node->getType() == NT_HASH
-            && stored_node->getType() == NT_LIST
-        ? qore_weak_store_wrap_desc(weak, QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti), false)
-        : qore_weak_store_conversion_desc(weak, QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti)));
+    xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_conversion_desc(weak,
+        QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti)));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_check_weak_store_conversion(const QoreTypeInfo* ti, uint64_t original,

@@ -6038,6 +6038,56 @@ struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
         }
     }
 };
+
+//! The filter policy of the lvalue of a weak (:=) or opaque (@=) assignment (qore#7619)
+/** As \a Base, except that a conversion of a value that is not a list that gives a list is refused: a softlist type
+    wraps the value in a new list, or converts no value (NOTHING or NULL) to a new empty list, which the reference
+    would designate instead of the value assigned.  Only the conversion of the lvalue's own type is checked: the
+    conversions of the elements of a container use \a Base (see input()), as a container converted to a copy is refused
+    by qore_weak_assignment_conversion().  A value that needs no conversion takes the same path as with \a Base.
+*/
+template <typename Base>
+struct WeakStoreFilterPolicy : Base {
+    //! the type of the lvalue
+    const QoreTypeInfo* target;
+    //! true for a weak assignment, false for an opaque one
+    bool weak;
+
+    WeakStoreFilterPolicy(Base base, const QoreTypeInfo* target, bool weak) : Base(base), target(target), weak(weak) {
+    }
+
+    void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
+        qore_type_t t = n.getType();
+        if (!qore_weak_value_may_wrap(t)) {
+            Base::map(accept, n, xsink);
+            return;
+        }
+        // the type of the value is read before the conversion, which can release the value (ex: a softlist<softint>
+        // type converts a string to the element of its list)
+        const QoreTypeInfo* vti = n.getTypeInfo();
+        Base::map(accept, n, xsink);
+        if (n.getType() == NT_LIST && !(xsink && *xsink)) {
+            assert(xsink);
+            // the caller adds the context of the conversion to the error (QoreTypeSpec::acceptInputImpl())
+            xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_wrap_desc(weak, QoreTypeInfo::getName(vti),
+                QoreTypeInfo::getName(target), t == NT_NOTHING || t == NT_NULL
+                    ? QoreWeakWrapKind::NoValue
+                    : QoreWeakWrapKind::Value));
+        }
+    }
+};
+}
+
+void QoreTypeInfo::acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+        q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, "lvalue", false, -1, text, n, nullptr, vts,
+        WeakStoreFilterPolicy<DefaultTypeFilterPolicy>(DefaultTypeFilterPolicy{}, this, weak));
+}
+
+void QoreTypeInfo::acceptInputInternWeak(ExceptionSink* xsink, const char* text, QoreValue& n, bool weak,
+        LexicalSemanticPolicy policy, q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, "lvalue", false, -1, text, n, nullptr, vts,
+        WeakStoreFilterPolicy<LexicalTypeFilterPolicy>(LexicalTypeFilterPolicy{policy}, this, weak));
 }
 
 void qore_lexical_soft_bool_filter(QoreValue& value, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -6572,10 +6622,10 @@ template <typename FilterPolicy>
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_record(QoreReferenceBindProbe& probe,
         ReferenceNode* r, const QoreTypeInfo* target_ti, FilterPolicy policy, ExceptionSink* xsink) {
     bool ok;
-    if constexpr (std::is_same<FilterPolicy, LexicalTypeFilterPolicy>::value) {
+    if constexpr (std::is_base_of<LexicalTypeFilterPolicy, FilterPolicy>::value) {
         ok = probe.record(r, target_ti, policy.policy, true);
     } else {
-        static_assert(std::is_same<FilterPolicy, DefaultTypeFilterPolicy>::value, "a filter policy of a check");
+        static_assert(std::is_base_of<DefaultTypeFilterPolicy, FilterPolicy>::value, "a filter policy of a check");
         ok = probe.record(r, target_ti, LexicalSemanticPolicy(), false);
     }
     if (!ok && xsink) {

@@ -77,7 +77,8 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
             "our softlist gsl;\n";
 
         #! parse-time cases of softlist lvalues: name, code, expected error ("wrap" for a value that is not a list,
-        #! "empty" for no value, "ok" for a script that is parsed and run) (qore#7619)
+        #! "empty" for no value, "either" for a value that can be either, "ok" for a script that is parsed and run), and
+        #! optionally the type that the error names for the lvalue (qore#7619)
         const WrapParseCases = (
             ("object into softlist", "PcObj c(); softlist v; v := c;", "wrap"),
             ("object into softlist, opaque", "PcObj c(); softlist v; v @= c;", "wrap"),
@@ -94,8 +95,18 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
             ("global", "gsl := 1;", "wrap"),
             ("member", "PcListHolder o(); o.sli := 1;", "wrap"),
             ("opaque member", "PcObj c(); PcListHolder o(); o.nsl @= c;", "wrap"),
-            ("hash key", "hash<string, softlist> h = {}; h.k := 1;", "wrap"),
-            ("list element", "list<softlist> l = (); l[0] := 1;", "wrap"),
+            ("hash key", "hash<string, softlist> h = {}; h.k := 1;", "wrap", "softlist"),
+            ("list element", "list<softlist> l = (); l[0] := 1;", "wrap", "softlist"),
+            ("nested hash key", "hash<string, hash<string, softlist>> hh = {}; PcObj c(); hh.a.b := c;", "wrap",
+                "softlist"),
+            ("nested list element", "list<list<softlist<int>>> ll = (); ll[0][1] := 1;", "wrap", "softlist<int>"),
+            ("NOTHING into a hash key", "hash<string, softlist> h = {}; h.k := NOTHING;", "empty", "softlist"),
+            ("NOTHING into a list element", "list<softlist> l = (); l[0] := NOTHING;", "empty", "softlist"),
+            ("NOTHING into a *softlist hash key keeps", "hash<string, *softlist> h = {\"k\": (1,)}; h.k := NOTHING; "
+                "if (exists h.k) { throw \"X\"; }", "ok"),
+            ("maybe NOTHING into softlist", "*int n; softlist v; v := n;", "either", "softlist"),
+            ("maybe NOTHING into a hash key", "*int n; hash<string, softlist> h = {}; h.k @= n;", "either",
+                "softlist"),
             ("NOTHING into softlist", "softlist v; v := NOTHING;", "empty"),
             ("NOTHING into softlist, opaque", "softlist v; v @= NOTHING;", "empty"),
             ("NOTHING into softlist<auto>", "softlist<auto> v; v := NOTHING;", "empty"),
@@ -195,9 +206,23 @@ class WeakStoreConversionErrorTest inherits QUnit::Test {
             }
             assertNeq(0, r.rc, c[0]);
             assertRegex("PARSE-TYPE-ERROR: the (weak|opaque) assignment operator ", r.out, c[0]);
-            assertRegex(c[2] == "wrap"
-                ? "the lvalue's type wraps the value in a new list"
-                : "the lvalue's type converts no value to a new empty list", r.out, c[0]);
+            switch (c[2]) {
+                case "wrap":
+                    assertRegex("the lvalue's type wraps the value in a new list", r.out, c[0]);
+                    break;
+                case "empty":
+                    assertRegex("the lvalue's type converts no value to a new empty list", r.out, c[0]);
+                    break;
+                case "either":
+                    assertRegex("the lvalue's type wraps a value in a new list, and converts no value to a new empty "
+                        "list", r.out, c[0]);
+                    break;
+                default:
+                    fail(sprintf("%s: unknown kind %y", c[0], c[2]));
+            }
+            if (c[3]) {
+                assertRegex(sprintf("in an lvalue of type '%s':", c[3]), r.out, c[0] + ": lvalue type");
+            }
         }
         # a script that the parse refuses is not compiled
         string bin = tmp.path + "/wrap-parse-case-compiled";

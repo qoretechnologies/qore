@@ -267,10 +267,11 @@ static bool qore_parse_weak_store_converts(const QoreTypeInfo* target_ti, const 
     list is checked by qore_parse_weak_store_converts() and at run time; any other case is refused by the run-time
     check of LValueHelper::assign()
 
-    @param no_value set to true if the value is known to be NOTHING or NULL
+    @param kind set to what the lvalue makes of the value: no value only (the value's type is NOTHING or NULL), a
+    value that is not a list only, or either (ex: a \c *int value)
 */
 static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti,
-        bool& no_value) {
+        QoreWeakWrapKind& kind) {
     if (!QoreTypeInfo::hasType(value_ti) || !QoreTypeInfo::isSoftListType(target_ti)
             || QoreTypeInfo::isReference(value_ti)) {
         return false;
@@ -284,9 +285,40 @@ static bool qore_parse_weak_store_wraps(const QoreTypeInfo* target_ti, const Qor
     if (maybe_nothing && QoreTypeInfo::parseReturns(target_ti, NT_NOTHING) != QTI_NOT_EQUAL) {
         return false;
     }
-    no_value = QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT
-        || QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT;
+    if (!maybe_nothing) {
+        kind = QoreWeakWrapKind::Value;
+    } else if (QoreTypeInfo::parseReturns(value_ti, NT_NOTHING) == QTI_IDENT
+            || QoreTypeInfo::parseReturns(value_ti, NT_NULL) == QTI_IDENT) {
+        kind = QoreWeakWrapKind::NoValue;
+    } else {
+        kind = QoreWeakWrapKind::Either;
+    }
     return true;
+}
+
+//! returns the type that a weak or opaque assignment to \a left assigns the value with, for its parse-time checks
+//! (qore#7619)
+/** A key of a hash<string, T> or an element of a list<T> is assigned with T, which the type of the lvalue, \a ti,
+    gives as *T, as the key or the element can be missing; any other lvalue with \a ti
+*/
+static const QoreTypeInfo* qore_parse_weak_store_lvalue_type(const QoreValue& left, const QoreTypeInfo* ti) {
+    const AbstractQoreNode* node = left.getInternalNode();
+    if (!node) {
+        return ti;
+    }
+    const QoreTypeInfo* eti = nullptr;
+    if (const QoreHashObjectDereferenceOperatorNode* h
+            = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        if (!h->isSlice()) {
+            eti = QoreTypeInfo::getReturnComplexHashOrNothing(h->getOwnerTypeInfo());
+        }
+    } else if (const QoreSquareBracketsOperatorNode* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        const ParseNode* container = dynamic_cast<const ParseNode*>(sb->getLeft().getInternalNode());
+        if (container) {
+            eti = QoreTypeInfo::getReturnComplexListOrNothing(container->getParseTypeInfo());
+        }
+    }
+    return QoreTypeInfo::hasType(eti) ? eti : ti;
 }
 
 int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
@@ -743,11 +775,13 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
         // a softlist lvalue that is known to wrap the value in a new list, or to convert no value to a new empty list,
         // is refused likewise (qore#7619)
-        bool no_value = false;
-        if (qore_parse_weak_store_wraps(ti, parse_context.typeInfo, no_value)) {
+        // the declared type of a key or an element, which the error names as the run-time error names it
+        const QoreTypeInfo* wrap_ti = qore_parse_weak_store_lvalue_type(left, ti);
+        QoreWeakWrapKind kind = QoreWeakWrapKind::Value;
+        if (qore_parse_weak_store_wraps(wrap_ti, parse_context.typeInfo, kind)) {
             qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
                 qore_weak_store_wrap_desc(mode == AssignmentMode::Weak, QoreTypeInfo::getName(parse_context.typeInfo),
-                    QoreTypeInfo::getName(ti), no_value));
+                    QoreTypeInfo::getName(wrap_ti), kind));
             err = -1;
         } else if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
             qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",

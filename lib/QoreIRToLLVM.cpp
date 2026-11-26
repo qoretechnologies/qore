@@ -81,8 +81,9 @@ static bool qore_assignment_mode_converts_value(AssignmentMode mode) {
 /** A weak or opaque store refuses a container that the local's type converted to a copy (qore#7572).  A weak store
     converts the value with the weak helper (see qore_coerce_helper_name()), which refuses such a copy itself
     (qore_weak_assignment_conversion()), so only an opaque store calls the check
-    (qore_rt_check_weak_store_conversion()) after its conversion; both refuse likewise a new list that a softlist local
-    made of a value that is not a list (qore_weak_assignment_wrap(); qore#7619)
+    (qore_rt_check_weak_store_conversion()) after its conversion; the weak helper's conversion refuses also a new list
+    that a softlist local would make of a value that is not a list, and the check refuses it for an opaque store
+    (QoreTypeInfo::acceptAssignmentWeak(); qore#7619)
 */
 static bool qore_store_checks_weak_conversion(AssignmentMode mode) {
     return mode == AssignmentMode::Opaque;
