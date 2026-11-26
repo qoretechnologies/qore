@@ -67,6 +67,7 @@
 #include <map>
 #include <memory>
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
@@ -837,6 +838,17 @@ static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConf
     int64 count = HARD_QORE_VALUE_INT(params, 1);
     int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
     return qore_type_dbg_wait_entered(tid, count, timeout_ms);
+#else
+    return false;
+#endif
+}
+
+//! Waits until a thread waits for a lazy shared value that another thread builds; returns false on timeout (qore#7684)
+static QoreValue f_dbg_lazy_shared_wait_waiting(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 1);
+    return qore_lazy_shared_dbg_wait_waiting(tid, timeout_ms);
 #else
     return false;
 #endif
@@ -37312,6 +37324,36 @@ static QoreValue f_dbg_nested_native_load_policy(const QoreListNode* params, Run
     return result.release();
 }
 
+//! Runs a call with a sandboxed caller recorded on the thread and hidden from the walk of the Programs (qore#7684)
+/** The code of \a caller (a sandboxed Program) parses or loads a module in \a target, as Program::parse() does: the
+    thread's current Program is \a target, which hides \a caller from sandbox resolution, and only the sandboxed caller
+    that QoreCallerSandboxHelper records keeps the calling code sandboxed; \a call runs there.  DEBUG builds only.
+*/
+static QoreValue f_dbg_call_with_sandboxed_caller_record(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* caller_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> caller(static_cast<QoreProgram*>(caller_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!caller) {
+        return QoreValue();
+    }
+    const ResolvedCallReferenceNode* call = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    QoreProgram* target = rc.getProgram();
+    ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreCallerSandboxHelper issuer(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ProgramRuntimeParseContextHelper destination(xsink, target);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return call->invoke(nullptr, xsink);
+}
+
 //! Observes a live policy change of a test-owned sandbox while two library initializers are active.
 static QoreValue f_dbg_native_load_init_revocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreSandboxManager> manager(new QoreSandboxManager, nullptr);
@@ -37564,6 +37606,9 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_lazy_shared_wait_waiting", f_dbg_lazy_shared_wait_waiting, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_keep_until_cleanup", f_dbg_keep_until_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -37659,6 +37704,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_nested_native_load_policy", f_dbg_nested_native_load_policy, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
         QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_call_with_sandboxed_caller_record", f_dbg_call_with_sandboxed_caller_record,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, autoTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
+        codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_inherited_member_initializer", f_dbg_inherited_member_initializer, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "resolve");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

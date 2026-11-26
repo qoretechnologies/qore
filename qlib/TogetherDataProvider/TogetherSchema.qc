@@ -77,13 +77,9 @@ public class TogetherSchema {
             "api_version": "2.0.0",
         };
     }
-    private {
-        static list<OpenApi3Schema> schemas = ();
-        static list<RestSchemaActionSet> action_sets = ();
-    }
-
     private:internal {
-        static Mutex lock();
+        #! the parsed schemas and the action sets, built once for every caller as trusted code (qore#7684)
+        static LazySharedValue state(\TogetherSchema::buildState());
     }
 
     #! Returns both action sets, sharing reference data from the primary API
@@ -91,9 +87,7 @@ public class TogetherSchema {
         @throw REST-SCHEMA-ACTION-ERROR the manifest and schema disagree
     */
     static list<RestSchemaActionSet> getActionSets() {
-        AutoLock al(lock);
-        initIntern();
-        return action_sets;
+        return state.get().action_sets;
     }
 
     #! Returns the primary v1 action set
@@ -137,16 +131,11 @@ public class TogetherSchema {
         if (version != 1 && version != 2) {
             throw "TOGETHER-SCHEMA-ERROR", "supported API versions are 1 and 2";
         }
-        AutoLock al(lock);
-        initIntern();
-        return schemas[version - 1];
+        return state.get().schemas[version - 1];
     }
 
-    #! Builds the schema objects while holding the lock
-    private static initIntern() {
-        if (action_sets) {
-            return;
-        }
+    #! Builds the schema objects and the action sets, which are published together
+    private:internal static hash<auto> buildState() {
         list<OpenApi3Schema> parsed = ();
         foreach int version in (1, 2) {
             push parsed, OpenApi3Loader::fromFile(Priv::TogetherModuleDir
@@ -157,8 +146,7 @@ public class TogetherSchema {
         RestSchemaActionSet dedicated(parsed[1], TogetherDedicatedManifest::Manifest,
             TogetherDedicatedManifest::ReferenceData, (primary,),
             NOTHING, RestSchemaActionSet::LazyResponseTypes);
-        schemas = parsed;
-        action_sets = (primary, dedicated);
+        return {"schemas": parsed, "action_sets": (primary, dedicated)};
     }
 }
 }

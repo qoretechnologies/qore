@@ -76,6 +76,7 @@
 #include "qore/intern/QC_Gate.h"
 #include "qore/intern/QC_Sequence.h"
 #include "qore/intern/QC_Counter.h"
+#include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 #include "qore/intern/QC_Future.h"
@@ -8805,6 +8806,24 @@ static QoreParseOptions qore_get_creation_origin_restrictions(ThreadData* td) {
     return qore_get_calling_code_restrictions(td);
 }
 
+bool qore_trusted_build_hides_nothing() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // what the barrier of a trusted build hides from the code that it runs (see QoreModuleInitSandboxBarrierHelper):
+    // a sandboxed caller that a parse or module load recorded, the sandbox that governs the calling code or that it
+    // acts for (fails closed: also if it cannot be resolved), and the restrictions of the calling code that what the
+    // code creates would record (see qore_get_creation_origin_restrictions())
+    if (td->sandboxed_caller) {
+        return false;
+    }
+    if (qore_caller_sandbox_state_intern(nullptr)) {
+        return false;
+    }
+    return qore_get_calling_code_restrictions(td).empty();
+}
+
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
 static qore_program_id_t qore_current_program_id(ThreadData* td) {
     QoreProgram* pgm = td->current_pgm ? td->current_pgm : td->call_program_context;
@@ -13368,6 +13387,8 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initGateClass(*Thread));
     Thread->addSystemClass(initSequenceClass(*Thread));
     Thread->addSystemClass(initCounterClass(*Thread));
+    Thread->addSystemClass(initLazySharedValueClass(*Thread));
+    Thread->addSystemClass(initLazySharedMapClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
     Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));

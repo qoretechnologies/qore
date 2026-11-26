@@ -134,20 +134,21 @@ public class AssemblyAiSchema {
             "dictation": "dictation",
         };
     }
-    private {
-        static hash<string, RestSchemaActionSet> action_sets = {};
-    }
-
     private:internal {
-        static Mutex lck();
+        #! the action sets, built once for every caller as trusted code (qore#7684)
+        static LazySharedValue action_sets(\AssemblyAiSchema::buildActionSets());
     }
 
     #! Returns every validated action set
     /** @return sets keyed by API document name */
     static hash<string, RestSchemaActionSet> getActionSets() {
-        AutoLock al(lck);
-        if (!action_sets) {
-            hash<string, RestSchemaActionSet> parsed = {};
+        return action_sets.get();
+    }
+
+    #! Parses every API document and validates its action set; only a complete set of them is published
+    private:internal static hash<string, RestSchemaActionSet> buildActionSets() {
+        hash<string, RestSchemaActionSet> parsed = {};
+        {
             hash<string, hash<string, hash<RestSchemaReferenceDataInfo>>> refs = {
                 "transcripts": AssemblyAiTranscriptsManifest::ReferenceData,
                 "agents": AssemblyAiAgentsManifest::ReferenceData,
@@ -165,9 +166,8 @@ public class AssemblyAiSchema {
                     (map $1, parsed.iterator()),
                     NOTHING, RestSchemaActionSet::LazyResponseTypes);
             }
-            action_sets = parsed;
         }
-        return action_sets;
+        return parsed;
     }
 
     #! Finds the API document owning an action

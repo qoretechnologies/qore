@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - threads waiting on condition variables, trusted builds and AOT-compiled calls of builtin classes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LazySharedValuesTest
+
+#! Regression test for qore#7684: process-wide values built on first use are built as trusted code
+/** LazySharedValues.q uses a library module that builds process-wide values with LazySharedMap and LazySharedValue,
+    and with the plain lazy pattern that they replace: only trusted code creates the objects; for each state of the
+    first caller that the barrier of a trusted build hides (a sandbox, a sandbox that a trusted deputy acts for, a
+    hidden sandboxed caller record, a restricted Program with no sandbox) the value's objects are marked as shared and
+    its code records no restrictions, where the plain pattern gives unmarked objects and restricted code, and a plain
+    trusted first caller gets the same without the barrier; several first callers share one build, a caller with a
+    timeout gives up; a failed build, an unknown key, a builder that needs its own value, a cycle of waits of
+    builders and a value that a tenant created leave no entry; a map's maximum size is enforced.
+    LazySharedVendoredSchemas.q checks that the data provider modules that load their vendored schemas on first use
+    build them for a sandboxed first caller as trusted code.  Their output must be the one in the .expected files in
+    every execution mode, and in programs compiled with qcc -O0 and -O3 (the callers' code is parsed at run time, so
+    the compiled code there is that of the trusted callers and of the test module).
+*/
+class LazySharedValuesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        list<string> fixtures = ("LazySharedValues", "LazySharedVendoredSchemas");
+    }
+
+    constructor() : QUnit::Test("lazy shared values", "1.0", \ARGV) {
+        foreach string fixture in (fixtures) {
+            string name = fixture;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(name + ": execution mode " + mode, sub () {
+                    # the library modules' code chooses its own execution, so the native compilation is not checked
+                    assertEq(expected(name), ExecModeHarness::run(command(name, execution_mode),
+                        ExecModeHarness::NativeCheck::None));
+                });
+            }
+            addTestCase(name + ": qcc -O0", sub () { checkQcc(name, 0); });
+            addTestCase(name + ": qcc -O3", sub () { checkQcc(name, 3); });
+        }
+
+        set_return_value(main());
+    }
+
+    private string fixture(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+    }
+
+    private string command(string name, string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture(name)));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(string name, int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/" + name;
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture(name))));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected(name), backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

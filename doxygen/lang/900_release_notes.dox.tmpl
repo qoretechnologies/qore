@@ -1433,6 +1433,12 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Process-Wide Values Built on First Use as Trusted Code
+    @ref Qore::Thread::LazySharedValue "LazySharedValue" and @ref Qore::Thread::LazySharedMap "LazySharedMap" build
+    process-wide state once, as trusted code, for whichever caller needs it first, so that it is marked as shared and
+    takes neither the sandbox nor the restrictions of that caller (see @ref sandbox_lazy_shared_values;
+    <a href="https://github.com/qoretechnologies/qore/issues/7684">issue 7684</a>).
+
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as
