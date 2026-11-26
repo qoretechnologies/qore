@@ -111,7 +111,9 @@ hash<HttpResponseInfo> sub probe_response(hash<string, string> r) {
 const Refused = {
     "acceptAllCertificates": sub (Socket s) { s.acceptAllCertificates(); },
     "captureRemoteCertificates": sub (Socket s) { s.captureRemoteCertificates(); },
+    "checkHttp2StreamSendRate": sub (Socket s) { s.checkHttp2StreamSendRate(1, True, 1024, 60s); },
     "checkIdleDataForAsyncPoll": sub (Socket s) { s.checkIdleDataForAsyncPoll(); },
+    "checkQuicStreamSendRate": sub (Socket s) { s.checkQuicStreamSendRate(1, 0, True, 1024, 60s); },
     "clearStats": sub (Socket s) { s.clearStats(); },
     "clearWarningQueue": sub (Socket s) { s.clearWarningQueue(); },
     "drainHttpConnection": sub (Socket s) { s.drainHttpConnection(); },
@@ -378,7 +380,13 @@ class HttpServerHandlerSocketMethodsTest inherits QUnit::Test {
                 missing += sprintf("%s(%s)", m.getName(), types.join(", "));
             }
         }
-        assertEq((), missing, "the methods of Socket that run on the object's own socket");
+        # a method that is not overridden would run on the object's own unconnected socket, or, for one that takes
+        # a stream or a session, bypass the request's state: each new method of Socket must be classified
+        assertEq((), missing, "the methods of Socket that Http1HandlerSocket does not override: each new method of "
+            "Socket needs an override with the same parameters in Http1HandlerSocket in qlib/HttpServer.qm, which "
+            "either acts for the request on the connection's socket (see getPort()) or refuses it with refuse() "
+            "(the methods of the connection's other uses: TLS settings, HTTP/2 and HTTP/3 streams, poll operations, "
+            "the server's own settings) (qore#7567)");
     }
 
     availTest() {

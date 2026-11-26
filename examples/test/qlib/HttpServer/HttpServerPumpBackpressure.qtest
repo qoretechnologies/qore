@@ -62,6 +62,11 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! True when this test runs under valgrind
+    private static bool underValgrind() {
+        return is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/;
+    }
+
     #! reads a named pipe to its end, unless its writer has closed it
     /** The pipe is opened without waiting, which also ends a writer's wait for a reader, and each read waits for
         data at most 30 seconds
@@ -182,10 +187,14 @@ class HttpServerPumpBackpressureTest inherits QUnit::Test {
         hash<string, int> start = TestCpuTime::cpuSnapshot();
         usleep(WaitSecs * 1000000);
         float used = TestCpuTime::cpuTimeSince(start);
-        # an idle server uses a few milliseconds (under 0.05 s under valgrind); one that wakes again and again uses
-        # far more (a 1 ms timer: 0.15 to 0.3 s; continuous runs: the whole wait)
-        assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the stream waited %d s for "
-            "credit", used, WaitSecs));
+        # an idle server uses a few milliseconds; one that wakes again and again uses far more (a 1 ms timer: 0.15 to
+        # 0.3 s; continuous runs: the whole wait).  Under valgrind, which runs code many times slower, the few
+        # milliseconds of an idle server measure 0.14 to 0.16 s, as much as a server that wakes, so the bound is not
+        # checked there; the test still runs, and valgrind checks the memory of the wait
+        if (!underValgrind()) {
+            assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the stream waited %d s for "
+                "credit", used, WaitSecs));
+        }
 
         # the credit comes: the whole body arrives
         if (http3) {
