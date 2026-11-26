@@ -101,7 +101,9 @@ http.waitStop();
     - the log message callback of a restricted %Program gets the request without its credentials, with the keys that
       the handler adds for the dispatch of a call (@ref YamlRpcHandler::YamlRpcHandler::YamlRpcHandlerContextKeys
       "YamlRpcHandlerContextKeys") and those that a subclass names with
-      @ref YamlRpcHandler::YamlRpcHandler::getRpcContextKeys() "getRpcContextKeys()" (issues #7303, #7724)
+      @ref YamlRpcHandler::YamlRpcHandler::getRpcContextKeys() "getRpcContextKeys()"; the method's function only as
+      the name of an internal method (the callback, and its method hash, get no code), and its context marker only
+      when it holds no object (issues #7303, #7724, #7726)
     - the introspection methods \c help, \c system.listMethods and \c system.describe return the registered
       methods' help, names and service description (issue #7149)
     - the error of a method call and the response for a request body that cannot be parsed give the location of the
@@ -144,7 +146,11 @@ public namespace YamlRpcHandler {
         #! The keys of the request context that the handler adds for the dispatch of a call, which the code of a
         #! restricted %Program gets also when the request is filtered for it (qore#7724)
         /** The method (\c method), the request ID (\c yamlid), and the context marker (\c cmark) and function
-            (\c function) of the method; see getRpcContextKeys() for keys that a subclass adds
+            (\c function) of the method; see getRpcContextKeys() for keys that a subclass adds.
+
+            The log message callback of a restricted %Program gets the method's function only as the name of an
+            internal method, never the code of a method, neither in the context nor in the method's hash that it
+            gets; it gets the context marker only when the marker holds no object (qore#7726)
 
             @since YamlRpcHandler 1.5
         */
@@ -470,22 +476,27 @@ public namespace YamlRpcHandler {
         /** See @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()";
             fails closed
         */
+        /** The method's function is given only as the name of an internal method: the code of a method is not given
+            to the code of a restricted %Program, which could call it outside the dispatch of the handler; the context
+            marker is given only when it holds no object (qore#7726)
+        */
         private hash<auto> getContextForCode(code c, hash<auto> cx) {
-            bool restricted;
-            try {
-                restricted = SandboxManager::isCodeFromRestrictedProgram(c);
-            } catch (hash<ExceptionInfo> ex) {
-                restricted = True;
-            }
-            if (!restricted) {
+            if (!isRestrictedCode(c)) {
                 return cx;
             }
             hash<auto> rcx = filterRequestForHandler(cx, cx.hdr ?? {}).cx;
             # the handler's own keys for the dispatch of the call
             foreach string key in (YamlRpcHandlerContextKeys) {
-                if (cx.hasKey(key)) {
-                    rcx{key} = cx{key};
+                if (!cx.hasKey(key)) {
+                    continue;
                 }
+                if (key == "function" && cx.function.typeCode() != NT_STRING) {
+                    continue;
+                }
+                if (key == "cmark" && AbstractStreamRequest::holdsObject(cx.cmark)) {
+                    continue;
+                }
+                rcx{key} = cx{key};
             }
             # the keys that a subclass adds: plain data only, never the request keys or the server's objects
             foreach string key in (getRpcContextKeys()) {
@@ -497,6 +508,33 @@ public namespace YamlRpcHandler {
             }
             return rcx;
         }
+        #! Returns True if the code is of a restricted %Program; fails closed
+        private:internal static bool isRestrictedCode(code c) {
+            try {
+                return SandboxManager::isCodeFromRestrictedProgram(c);
+            } catch (hash<ExceptionInfo> ex) {
+                return True;
+            }
+        }
+
+        #! Returns the method's hash that the log message callback gets: for the code of a restricted %Program, its
+        #! function only as the name of an internal method, and its values that hold an object not at all (qore#7726)
+        private:internal hash<auto> getMethodInfoForCode(code c, hash<auto> found) {
+            hash<auto> info = found - "name_re";
+            if (!isRestrictedCode(c)) {
+                return info;
+            }
+            if (info.function.typeCode() != NT_STRING) {
+                remove info.function;
+            }
+            foreach string key in (keys info) {
+                if (AbstractStreamRequest::holdsObject(info{key})) {
+                    remove info{key};
+                }
+            }
+            return info;
+        }
+
         final private hash<auto> callMethod(hash cx, auto params) {
             @assert(cx.method);
             string method = cx.method;
@@ -517,7 +555,8 @@ public namespace YamlRpcHandler {
                 cx.function = found.function;
 
                 *string msg = getLogMessage
-                    ? getLogMessage(getContextForCode(getLogMessage, cx), found - "name_re", \params) : NOTHING;
+                    ? getLogMessage(getContextForCode(getLogMessage, cx), getMethodInfoForCode(getLogMessage, found),
+                        \params) : NOTHING;
                 if (msg)
                     log(cx, msg);
 
