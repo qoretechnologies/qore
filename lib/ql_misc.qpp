@@ -1042,14 +1042,15 @@ nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAME
 *object logger = get_async_io_logger();
     @endcode
 
-    @return the logger object, or @ref nothing "NOTHING" if none is set or if the caller is code that is sandboxed or
-    acts for sandboxed code, which does not get the logger of the process (see @ref sandbox_process_wide_registries)
+    @return the logger object, or @ref nothing "NOTHING" if none is set or if the caller is code that is restricted or
+    acts for restricted code, which does not get the logger of the process (see @ref sandbox_process_wide_registries
+    and @ref sandbox_manager_classes)
 
     @since %Qore 3.0
 */
 *object get_async_io_logger() [flags=CONSTANT;dom=PROCESS] {
-    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
-    if (qore_caller_is_sandboxed()) {
+    // the logger is process-wide and configured by the host: not handed to restricted code (issue #6836, qore#7737)
+    if (qore_caller_is_restricted()) {
         return QoreValue();
     }
     return qore_get_async_io_logger_object();  // already referenced
@@ -4509,8 +4510,9 @@ auto val = get_module_option(mod, opt);
     @param option the name of the option
 
     @return the value of the given module option, or @ref nothing "NOTHING" if it is not set or if the calling code
-    is the code of a sandboxed %Program, which does not get the module options of the process (see
-    @ref sandbox_process_wide_registries)
+    is the code of a restricted %Program, which does not get the module options of the process (see
+    @ref sandbox_process_wide_registries; the code of a %Program that a trusted, governed, sandbox governs gets them,
+    see @ref sandbox_manager_classes)
 
     @note module options are process-wide and set by trusted code (see set_module_option()); the C++ code of a module
     reads its own options with \c qore_get_module_option()
@@ -4521,8 +4523,9 @@ auto val = get_module_option(mod, opt);
     @since %Qore 3.0 the code of a sandboxed %Program gets no value
 */
 auto get_module_option(string module, string option) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
-    // module options are process-wide and configured by the host: not handed to sandboxed code (qore#6749)
-    if (qore_calling_code_is_sandboxed()) {
+    // module options are process-wide and configured by the host: not handed to restricted code (qore#6749,
+    // qore#7737)
+    if (qore_calling_code_is_restricted()) {
         return QoreValue();
     }
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
@@ -4614,8 +4617,9 @@ nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] 
     @param key the registry key
 
     @return the value stored under the given key, or @ref nothing if not set or if the calling code is the code of a
-    sandboxed %Program, which does not get the values that the host published for the whole process (see
-    @ref sandbox_process_wide_registries)
+    restricted %Program, which does not get the values that the host published for the whole process (see
+    @ref sandbox_process_wide_registries; the code of a %Program that a trusted, governed, sandbox governs gets them,
+    see @ref sandbox_manager_classes)
 
     @note library module code still gets the values when it serves sandboxed code, as the \c DataProvider module
     does for the custom expressions that the host registers; such code is responsible for what it returns to its
@@ -4627,8 +4631,9 @@ nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] 
  */
 auto get_app_registry(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
     // the registry is process-wide and holds the host's data and callbacks: not handed to the code of a sandboxed
-    // Program, while the library modules that read it to serve such code still get it (qore#6749)
-    if (qore_calling_code_is_sandboxed()) {
+    // Program, while the library modules that read it to serve such code still get it (qore#6749); the code of a
+    // Program that a trusted (governed) sandbox governs gets it (qore#7737)
+    if (qore_calling_code_is_restricted()) {
         return QoreValue();
     }
     TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);

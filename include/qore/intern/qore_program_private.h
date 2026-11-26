@@ -1440,6 +1440,12 @@ public:
         sandboxed.store(true, std::memory_order_release);
     }
 
+    //! true if restricted code created the Program or committed code in it with no restricting sandbox that the
+    //! Program keeps; set when the Program is created or the code is committed, never cleared once set (see
+    //! qore_program_is_restricted(); qore#7737)
+    std::atomic<bool> restricted_marked{false};
+
+
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
         that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
@@ -1501,6 +1507,9 @@ public:
     //! pending_restricted_caller of the code being committed, for the classes that the commit commits; with the parse
     //! lock held
     bool commit_restricted_caller = false;
+    //! true if the pending code was parsed by restricted code with no restricting sandbox that the Program keeps: the
+    //! Program is marked restricted (restricted_marked) when the code is committed (qore#7737); with the parse lock held
+    bool pending_restricted_mark = false;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -2378,6 +2387,9 @@ struct QoreParseCreatorSandbox {
     //! true if restricted code is on the parsing code's call stack, also when a manager of a Program that trusts its
     //! code governs the parsing code (see qore_caller_has_restricted_code()) (qore#7635)
     bool restricted = false;
+    //! true if the Program is to be marked restricted when the code is committed: restricted code parses it with no
+    //! restricting sandbox that the Program keeps (qore#7737)
+    bool mark_restricted = false;
 
     DLLLOCAL QoreParseCreatorSandbox() = default;
     DLLLOCAL ~QoreParseCreatorSandbox();
@@ -5952,7 +5964,8 @@ public:
         if (checkDefine(loc, str, xsink))
             return;
 
-        const bool untrusted = qore_caller_is_untrusted();
+        // code that a trusted (governed) sandbox governs is the host (qore#7737)
+        const bool untrusted = qore_caller_is_restricted_or_untrusted();
         // the value replaced is released after plock (see runTimeUnDefine())
         ValueHolder old(xsink);
         AutoLocker al(plock);

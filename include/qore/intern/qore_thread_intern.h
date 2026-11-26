@@ -629,11 +629,29 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 */
 DLLLOCAL bool qore_scope_creator_is_sandboxed();
 
+//! returns true if a restricting sandbox governs the calling code itself, not counting the sandbox that the thread
+//! inherited from the code that started it (qore#7737)
+/** As qore_scope_creator_is_sandboxed(), where only restricted code counts: a Program that
+    qore_program_is_restricted() reports restricted and a sandbox that refuses uncontrolled APIs (a trusted, governed,
+    sandbox does not); for Qore::Thread::ThreadCapabilityScope, whose capabilities trusted code sets
+*/
+DLLLOCAL bool qore_scope_creator_is_restricted();
+
+//! Returns true if the provenance \a ctx of a callback or object is restricted (qore#7737)
+/** True if the code that created it was restricted or acted for restricted code (QoreSandboxContext::restricted), if
+    a manager that it records refuses uncontrolled APIs (a composition: if any member does), if it records
+    functional-domain restrictions of the code that created it, or if it records sandboxed code without a manager
+    (fails closed); provenance that only the code of trusted (governed) sandboxes recorded, for no restricted code, is
+    not restricted
+*/
+DLLLOCAL bool qore_sandbox_context_is_restricted(const QoreSandboxContext* ctx);
+
 //! Returns why the calling code may not run ThreadCapabilityScope::call(), or nullptr if it may (qore#6737)
 /** The call is bound to the frame of the code that makes it, so only that code is judged: it must be Qore code that
     calls the builtin directly (not a call reference to the builtin, which runs it for the reference's caller, nor
     another builtin, such as call_static_method()), and neither its Program nor the Program running on the thread
-    may be sandboxed (by a manager or by its flag).  Sandboxed callers further up the stack do not count, unlike for
+    may be restricted (qore_program_is_restricted(): by a manager that refuses uncontrolled APIs or by its flag;
+    qore#7737).  Sandboxed callers further up the stack do not count, unlike for
     a scope object (qore_scope_creator_is_sandboxed()), whose set stays in effect after the call that creates it.
 
     @param call_name the call name of the builtin's own frame
@@ -643,6 +661,11 @@ DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 //! Returns true if the code that calls this builtin is sandboxed: the Program that its frame records, or the Program
 //! running on the thread; fails closed: true if the builtin's frame is not the innermost one
 DLLLOCAL bool qore_builtin_caller_is_sandboxed();
+
+//! Returns true if the code that calls this builtin is restricted (qore_program_is_restricted()): the Program that
+//! its frame records, or the Program running on the thread; fails closed: true if the builtin's frame is not the
+//! innermost one (qore#7737)
+DLLLOCAL bool qore_builtin_caller_is_restricted();
 
 //! Returns the Program of the code that calls this builtin, which its frame records, or nullptr if the builtin's frame
 //! is not the innermost one
@@ -1497,6 +1520,14 @@ public:
     //! the thread was started by module code, whose work can serve every caller of the module and so runs for no
     //! application (qore#7010), also the host code that it calls (qore#7148)
     bool capturer_module = false;
+    //! True if the capturing code was restricted, or acted for restricted code, when the context was captured
+    //! (qore_caller_is_restricted(), which fails closed; qore#7737)
+    /** The managers that the context records do not tell it alone: code that a trusted (governed) sandbox governs and
+        that runs for restricted code (restricted code called it) is restricted, while the context records only the
+        trusted manager; what that code creates (a callback, a call reference, an object) stays restricted with it
+        (qore_sandbox_context_is_restricted())
+    */
+    bool restricted = false;
     //! The application that the capturing code acted for (see qore_aio_caller_app_id()), QORE_NO_PROGRAM_ID for none,
     //! or 0 if no sandbox governed it (qore#7148)
     /** The host's code that continues the context (in a thread or a task that the capturing code started or submitted,
@@ -2605,6 +2636,13 @@ DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 //! Returns true if the Program is sandboxed or its parse options restrict a functional domain
 DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
 
+//! Returns true if the Program is restricted (qore_program_is_restricted()) or its parse options restrict a
+//! functional domain (qore#7737)
+/** As qore_program_code_is_untrusted(), for the rules that restrict what code may do: a Program that a trusted
+    (governed) sandbox governs is not
+*/
+DLLLOCAL bool qore_program_code_is_restricted_or_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
@@ -2778,11 +2816,75 @@ DLLLOCAL bool qore_caller_restricts_terminal_io();
 */
 DLLLOCAL int qore_caller_sandbox_state();
 
-//! returns true if what the calling code creates may be shared by every Program: the code is not sandboxed, or the
-//! governing sandbox cannot be resolved (fails closed: such an object is treated as shared, which sandboxed code
-//! cannot change)
+//! returns 1 if the calling code is restricted (see qore_caller_is_restricted()), 0 if not, and -1 if the governing
+//! sandbox cannot be resolved for lack of memory (qore#7737)
+/** As qore_caller_sandbox_state(), for the rules that restrict what code may do; for callers that must fail closed in
+    the other direction than qore_caller_is_restricted() (see qore_caller_creates_shared_objects())
+
+    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if none is found or it is not
+    known
+*/
+DLLLOCAL int qore_caller_restricted_state(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true if the code running on the current thread is restricted, or acts for restricted code (qore#7737)
+/** The classification of the rules that restrict what code may do (shared objects, injection, the disclosure of
+    process-wide state, private access by reflection, module paths and commands, the marking of the origin of
+    exceptions, the per-Program cache, cancellation deferral, the capabilities of trusted code): the code that
+    qore_caller_is_sandboxed() looks at, where only a restricting sandbox counts, one that refuses uncontrolled APIs
+    (QoreSandboxManager::trustsUncontrolledApis(); a composition is restricting if any member is), and a Program
+    sandboxed without a manager (qore_program_is_restricted(), which fails closed).  A restricting sandbox that the
+    thread carries (inherited from the code that started it, or of the operation that it continues), and a context or
+    provenance frame that restricted code (or code acting for it) captured (QoreSandboxContext::restricted), count
+    also where the Program that the code runs in has a trusting manager of its own, which otherwise ends the walk
+    (qore#7730).  Code that a trusted (governed) sandbox governs, one that allows uncontrolled APIs
+    (SandboxManager::setUncontrolledApiPolicy()), is sandboxed but not restricted: its interrupts, limits, budgets,
+    I/O policies and isolation domain still apply
+    (qore_caller_is_sandboxed()), as do the rules for process-wide registrations.
+
+    Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
+
+    The walk resolves the sandboxes as for interrupts (QoreSandboxManagerHelper::All): a policy barrier
+    (SandboxManager::callWithSystemPolicy(), a capability of SandboxManager::createSystemPolicyCall()) does not hide
+    restricted code; only the barrier of a trusted build (SandboxManager::createTrustedBuildCall()) hides the code
+    that calls it, whose sandbox does not govern the build, as does the initialization of library code that code that
+    is not restricted loads.  The code of a class that restricted code declared is
+    restricted wherever it runs (qore_calling_class_is_restricted()).
+
+    @param pgm_id if not nullptr, set to the ID of the restricted Program found, or 0 if none is found or it is not
+    known
+*/
+DLLLOCAL bool qore_caller_is_restricted(qore_program_id_t* pgm_id = nullptr);
+
+//! Returns true if the code that calls the current builtin is the code of a restricted Program (qore#7737)
+/** As qore_calling_code_is_sandboxed(), where a Program counts only if qore_program_is_restricted() reports it
+    restricted: a Program that a trusted (governed) sandbox governs is not; the code of a class that restricted code
+    declared counts as well (qore_calling_class_is_restricted())
+*/
+DLLLOCAL bool qore_calling_code_is_restricted();
+
+//! Returns true if the code that runs is the code of a class that restricted code declared (qore#7737)
+/** The class context of the code that calls the current builtin (or of the code that runs, outside a builtin): a class
+    that restricted code committed (its permanent mark, see qore_class_private::isSandboxDeclared()), or whose source
+    Program is restricted now (qore_class_private::isRestrictedCode()); a builtin class is trusted.  The rules that
+    restrict what code may do look at it as well as at the Programs on the stack, so that such code stays restricted
+    when trusted code calls it with no restricted Program on the stack
+*/
+DLLLOCAL bool qore_calling_class_is_restricted();
+
+//! Returns true if the calling code is restricted (qore_caller_is_restricted()), restricts a functional domain, or
+//! is library code that such code loaded, while it is initialized (qore#7737)
+/** As qore_caller_is_untrusted(), for the rules that restrict what code may do: code that a trusted (governed)
+    sandbox governs is not untrusted by this test
+*/
+DLLLOCAL bool qore_caller_is_restricted_or_untrusted();
+
+//! returns true if what the calling code creates may be shared by every Program: the code is not restricted (see
+//! qore_caller_is_restricted()), or the governing sandbox cannot be resolved (fails closed: such an object is treated
+//! as shared, which restricted code cannot change)
+/** A trusted (governed) sandbox's code creates shared objects, and may change them (qore#7737)
+*/
 DLLLOCAL inline bool qore_caller_creates_shared_objects() {
-    return qore_caller_sandbox_state() != 1;
+    return qore_caller_restricted_state() != 1;
 }
 
 class QoreCallerSandboxHelper;
@@ -2806,11 +2908,13 @@ struct QoreThreadProgramMarker {
 //! Returns the current point of the calling thread's Program context stack
 DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 
-//! Returns true if the calling thread has entered the code of a sandboxed Program since \a marker was taken and not
-//! left it yet: the thread runs code that sandboxed code supplied (a callback, a method of a class of a sandboxed
+//! Returns true if the calling thread has entered the code of a restricted Program since \a marker was taken and not
+//! left it yet: the thread runs code that restricted code supplied (a callback, a method of a class of a restricted
 //! Program, a destructor), or code that such code called
-/** Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
-    (qore#7202).  Fails closed: true if \a marker is not on the thread's Program context stack
+/** A Program counts if qore_program_is_restricted() reports it restricted: code that a trusted (governed) sandbox
+    governs changes shared objects as trusted code (qore#7737); code compiled in a restricted Program that runs in
+    another Program counts as the code of the restricted Program (qore#7202).  Fails closed: true if \a marker is not
+    on the thread's Program context stack
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
@@ -2826,12 +2930,13 @@ DLLLOCAL bool qore_caller_has_restricted_code();
 
 //! Returns the Program of the calling code whose per-Program cache a library class uses (see
 //! SandboxManager::setProgramCacheValue())
-/** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
-    outermost Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code
-    is sandboxed but no sandboxed Program is on the stack (a sandbox inherited by the thread), so that nothing is
-    cached for it.  Code compiled in a sandboxed Program that runs in another Program, and the code that it calls, use
-    the cache of the Program that compiled it; nullptr if another sandboxed Program is on the stack as well, as the
-    innermost of the two is not known then (qore#7202)
+/** For restricted code (qore_caller_is_restricted()), the innermost restricted Program on the thread's Program
+    context stack; for trusted code, also code that a trusted (governed) sandbox governs (qore#7737), the outermost
+    Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code is
+    restricted but no restricted Program is on the stack (a sandbox inherited by the thread), so that nothing is
+    cached for it.  Code compiled in a restricted Program that runs in another Program, and the code that it calls,
+    use the cache of the Program that compiled it; nullptr if another restricted Program is on the stack as well, as
+    the innermost of the two is not known then (qore#7202)
 */
 DLLLOCAL QoreProgram* qore_caller_cache_program();
 

@@ -313,6 +313,91 @@ auto result = p.callFunction("main");
     of them applies: the owner rules apply if any of them isolates tenants.
     @ref Qore::SandboxManager::isTenantIsolated() "SandboxManager::isTenantIsolated()", and
     \c qore_caller_tenant_isolated() in C++, tell library code whether the owner rules apply to its caller.
+    @subsection sandbox_manager_classes Trusted (Governed) and Restricting Managers
+
+    A host attaches a @ref Qore::SandboxManager "SandboxManager" for one of two purposes, which the manager's
+    uncontrolled-API policy tells apart (@ref Qore::SandboxManager::trustsUncontrolledApis()
+    "SandboxManager::trustsUncontrolledApis()"):
+    - a <b>trusted (governed) manager</b> allows uncontrolled APIs
+      (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy(True)"): the host attaches it to
+      code that it trusts, only so that it can interrupt and force-terminate it, cancel its I/O, limit its resources or
+      apply an I/O policy to it; the code keeps the rights of trusted code
+    - a <b>restricting (enforcing) manager</b> refuses uncontrolled APIs, the default (a manager fails closed): the
+      code that it governs is restricted, as the code of a tenant must be
+
+    Code is <b>restricted</b> if a restricting manager governs it, also through the code that it acts for (a caller on
+    its call stack, the provenance of an object or callback that it runs, the sandbox inherited by its thread), and
+    through a policy barrier or a system-policy capability (as for @ref Qore::SandboxManager::isRestricted()
+    "SandboxManager::isRestricted()"), and if it is the code of a %Program that is sandboxed without a manager (one
+    that restricted code created, see @ref Qore::SandboxManager::isFromRestrictedProgram()
+    "SandboxManager::isFromRestrictedProgram()").  When several managers govern the code together (the manager of a
+    %Program and that of the code that created it, for example), the code is restricted if any of them is restricting.
+    A Qorus server, for example, gives its trusted interfaces a trusted manager and the interfaces of portable groups a
+    restricting one.  Fails closed: code whose governing sandbox cannot be resolved is restricted.
+
+    The governance of trusted code by a trusted manager is cooperative: it bounds runaway trusted code (its
+    interrupts, force-termination, limits and I/O policy apply), but it does not contain it, as the code is trusted:
+    it may still use the system-policy calls
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), system threads
+    (@ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()"), governed calls
+    (@ref Qore::SandboxManager::callGoverned() "SandboxManager::callGoverned()") and cancellation
+    deferral (@ref Qore::defer_thread_cancel() "defer_thread_cancel()", which postpones its interrupts until the
+    deferred code returns), and any uncontrolled API.  Containment is what a restricting manager gives.  Code that a
+    trusted manager governs and that runs for restricted code (called by it, or in a thread, task or callback that was
+    started or created for it, also several steps later) is restricted.
+
+    A policy barrier does not hide restricted code from these rules: trusted code that restricted code calls, also
+    inside @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or a capability of
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()", acts for it, and is
+    refused what restricted code is refused (relating classes by injection, for example); the barrier lifts only the
+    filesystem and network policy.  Only a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") hides the code that
+    calls it: the build runs as the code of the %Program that created the capability.  The code of a class that
+    restricted code declared is restricted wherever it runs, also when trusted code calls it, and a %Program that
+    restricted code created or parsed code in without a restricting sandbox that the %Program keeps is restricted for
+    good.
+
+    The rules that restrict what code may do apply only to restricted code; the mechanisms that make code
+    interruptible and bounded apply to code that any manager governs:
+
+    |!Rule|!Code that a trusted manager governs|!Restricted code
+    |interrupts, force-termination and I/O cancellation (@ref sandbox_interrupt)|apply|apply
+    |@ref sandbox_resources "resource limits" and budgets, @ref sandbox_isolation_domains "isolation domains", and the \
+    filesystem and network policy|apply|apply
+    |@ref sandbox_process_wide_registries "process-wide registrations" (\c \
+    SandboxManager::isProcessWideRegistrationAllowed())|refused|refused
+    |a module loaded by path in place of a module of the module path, or into a %Program container under its \
+    name (it would replace the module for every later user), and the modules that the governed code chose|refused, \
+    or private to the loading code|refused, or private to the loading code
+    |a change, copy or serialization of a @ref sandbox_shared_objects "shared object", and objects created as \
+    shared|allowed, as trusted code|refused
+    |a process-shared @ref sandbox_lazy_shared_values "lazy value", and the capabilities of trusted code (\c \
+    SandboxManager::createTrustedBuildCall(), \c createSystemPolicyCall(), \c createSystemThreadCall(), \c \
+    callGoverned(), @ref sandbox_thread_capabilities "thread capability scopes")|allowed|refused
+    |relating classes by injection (@ref Qore::Program::importClass() "Program::importClass()"), and the re-export of \
+    imported classes and hashdecls|allowed|refused
+    |the process-wide state that the host configures (@ref Qore::get_app_registry() "get_app_registry()", @ref \
+    Qore::get_module_option() "get_module_option()", the logger and the operations of the async I/O \
+    controller)|returned|withheld
+    |@ref sandbox_private_access "private access" through reflection and @ref sandbox_serialization \
+    "serialization"|allowed|refused
+    |the module paths of a %Program, module commands to another %Program and the names of encodings that are not \
+    known|allowed|refused
+    |the mark of @ref sandbox_exception_reports "exception reports"|unmarked, as the host's|marked
+    |the per-%Program cache (\c SandboxManager::getProgramCacheValue())|the cache of the host's %Program|the cache of \
+    its own %Program
+    |marking a socket as a server's connection (\c Socket::setServerOwned())|allowed|refused
+    |cancellation deferral (@ref Qore::defer_thread_cancel() "defer_thread_cancel()", destructors, thread \
+    teardown)|kept, as for trusted code|never deferred
+    |uncontrolled APIs (@ref sandbox_uncontrolled_api)|allowed|refused
+
+    The process-wide registrations, and the modules that replace a module of the module path, stay refused to code
+    that any manager governs, because what such code registers or loads carries its manager (see
+    @ref sandbox_provenance), whose interrupts, limits and isolation domain would then apply to every later user.  A manager's own configuration cannot be loosened by the code that it governs, whatever
+    its class.
+
+    @since %Qore 3.0
 
     @subsection sandbox_provenance Objects, Callbacks, and Trusted Resources
 
@@ -348,7 +433,8 @@ code authenticate = SandboxManager::createSystemPolicyCall(\authenticate_provide
 authenticate();
     @endcode
 
-    Only code executing outside every sandbox can register such a capability. Its fixed callback must validate its
+    Only code that no restricting sandbox governs (see @ref sandbox_manager_classes) can register such a capability, and
+    its callback must not have the provenance of restricted code. Its fixed callback must validate its
     arguments; a capability for an arbitrary file reader grants that operation to everyone holding it. Tenant
     callbacks invoked within the operation regain their own provenance and Program policy. Interrupts and thread
     accounting are preserved. Initialize shared system resources before invoking tenant code; first initialization
@@ -538,18 +624,19 @@ authenticate();
     A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code
     that it runs for an interface with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"; module code
     uses them through a guard (@ref Qore::get_thread_capability() "get_thread_capability()"), which runs only
-    code that no sandbox governs.  Sandboxed code can neither set nor see the capabilities.
+    code that no restricting sandbox governs.  Restricted code can neither set nor see the capabilities; code that a
+    trusted (governed) sandbox governs can, as trusted code (see @ref sandbox_manager_classes).
 
     - <b>A scope object</b> (<tt>ThreadCapabilityScope scope(caps);</tt>) keeps its set in effect until it is
       destroyed, also for the code that runs after the call that created it: it cannot be created while any code that
-      a sandbox governs is on the thread's stack, including callers of the code that creates it.
+      a restricting sandbox governs is on the thread's stack, including callers of the code that creates it.
     - <b>A call-bound scope</b> (@ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()")
       sets the capabilities only while the given call runs, and restores the outer set however it ends, so it cannot
       outlive the frame of the code that made it.  Only that code is judged: Qore code that calls it directly, whose
-      %Program and the %Program running on the thread are not sandboxed (by a manager, or as a %Program that sandboxed
-      code created), and that may control threads.  Sandboxed callers further up the stack do not count, so a host
-      whose interfaces all have a sandbox manager can set the capabilities of the interface that it calls for another
-      one.  A call reference to the method is refused, as it would run the method for the code that holds the
+      %Program and the %Program running on the thread are not restricted (by a restricting manager, or as a %Program
+      that restricted code created), and that may control threads.  Restricted callers further up the stack do not
+      count, so a host whose interfaces all have a restricting sandbox manager can set the capabilities of the
+      interface that it calls for another one.  A call reference to the method is refused, as it would run the method for the code that holds the
       reference, as is a call through another builtin (for example
       @ref Qore::call_static_method() "call_static_method()").  The code run in the call, which can be sandboxed, keeps
       its own restrictions: sandboxed code still cannot see the capabilities or set a scope.
@@ -739,8 +826,8 @@ authenticate();
     @ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()"
     returns @ref False, and the object then uses the process's setting.
 
-    Code that is sandboxed or acts for sandboxed code (as decided for registrations) does not get the loggers that
-    the host configured either: @ref Qore::AsyncIoController::getLogger() "AsyncIoController::getLogger()" and
+    Restricted code, or code that acts for it (see @ref sandbox_manager_classes), does not get the loggers that the
+    host configured either: @ref Qore::AsyncIoController::getLogger() "AsyncIoController::getLogger()" and
     @ref Qore::get_async_io_logger() "get_async_io_logger()" return @ref nothing "NOTHING" for it, as if no logger
     were set, and @ref Qore::AsyncIoController::getCacheSize() "AsyncIoController::getCacheSize()" refuses it
     (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
@@ -964,8 +1051,8 @@ authenticate();
     variable or a cache of a module) is shared by the code of every tenant.  Trusted code marks such an object with
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()", usually in its constructor when
     @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" returns @ref True.  Code
-    that is sandboxed or acts for sandboxed code (as decided for @ref sandbox_process_wide_registries "registrations")
-    then cannot change the object's members, in any form of write (assignment, the other operators that change an
+    that is restricted or acts for restricted code (see @ref sandbox_manager_classes; code that a trusted, governed,
+    sandbox governs creates and changes shared objects as trusted code) then cannot change the object's members, in any form of write (assignment, the other operators that change an
     lvalue, \c remove and \c delete of a member or a slice of members, a write through a reference to a member,
     the \c += operator with a hash on the object, a write to an element of a container that a member holds), nor
     delete the object with the \c delete operator: each raises \c SHARED-OBJECT-ERROR before anything is changed.
@@ -997,8 +1084,8 @@ authenticate();
 
     Only code that may share objects
     (@ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()") can mark an object with
-    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()": code that no sandbox governs, and the
-    code of a class of a shared object in an update scope for it (not code that sandboxed code called in the scope);
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()": code that no restricting sandbox governs,
+    and the code of a class of a shared object in an update scope for it (not code that sandboxed code called in the scope);
     sandboxed code cannot, so a shared object is always one that trusted code created or built.  The types and fields
     that a shared REST schema builds and caches, also for sandboxed code, are shared in this way when the build has
     finished (see @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()"), so
@@ -1087,8 +1174,8 @@ authenticate();
 
     Library code that builds process-wide state lazily, the first time that a caller needs it (a registry filled on
     demand, a schema loaded on first use, a cache), builds it on that caller's thread.  With the plain pattern
-    (\c "v ?? (v = build())"), what it builds takes that caller's sandbox and restrictions: if the caller is sandboxed
-    or acts for sandboxed code,
+    (\c "v ?? (v = build())"), what it builds takes that caller's sandbox and restrictions: if the caller is restricted
+    or acts for restricted code (see @ref sandbox_manager_classes),
     @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" is @ref False, so the
     objects that every later caller gets are not marked as shared (see @ref sandbox_shared_objects), and if the caller
     is restricted (with a \c PO_NO_* option), the code that the build creates for every caller records its
@@ -1585,7 +1672,8 @@ authenticate();
     the chain, the location where it was raised, the error, description and argument, and the function, file and line
     of each frame of the call stack (without the language and the code type of each frame); a log line names the first
     exception of a chain, as for other code.  The exceptions
-    of the host's own code are reported as before.  The mark is a property of the report: Qore code that catches the
+    of the host's own code are reported as before, and so are the exceptions of code that a trusted (governed) sandbox
+    governs: only restricted code is marked (see @ref sandbox_manager_classes).  The mark is a property of the report: Qore code that catches the
     exception (such as a host that logs it with @ref Util::get_exception_string() "get_exception_string()") gets its
     values as they are, and escapes them itself before it writes them where they could pass for its own.
 
@@ -1645,9 +1733,12 @@ authenticate();
     - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
       sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
       (see below);
-    - code that is not trusted cannot mark imported classes and hashdecls for re-export to the modules that a
-      %Program loads (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
-      @ref Qore::Program::importHashDecl() "Program::importHashDecl()").
+    - restricted code cannot mark imported classes and hashdecls for re-export to the modules that a %Program loads
+      (the \c reexport argument of @ref Qore::Program::importClass() "Program::importClass()" and
+      @ref Qore::Program::importHashDecl() "Program::importHashDecl()"): code that a sandbox that refuses uncontrolled
+      APIs governs, whose parse options restrict a functional domain, or library code that such code loaded while it
+      is initialized; code that a sandbox that allows uncontrolled APIs governs is not restricted here (see
+      @ref sandbox_manager_classes).
 
     A module that a caller loads by path, or finds through a module path that a %Program added with
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
@@ -2393,8 +2484,8 @@ socket) and connects to the checked addresses only
     says so with @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy(True)".
     The default is to refuse them, so a sandbox fails closed.
 
-    The policy decides whether code counts as restricted for the rules that keep sandboxed code from I/O that %Qore
-    does not control: the @ref DataProvider::DataProviderAppInfo "external_io" apps of the data provider catalog
+    The policy decides whether code counts as restricted for every rule that restricts what code may do (see
+    @ref sandbox_manager_classes), such as the rules that keep sandboxed code from I/O that %Qore does not control: the @ref DataProvider::DataProviderAppInfo "external_io" apps of the data provider catalog
     and their factories and connections, and the module checks that use the same query.  It does not lift the rules
     that keep what code registers process-wide from carrying a sandbox: the data provider catalog's registrations,
     change listeners and callbacks are refused to code that any sandbox governs
@@ -2845,6 +2936,22 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     uncontrolled APIs: @ref Qore::SandboxManager::isRestricted() "isRestricted()" for the code that calls it, and
     @ref Qore::SandboxManager::isFromRestrictedProgram() "isFromRestrictedProgram()" for the %Program of the class of an
     object; both are evaluated at each call and fail closed.
+
+    %Qore applies the same rule to the relation of classes by injection
+    (@ref Qore::Program::importClass() "Program::importClass()" with \c inject set): only the %Program that declares
+    both classes, or code that is not restricted, may relate them.  Restricted code is code that a sandbox that refuses
+    uncontrolled APIs governs, also as the caller of trusted code further down the call stack, any code that runs in a
+    thread started for such code (also in a %Program that a sandbox that allows uncontrolled APIs governs), code whose
+    parse options restrict a functional domain, and library code that restricted code loaded while it is initialized;
+    the test fails closed.  Code that only a sandbox that allows
+    uncontrolled APIs governs relates classes by injection and re-exports imported classes as trusted code does.  A
+    policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+    @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") does not hide a
+    restricted caller from this rule: trusted code that it calls for restricted code cannot relate classes by
+    injection or re-export them.  A trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()") and the
+    initialization of library code that code that is not restricted loads run as trusted code, and can.  The same
+    classification applies to every rule that restricts what code may do (see @ref sandbox_manager_classes).
 
     @section sandbox_exceptions Security Exceptions
 

@@ -44,8 +44,9 @@
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
     - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
       @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
-      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
-      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
+      refuse) decides whether the code counts as restricted for the rules that restrict what code may do, such as
+      the rules that keep sandboxed code from I/O that %Qore does not control (see @ref sandbox_manager_classes);
+      queried with
       @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
       @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
       \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
@@ -1542,6 +1543,12 @@
     @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()" does
     the same for the %Program of a call reference or a closure
     (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
+
+    @par Trusted (Governed) and Restricting Sandbox Managers
+    The rules that restrict what code may do (shared objects, injection, private access, process-wide state, trusted
+    capabilities, deferral) apply only to code that a restricting sandbox governs, also code acting for it, which cannot
+    send @ref Qore::Program::issueModuleCmd() "module commands" to another Program; trusting sandboxes keep interrupts,
+    limits and I/O policies (@ref sandbox_manager_classes; <a href="https://github.com/qoretechnologies/qore/issues/7737">issue 7737</a>).
 
     @par Configurable Exception Report Limit
     @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an
