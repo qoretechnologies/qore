@@ -1906,6 +1906,10 @@ protected:
     mutable std::mutex aot_lazy_closure_ir_mutex;
     //! Lock-free closure-call guard; publishes aot_lazy_closure_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_closure_ir{false};
+    //! The serialized IR of a closure with a native body, compiled with debugging (qcc -g), which runs in the IR
+    //! interpreter while a debugger is attached (materializeAOTClosureDebugIR(); qore#7752); protected by
+    //! aot_lazy_closure_ir_mutex
+    mutable std::shared_ptr<const QoreAOTLazyClosureIR> aot_closure_debug_ir;
     //! Serialized source-stripped function IR installed for qcc parse-time execution.
     mutable std::shared_ptr<const QoreAOTLazyFunctionIR> aot_lazy_function_ir;
     //! Entry in the shared lazy-function descriptor table.
@@ -1957,6 +1961,12 @@ protected:
     //! Materialize source-stripped closure fallback IR if one is installed.
     DLLLOCAL bool materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const;
 
+    //! Materializes the debug IR of a closure with a native body when a debugger is attached (qore#7752)
+    /** @return true if the closure has its IR now, false if it has no debug IR (it was not compiled with debugging,
+        or has no native body) or the IR could not be materialized (with an exception raised)
+    */
+    DLLLOCAL bool materializeAOTClosureDebugIR(const char* name, ExceptionSink* xsink) const;
+
     //! Materialize source-stripped function fallback IR if one is installed.
     DLLLOCAL bool materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const;
 
@@ -2001,6 +2011,13 @@ public:
     DLLLOCAL void setLazyAOTClosureIR(std::shared_ptr<const QoreAOTLazyClosureIR> lazy_ir) const {
         aot_lazy_closure_ir = std::move(lazy_ir);
         has_aot_lazy_closure_ir.store(true, std::memory_order_release);
+    }
+
+    //! Installs the serialized IR of a closure with a native body compiled with debugging (qore#7752)
+    /** During single-threaded AOT registration, before publication; the IR runs only while a debugger is attached
+    */
+    DLLLOCAL void setAOTClosureDebugIR(std::shared_ptr<const QoreAOTLazyClosureIR> debug_ir) const {
+        aot_closure_debug_ir = std::move(debug_ir);
     }
 
     //! @return true when this closure has deferred fallback IR to materialize

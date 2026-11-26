@@ -35083,8 +35083,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     identity->second, "stored_closure_expected");
             }
             // an init function has no closure bodies that define the dispatch functions (qore#6336)
+            // code compiled with debugging calls a closure through the runtime, which runs the closure's debug IR
+            // while a debugger is attached (qore#7752)
             if ((immediate_closure || guarded_stored_closure)
-                    && aot_mode && aot_direct_closure_fast_entry && current_ir_func
+                    && aot_mode && aot_direct_closure_fast_entry && aot_debugger_checks != AOTDebuggerChecks::All
+                    && current_ir_func
                     && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI")) {
                 const QoreIRCreateClosureInstruction* create = immediate_create;
                 const QoreClosureParseNode* closure = immediate_closure_node;
@@ -35472,7 +35475,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
                         const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
                         const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
-                        if (aot_direct_closure_fast_entry
+                        if (aot_direct_closure_fast_entry && aot_debugger_checks != AOTDebuggerChecks::All
                                 && current_ir_func && closure && !closure->isInMethod()
                                 && (!captures || captures->empty()) && variant
                                 && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY")

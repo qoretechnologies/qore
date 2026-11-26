@@ -6447,6 +6447,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     && debug_metadata && slot_maps_start
                     && ir_start_ptr >= slot_maps_start
                     && !q_env_is_set("QORE_DISABLE_AOT_LAZY_CLOSURE_IR");
+                // a closure with a native body in code compiled with debugging keeps its serialized IR, which runs
+                // while a debugger is attached, also when native code created the closure (qore#7752)
+                const bool native_debug_ir = native_metadata_only
+                    && (reader.getHeader().flags & QORE_AOT_FLAG_DEBUGGING)
+                    && debug_metadata && slot_maps_start && ir_start_ptr >= slot_maps_start;
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error,
                     ctx->locals, num_locals, &closure_locals_vec,
@@ -6529,7 +6534,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_sig->setSelfId(closure_selfid);
                 }
 
-                if (lazy_fallback) {
+                if (lazy_fallback || native_debug_ir) {
                     auto lazy_ir = std::make_shared<QoreAOTLazyClosureIR>();
                     lazy_ir->metadata = debug_metadata;
                     lazy_ir->ir_offset = static_cast<uint32_t>(ir_start_ptr - slot_maps_start);
@@ -6544,7 +6549,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     lazy_ir->enclosing_locals = std::move(enclosing_locals);
                     lazy_ir->body_locals = closure_ir->all_body_locals;
-                    closure_variant->setLazyAOTClosureIR(std::move(lazy_ir));
+                    if (lazy_fallback) {
+                        closure_variant->setLazyAOTClosureIR(std::move(lazy_ir));
+                    } else {
+                        closure_variant->setAOTClosureDebugIR(std::move(lazy_ir));
+                    }
                 } else if (!native_metadata_only) {
                     // Restore the parameter mapping used by IR analysis.
                     // setCachedIR() derives the pre-instantiated local sets once
