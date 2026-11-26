@@ -133,6 +133,10 @@ class HttpClientH3UpgradeConcurrentTest inherits QUnit::Test {
         # the requests in progress on the old manager complete, each sent once: a request that was sent is not repeated
         checkHeld(h, results, done, 2);
         assertEq(0, h.arrived.size(), "the server received each held request once");
+        # their completion on the retired manager does not change the client: it stays on HTTP/3
+        assertTrue(hc.isHttp3Active(), "the client is still on HTTP/3");
+        assertEq("ok", hc.get("/"));
+        assertEq("HTTP/3", hc.getHttpVersion(), "the next request is sent with HTTP/3");
     }
 
     testFallback() {
@@ -189,15 +193,16 @@ class HttpClientH3UpgradeConcurrentTest inherits QUnit::Test {
         Counter reached(1);
         Counter release(1);
         call_function("dbg_http_hold_at", "acquire-start", reached, release);
+        Queue results();
+        Counter done();
+        # the hold is released before the thread is waited for (the exit handlers run in reverse order)
+        on_exit done.waitForZero(Timeout);
         on_exit {
             if (release.getCount()) {
                 release.dec();
             }
             call_function("dbg_http_hold_clear");
         }
-        Queue results();
-        Counter done();
-        on_exit done.waitForZero(Timeout);
         done.inc();
         background sub () {
             on_exit done.dec();

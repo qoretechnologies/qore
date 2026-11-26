@@ -1362,6 +1362,8 @@ struct qore_httpclient_priv {
     //! (qore#7741); protected by retired_lock
     std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> retired_mgrs;
     std::mutex retired_lock;
+    //! the number of retired managers, read without the lock to skip reaping when there are none
+    std::atomic<size_t> retired_count{0};
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
     // Thread safety: protected by alt_svc_lock, a leaf lock: the requests of the connection manager path read and
@@ -1596,28 +1598,45 @@ struct qore_httpclient_priv {
     */
     DLLLOCAL void retireConnMgr(std::shared_ptr<HttpClientConnectionManagerBase> old_mgr) {
         if (old_mgr) {
-            old_mgr->retire();
+            qore_http_manager_ops(old_mgr.get()).retire();
+            std::lock_guard<std::mutex> lk(retired_lock);
+            retired_mgrs.push_back(std::move(old_mgr));
+            retired_count.store(retired_mgrs.size(), std::memory_order_release);
+        }
+        reapRetiredConnMgrs();
+    }
+
+    //! Releases the retired managers whose connections have closed (qore#7741)
+    /** They stay in the list while they are reaped, so that a disconnect meanwhile closes them; must not be called
+        with priv->m held, nor on the async I/O thread
+    */
+    DLLLOCAL void reapRetiredConnMgrs() {
+        if (!retired_count.load(std::memory_order_acquire)) {
+            return;
         }
         std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> retired;
         {
             std::lock_guard<std::mutex> lk(retired_lock);
-            retired.swap(retired_mgrs);
-            if (old_mgr) {
-                retired.push_back(std::move(old_mgr));
-            }
+            retired = retired_mgrs;
         }
-        // a manager whose connections have closed is released outside the lock
-        std::vector<std::shared_ptr<HttpClientConnectionManagerBase>> keep;
+        std::vector<HttpClientConnectionManagerBase*> done;
         for (auto& mgr : retired) {
-            if (!mgr->reapRetired()) {
-                keep.push_back(std::move(mgr));
+            if (qore_http_manager_ops(mgr.get()).reapRetired()) {
+                done.push_back(mgr.get());
             }
         }
-        retired.clear();
-        std::lock_guard<std::mutex> lk(retired_lock);
-        for (auto& mgr : keep) {
-            retired_mgrs.push_back(std::move(mgr));
+        if (!done.empty()) {
+            std::lock_guard<std::mutex> lk(retired_lock);
+            for (auto i = retired_mgrs.begin(); i != retired_mgrs.end();) {
+                if (std::find(done.begin(), done.end(), i->get()) != done.end()) {
+                    i = retired_mgrs.erase(i);
+                } else {
+                    ++i;
+                }
+            }
+            retired_count.store(retired_mgrs.size(), std::memory_order_release);
         }
+        // the managers released here are destroyed outside the lock, with their connections all closed
     }
 
     //! Closes the connection managers that the client has retired (a disconnect of the client)
@@ -1626,6 +1645,7 @@ struct qore_httpclient_priv {
         {
             std::lock_guard<std::mutex> lk(retired_lock);
             retired.swap(retired_mgrs);
+            retired_count.store(0, std::memory_order_release);
         }
         for (auto& mgr : retired) {
             closeDetachedConnMgr(mgr);
@@ -1793,9 +1813,12 @@ struct qore_httpclient_priv {
             rv = conn_mgr;
         }
         // a manager replaced for a change of the client's settings or protocol is retired, so that the requests of
-        // other threads in progress on it complete (qore#7741)
+        // other threads in progress on it complete; the retired managers whose connections have closed are released
+        // (qore#7741)
         if (old_mgr) {
             retireConnMgr(std::move(old_mgr));
+        } else {
+            reapRetiredConnMgrs();
         }
         return rv;
     }
@@ -6022,6 +6045,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     int shutdown_repeats = 0;
     constexpr int MaxShutdownRepeats = 3;
     int64 request_deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + (int64)timeout_ms * 1000 : 0;
+    // the timeout of the request itself, which a repetition reduces to what remains of it
+    int request_timeout_ms = timeout_ms;
+    // the manager that the last pass of the request used
+    std::shared_ptr<HttpClientConnectionManagerBase> last_mgr;
     bool has_body = stream_body || body_len;
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
@@ -6113,6 +6140,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             return nullptr;
         }
         HttpClientConnectionManagerBase& mgr = *mgr_holder;
+        last_mgr = mgr_holder;
         // a request that its manager refused (HTTPCLIENT-SHUTDOWN, raised only when a connection is acquired, before
         // anything is sent) because another thread of the client replaced and retired it meanwhile is repeated on the
         // client's current manager, within its timeout; not when the client is disconnected (qore#7741)
@@ -6125,12 +6153,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN")) {
                 return false;
             }
-            if (timeout_ms > 0) {
-                int64 left_ms = request_deadline_us ? (request_deadline_us - q_get_monotonic_us()) / 1000 : 0;
+            // the request's own timeout is what remains of it; the waits of the parts of its response keep theirs
+            if (request_deadline_us) {
+                int64 left_ms = (request_deadline_us - q_get_monotonic_us()) / 1000;
                 if (left_ms <= 0) {
                     return false;
                 }
-                timeout_ms = (int)left_ms;
+                request_timeout_ms = (int)left_ms;
             }
             ++shutdown_repeats;
             xsink->clear();
@@ -7371,7 +7400,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // Non-streaming path: submit and await complete response
             ReferenceHolder<QoreHashNode> raw_resp(
                 mgr.request(meth, scheme, this_connection.host.c_str(), this_connection.port,
-                    msgpath, *nh, body_ptr, body_len, timeout_ms, xsink, event_sink),
+                    msgpath, *nh, body_ptr, body_len, request_timeout_ms, xsink, event_sink),
                 xsink);
             // HttpClientConnectionManagerBase::request() documents FUTURE-TIMEOUT for its own callers, but
             // this class documents SOCKET-TIMEOUT for a request that exceeds its "timeout" option; translate
@@ -7639,9 +7668,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         QoreStringDataHelper protocol_str(*response_protocol);
         const char* protocol = protocol_str.c_str();
         if (!request_target) {
-            http2_active = !strcmp(protocol, "h2");
-            last_url_protocol = 0;
-            http3_active = !strcmp(protocol, "h3");
+            // only from the client's current manager: a request that completes on a manager that another thread's
+            // request replaced and retired does not undo the change (qore#7741)
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            if (conn_mgr == last_mgr) {
+                http2_active = !strcmp(protocol, "h2");
+                last_url_protocol = 0;
+                http3_active = !strcmp(protocol, "h3");
+            }
         } else {
             last_url_protocol = !strcmp(protocol, "h3") ? 3 : (!strcmp(protocol, "h2") ? 2 : 1);
         }
@@ -8845,7 +8879,10 @@ public:
                     if (proto.getType() == NT_STRING) {
                         QoreStringValueHelper proto_str(proto);
                         const char* p = proto_str->c_str();
-                        if (!strcmp(p, "h2")) {
+                        // only from the client's current manager: a request that completes on a manager that
+                        // another thread's request replaced and retired does not change the client (qore#7741)
+                        if (!strcmp(p, "h2") && priv_ref->getConnMgrIfPresent()
+                                == (request ? request->mgr : pending_mgr)) {
                             priv_ref->http2_active = true;
                         }
                         // the response of a request of the client's own: getHttpVersion() reports the client's

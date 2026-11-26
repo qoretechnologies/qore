@@ -1169,6 +1169,8 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
     bool swapped = false;
     // true if the transitional connection was removed from the pool here, as the concrete one has closed already
     bool neg_evicted = false;
+    // the concrete connection swapped into the pool of a retired manager, referenced
+    HttpClientConnectionBase* retired_concrete = nullptr;
     {
         std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
         auto it = b->pool_.find(key);
@@ -1192,6 +1194,12 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
                 }
             }
         }
+        if (swapped && b->shutdown_) {
+            // the connection of a request in progress on a retired manager closes itself when the request has ended
+            // (qore#7741); the hook is set below, outside the lock, with a reference of its own
+            concrete_raw->ref();
+            retired_concrete = concrete_raw;
+        }
         if (swapped) {
             b->observed_protocols_.fetch_or(
                 1u << static_cast<unsigned>(concrete_raw->getProtocol()),
@@ -1201,6 +1209,11 @@ HttpClientConnectionBase* qore_http_manager_ops::swapNegotiatedConnectionImpl(Ht
                 (void)concrete_raw->tryReserveStream(false);
             }
         }
+    }
+
+    if (retired_concrete) {
+        retired_concrete->setIdleTimeoutHook(1);
+        retired_concrete->deref(xsink);
     }
 
     // Release the stream slot the acquire reserved on the transitional
@@ -1251,7 +1264,15 @@ void qore_http_manager_ops::applyConnectionOptionsImpl(HttpClientConnectionManag
     // H3 uses ngtcp2's own idle/keepalive timers and inherits the
     // base no-op.  Safe to call before or after wait_for_ready — the
     // hook is idempotent and a no-op while the poll op is unbuilt.
-    if (b->opts_.idle_timeout_ms > 0) {
+    bool shut_down;
+    {
+        std::shared_lock<std::shared_mutex> rl(b->pool_lock_);
+        shut_down = b->shutdown_;
+    }
+    if (shut_down) {
+        // a connection of a retired manager closes itself when its request has ended (qore#7741)
+        conn->setIdleTimeoutHook(1);
+    } else if (b->opts_.idle_timeout_ms > 0) {
         conn->setIdleTimeoutHook((int64_t)b->opts_.idle_timeout_ms * 1000LL);
     }
     if (b->opts_.max_response_body_size > 0) {
@@ -1393,21 +1414,24 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     }
 }
 
-void HttpClientConnectionManagerBase::retire() {
+void qore_http_manager_ops::retireImpl(HttpClientConnectionManagerBase* b) {
     // the idle connections, taken from the pool, and the connections with requests, which stay in it until they close
     std::vector<HttpClientConnectionBase*> idle;
     std::vector<HttpClientConnectionBase*> busy;
     {
-        std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        if (shutdown_) {
+        std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
+        if (b->shutdown_) {
             return;
         }
-        shutdown_ = true;
-        for (auto it = pool_.begin(); it != pool_.end();) {
+        b->shutdown_ = true;
+        for (auto it = b->pool_.begin(); it != b->pool_.end();) {
             auto& conns = it->second;
             for (auto cit = conns.begin(); cit != conns.end();) {
                 HttpClientConnectionBase* conn = *cit;
-                if (!conn->getActiveStreamCount() && !conn->getPendingStreamCount()) {
+                // the reservations are read first: no reservation is taken while the pool is locked for writing, and
+                // a submit counts its active stream before it releases its reservation, so a request that is being
+                // submitted is in one of the two counts (as in evictDeadLockedImpl())
+                if (!conn->getPendingStreamCount() && !conn->getActiveStreamCount()) {
                     idle.push_back(conn);
                     cit = conns.erase(cit);
                 } else {
@@ -1418,7 +1442,7 @@ void HttpClientConnectionManagerBase::retire() {
                 }
             }
             if (conns.empty()) {
-                it = pool_.erase(it);
+                it = b->pool_.erase(it);
             } else {
                 ++it;
             }
@@ -1427,9 +1451,9 @@ void HttpClientConnectionManagerBase::retire() {
 
     // an acquire waiting for a connection being created sees the shutdown
     {
-        std::lock_guard<std::mutex> cl(create_lock_);
-        creating_.clear();
-        create_cond_.notify_all();
+        std::lock_guard<std::mutex> cl(b->create_lock_);
+        b->creating_.clear();
+        b->create_cond_.notify_all();
     }
 
     // the idle connections are closed now, as in closeAll(), which takes the pool's references
@@ -1447,8 +1471,10 @@ void HttpClientConnectionManagerBase::retire() {
     for (HttpClientConnectionBase* conn : busy) {
         conn->setIdleTimeoutHook(1);
         ExceptionSink xs;
-        if (!conn->getActiveStreamCount() && !conn->getPendingStreamCount()) {
-            closeAndEvict(conn, &xs);
+        // the pending count first, as above; a connection with neither can take no new request, as the manager is
+        // shut down
+        if (!conn->getPendingStreamCount() && !conn->getActiveStreamCount()) {
+            b->closeAndEvict(conn, &xs);
             xs.clear();
         }
         conn->deref(&xs);
@@ -1456,16 +1482,16 @@ void HttpClientConnectionManagerBase::retire() {
     }
 }
 
-bool HttpClientConnectionManagerBase::reapRetired() {
+bool qore_http_manager_ops::reapRetiredImpl(HttpClientConnectionManagerBase* b) {
     ExceptionSink xs;
     // the close notifications of the I/O thread, then the connections closed without one
-    qore_http_manager_ops(this).processClosedConnections(&xs);
+    qore_http_manager_ops(b).processClosedConnections(&xs);
     xs.clear();
     std::vector<HttpClientConnectionBase*> to_deref;
     bool empty;
     {
-        std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        for (auto it = pool_.begin(); it != pool_.end();) {
+        std::unique_lock<std::shared_mutex> wl(b->pool_lock_);
+        for (auto it = b->pool_.begin(); it != b->pool_.end();) {
             auto& conns = it->second;
             for (auto cit = conns.begin(); cit != conns.end();) {
                 if ((*cit)->isClosed()) {
@@ -1476,15 +1502,15 @@ bool HttpClientConnectionManagerBase::reapRetired() {
                 }
             }
             if (conns.empty()) {
-                it = pool_.erase(it);
+                it = b->pool_.erase(it);
             } else {
                 ++it;
             }
         }
-        empty = pool_.empty();
+        empty = b->pool_.empty();
     }
     for (HttpClientConnectionBase* conn : to_deref) {
-        qore_http_manager_ops(this).detachAndDeref(conn, &xs);
+        qore_http_manager_ops(b).detachAndDeref(conn, &xs);
         xs.clear();
     }
     return empty;

@@ -412,22 +412,6 @@ public:
     */
     DLLEXPORT virtual void closeAll(ExceptionSink* xsink);
 
-    //! Retires the manager: it hands out no connection any more, and closes each of its connections when the
-    //! connection has no request (qore#7741)
-    /** A client that replaces its manager (a change of protocol) retires the old one, so that the requests in
-        progress on it complete: its idle connections are closed now; each other one is given the shortest idle
-        timeout, so that it closes itself when its last request has ended (an HTTP/3 connection closes with its QUIC
-        idle timeout).  An acquire on a retired manager, also one that waits for a connection being created, fails
-        with \c HTTPCLIENT-SHUTDOWN before anything is sent.  Must not be called on the async I/O thread, nor with
-        the lock of the client's socket held.
-    */
-    DLLLOCAL void retire();
-
-    //! Releases the connections of a retired manager that have closed; returns true when it has none left
-    /** Must not be called on the async I/O thread (qore#7741)
-    */
-    DLLLOCAL bool reapRetired();
-
     //! Returns the options used to create this manager.
     DLLLOCAL const Options& getOptions() const {
         return opts_;
