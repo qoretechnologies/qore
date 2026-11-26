@@ -140,7 +140,7 @@ struct qore_siphash13_state {
     static QORE_SIPHASH_INLINE uint64_t load8(const unsigned char* p) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
         uint64_t w;
-        memcpy(&w, p, 8);
+        std::memcpy(&w, p, 8);
         return w;
 #else
         uint64_t w = 0;

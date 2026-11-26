@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the hash containers of the C++ standard library (libc++ keeps the hashes of the keys in its nodes) when an adaptive container switches its hash
 
 /*  dataframe-keyed-hash-sites.qtest Copyright 2026 Qore Technologies, s.r.o.
     MIT License
