@@ -1211,7 +1211,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         && retries < max_retries && canRetryRequest(method, stream)) {
                     timeout_retried = True;
                     ++retries;
-                    HttpClientConnection timed_out_conn = stream.getConnection();
+                    HttpClientConnection timed_out_conn = HttpClientIoSocketAccess::connectionOf(stream);
                     log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
                         "evicting stale connection and retrying (%d/%d)",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
@@ -1658,7 +1658,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     }
                 }
                 try {
-                    sh.getConnection().cancelRequest(sh.getStreamId());
+                    HttpClientConnection sh_conn = HttpClientIoSocketAccess::connectionOf(sh);
+                    sh_conn.cancelRequest(sh.getStreamId());
                 } catch (hash<ExceptionInfo> ex) {
                     # the connection is already closed
                 }
@@ -2090,7 +2091,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                             && resend.retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
                         ++resend.retries;
-                        HttpClientConnection timed_out_conn = stream.getConnection();
+                        HttpClientConnection timed_out_conn = HttpClientIoSocketAccess::connectionOf(stream);
                         log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d (%s), "
                             "evicting stale connection and retrying within the remaining %s (%d/%d)",
                             timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(), ex.desc,

@@ -78,14 +78,23 @@ l50Xb2GWQesIt9k5jF5IOw==
 #! the code of the borrower
 const BorrowerCode = "%modern
 %requires HttpClientIo
-our HttpClientConnection conn;
-#! makes a request with the manager and keeps its connection; returns the status code
+our HttpClientConnectionView conn;
+our HttpClientStreamHandle kept;
+our bool during;
+#! makes a request with the manager and keeps the view of its connection; returns the status code
 int sub request(HttpClientConnectionManager mgr, string url, string path) {
     HttpClientStreamHandle sh = mgr.acquireStream(url);
+    kept = sh;
+    conn = sh.getConnectionView();
     hash<auto> r = sh.submitAsync(\"GET\", path);
+    # the view works while the borrower's request is active
+    during = conn.isActive() && conn.isReady() && conn.getProtocol() != \"\";
     int status = r.future.get(20s).status_code;
-    conn = sh.getConnection();
     return status;
+}
+#! True if the view worked during the borrower's request
+bool sub viewDuringRequest() {
+    return during;
 }
 #! the ID of the kept connection
 int sub connId() {
@@ -96,9 +105,9 @@ string sub act(string what) {
     try {
         switch (what) {
             case \"close\": conn.close(); break;
-            case \"pool\": conn.releaseStreamReservation(); conn.setLeased(True); break;
             case \"cancel\": conn.cancelRequest(1); break;
             case \"cancel3\": conn.cancelRequest(3); break;
+            case \"direct\": kept.getConnection().close(); break;
             default: throw \"UNKNOWN\", what;
         }
         return \"done\";
@@ -218,6 +227,7 @@ class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
             Program p = getBorrower(srv.port);
 
             assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+            assertTrue(p.callFunction("viewDuringRequest"), protocol + ": the view works during the request");
             int borrowed = p.callFunction("connId");
             # the host's request reuses the connection
             string result;
@@ -237,11 +247,11 @@ class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
     }
 
     h1Test() {
-        scopeTest(False, "h1", ("close", "pool"));
+        scopeTest(False, "h1", ("close", "direct"));
     }
 
     h2Test() {
-        scopeTest(True, "h2", ("close", "pool", "cancel", "cancel3"));
+        scopeTest(True, "h2", ("close", "cancel", "cancel3", "direct"));
     }
 
     ownerTest() {
@@ -254,6 +264,10 @@ class HttpClientIoLentConnectionScopeTest inherits QUnit::Test {
             HttpClientStreamHandle sh = mgr.acquireStream(srv.url);
             hash<auto> r = sh.submitAsync("GET", "/ok");
             assertEq(200, r.future.get(HangGuard).status_code, c.protocol + ": the host's request");
+            # the view of the code that owns the manager is never ended
+            HttpClientConnectionView view = sh.getConnectionView();
+            assertTrue(view.isActive(), c.protocol + ": the owner's view is active after its request");
+            assertTrue(view.isReady(), c.protocol + ": the owner's view works after its request");
             HttpClientConnection conn = sh.getConnection();
             conn.close();
             assertEq(200, hostRequest(mgr, srv.url, "/again")[0], c.protocol + ": the owner closed its connection");
