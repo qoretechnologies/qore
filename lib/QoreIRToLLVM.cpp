@@ -23236,6 +23236,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool needs_value_coerce = element_coerce
                 || (!element_store && !mode_store_through_runtime
                     && (is_complex_typed || needs_scalar_coerce || needs_plain_any));
+            // the store of a push to a list<int> local on the runtime stack: the coercion keeps a list of the
+            // local's type as it is, and the assignment does nothing when the variable holds the list already, which
+            // the push changed in place (qore_rt_coerce_int_list_value(), qore_rt_assign_int_list_local())
+            bool int_list_push_store = inst->list_push_local_cow && needs_value_coerce && is_complex_typed
+                && !element_store && !is_ir_only && linst->mode == AssignmentMode::Normal
+                && !linst->foreach_assignment && !linst->is_ref && !linst->is_closure
+                && local_ti == qore_get_complex_list_type(bigIntTypeInfo)
+                && !QORE_ENV_IS_SET("QORE_DISABLE_IR_INT_LIST_PUSH_STORE");
             llvm::Value* consumed_cleanup = nullptr;
             // the value assigned, before the local's own type is applied to it
             llvm::Value* original_boxed = boxed;
@@ -23334,7 +23342,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                                  boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction(qore_coerce_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment, linst->mode),
+                        auto coerce_fn = module.getOrInsertFunction(int_list_push_store
+                                ? std::string("qore_rt_coerce_int_list_value_aot")
+                                : qore_coerce_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment,
+                                    linst->mode),
                                 llvm::FunctionType::get(i64_type,
                                         {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
@@ -23352,7 +23363,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction(qore_coerce_helper_name("qore_rt_coerce_value", linst->foreach_assignment, linst->mode),
+                        auto coerce_fn = module.getOrInsertFunction(int_list_push_store
+                                ? std::string("qore_rt_coerce_int_list_value")
+                                : qore_coerce_helper_name("qore_rt_coerce_value", linst->foreach_assignment,
+                                    linst->mode),
                                 llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, xsink_arg});
@@ -23784,6 +23798,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? "qore_rt_assign_local_no_coerce_throwing"
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_throwing"
                             : "qore_rt_assign_local_eval_weak_throwing");
+                if (int_list_push_store) {
+                    assert(use_no_coerce);
+                    aot_helper_name = "qore_rt_assign_int_list_local_aot";
+                    aot_helper_throwing_name = "qore_rt_assign_int_list_local_aot_throwing";
+                    jit_helper_name = "qore_rt_assign_int_list_local";
+                    jit_helper_throwing_name = "qore_rt_assign_int_list_local_throwing";
+                }
 
                 if (linst->mode == AssignmentMode::Normal && !linst->foreach_assignment) {
                     boxed = emit_take_store_value(boxed, consumed_cleanup);
@@ -42425,6 +42446,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* direct_member_ptr = direct_self_mutation
                 ? qore_ir_create_global_string_ptr(builder, *direct_self_member) : nullptr;
 
+            // += and -= on an element of a list<int> local whose index operand is a native integer (a constant index is
+            // one too; a path whose step had a constant index of its own would give it as a constant): the helper
+            // changes an inline integer element of a list that only the variable holds in place and makes any other
+            // case as the generic helper (qore_rt_lv_path_int_list_compound()); the index is given as it is, so no
+            // array of boxed dynamic operands is built
+            llvm::Value* int_list_index = nullptr;
+            if (!direct_self_mutation && qore_ir_is_int_list_compound_shape(*path_inst)
+                    && !QORE_ENV_IS_SET("QORE_DISABLE_IR_IN_PLACE_INT_LIST_COMPOUND")) {
+                const auto* root = reinterpret_cast<const LocalVar*>(path_inst->path[0].ref_ptr);
+                const LVPathStep& index_step = path_inst->path[1];
+                if (root && !root->closureUse() && !root->isReadOnly()
+                        && root->getTypeInfoForLValue() == qore_get_complex_list_type(bigIntTypeInfo)) {
+                    if (index_step.operand_idx == UINT32_MAX) {
+                        int_list_index = llvm::ConstantInt::get(i64_type, index_step.index);
+                    } else if (!nanboxed_values.count(index_step.operand_idx)) {
+                        auto* index_val = getVal(index_step.operand_idx, error);
+                        if (!index_val) { return false; }
+                        if (index_val->getType() == i64_type) {
+                            int_list_index = index_val;
+                        }
+                    }
+                }
+            }
+
             // Count dynamic operands (single-value steps with operand_idx != UINT32_MAX,
             // plus each SSA id inside slice steps)
             int num_dyn = 0;
@@ -42441,7 +42486,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Build dynamic operands array (alloca in entry block)
             llvm::Value* dyn_array;
-            if (num_dyn > 0) {
+            if (num_dyn > 0 && !int_list_index) {
                 llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                         llvm_func->getEntryBlock().begin());
                 dyn_array = ab.CreateAlloca(i64_type,
@@ -42785,6 +42830,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 static_cast<int32_t>(path_inst->compound_op)),
                              rhs_boxed, xsink_arg},
                             module, llvm_func, inst);
+                    } else if (int_list_index) {
+                        llvm::Value* consume_val = llvm::ConstantInt::get(i32_type, consume ? 1 : 0);
+                        if (aot_slots) {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_int_list_compound_aot", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_int_list_compound_aot_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot), int_list_index,
+                                 rhs_boxed, consume_val, xsink_arg},
+                                module, llvm_func, inst);
+                        } else {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i64_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_int_list_compound", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_int_list_compound_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {inst_ptr_val, int_list_index, rhs_boxed, consume_val, xsink_arg},
+                                module, llvm_func, inst);
+                        }
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);

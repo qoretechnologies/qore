@@ -145,6 +145,64 @@ value operand are released before the mutation (`DiscardTempsKeep`).
 See `design/lvalue-loads-in-ir.md` for the precise invariant and current
 handler rules.
 
+### In-place integer list element compound assignment
+
+Native code makes `local[index] += value` and `local[index] -= value`
+(`LValuePathCompound` with a `LocalVar` step and a `ListIndex` step,
+`qore_ir_is_int_list_compound_shape()`) on a local declared `list<int>` that is
+neither read-only nor a closure variable, whose index operand is a native integer
+(a constant index is one too), with `qore_rt_lv_path_int_list_compound()` (`_aot` in
+compiled code) instead of the generic `qore_rt_lv_path_compound()`: the index is
+given as it is, and no array of boxed dynamic operands is built.  The helper
+changes the element in place only where the generic path would change the same
+element of the same list and store the same value: the variable is on the
+current thread's local variable stack and holds the list itself (not a
+reference, a weak reference or a value assigned without a reference of its own),
+the list is valid, of type `list<int>` and held by the variable alone (the
+generic path would copy a shared list first), the index is that of an existing
+element holding an inline integer, and the operand is an inline integer whose
+sum or difference with the element is inline too.  The sum or difference of two
+inline integers fits in an `int64`, an inline value replaced by another changes
+no reference count and no count of values that the garbage collector scans, and
+the element type takes it, so the change raises nothing.  Every other case
+(a shared list, an index past the end or negative, a wide value or result, an
+operand of another type) is made by the generic path with the same operand
+handover rules (a consumed operand passes to the helper in every case).  The
+code around the call is unchanged: the root's caches are cleared before it and
+the root is reloaded after it.  `QORE_DISABLE_IR_IN_PLACE_INT_LIST_COMPOUND`
+disables it.  `IRInPlaceIntListCompound.qtest` checks the hits and every kind of
+miss in every execution mode and compiled code, with the compiled code's calls of
+the helper.
+
+### The store of a push to a list<int> local on the runtime stack
+
+`push local, value` is lowered as a load of the local, the push and a store of
+its result to the local (`list_push_local_cow` on the push and the store); a
+local on the runtime stack (one that is not IR-only, for example because an
+lvalue path such as `local[i] += 1` changes it) is pushed to with the
+copy-on-write helper, which changes a list that only the variable holds in place
+and returns it, and the store then coerces the result to the local's type and
+assigns it to the variable.  For a local declared `list<int>` (a `Normal` store
+that is not the store of a foreach variable, of a reference or of a closure
+variable) native code makes that store with `qore_rt_coerce_int_list_value()`
+and `qore_rt_assign_int_list_local()` (`_aot` in compiled code): the coercion
+keeps a plain list of the local's type as it is, which
+`QoreTypeInfo::acceptAssignment()` would accept unchanged (an `int` element is
+accepted without a check, and the type is not one that a no-narrow lvalue
+strips), and the assignment does nothing when the variable on the current
+thread's local variable stack holds that list already with a reference of its
+own, no weak reference designates the list (the store of a weakly designated
+container can copy it) and the store is given no reference to take
+(`qore_rt_take_store_value()`); the assignment of the same list would only take
+and release a reference.  Any other value (the copy that the push made of a
+shared list, a replaced variable) is coerced and assigned as with
+`qore_rt_coerce_value()` and `qore_rt_assign_local_no_coerce_eval_weak()`.  The
+cleanup of the coerced value and the reload of the local after the store are
+unchanged.  `QORE_DISABLE_IR_INT_LIST_PUSH_STORE` disables it.
+`IRIntListPushStore.qtest` checks pushes to unique, shared, weakly designated,
+replaced and passed lists, wide values and a rejected value in every execution
+mode and compiled code, with the compiled code's calls of the helpers.
+
 ## Lowering Coverage
 
 The current implementation supports the language constructs needed by the

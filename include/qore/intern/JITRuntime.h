@@ -591,6 +591,22 @@ void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink*
 void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
+//! The coercion and the assignment of the store of a push to a list<int> local on the runtime stack (qore#5578)
+/** The store that follows <tt>push local, value</tt> (QoreIRInstruction::list_push_local_cow) to a local declared
+    \c list<int>: the coercion keeps a list of that type as it is, without the generic conversion, and the assignment
+    does nothing when the variable holds the list already (the push changed it in place); any other value is coerced
+    and assigned as with qore_rt_coerce_value() and qore_rt_assign_local_no_coerce_eval_weak()
+*/
+uint64_t qore_rt_coerce_int_list_value(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+    ExceptionSink* xsink);
+uint64_t qore_rt_coerce_int_list_value_aot(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+    uint64_t* cleanup_ptr, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+
 //! Publish a compiled local alloca value to the runtime local stack before
 //! executing deferred handlers.  This intentionally ignores any pre-existing
 //! exception in the caller's ExceptionSink because on_error handlers run while
@@ -2232,6 +2248,21 @@ uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* d
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+//! Applies += or -= to an element of a list<int> local with a native index (qore#5578)
+/** For an instruction of qore_ir_is_int_list_compound_shape() whose local is declared \c list<int>.  An inline integer
+    element of a list that only the variable holds is changed in place; any other case is made by the generic path, as
+    qore_rt_lv_path_compound() (or qore_rt_lv_path_compound_consume() with \a consume_rhs) makes it.
+
+    @param inst the lvalue path instruction
+    @param index the index of the element: the value of the path's dynamic index operand, or its constant index
+    @param rhs_bits the operand
+    @param consume_rhs nonzero if the reference to the operand passes to this function in every case
+    @param xsink for exceptions
+
+    @return the value of the element after the operation (an owned reference), NOTHING on exception
+*/
+uint64_t qore_rt_lv_path_int_list_compound(QoreIRLValuePathInstruction* inst, int64_t index, uint64_t rhs_bits,
+    int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound_consume(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
@@ -2252,6 +2283,9 @@ uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+//! The AOT counterpart of qore_rt_lv_path_int_list_compound(); the instruction is the path of \a slot
+uint64_t qore_rt_lv_path_int_list_compound_aot(QoreAOTContext* ctx, int32_t slot, int64_t index, uint64_t rhs_bits,
+    int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,

@@ -2835,6 +2835,18 @@ public:
     // LValuePathTernary:   operands[0..2] = offset, length, replacement; dynamic key/index follow
 };
 
+//! Returns true if an lvalue path operation is += or -= on an element of a local variable (qore#5578)
+/** <tt>local[index] += value</tt> or <tt>local[index] -= value</tt>: the shape that native code makes with
+    qore_rt_lv_path_int_list_compound() when the local is declared \c list<int> (see design/qore-ir-spec.md, "In-place
+    integer list element compound assignment").
+*/
+DLLLOCAL inline bool qore_ir_is_int_list_compound_shape(const QoreIRLValuePathInstruction& inst) {
+    return inst.opcode == QoreIROpcode::LValuePathCompound
+        && (inst.compound_op == LVCompoundOp::AddAssign || inst.compound_op == LVCompoundOp::SubAssign)
+        && inst.path.size() == 2 && inst.path[0].kind == LVPathStepKind::LocalVar
+        && inst.path[1].kind == LVPathStepKind::ListIndex;
+}
+
 //! Shared LValuePathUnary slice-terminal-step executors, called from both
 //! the IR interpreter (QoreIRInterpreter.cpp) and the JIT runtime helper
 //! (qore_rt_lv_path_unary in JITRuntime.cpp).  Precondition: `lvh` is
