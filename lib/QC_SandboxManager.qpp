@@ -596,6 +596,12 @@ hashdecl SandboxConfigInfo {
     /** @since %Qore 3.0
     */
     bool uncontrolled_api_policy;
+    //! The enforcement level of the sandbox (see SandboxManager::setEnforcementLevel())
+    /** @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+        @since %Qore 3.0
+    */
+    int enforcement_level;
 }
 
 /** @defgroup sandbox_fs_access Filesystem Access Mode Constants
@@ -636,6 +642,20 @@ const QSEC_NET_UNIX = QSEC_NET_UNIX;
 
 //! All network protocols
 const QSEC_NET_ALL = QSEC_NET_ALL;
+///@}
+
+/** @defgroup sandbox_enforcement_levels Sandbox Enforcement Level Constants
+    The enforcement levels of a sandbox (see @ref Qore::SandboxManager::setEnforcementLevel()
+    "SandboxManager::setEnforcementLevel()" and @ref sandbox_enforcement_level)
+
+    @since %Qore 3.0
+*/
+///@{
+//! Code safety: the policy, limits and functional-domain checks of the sandbox only (no owner rules)
+const QSEL_CODE_SAFETY = QSEL_CODE_SAFETY;
+
+//! Tenant isolation (the default): the checks of @ref QSEL_CODE_SAFETY and the owner rules of the sandbox
+const QSEL_TENANT_ISOLATION = QSEL_TENANT_ISOLATION;
 ///@}
 
 //! Unified sandbox manager combining filesystem, network, and resource controls
@@ -1435,6 +1455,77 @@ bool SandboxManager::getUncontrolledApiPolicy() [flags=RET_VALUE_ONLY] {
     return sm->getUncontrolledApiPolicy();
 }
 
+//! Sets the enforcement level of the sandbox
+/** The enforcement level decides what the sandbox keeps apart besides the functional domains of the code that it
+    governs (see @ref sandbox_enforcement_level):
+    - @ref QSEL_TENANT_ISOLATION (the default of a new manager): the policy, limits and functional-domain checks of the
+      sandbox, and the owner rules, which keep the code that the sandbox governs from changing or reading the state of
+      objects that its sandbox did not create, for the code of a tenant that must be isolated from the host and from
+      other tenants;
+    - @ref QSEL_CODE_SAFETY: the policy, limits and functional-domain checks only, for code that the host trusts and
+      runs in a sandbox to keep it from mistakes, or for interrupts and limits.
+
+    When more than one sandbox governs code, the strictest level of them applies.
+
+    Raising the level to @ref QSEL_TENANT_ISOLATION is always allowed, and fixes it: the level can never be lowered
+    again.  Lowering it to @ref QSEL_CODE_SAFETY is allowed only to the creator of the manager: trusted code, or the
+    code of the %Program whose code created the manager (as for the other changes that lift a restriction, see
+    @ref Qore::SandboxManager "SandboxManager"); never to code that the manager governs, and only while the level has
+    not been fixed.
+
+    @param level @ref QSEL_TENANT_ISOLATION or @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+# a sandbox for interrupting and limiting code that the host trusts
+SandboxManager sm();
+sm.setEnforcementLevel(QSEL_CODE_SAFETY);
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR the level was lowered by code that the manager governs, by code that is not trusted
+    and whose %Program did not create the manager, or after the level was fixed
+    @throw SANDBOX-ENFORCEMENT-LEVEL-ERROR invalid level
+
+    @see
+    - getEnforcementLevel()
+    - isEnforcementLevelFixed()
+    - isTenantIsolated()
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setEnforcementLevel(int level) [flags=NAMED_ARGS] {
+    if (level != QSEL_CODE_SAFETY && level != QSEL_TENANT_ISOLATION) {
+        xsink->raiseException("SANDBOX-ENFORCEMENT-LEVEL-ERROR", "invalid sandbox enforcement level " QLLD
+            "; expecting QSEL_CODE_SAFETY (%d) or QSEL_TENANT_ISOLATION (%d)", level, QSEL_CODE_SAFETY,
+            QSEL_TENANT_ISOLATION);
+        return QoreValue();
+    }
+    sm->setEnforcementLevel(static_cast<QoreSandboxEnforcementLevel>(level), xsink);
+}
+
+//! Returns the enforcement level of the sandbox
+/** @return @ref QSEL_TENANT_ISOLATION (the default) or @ref QSEL_CODE_SAFETY
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getEnforcementLevel() [flags=RET_VALUE_ONLY] {
+    return static_cast<int64>(sm->getEnforcementLevel());
+}
+
+//! Returns @ref True if the enforcement level of the sandbox can no longer be lowered
+/** @return @ref True once the level was raised to @ref QSEL_TENANT_ISOLATION with setEnforcementLevel()
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+bool SandboxManager::isEnforcementLevelFixed() [flags=RET_VALUE_ONLY] {
+    return sm->isEnforcementLevelFixed();
+}
+
 //! Returns the filesystem security configuration
 /** @return a @ref FilesystemSecurityConfigInfo hash with the current filesystem security configuration
 
@@ -2137,6 +2228,38 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns @ref True if the owner rules apply to the calling code
+/** The owner rules keep the code of a sandbox at the enforcement level @ref QSEL_TENANT_ISOLATION from changing or
+    reading the state of objects that its sandbox did not create (see @ref sandbox_enforcement_level).  They apply if
+    the calling code is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") and a sandbox that governs it has the level
+    @ref QSEL_TENANT_ISOLATION: the strictest level of the governing sandboxes (of the call stack, of the objects and
+    callbacks that the code runs, of the thread's start and of a sandboxed caller that the code acts for) decides.  It
+    fails closed: sandboxed code that no sandbox manager governs is isolated.
+
+    Library code uses it to apply a rule that only isolates tenants from each other, and that code that the host
+    trusts and runs in a sandbox only for code safety must not be subject to.
+
+    It reveals only whether the calling code is isolated, so it is not restricted itself.
+
+    @return @ref True if the owner rules apply to the calling code, @ref False if it is trusted or every sandbox that
+    governs it has the level @ref QSEL_CODE_SAFETY
+
+    @par Example:
+    @code{.py}
+if (SandboxManager::isTenantIsolated()) {
+    throw "TENANT-ERROR", "tenant code cannot share this object";
+}
+    @endcode
+
+    @see setEnforcementLevel()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isTenantIsolated() [flags=RET_VALUE_ONLY] {
+    return qore_caller_tenant_isolated();
+}
+
 //! Returns @ref True if a sandbox governs the Program of the class of the given object
 /** The Program of the class is the Program whose code declares the class or one of its base classes, wherever the
     class is used (also when it was imported into another Program, see
@@ -2396,6 +2519,72 @@ static nothing SandboxManager::checkProcessWideRegistration(string what) {
 */
 static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_ONLY] {
     return !qore_caller_is_sandboxed();
+}
+
+//! Returns @ref True if the current thread's code may change the given object as its owner
+/** Code that is trusted may change any object; code that is sandboxed or acts for sandboxed code (as decided for
+    @ref sandbox_process_wide_registries "process-wide registrations") may change an object only if its sandbox created
+    it: if every sandbox manager that governs the code also governed the creation of the object (see
+    @ref sandbox_object_ownership).  The check fails closed: sandboxed code that no sandbox manager governs, and code
+    whose sandbox cannot be resolved, owns no object.
+
+    A setter that replaces state that other code relies on, such as the logger of an object that is shared with other
+    code, uses checkObjectOwnedByCaller() to refuse a caller that does not own the object; trusted infrastructure that
+    changes such state only as a side effect of an operation that it performs for its caller, such as passing a logger
+    on to a child object that it did not create, uses this method to leave the change out.
+
+    It reveals only whether the calling code created the object, so it is not restricted itself.
+
+    @param obj the object to check
+
+    @return @ref True if the code is trusted or its sandbox created \a obj, @ref False if not
+
+    @par Example:
+    @code{.py}
+if (logger && SandboxManager::isObjectOwnedByCaller(child)) {
+    child.setLogger(logger);
+}
+    @endcode
+
+    @see checkObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isObjectOwnedByCaller(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_caller_created_object(*obj);
+}
+
+//! Refuses a change to the given object by sandboxed code whose sandbox did not create it
+/** Decides as isObjectOwnedByCaller() does, and raises an exception if the calling code may not change \a obj as
+    its owner.
+
+    @param obj the object to check
+    @param what what the caller tried to do, for the exception (ex: \c "change the logger of")
+
+    @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change an object that
+    its sandbox did not create
+
+    @par Example:
+    @code{.py}
+setLogger(*LoggerInterface logger) {
+    SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
+    self.logger = logger;
+}
+    @endcode
+
+    @see isObjectOwnedByCaller()
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkObjectOwnedByCaller(object obj, string what) {
+    if (qore_caller_owns_object(*obj)) {
+        return QoreValue();
+    }
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    qore_check_caller_owns_object(*obj, str->c_str(), xsink);
 }
 
 //! Returns @ref True if what the current thread's code creates may be shared by every %Program of the process
@@ -2853,6 +3042,41 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return static_cast<int64>(id);
+}
+
+//! Hands an object that trusted code created to the sandboxed code that it serves, which then owns it
+/** An object is owned by a sandbox if sandboxed code created it, or if the code of a class that trusted code declared
+    created it directly in a method of an object that the sandbox owns while it served that sandbox; an object that
+    trusted code creates while it serves sandboxed code is governed by that code's sandbox but owned by none (see
+    @ref sandbox_object_ownership).
+    Trusted code that creates an object for the sandboxed code that it serves, such as a factory or host code that
+    configures the object for its caller, hands it to that code with this method; the transfer is one-way.
+
+    Only an object that was created while the caller was served (whose provenance names the caller's sandbox) can be
+    transferred, so that an object that exists already, such as a shared object, is never handed to a sandbox by
+    mistake; to give the caller such an object, create a new object while serving the caller and transfer that (a copy
+    of such an object cannot be transferred either, as it keeps the provenance of the object that it copies).  Only
+    sandboxed code at the @ref sandbox_enforcement_level "enforcement level" of tenant isolation owns objects: an
+    object cannot be transferred to code that only sandboxes at the level of code safety govern.  The object is then
+    owned by the sandboxes that govern the caller.
+
+    @param obj the object to hand over
+
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed, a sandbox owns \a obj already, no sandboxed caller is
+    served, no sandbox at the enforcement level of tenant isolation governs the caller, or \a obj was not created while
+    the caller was served
+
+    @par Example:
+    @code{.py}
+AbstractDataProvider prov = factory.create(opts);
+SandboxManager::transferObjectToCaller(prov);
+prov.setLogger(logger);
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::transferObjectToCaller(object obj) {
+    qore_transfer_object_to_caller(*obj, xsink);
 }
 
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains

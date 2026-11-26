@@ -1258,6 +1258,12 @@ DLLLOCAL QoreProgram* qore_get_calling_program();
 */
 DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
 
+//! Returns true if \a sm, or a composition that it is a member of, governs the code running on the current thread
+/** The governing sandboxes are resolved as for QoreSandboxManagerHelper::All (see qore_caller_tenant_isolated());
+    used to refuse a change that lifts a restriction of a manager to the code that it governs
+*/
+DLLLOCAL bool qore_thread_sandbox_governed_by(const QoreSandboxManager* sm);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
@@ -1384,7 +1390,25 @@ public:
     */
     DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, ModuleCleanupWork kind);
 
+    //! Selects the constructor that copies a context without its module cleanup flags
+    enum class CopyGoverning {
+        Copy,
+    };
+
+    //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr), without the module
+    //! cleanup flags of \a src
+    /** For the provenance of an object that is owned as another object (qore_sandbox_owned_creation_context()).  Takes
+        its own references to the managers and budgets of \a src; may throw std::bad_alloc
+    */
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, CopyGoverning) {
+        copyGoverning(src);
+    }
+
     DLLLOCAL ~QoreSandboxContext();
+
+    //! Copies the properties of \a src that decide how the context governs, and takes references to its managers and
+    //! budgets; for the constructors only
+    DLLLOCAL void copyGoverning(const QoreSandboxContext* src);
 
     DLLLOCAL void ref() const { ROreference(); }
     DLLLOCAL void deref() const { if (ROdereference()) { delete this; } }

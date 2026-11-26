@@ -8047,6 +8047,51 @@ bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy) {
         && visit_thread_provenance(td, policy, false, allows);
 }
 
+bool qore_thread_sandbox_governed_by(const QoreSandboxManager* sm) {
+    assert(sm);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the manager, or a composition that it is a member of, governs the code
+    auto other = [sm](QoreSandboxManager* governing) -> bool {
+        if (governing == sm) {
+            return false;
+        }
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(governing)) {
+            return std::find(members->begin(), members->end(), sm) == members->end();
+        }
+        return true;
+    };
+    return !(visit_thread_sandbox_stack(td, nullptr, false, false, other)
+        && visit_thread_provenance(td, false, false, other));
+}
+
+bool qore_caller_tenant_isolated() {
+    // trusted code, also under a module initialization barrier for the code that loads library code; fails closed
+    // if the governing sandbox cannot be resolved
+    if (!qore_caller_is_sandboxed()) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // the strictest level of the governing sandboxes, as qore_thread_sandbox_allows_uncontrolled_apis() resolves them
+    // for QoreSandboxManagerHelper::All: the first manager with tenant isolation ends the walk
+    bool governed = false;
+    auto code_safety = [&governed](QoreSandboxManager* sm) -> bool {
+        governed = true;
+        return sm->getEnforcementLevel() == QSEL_CODE_SAFETY;
+    };
+    if (!visit_thread_sandbox_stack(td, nullptr, false, false, code_safety)
+            || !visit_thread_provenance(td, false, false, code_safety)) {
+        return true;
+    }
+    // sandboxed code that no sandbox manager governs: fails closed
+    return !governed;
+}
+
 static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_id_t* pgm_id = nullptr,
         bool policy = false) {
     ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);
@@ -9412,6 +9457,10 @@ QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm,
     if (qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
         return nullptr;
     }
+    // taking the container deletes the object: refused for an object that the current code may not delete (qore#6842)
+    if (qore_check_object_delete(*obj, "take over", xsink)) {
+        return nullptr;
+    }
     QoreObject* o = const_cast<QoreObject*>(obj);
 #ifdef DEBUG
     // tests hold the take-over here, after the binding of the arguments, to delete the object meanwhile
@@ -9913,6 +9962,10 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
 QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleCleanupWork kind)
         : module_cleanup_delegate(true), module_cleanup_work(true),
         module_cleanup_canceled(kind == ModuleCleanupWork::Canceled) {
+    copyGoverning(src);
+}
+
+void QoreSandboxContext::copyGoverning(const QoreSandboxContext* src) {
     if (!src) {
         return;
     }
@@ -10098,6 +10151,186 @@ QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm,
     QoreSandboxContext* ctx = new QoreSandboxContext(false);
     ctx->origin_restrictions = origin;
     return ctx;
+}
+
+//! Adds the sandbox managers that \a ctx records to \a managers: the members of a composition, or the manager
+static void qore_add_sandbox_context_managers(const QoreSandboxContext& ctx,
+        std::vector<const QoreSandboxManager*>& managers) {
+    for (const QoreSandboxManager* sm : {ctx.manager, ctx.policy_manager, ctx.provenance_manager,
+            ctx.provenance_policy_manager}) {
+        if (!sm) {
+            continue;
+        }
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+            managers.insert(managers.end(), members->begin(), members->end());
+        } else {
+            managers.push_back(sm);
+        }
+    }
+}
+
+bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm) {
+    // only a sandbox at the enforcement level of tenant isolation isolates the objects of its code from other code
+    return sm.getEnforcementLevel() == QSEL_TENANT_ISOLATION;
+}
+
+bool qore_sandbox_current_code_created(const QoreSandboxContext* creation, bool owned) {
+    try {
+        // the sandboxes that govern the current code, as they would be recorded for an object that it created now
+        // (qore_capture_sandbox_provenance())
+        // held until the managers are compared, also when an allocation below fails, so that the context is
+        // released and the managers that it references stay alive while they are compared
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                ctx->deref();
+            }
+        } current{new QoreSandboxContext(false)};
+        std::vector<const QoreSandboxManager*> current_managers;
+        qore_add_sandbox_context_managers(*current.ctx, current_managers);
+        // sandboxed code that no manager governs: fails closed
+        if (current_managers.empty()) {
+            return false;
+        }
+        // only the managers at the enforcement level of tenant isolation decide; code that only code-safety sandboxes
+        // govern owns every object, as trusted code does
+        current_managers.erase(std::remove_if(current_managers.begin(), current_managers.end(),
+            [](const QoreSandboxManager* sm) { return !qore_sandbox_owner_rules_apply(*sm); }),
+            current_managers.end());
+        if (current_managers.empty()) {
+            return true;
+        }
+        // an object that no sandbox owns (one that trusted code created, also for a sandboxed caller)
+        if (!owned || !creation) {
+            return false;
+        }
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        for (const QoreSandboxManager* sm : current_managers) {
+            if (std::find(creation_managers.begin(), creation_managers.end(), sm) == creation_managers.end()) {
+                return false;
+            }
+        }
+        return true;
+    } catch (std::bad_alloc&) {
+        // the sandboxes cannot be compared: fails closed
+        return false;
+    }
+}
+
+bool qore_caller_created_object(const QoreObject& obj) {
+    if (!qore_caller_is_sandboxed()) {
+        return true;
+    }
+    const QoreSandboxContext* owner = qore_object_private::get(obj)->getSandboxOwner();
+    return qore_sandbox_current_code_created(owner, owner);
+}
+
+QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext* creation) {
+    if (!creation) {
+        return nullptr;
+    }
+    try {
+        // the sandboxes that govern the current code, as qore_sandbox_current_code_created() captures them; released
+        // unless returned, also when an allocation below fails
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                if (ctx) {
+                    ctx->deref();
+                }
+            }
+        } current{new QoreSandboxContext(false)};
+        std::vector<const QoreSandboxManager*> current_managers;
+        qore_add_sandbox_context_managers(*current.ctx, current_managers);
+        // only a sandbox at the enforcement level of tenant isolation owns objects: the caller must be governed by one
+        current_managers.erase(std::remove_if(current_managers.begin(), current_managers.end(),
+            [](const QoreSandboxManager* sm) { return !qore_sandbox_owner_rules_apply(*sm); }),
+            current_managers.end());
+        if (current_managers.empty()) {
+            return nullptr;
+        }
+        // the object was created while the caller was served: its provenance names every such sandbox of the caller
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        for (const QoreSandboxManager* sm : current_managers) {
+            if (std::find(creation_managers.begin(), creation_managers.end(), sm) == creation_managers.end()) {
+                return nullptr;
+            }
+        }
+        current.ctx->origin_restrictions = creation->origin_restrictions;
+        QoreSandboxContext* rv = current.ctx;
+        current.ctx = nullptr;
+        return rv;
+    } catch (std::bad_alloc&) {
+        // the sandboxes cannot be compared: fails closed
+        return nullptr;
+    }
+}
+
+QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
+        const QoreSandboxContext* creation) {
+    assert(owner && creation);
+    try {
+        std::vector<const QoreSandboxManager*> owner_managers;
+        qore_add_sandbox_context_managers(*owner, owner_managers);
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        // the managers are compared as a set, whatever slot names them: a manager that the owner names in another
+        // slot than the creation does counts as named; and ownership follows the enforcement level of each manager
+        // when it is checked, so a manager at code safety that this provenance names and that is later raised to
+        // tenant isolation (SandboxManager::setEnforcementLevel()) owns the object with the others, as for any object
+        // that it governs
+        bool covered = std::all_of(creation_managers.begin(), creation_managers.end(),
+            [&owner_managers](const QoreSandboxManager* sm) {
+                return std::find(owner_managers.begin(), owner_managers.end(), sm) != owner_managers.end();
+            });
+        if (covered && owner->origin_restrictions == creation->origin_restrictions) {
+            owner->ref();
+            return const_cast<QoreSandboxContext*>(owner);
+        }
+        // released unless returned, also when an allocation below fails
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                if (ctx) {
+                    ctx->deref();
+                }
+            }
+        } rv{new QoreSandboxContext(owner, QoreSandboxContext::CopyGoverning::Copy)};
+        // keeps the functional-domain restrictions of the creating code (qore#6520)
+        rv.ctx->origin_restrictions = creation->origin_restrictions;
+        if (!covered) {
+            // the sandboxes that governed the creating code and that the owner does not name, such as one at the
+            // enforcement level of code safety, keep governing the object: each slot takes the stricter of both
+            std::pair<QoreSandboxManager**, QoreSandboxManager*> slots[] = {
+                {&rv.ctx->manager, creation->manager},
+                {&rv.ctx->policy_manager, creation->policy_manager},
+                {&rv.ctx->provenance_manager, creation->provenance_manager},
+                {&rv.ctx->provenance_policy_manager, creation->provenance_policy_manager},
+            };
+            for (auto& slot : slots) {
+                if (!slot.second || *slot.first == slot.second) {
+                    continue;
+                }
+                QoreSandboxManager* combined = QoreSandboxComposition::combine({*slot.first, slot.second});
+                if (*slot.first) {
+                    (*slot.first)->deref(nullptr);
+                }
+                *slot.first = combined;
+            }
+            std::vector<qore_program_id_t>& ids = rv.ctx->program_ids;
+            ids.insert(ids.end(), creation->program_ids.begin(), creation->program_ids.end());
+            std::sort(ids.begin(), ids.end());
+            ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+        }
+        QoreSandboxContext* ctx = rv.ctx;
+        rv.ctx = nullptr;
+        return ctx;
+    } catch (std::bad_alloc&) {
+        // the provenance cannot be made: the caller fails closed
+        return nullptr;
+    }
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {

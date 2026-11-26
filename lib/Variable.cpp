@@ -3565,8 +3565,9 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         clearPathContainers();
         clearPtr();
 
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
+        // a member of self (see qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -3702,8 +3703,10 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         clearPtr();
 
         const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
-        // getLValue() sets the object context: the object is on the path once (qore#7348)
-        if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
+        // a member of self, also of a reference's: the object and class of the code that created it (see
+        // qore_object_private::getSelfLValue())
+        // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+        if (qore_object_private::getSelfLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
@@ -4024,8 +4027,9 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             clearPathContainers();
             clearPtr();
-            // getLValue() sets the object context: the object is on the path once (qore#7348)
-            if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
+            // a member of self (see qore_object_private::getSelfLValue())
+            // getSelfLValue() sets the object context, as getLValue() does: the object is on the path once (qore#7348)
+            if (qore_object_private::getSelfLValue(*obj, root.name.c_str(), *this,
                     runtime_get_class(), for_remove, vl.xsink)) {
                 // object already cleared above
                 return -1;
@@ -6286,7 +6290,7 @@ void LValueRemoveHelper::deleteLValue() {
                 if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                     continue;
                 }
-                o->doDelete(xsink);
+                qore_operator_delete_object(o, xsink);
             }
         }
 
@@ -6305,7 +6309,7 @@ void LValueRemoveHelper::deleteLValue() {
         return;
     }
 
-    o->doDelete(xsink);
+    qore_operator_delete_object(o, xsink);
 }
 
 void LValueRemoveHelper::doRemove(QoreValue lvalue) {

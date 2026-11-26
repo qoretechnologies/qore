@@ -62,6 +62,7 @@ auto v = m.call(obj, arg1, arg2);
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
     @throw INVALID-FUNCTION-ACCESS the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
     @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
+    @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code cannot delete an object that its sandbox did not create
 */
 nothing DestructorMethodVariant::call(object obj) {
     // the privileges of the calling code, captured before switching to the class's Program
@@ -87,5 +88,10 @@ nothing DestructorMethodVariant::call(object obj) {
         return QoreValue();
     }
 
+    // an explicit deletion: for code that is sandboxed or acts for sandboxed code, only of an object that its sandbox
+    // owns (qore#6842)
+    if (qore_check_caller_owns_object(*obj, "delete", xsink)) {
+        return QoreValue();
+    }
     obj->doDelete(xsink);
 }

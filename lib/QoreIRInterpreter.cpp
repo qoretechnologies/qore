@@ -7383,6 +7383,21 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     return true;
 }
 
+//! returns true if the sandboxed rule of non-public method calls refuses the call (qore#7102); outlined from the
+//! inline method call path, which runs it only while code in the process is sandboxed
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool interpreterInlineMethodCallDenied(const AbstractQoreFunctionVariant* inst_variant,
+        const QoreMethod* method, QoreObject* self, ExceptionSink* xsink) {
+    if (!method || method->isStatic()) {
+        return false;
+    }
+    // the variant the inlined call evaluates (see executeInterpreterInlineIRMethodTarget()): a runtime-resolved target
+    // reaches the inline path only after the cache proved that the single own variant is selected
+    const AbstractQoreFunctionVariant* access_variant = inst_variant
+        ? inst_variant : qore_method_private::get(*method)->getFunction()->first();
+    return access_variant && qore_object_private::checkSandboxedMethodCall(self,
+        METHV_const(access_variant)->getAccess(), method->getName(), xsink);
+}
+
 template <bool GIVEN = false, typename DirectMethodInst>
 static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const QoreMethod* method,
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
@@ -7398,6 +7413,12 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     if (uvb->hasCachedFunction()) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
+    }
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller; outlined
+    if (qore_sandboxed_code_active()
+            && interpreterInlineMethodCallDenied(inst->variant, method, self, xsink)) {
+        result = QoreValue();
+        return true;
     }
     // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
     // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
@@ -21589,7 +21610,7 @@ load_local_done:
                     if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                         return;
                     }
-                    o->doDelete(xsink);
+                    qore_operator_delete_object(o, xsink);
                 };
                 // direct_list: the removed value is the synthetic list of elements a list index or range
                 // slice took out of the container rather than a value stored in it, so "delete" applies
@@ -21843,7 +21864,7 @@ load_local_done:
                                         "cannot delete a system constant object (class '%s')", o->getClassName());
                                 } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                                     // sandboxed code cannot delete a shared object (qore#6843)
-                                    o->doDelete(xsink);
+                                    qore_operator_delete_object(o, xsink);
                                 }
                             }
                             // a borrowed reference (self) is not released: the caller's reference keeps the object

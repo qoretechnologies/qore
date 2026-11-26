@@ -45,10 +45,10 @@ public class SwaggerDataProviderCommon inherits DataProvider::AbstractDataProvid
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
         if (rest) {
             rest.setLogger(logger);
         }
-        LoggerWrapper::setLogger(logger);
     }
 
     #! Returns the Swagger schema

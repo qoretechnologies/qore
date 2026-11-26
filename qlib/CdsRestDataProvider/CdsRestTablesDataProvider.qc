@@ -94,8 +94,8 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! Returns a list of child data provider names, if any

@@ -633,6 +633,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
         }
     }
 
+    // the non-public members only for code that may read them as a whole: trusted code, or sandboxed code whose sandbox
+    // created the object (qore#7033)
+    bool non_public = qore_object_private::get(self)->callerReadsNonPublicMembers();
+
     // first write object to index
     imap_t::iterator i = serialization_add_index(context, str, hint, self);
     const std::string& index_str = i->second.index;
@@ -709,9 +713,12 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             bool protect = current_priv->sandboxSerializationProtected();
 
             // see if the local class has a serializeMembers() method defined; the method of a protected class is not
-            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146)
-            const QoreMethod* serializeMembers = protect && context.caller.restricts(*current_priv, true) ? nullptr
-                : current_cls.findLocalMethod("serializeMembers");
+            // called for code that does not get all of its state, as its output cannot be filtered (qore#7146), nor
+            // for code that may not read the non-public members of the object as a whole (qore#7033): the automatic
+            // members are serialized then, with the rule of each
+            const QoreMethod* serializeMembers = !non_public
+                || (protect && context.caller.restricts(*current_priv, true))
+                ? nullptr : current_cls.findLocalMethod("serializeMembers");
 
             // iterate all nornal members in the class
             QoreClassMemberIterator mi(ci.get());
@@ -737,6 +744,14 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
                 if (protect && m.getAccess() != Public
                     && context.caller.restricts(*current_priv, m.getAccess() == Internal)) {
                     raiseWithheldError(current_cls, "member", mname, xsink);
+                    return context.imap.end();
+                }
+                // a non-public member of an object whose non-public members the calling code may not read as a
+                // whole: the code is sandboxed and its sandbox did not create the object (qore#7033)
+                if (!non_public && m.getAccess() != Public) {
+                    xsink->raiseException("SERIALIZATION-ERROR", "cannot serialize non-public member '%s::%s' of an "
+                        "object of class '%s' that the sandbox of the calling code did not create",
+                        current_cls.getName(), mname, cls.getName());
                     return context.imap.end();
                 }
 

@@ -3857,6 +3857,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3914,6 +3915,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
     @throw SANDBOX-ISOLATION-ERROR in a trusted build that sandboxed code called, the container is a %Program of another
     @ref sandbox_isolation_domains "isolation domain"; its object is not deleted then
 
@@ -3966,6 +3968,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -3995,6 +3998,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4021,6 +4028,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - it is not an error to set the \a reinject argument to @ref True "True" when the given module has not already been loaded
@@ -4050,6 +4058,10 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4077,6 +4089,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -4104,6 +4117,10 @@ Program::loadApplyToPrivateUserModule(
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
         return QoreValue();
     }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
+        return QoreValue();
+    }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
     // the reference that the object held is given to the module
@@ -4128,6 +4145,7 @@ Program::loadApplyToPrivateUserModule(
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @note
     - after this call the Program object will be owned by the user module and will no longer be valid, so any accesses to the object after this call will result in an exception
@@ -4153,6 +4171,10 @@ Program::loadApplyToPrivateUserModule(
         return QoreValue();
     }
     if (QoreModuleManager::checkModuleName(*module_name, xsink)) {
+        return QoreValue();
+    }
+    // the call deletes the Program object: only code that may delete it can make the call (qore#6842)
+    if (qore_check_object_delete(*self, "delete", xsink)) {
         return QoreValue();
     }
     // remove the QoreProgram private data from the object

@@ -74,9 +74,9 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
+        LoggerWrapper::setLogger(logger);
         rest.setLogger(logger);
         sdp.setLogger(logger);
-        LoggerWrapper::setLogger(logger);
     }
 
     static AbstractRestClient getRestConnection(*hash<auto> options) {

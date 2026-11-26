@@ -291,6 +291,29 @@ p.parse(user_code, "user_script");
 auto result = p.callFunction("main");
     @endcode
 
+    @subsection sandbox_enforcement_level Enforcement Levels: Tenant Isolation and Code Safety
+
+    A sandbox has an enforcement level (@ref Qore::SandboxManager::setEnforcementLevel()
+    "SandboxManager::setEnforcementLevel()"), which decides what it keeps apart besides the functional domains of the
+    code that it governs:
+
+    |!Level|!Enforces|!For
+    |@ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION" (the default)|the policy, limits and functional-domain checks of the sandbox, and the owner rules: the code that the sandbox governs cannot change or read the state of objects that its sandbox did not create|the code of a tenant, which must be isolated from the host and from other tenants
+    |@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY"|the policy, limits and functional-domain checks of the sandbox only|code that the host trusts and runs in a sandbox to keep it from mistakes, or for interrupts and limits
+
+    A new sandbox manager has the level @ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION", so a sandbox
+    isolates its code unless its creator decides otherwise.  Only the creator of the manager can lower the level to
+    @ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY": trusted code, or the code of the %Program whose code created the
+    manager; never code that the manager governs.  Raising the level to
+    @ref Qore::QSEL_TENANT_ISOLATION "QSEL_TENANT_ISOLATION" is always allowed and fixes it, so that nobody can lower
+    it again.
+
+    When more than one sandbox governs code (the sandbox of a %Program and the sandbox of the code that created it, of
+    a caller, of an object or callback that the code runs, or of the code that started the thread), the strictest level
+    of them applies: the owner rules apply if any of them isolates tenants.
+    @ref Qore::SandboxManager::isTenantIsolated() "SandboxManager::isTenantIsolated()", and
+    \c qore_caller_tenant_isolated() in C++, tell library code whether the owner rules apply to its caller.
+
     @subsection sandbox_provenance Objects, Callbacks, and Trusted Resources
 
     An object or runtime call reference created under a sandbox retains that context. Calling its methods or
@@ -784,6 +807,92 @@ authenticate();
     - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
       member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
       \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
+
+    @since %Qore 3.0
+
+    @subsection sandbox_object_ownership Objects That Other Code Created
+
+    A non-public member of an object (declared \c private, which is the same as \c private:hierarchy) is reachable from
+    the code of every class of the object's hierarchy, on every object of it.  The code of a class that sandboxed code
+    declared (the code of a sandboxed %Program or of a %Program that sandboxed code created) therefore cannot write a
+    non-public member of an object that its sandbox did not create, such as an object that the host, the library or
+    another sandbox created: every form of write is refused with \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object
+    unchanged, from an assignment and the other operators that change a value to the removal of a member, in every
+    execution mode.  A sandbox created an object if every sandbox manager at the
+    @ref sandbox_enforcement_level "enforcement level" of tenant isolation that governs the writing code also governed
+    the creation of the object (see @ref sandbox_provenance); sandboxed code that no sandbox manager governs created no
+    object.  A member declared \c private:internal is reachable only from the class that declares it.
+
+    A sandbox owns an object only if sandboxed code executed the expression that created it (\c new, \c copy() or a
+    deserialization), or if the code of a class that trusted code declared created it directly in a constructor,
+    method or destructor of an object that the sandbox owns while that code served the sandbox (the new object is
+    owned as that object is, and the sandboxes that governed the creating code, such as one at the enforcement level
+    of code safety, keep governing it; not in a static method or a function, nor in a method of another object, nor
+    while the code serves another sandbox or no sandbox).  An object that trusted code creates
+    while it serves sandboxed code, such as a shared object that it creates lazily for its first caller, is governed
+    by that code's sandbox but owned by no sandbox.  Trusted code that creates an object for the sandboxed code that
+    it serves hands it over with
+    @ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()" (in C++:
+    \c qore_transfer_object_to_caller()); the transfer is one-way, and only to sandboxed code at the enforcement level
+    of tenant isolation.  The bound of the rule: an object that the code of a trusted class creates directly in a
+    method of an object that a sandbox owns, while it serves that sandbox, is that sandbox's, also if the method stores
+    it in a static member or a global variable, where other code can reach it.
+
+    The rule does not apply to:
+    - a write of a member of \c self, or of an object of the writing code's class or of a subclass of it, whose behavior
+      the code of that class defines already
+    - a write of a public member
+    - the code of a class that trusted code declared, such as the classes of the library and of the host, also when
+      sandboxed code calls it: such a class changes the state of an object only through its own API
+    - code that only sandboxes at the enforcement level of code safety (@ref Qore::QSEL_CODE_SAFETY "QSEL_CODE_SAFETY")
+      govern: the owner rules apply only to the code of a tenant (see @ref sandbox_enforcement_level)
+
+    Sandboxed code (the code of a sandboxed %Program or of a class that sandboxed code declared) cannot delete an object
+    that its sandbox did not create either: the \c delete operator, in each of its forms, raises
+    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is, in every execution mode, and so do a call of a
+    destructor with the reflection API by code that is sandboxed or acts for sandboxed code,
+    @ref Qore::delete_thread_data() "delete_thread_data()" (which leaves the key as it is), and the functions and
+    methods that take over or delete a @ref Qore::Program "Program" object, such as
+    @ref Qore::load_user_module_with_program() "load_user_module_with_program()",
+    @ref Qore::Program::loadUserModuleWithProgram() "Program::loadUserModuleWithProgram()" and
+    @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()".  A value that goes out of
+    scope or that the code removes (\c remove) is released as before, and code that only sandboxes at the enforcement
+    level of code safety govern deletes objects as trusted code does.
+
+    The code of such a class cannot read a non-public member of such an object either, with the same exemptions: a
+    direct read (also a dynamic one, \c obj.(name), and a call through a member that holds code) is refused with
+    \c SANDBOX-OBJECT-ACCESS-ERROR, and a read of the whole object (the member hash and its keys, iterators, slices, the
+    first and last key, \c exists, the member names of \c <object>::keys() and the member count of
+    \c <object>::size() and \c elements, and the merge of the object into a hash or into another object with \c +
+    and \c +=) sees the public members only, as code outside the class does; a merge of an object into a hash member of
+    the same object gives the code of such a class the public members only also of an object that its sandbox
+    created.  Formatting an
+    object with \c %%y, which does not depend on a class context, shows the non-public members only to trusted code and
+    to sandboxed code whose sandbox created the object, and serializing it for other sandboxed code raises
+    \c SERIALIZATION-ERROR if a non-public member has a value, as for the non-public state of the classes that trusted
+    code declared (see @ref sandbox_serialization); the \c serializeMembers() method of a class is not called for such
+    code, whose serialization has the automatic members only (a transient member is not serialized), and the
+    serializers of builtin classes, whose state is their own, are not affected.  A copy of an object (\c copy()) keeps the
+    creation provenance of the source object, also when that is none, so copying an object does not give sandboxed code
+    an object of its own with the state of an object that its sandbox did not create.
+
+    Nor can the code of such a class call a non-public method of such an object, with the same exemptions, as calling
+    it reads or changes state of the object that its class does not offer to every caller: the call is refused with
+    \c SANDBOX-OBJECT-ACCESS-ERROR from a method of the class, a static method, a closure, a call reference and the
+    reflection API, in every execution mode.  A binary module applies the same owner check to its own state with
+    \c qore_caller_owns_object() and \c qore_check_caller_owns_object() (\c QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK).
+
+    Trusted code that changes state of an object that other code relies on for its caller can decide in the same way
+    for the code that calls it: @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()" refuses a sandboxed
+    caller whose sandbox did not create the object, with
+    @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()", and the code that
+    passes a logger on to another object as a side effect of an operation leaves it out when
+    @ref Qore::SandboxManager::isObjectOwnedByCaller() "SandboxManager::isObjectOwnedByCaller()" returns @ref False.
+    The other setters of the standard modules of state that other code relies on decide in the same way: the logger
+    setters of \c HttpServerAsyncIo::HttpAsyncSocketIoController and of \c DataProvider::DpqlActionSession, the
+    conversation context store setters of the AI data providers and the setters of the connection manager of the
+    REST clients; reading a non-public member of an object with the reflection API also requires its owner.
+    Trusted code changes any object.
 
     @since %Qore 3.0
 
@@ -2693,8 +2802,10 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-ENFORCEMENT-LEVEL-ERROR|SandboxManager|An invalid @ref sandbox_enforcement_level "enforcement level"
     |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
+    |\c SANDBOX-OBJECT-ACCESS-ERROR|SandboxManager|Sandboxed code tried to change @ref sandbox_object_ownership "an object that its sandbox did not create"
     |\c SHARED-OBJECT-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change or delete a @ref sandbox_shared_objects "shared object"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality

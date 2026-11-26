@@ -15026,7 +15026,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             // even though the argument itself is already an NT_REFERENCE.
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed_inline(paramTypeInfo, receiver_type_info);
             }
             if (paramTypeInfo && (QoreTypeInfo::hasType(paramTypeInfo)
                     || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
@@ -15085,7 +15085,7 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
             QoreValue val;
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
-                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+                paramTypeInfo = qore_substitute_type_params_if_needed_inline(paramTypeInfo, receiver_type_info);
             }
             if (QoreTypeInfo::hasType(paramTypeInfo)) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
@@ -19055,8 +19055,9 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
     if (qore_rt_check_closure_self_valid(obj, xsink)) {
         return -1;
     }
-    // getLValue() sets the object context: the object is on the path once (qore#7348)
-    if (qore_object_private::getLValue(*obj, member_name, lvh,
+    // a member of self (see qore_object_private::getSelfLValue()); getSelfLValue() sets the object context, as
+    // getLValue() does: the object is on the path once (qore#7348)
+    if (qore_object_private::getSelfLValue(*obj, member_name, lvh,
             runtime_get_class(), false, xsink)) {
         return -1;
     }
@@ -20242,7 +20243,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
             return;
         }
-        o->doDelete(xsink);
+        qore_operator_delete_object(o, xsink);
     };
     // direct_list: the removed value is the synthetic list of elements a list index or range slice took
     // out of the container rather than a value stored in it, so "delete" applies to each element.  This
@@ -20504,7 +20505,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         o->getClassName());
                 } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                     // sandboxed code cannot delete a shared object (qore#6843)
-                    o->doDelete(xsink);
+                    qore_operator_delete_object(o, xsink);
                 }
             }
             // a borrowed reference (self) is not released: the caller's reference keeps the object until the
@@ -23813,6 +23814,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 DLLLOCAL bool qore_rt_try_dispatch_method_given_by_name(QoreObject* o, const QoreMethod* method, const QoreClass* qc,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
 
+//! returns true if the sandboxed rule of non-public method calls refuses the call (qore#7102); outlined from the fast
+//! method dispatch, which runs it only while code in the process is sandboxed
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_rt_fast_method_call_denied(QoreObject* o, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+    return !method->isStatic() && qore_object_private::checkSandboxedMethodCall(o, METHV_const(variant)->getAccess(),
+        method->getName(), xsink);
+}
+
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -23821,6 +23830,12 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     QoreSandboxProvenanceHelper provenance(o);
     if (!variant) {
         return false;
+    }
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
+    if (qore_sandboxed_code_active()
+            && qore_rt_fast_method_call_denied(o, method, variant, xsink)) {
+        result = toBits(QoreValue());
+        return true;
     }
     // copy() must go through dispatch_method_on_object → execCopy to create a new object; the length and the bytes
     // of the name are compared inline (a std::string == const char* that the compiler leaves out of line calls
@@ -25353,6 +25368,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
         *arg_list, xsink);
 }
 
+//! returns true if a call of the method of an AOT call target must be dispatched instead of inlined: a non-public
+//! method while code in the process is sandboxed, whose call the sandboxed rule of non-public method calls checks
+//! (qore#7102); the getters and setters that the AOT code inlines read and write the member directly
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_rt_aot_target_non_public(const QoreAOTCallTarget& target) {
+    return target.variant ? METHV_const(target.variant)->getAccess() > Public : target.method->isPrivate();
+}
+
+static QORE_INTERN_ALWAYS_INLINE bool qore_rt_aot_target_needs_dispatch(const QoreAOTCallTarget& target) {
+    return qore_sandboxed_code_active() && target.method && qore_rt_aot_target_non_public(target);
+}
+
 static const QoreAOTObjectMemberDescriptor*
 qore_rt_get_aot_object_member_descriptor(
         QoreAOTCallTarget& target, const char* member_name,
@@ -25411,7 +25437,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
@@ -25470,7 +25496,7 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     ValueHolder value(xsink);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT) {
         value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink));
@@ -25540,7 +25566,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs) {
@@ -25625,7 +25651,7 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     ValueHolder fallback(xsink);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs) {
@@ -25750,7 +25776,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs

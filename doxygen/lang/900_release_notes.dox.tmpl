@@ -119,6 +119,12 @@
     elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
     @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
 
+    @par An Object Merged Into Another Object Gives the Members That the Merging Code May Read
+    The @ref plus_equals_operator "+= operator" with an object operand gives the target the source object's private
+    members only in the code of its class or of a class with private access to it, as the other reads of a whole object
+    do; code outside the class that relied on copying them gets the public members only
+    (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>).
+
     @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
     Code with sandboxed callers cannot serialize (\c SERIALIZATION-ERROR), show with \c %%y or set by
     deserialization the non-public state of classes declared by trusted code that it has no private access to, unless
@@ -2045,6 +2051,28 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par Sandbox Enforcement Levels
+    A sandbox isolates tenants (\c QSEL_TENANT_ISOLATION, the default) or only checks code safety
+    (\c QSEL_CODE_SAFETY), as its creator sets with @ref Qore::SandboxManager::setEnforcementLevel() (parse define
+    and C++ macro \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
+
+    @par Sandboxed Code Changes Only the Objects That Its Sandbox Created
+    At tenant isolation, sandboxed code cannot delete or write non-public members of objects its sandbox did not
+    create, setters check @ref Qore::SandboxManager::checkObjectOwnedByCaller(), and trusted code hands objects over
+    with @ref Qore::SandboxManager::transferObjectToCaller(); see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>).
+
+    @par Sandboxed Code Reads Only the Non-Public State of the Objects That Its Sandbox Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot read a non-public member of an object
+    that its sandbox did not create, whole-object reads show it the public members only, and a copy keeps the source's
+    ownership; see @ref sandbox_object_ownership
+    (<a href="https://github.com/qoretechnologies/qore/issues/7033">issue 7033</a>).
+
+    @par Sandboxed Code Calls Only the Public Methods of the Objects That Other Code Created
+    At tenant isolation, the code of a class that sandboxed code declared cannot call a non-public method of an object
+    that its sandbox did not create, and binary modules check owners with the new \c qore_check_caller_owns_object();
+    see @ref sandbox_object_ownership (<a href="https://github.com/qoretechnologies/qore/issues/7102">issue 7102</a>).
+
     @par Process-Wide Singletons Refuse Sandboxed Code
     Sandboxed code cannot change the process-wide default thread stack size or logger start time, and does not get
     the global loggers of the data provider modules; see
@@ -2491,6 +2519,8 @@
       - the \c transcribe-audio action and the Conversations API, replacing the deprecated Assistants API
       - the \c multipart/form-data boundary of a file upload is random
         (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
+      - the conversation context store of a provider is changed only by its owner, under tenant isolation
+        (<a href="https://github.com/qoretechnologies/qore/issues/7035">issue 7035</a>)
       - see @ref openaidataprovider_v1_7 for all changes
 
     - @ref openairestclientintro "OpenAiRestClient" module
@@ -2573,6 +2603,8 @@
         asynchronous client of a connection that awaits authorization is created without logging in (see
         @ref restclientv2_7 for every change in behavior;
         <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
+      - the public \c getLogger() of the clients returns the logger only to the owner of the client, under tenant
+        isolation (<a href="https://github.com/qoretechnologies/qore/issues/7034">issue 7034</a>)
       - OAuth2 client credentials that trusted code supplies can be sealed into a client: they are used for its token
         requests but never given out (see @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials";
         <a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
@@ -3060,6 +3092,9 @@
       object or variable: the references are bound with no lock held (issue #7391)
     - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
       (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
+    - the @ref plus_equals_operator "+= operator" merges only the members of an object that the merging code may read
+      into another object, where it gave code outside the class the source object's private members
+      (<a href="https://github.com/qoretechnologies/qore/issues/7657">issue 7657</a>)
     - an object that a signal handler deletes is marked as being destroyed, so that a second deletion while its
       destructor runs is refused with \c DOUBLE-DELETE-EXCEPTION instead of running the destructor again
       (@ref signal_handler_object_deletion; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
@@ -4944,6 +4979,10 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - @ref Qore::delete_thread_data() "delete_thread_data()" and the C++ API's \c QoreHashNode::deleteKey() and
+      \c QoreObject::deleteMemberValue() raise \c SYSTEM-OBJECT-ERROR for a system constant object such as
+      @ref Qore::stdout "stdout", as the @ref delete "delete operator" does, where they deleted it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
     - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
       %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
       @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from

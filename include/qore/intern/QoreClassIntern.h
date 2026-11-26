@@ -146,6 +146,23 @@ DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
 #define QORE_PARAM_CLASS_CHECK_STEP()
 #endif
 
+//! True once the code of a Program in the process is sandboxed (qore_program_private::sandboxed was set); never
+//! cleared
+/** Read without ordering by the writes of non-public object members (qore_object_private::checkMemberAccessGetTypeInfo())
+    before anything else of the sandboxed write rule is looked at (qore#6842): a process in which no code is sandboxed
+    pays a load and a branch for a write of a non-public member of another object than self, and nothing for one of
+    self.  Set before the Program's flag, so that code that finds the flag finds this set too.
+*/
+DLLLOCAL extern std::atomic<bool> qore_sandboxed_code_present;
+
+//! Returns true once code in the process is sandboxed (qore_sandboxed_code_present): the gate of the owner rules
+/** A plain load (relaxed) and a test that is predicted not taken, for the hot paths that the owner rules hook
+    (qore#6842, qore#7033, qore#7102): the code of the rules is in functions of its own (out of line and cold)
+*/
+static inline bool qore_sandboxed_code_active() {
+    return __builtin_expect(qore_sandboxed_code_present.load(std::memory_order_relaxed), 0);
+}
+
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
     increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused
@@ -628,6 +645,13 @@ private:
         not synchronized puts on the stack (issue #5852)
     */
     DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+            ExceptionSink* xsink) const;
+
+    //! evaluates a method while code in the process is sandboxed: checks the sandboxed rule of non-public method
+    //! calls first (qore#7102)
+    /** Outlined from evalMethod(), so that its frame is as before the rule
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue evalCheckedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
             ExceptionSink* xsink) const;
 };
 
