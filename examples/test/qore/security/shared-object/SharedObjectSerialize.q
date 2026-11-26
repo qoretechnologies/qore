@@ -2,8 +2,11 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # Code that is sandboxed or acts for sandboxed code cannot serialize an object that trusted code marked as shared
 # with SandboxManager::shareObject(), also when it is held by another value, whatever its classes declare
-# (serializeMembers() included); trusted code serializes as before, and a deserialized object is not shared
-# (qore#7673); see shared-object-serialize.qtest
+# (serializeMembers() included), also when its class lets sandboxed code serialize its non-public state (it inherits
+# SandboxSerializable); trusted code serializes as before, and a deserialized object is not shared (qore#7673); see
+# shared-object-serialize.qtest.  The objects that are not shared that the tenant serializes are of a trusted class
+# that inherits SandboxSerializable, without which sandboxed code cannot serialize the non-public state of a trusted
+# class (qore#7146)
 
 %modern
 %enable-all-warnings
@@ -24,6 +27,20 @@ public class GuardedNoHook inherits Serializable {
     #! serializes the object in the code of its own class
     binary serializeSelf() {
         return serialize();
+    }
+}
+
+#! guards a private member with isSharedObject(self) and lets sandboxed code serialize its non-public state
+/** The objects that are not shared that the tenant serializes; a shared object of the class is refused all the same
+*/
+public class GuardedOptedIn inherits SandboxSerializable {
+    private {
+        string secret = "secret";
+    }
+
+    #! the secret, which the class gives only for an object that is not shared
+    string useSecret() {
+        return SandboxManager::isSharedObject(self) ? "refused" : secret;
     }
 }
 
@@ -223,11 +240,16 @@ object sub shared(object o) {
 code deputy = binary sub (object o) { return Serializable::serialize(o); };
 
 foreach string name in (p.callFunction("serialization_names")) {
-    printf("tenant %s: shared: %s; shared with serializeMembers(): %s; not shared: %s\n", name,
+    printf("tenant %s: shared: %s; shared with serializeMembers(): %s; shared with SandboxSerializable: %s; not "
+        "shared: %s\n", name,
         p.callFunction("serialize_one", name, shared(new GuardedNoHook())),
         p.callFunction("serialize_one", name, shared(new GuardedHook())),
-        p.callFunction("serialize_one", name, new GuardedNoHook()));
+        p.callFunction("serialize_one", name, shared(new GuardedOptedIn())),
+        p.callFunction("serialize_one", name, new GuardedOptedIn()));
 }
+# without SandboxSerializable, the non-public state of a trusted class is not the tenant's to serialize (qore#7146)
+printf("tenant serializes one that is not shared without SandboxSerializable: %s\n",
+    p.callFunction("serialize_one", "Serializable::serialize()", new GuardedNoHook()));
 printf("tenant has the class serialize it: %s\n", p.callFunction("serialize_self", shared(new GuardedNoHook())));
 printf("trusted deputy serializes it for the tenant: %s\n", p.callFunction("serialize_deputy", deputy,
     shared(new GuardedNoHook())));
@@ -249,7 +271,7 @@ printf("tenant round trip with containers left out: %s\n", p.callFunction("round
     GuardedHook hc = Serializable::deserialize(h.serialize());
     printf("trusted code serializes one with serializeMembers(): %s\n", hc.useSecret());
 }
-printf("tenant round trip of one that is not shared: %s\n", p.callFunction("round_trip", new GuardedNoHook()));
+printf("tenant round trip of one that is not shared: %s\n", p.callFunction("round_trip", new GuardedOptedIn()));
 printf("tenant serializes a subclass that serializes a member: %s\n",
     p.callFunction("serialize_one", "Serializable::serialize()", shared(new GuardedHookChild())));
 printf("tenant serializes a subclass with only transient members: %s\n",
@@ -260,7 +282,7 @@ printf("tenant serializes a shared object of a builtin class with a serializer: 
 StaticHolder::held = shared(new GuardedNoHook());
 printf("tenant serializes a shared object in a static class variable: %s\n", p.callFunction("serialize_static",
     new StaticHolder()));
-StaticHolder::held = new GuardedNoHook();
+StaticHolder::held = new GuardedOptedIn();
 printf("tenant serializes one that is not shared in a static class variable: %s\n",
     p.callFunction("serialize_static", new StaticHolder()));
 remove StaticHolder::held;
