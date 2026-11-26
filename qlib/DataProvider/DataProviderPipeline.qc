@@ -314,6 +314,12 @@ class PipelineSharedState {
 
         #! the queues of the pipeline (weak references: the pipeline holds them)
         hash<string, auto> queues;
+
+        #! True while the pipeline is processing data (DataProviderPipeline::isProcessing())
+        bool processing = False;
+
+        #! True if the pipeline uses the bulk API (PipelineInfo::bulk)
+        bool bulk = True;
     }
 
     constructor(string name, *code<nothing(string, ...)> info_log, *code<nothing(string, ...)> error_log,
@@ -328,6 +334,11 @@ class PipelineSharedState {
     #! records a queue of the pipeline
     registerQueue(PipelineQueue queue) {
         queues{queue.id_str} := queue;
+    }
+
+    #! returns the number of queues of the pipeline (PipelineInfo::num_queues)
+    int getNumQueues() {
+        return queues.size();
     }
 
     #! Called from a pipeline queue object to report a fatal error durring processing
@@ -1264,6 +1275,22 @@ public class PipelineMetricsCollector {
 
         #! Parent pipeline reference (weak to avoid circular reference)
         DataProviderPipeline parent;
+
+        #! The state that the pipeline shares with its queue threads, read instead of the pipeline (qore#7509)
+        /** The snapshots are taken, and the errors logged, also in the queue threads while the pipeline's destructor
+            waits for them, when the pipeline cannot be called (a method call on an object whose destructor runs in
+            another thread is refused); taken from the pipeline when the collector is created
+        */
+        *object shared;
+    }
+
+    #! logs an error of the collector to the pipeline's error log, through the state that the pipeline shares
+    private logError(string fmt, ...) {
+        if (shared) {
+            call_object_method_args(shared, "logError", (fmt,) + argv);
+        } else {
+            call_object_method_args(parent, "logError", (fmt,) + argv);
+        }
     }
 
     #! Creates the metrics collector
@@ -1272,6 +1299,8 @@ public class PipelineMetricsCollector {
     */
     constructor(DataProviderPipeline parent, AbstractPipelineMetricsCollector collector) {
         self.parent := parent;
+        # the pipeline's shared state, if it has one already
+        shared = parent.getSharedStateIntern();
         self.collector = collector;
         collection_start = now_us();
         collection_start_mono_us = clock_get_monotonic_us();
@@ -1425,7 +1454,7 @@ public class PipelineMetricsCollector {
             try {
                 collector.reportMetrics(snapshot);
             } catch (hash<ExceptionInfo> ex) {
-                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+                logError("metrics collector error: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -1529,7 +1558,7 @@ public class PipelineMetricsCollector {
             try {
                 collector.reportMetrics(snapshot);
             } catch (hash<ExceptionInfo> ex) {
-                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+                logError("metrics collector error: %s: %s", ex.err, ex.desc);
             }
         }
     }
@@ -1703,7 +1732,7 @@ public class PipelineMetricsCollector {
         try {
             collector.reportMetrics(snapshot);
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1726,7 +1755,7 @@ public class PipelineMetricsCollector {
         try {
             collector.shutdown();
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector shutdown error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector shutdown error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1789,7 +1818,7 @@ public class PipelineMetricsCollector {
         try {
             collector.reset();
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector reset error: %s: %s", ex.err, ex.desc);
+            logError("metrics collector reset error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -1958,8 +1987,10 @@ public class PipelineMetricsCollector {
         prev_element_snap = new_prev;
 
         return <PipelineMetricsSnapshot>{
-            "pipeline_name": parent.getName(),
-            "status": parent.aborting() ? PS_ABORTED : (parent.isProcessing() ? PS_RUNNING : PS_IDLE),
+            "pipeline_name": shared ? shared.name : parent.getName(),
+            "status": (shared ? shared.abort_flag : parent.aborting())
+                ? PS_ABORTED
+                : ((shared ? shared.processing : parent.isProcessing()) ? PS_RUNNING : PS_IDLE),
             "start_time": collection_start,
             "snapshot_time": now,
             "total_records_submitted": total_submitted,
@@ -1967,8 +1998,8 @@ public class PipelineMetricsCollector {
             "throughput_rps": throughput,
             "avg_latency_us": avg_latency,
             "element_metrics": out_metrics,
-            "num_queues": parent.getInfo().num_queues,
-            "bulk_mode": parent.getInfo().bulk,
+            "num_queues": shared ? shared.getNumQueues() : parent.getInfo().num_queues,
+            "bulk_mode": shared ? shared.bulk : parent.getInfo().bulk,
             "total_errors": total_errors,
             "delta": snapshot_delta,
         };
@@ -2073,6 +2104,8 @@ public class DataProviderPipeline {
         synchronous = opts.synchronous ?? False;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
+        shared = new PipelineSharedState(name, info_log, error_log, debug_log, lck);
+
         # Initialize metrics collector if provided
         if (opts.metrics_collector) {
             metrics_collector = new PipelineMetricsCollector(self, opts.metrics_collector);
@@ -2081,7 +2114,6 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        shared = new PipelineSharedState(name, info_log, error_log, debug_log, lck);
         pmap."0" = new PipelineQueue(self, shared, lck, cnt, 0, 1, !synchronous);
         shared.registerQueue(pmap."0");
     }
@@ -2096,6 +2128,7 @@ public class DataProviderPipeline {
         cnt = new WaitGroup();
         # the copy's state, with its own errors and queues
         shared = new PipelineSharedState(shared.name, info_log, error_log, debug_log, lck);
+        shared.bulk = do_bulk;
 
         # ensure the copy is reset
         resetIntern();
@@ -2134,6 +2167,14 @@ public class DataProviderPipeline {
     bool hasQueue(int id) {
         return exists pmap{id};
     }
+
+    #! @cond nodoc
+    # only called by the pipeline's metrics collector (PipelineMetricsCollector): the state that the pipeline shares
+    # with its queue threads (qore#7509)
+    *object getSharedStateIntern() {
+        return shared;
+    }
+    #! @endcond
 
     #! Returns True if the object is stopping
     bool stopping() {
@@ -2215,6 +2256,7 @@ public class DataProviderPipeline {
 
         if (do_bulk && !processor.supportsBulkApi()) {
             do_bulk = False;
+            shared.bulk = False;
         }
     }
 
@@ -2338,6 +2380,7 @@ public class DataProviderPipeline {
         # unlock on exit
         on_exit {
             locked = False;
+            shared.processing = False;
         }
 
         # wait for primary queue to complete processing
@@ -2410,6 +2453,7 @@ public class DataProviderPipeline {
         }
 
         locked = False;
+        shared.processing = False;
 
         if (ignore_exceptions) {
             remove shared.error_list;
@@ -2670,6 +2714,7 @@ public class DataProviderPipeline {
             remove stop_time;
             remove stop_mono_us;
             locked = True;
+            shared.processing = True;
 
             # Set cached flags on all queues to avoid per-record overhead
             if (metrics_collector) {

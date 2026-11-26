@@ -47,6 +47,31 @@ class HoldingProcessor inherits DataProvider::AbstractDataProcessor {
     }
 }
 
+#! takes a snapshot after every record, and records the snapshots with the thread that took them
+class TestMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        Queue snapshots();
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        return 1;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        snapshots.push({"tid": gettid(), "snapshot": snapshot});
+    }
+
+    shutdown() {
+    }
+
+    reset() {
+    }
+}
+
 #! tells when its destructor starts
 class TestPipeline inherits DataProvider::DataProviderPipeline {
     public {
@@ -65,6 +90,7 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
     constructor() : QUnit::Test("PipelineDestroyedWhileProcessing", "1.0") {
         addTestCase("a record in progress completes while the pipeline is destroyed", \completesTest());
         addTestCase("the error of a record in progress is reported while the pipeline is destroyed", \errorTest());
+        addTestCase("the metrics of a record in progress are taken while the pipeline is destroyed", \metricsTest());
         set_return_value(main());
     }
 
@@ -81,8 +107,24 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         assertTrue(rv.error_logged, "the queue thread logged the error");
     }
 
+    metricsTest() {
+        TestMetricsCollector collector();
+        hash<auto> rv = run(False, collector);
+        assertEq(NOTHING, rv.err, "no error");
+        # the queue thread takes the record's snapshot while the destructor waits for it, in another thread than the
+        # destructor's, whose final snapshot follows
+        list<hash<auto>> snaps = ();
+        while (collector.snapshots.size()) {
+            snaps += collector.snapshots.get();
+        }
+        *hash<auto> worker_snap = (select snaps, $1.tid != rv.dtor_tid)[0];
+        assertEq("destroyed-while-processing", worker_snap.snapshot.pipeline_name, "the queue thread's snapshot");
+        assertEq(1, worker_snap.snapshot.num_queues);
+        assertEq(PS_RUNNING, worker_snap.snapshot.status);
+    }
+
     #! submits a record, releases the pipeline in another thread while the record is processed, and lets the record go on
-    private hash<auto> run(bool fail) {
+    private hash<auto> run(bool fail, *AbstractPipelineMetricsCollector collector) {
         Queue debug_log();
         Queue error_log();
         HoldingProcessor proc(fail);
@@ -97,6 +139,7 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
                 "error_log": sub (string fmt, ...) {
                     error_log.push(vsprintf(fmt, argv));
                 },
+                "metrics_collector": collector,
             });
             pipe.append(proc);
             pipe.submit({"a": 1});
@@ -109,8 +152,10 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
 
         Queue result();
         Counter done(1);
+        Queue dtor_tid();
         background sub () {
             on_exit done.dec();
+            dtor_tid.push(gettid());
             try {
                 TestPipeline pipe = handoff.get();
                 remove pipe;
@@ -124,6 +169,7 @@ class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
         proc.go.dec();
         assertEq(0, done.waitForZero(HangTimeout), "the pipeline's destructor ended");
         hash<auto> rv = result.get();
+        rv.dtor_tid = dtor_tid.get();
         while (debug_log.size()) {
             if (debug_log.get() =~ /data processor "HoldingProcessor" output/) {
                 rv.debug = True;
