@@ -292,6 +292,29 @@ const CaseNames = (
     "notifications",
 );
 
+# top-level code, which qcc compiles on its own (#7421): a block local and a root-level local that hold a reference
+our list<auto> top_block_list = (1,);
+our auto top_block_weak;
+top_block_weak := top_block_list;
+{
+    auto p = \top_block_list;
+    p += 7;
+}
+printf("top-level block local: %y, %y\n", top_block_list, top_block_weak);
+
+our hash<auto> top_root_hash = {"a": 1};
+our auto top_root_weak;
+top_root_weak := top_root_hash;
+auto top_root_ref = \top_root_hash;
+top_root_ref += {"b": 2};
+printf("top-level root local: %y, %y\n", top_root_hash, top_root_weak);
+
+auto top_list = (1, 2);
+auto top_list_weak;
+top_list_weak := top_list;
+top_list += 3;
+printf("top-level root local list: %y, %y\n", top_list, top_list_weak);
+
 # a case named on the command line runs alone
 *string only = ARGV[0];
 foreach string n in (CaseNames) {

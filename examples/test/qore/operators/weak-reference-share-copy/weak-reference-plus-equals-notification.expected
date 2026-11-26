@@ -1,3 +1,6 @@
+top-level block local: [1, 7], [1, 7]
+top-level root local: {a: 1, b: 2}, {a: 1, b: 2}
+top-level root local list: [1, 2, 3], [1, 2, 3]
 notify 1 m: [1, 2]
 notify 2 m: [1, 2]
 notify 3 m: [1, 2, 3]
