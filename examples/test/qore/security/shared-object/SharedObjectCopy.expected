@@ -1,0 +1,16 @@
+tenant copies a shared object without copy(): SHARED-OBJECT-ERROR
+no object was made: True
+tenant has the class copy it: SHARED-OBJECT-ERROR
+trusted deputy copies it for the tenant: SHARED-OBJECT-ERROR
+tenant copies one that is not shared: copied GuardedNoCopy, shared: False, secret: secret
+trusted code copies it: shared: False, secret: secret
+tenant copies a shared object with its own copy(): copied GuardedOwnCopy, shared: False, secret: no secret
+trusted deputy copies it for the tenant: copied GuardedOwnCopy, shared: False, secret: no secret
+tenant copies a shared object with an inherited copy(): copied GuardedInheritedCopy, shared: False, secret: no secret
+tenant copies a shared object with a builtin copy only: SHARED-OBJECT-ERROR
+trusted deputy copies it with Reflection for the tenant: SHARED-OBJECT-ERROR
+trusted deputy copies one with copy() with Reflection for the tenant: copied GuardedOwnCopy, shared: False, secret: no secret
+trusted deputy copies a subclass object with the base class copy method for the tenant: SHARED-OBJECT-ERROR
+trusted deputy copies it with its own class copy method for the tenant: copied GuardedOwnCopyChild, shared: False, secret: no child secret
+trusted code copies it with Reflection: shared: False
+trusted code copies it: shared: False, secret: secret

@@ -90,6 +90,16 @@ private:
 
 typedef std::list<RNotifier*> n_list_t;
 
+#ifdef DEBUG
+//! Called by a thread waiting for the rsection in qore_rsection_priv::tryRSectionLockNotifyWaitRead(), with the
+//! rsection's mutex held, just before it waits (\a woken false) and just after its wait returned, before it checks
+//! the rsection again (\a woken true) (debug builds only)
+/** Lets a unit test order another thread's acquisition of the lock between a waiter's wakeup and its check; the hook
+    may release the mutex in the second call, and must hold it again when it returns.
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_rsection_priv* rs, QoreThreadLock& m, bool woken)> qore_rsection_wait_hook;
+#endif
+
 // rwlock with standard read and write lock handling and special "rsection" handling
 // the rsection is grabbed with the read lock but only one thread can have the rsection lock at once
 // leaving other threads to read the object normally
@@ -155,9 +165,11 @@ public:
             qore_rsection_priv::notifyIntern();
         }
 
-        // a thread waiting for the rsection can only take it once no shared holder is left
-        if (rsection_waiting && !rs_shared.load(std::memory_order_relaxed))
-            rsection_cond.signal();
+        // a thread waiting for the rsection can only take it once no shared holder is left; every waiter is woken,
+        // see wakeRSectionWaitersIntern()
+        if (rsection_waiting && !rs_shared.load(std::memory_order_relaxed)) {
+            wakeRSectionWaitersIntern();
+        }
 
         if (!--readers)
             unlock_read_signal();
@@ -175,7 +187,7 @@ public:
             // the rsection is free now, so scans and threads waiting for it can take it
             qore_rsection_priv::notifyIntern();
             if (rsection_waiting) {
-                rsection_cond.signal();
+                wakeRSectionWaitersIntern();
             }
         }
 
@@ -220,8 +232,25 @@ protected:
     // written under l; atomic because checkRSectionHeld() reads it without l
     std::atomic_int rs_shared{0};
 
-    // rsection condition variablt
+    //! the condition that threads waiting for the rsection (rsection_waiting) wait on; see wakeRSectionWaitersIntern()
     QoreCondition rsection_cond;
+
+    //! Wakes every thread waiting for the rsection, which has just become free; called with l held
+    /** All of them are woken, not one, because a woken waiter does not always take the rsection: one in
+        tryRSectionLockNotifyWaitRead() that finds the write lock or the rsection taken by another thread between the
+        release and its wakeup registers a notification and returns -1, and a single wakeup would end with it.  The
+        waiters left asleep would then wait for an rsection that is free and that nothing releases again, and since
+        they keep rsection_waiting set, tryRSectionLockSharedNotifyWaitRead() would refuse every scan of the object
+        from then on (qore#7717).  Every woken waiter checks its condition again under l and waits again if it still
+        cannot proceed; a write lock taken in the meantime cannot leave one asleep, as a writer takes the lock only
+        when no reader is left, and a waiter only sleeps while the rsection is held, which needs a read lock.
+
+        Called only when rsection_waiting is set, so an uncontended release does not touch the condition.
+    */
+    DLLLOCAL void wakeRSectionWaitersIntern() {
+        assert(rsection_waiting);
+        rsection_cond.broadcast();
+    }
 
     // list of ObjectRSetHelper objects for notifications for rsection management
     n_list_t list;

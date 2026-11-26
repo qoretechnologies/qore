@@ -95,12 +95,18 @@ QoreLoggerBridge::~QoreLoggerBridge() {
 
 void QoreLoggerBridge::logArgs(int level, const QoreStringNode* msg,
         const QoreListNode* args, ExceptionSink* xsink) {
+    deliver(level, msg, args, xsink);
+}
+
+bool QoreLoggerBridge::deliver(int level, const QoreStringNode* msg, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    // the class of a LoggerInterfaceBase object implements logArgs(); a logger without it cannot take the message
     if (!logArgsMethod) {
-        return;
+        return false;
     }
     LoggerProgramContextHelper pch(pgm);
     if (!pch) {
-        return;
+        return false;
     }
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
     call_args->push(level, xsink);
@@ -120,31 +126,73 @@ void QoreLoggerBridge::logArgs(int level, const QoreStringNode* msg,
         call_args->push(args->refSelf(), xsink);
     }
     ValueHolder rv(logger_obj->evalMethod(*logArgsMethod, *call_args, xsink), xsink);
+    return true;
 }
 
 bool QoreLoggerBridge::isEnabledFor(int level) const {
     ExceptionSink xsink;
-    bool rv = isEnabledFor(level, &xsink);
+    Enabled rv = checkEnabledFor(level, &xsink);
     xsink.clear();
-    return rv;
+    return rv == Enabled::Yes;
 }
 
-bool QoreLoggerBridge::isEnabledFor(int level, ExceptionSink* xsink) const {
+QoreLoggerBridge::Enabled QoreLoggerBridge::checkEnabledFor(int level, ExceptionSink* xsink) const {
+    // the class of a LoggerInterfaceBase object implements isEnabledFor(); a logger without it cannot be asked
     if (!isEnabledForMethod) {
-        return false;
+        return Enabled::Unavailable;
     }
-    // a logger whose Program is being destroyed logs nothing more; this is not an error
+    // a logger whose Program is being destroyed takes no more messages; this is not an error
     LoggerProgramContextHelper pch(pgm);
     if (!pch) {
-        return false;
+        return Enabled::Unavailable;
     }
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
     call_args->push(level, xsink);
     ValueHolder rv(logger_obj->evalMethod(*isEnabledForMethod, *call_args, xsink), xsink);
     if (*xsink) {
+        return Enabled::No;
+    }
+    return rv->getAsBool() ? Enabled::Yes : Enabled::No;
+}
+
+bool QoreLoggerBridge::logV(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {
+    // the logger's Program is entered once for both calls, so that it cannot start its teardown between them, which
+    // would drop a message that the logger is enabled for
+    LoggerProgramContextHelper pch(pgm);
+    if (!pch) {
         return false;
     }
-    return rv->getAsBool();
+
+    // an exception that the logger raises is the caller's to report
+    ExceptionSink xsink;
+    Enabled enabled = checkEnabledFor(level, &xsink);
+    if (enabled == Enabled::Yes) {
+        // QoreString::vsprintf returns -1 (no retry) when the buffer is too small; re-copy the va_list and retry until
+        // it fits, mirroring the established pattern in support.cpp printe()/print_debug().  Without the loop, large
+        // owner / key strings (e.g. socket-sync owners) silently render as empty log messages.
+        SimpleRefHolder<QoreStringNode> msg(new QoreStringNode);
+        while (true) {
+            va_list iter_args;
+            va_copy(iter_args, args);
+            int rc = msg->vsprintf(fmt, iter_args);
+            va_end(iter_args);
+            if (!rc) {
+                break;
+            }
+        }
+        if (!deliver(level, *msg, nullptr, &xsink)) {
+            enabled = Enabled::Unavailable;
+        }
+    }
+    if (xsink) {
+        // the caller reports the logger's exception, or it is discarded
+        if (logger_xsink) {
+            logger_xsink->assimilate(xsink);
+        } else {
+            xsink.clear();
+        }
+    }
+    return enabled != Enabled::Unavailable;
 }
 
 void QoreLoggerBridge::derefLogged(bool report) {

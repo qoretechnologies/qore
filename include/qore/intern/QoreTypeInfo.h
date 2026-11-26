@@ -5070,6 +5070,10 @@ public:
     */
     DLLLOCAL static void getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types);
 
+    //! Sets \a name to the name of a mortal declaration that \a ti names (as addMortal() finds them) and returns true,
+    //! or returns false if it names none (qore#7680)
+    DLLLOCAL static bool getMortalDeclName(const QoreTypeInfo* ti, std::string& name);
+
     //! References the given declarations, each of which must be mortal (QoreTypeOwner::isTypeOwnerSystem() is
     //! false) and given once, when no declaration is referenced yet (qore#7607)
     DLLLOCAL void addMortalDecls(const std::vector<const QoreClass*>& classes,
