@@ -12251,16 +12251,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
     };
-    // steps over the store paired with a generic += of an "auto" local, at \a at in \a b, after the operation was made
-    // through a reference that the local holds: the local keeps the reference, and nothing is stored
-    // (QoreIRInstruction::paired_auto_add_store, qore#7421); the referenced lvalue can be another variable whose value
-    // a slot caches
-    auto skipPairedAutoAddStore = [&](const auto* b, auto& at) {
-        assert(at < b->instructions.size() && b->instructions[at]->paired_auto_add_store);
-        (void)b;
-        cleanupLocalCaches();
-        ++at;
-    };
 
     // Lightweight cache invalidation for after external calls (function/method calls).
     // Called functions run in their own frame and cannot modify the caller's local
@@ -14536,8 +14526,6 @@ dispatch_folded_step_host:
                 break;
             }
             case QoreIROpcode::Invoke: {
-                // see the generic += of an "auto" local below
-                bool skip_paired_store = false;
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
                 // operands after the switch
@@ -14663,13 +14651,6 @@ dispatch_folded_step_host:
                             weak_load_temp_slots, borrowed_temp_remaining}, inv, values, xsink, &func, block, ip,
                             preserve_hash_key_weak_result);
                     } else {
-                        if (inv->auto_local_string_append && inv->invoke_opcode == QoreIROpcode::AddAssignAny
-                                && !inv->operands.empty()) [[unlikely]] {
-                            // the operation is made through a reference that the local holds, and the paired store,
-                            // the first instruction of the normal target, stores nothing then (qore#7421)
-                            skip_paired_store
-                                = qore_ir_value_node_type(getIRValue(values, inv->operands[0])) == NT_REFERENCE;
-                        }
                         res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
                     }
                 }
@@ -14788,8 +14769,17 @@ dispatch_folded_step_host:
                 prev_block = block;
                 block = inv->normal_target;
                 ip = 0;
-                if (skip_paired_store) [[unlikely]] {
-                    skipPairedAutoAddStore(block, ip);
+                if (inv->auto_local_string_append) [[unlikely]] {
+                    // a generic += of an "auto" local whose load gave the reference that the local holds, which the
+                    // load's slot still holds, was made through it, once, as the AST interpreter makes it: the store
+                    // paired with it, the first instruction of the normal target, stores nothing
+                    // (QoreIRInstruction::paired_auto_add_store, qore#7421); the referenced lvalue can be another
+                    // variable whose value a slot caches
+                    if (qore_ir_value_node_type(getIRValue(values, inv->operands[0])) == NT_REFERENCE) {
+                        assert(!block->instructions.empty() && block->instructions[0]->paired_auto_add_store);
+                        cleanupLocalCaches();
+                        ip = 1;
+                    }
                 }
                 break;
             }
@@ -15300,6 +15290,17 @@ dbg_dismissed_exit:
                                 // the slot holds the reference itself, which the fast path above reads through on
                                 // every load; for an IR-only local an empty slot would read as no value
                                 locals_slot_cache.set(sid, reference_value->refRefSelf());
+                                if (local_inst->auto_local_string_append) [[unlikely]] {
+                                    // the += paired with this load is made on the referenced lvalue, which it gets as
+                                    // the reference itself (qore_rt_add_assign_local_any(), qore#7421)
+                                    if (needs_deref && val.needsRef()) {
+                                        val.discard(xsink);
+                                    }
+                                    out = QoreValue(reference_value->refRefSelf());
+                                    local_flags = IRCallFrame::LocalOwned;
+                                    result_slot_owned = true;
+                                    goto load_local_done;
+                                }
                             } else if (is_weak_ref_local || weak_container_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
@@ -15313,17 +15314,6 @@ dbg_dismissed_exit:
                             } else {
                                 locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
-                        }
-                        if (reference_value && local_inst->auto_local_string_append) [[unlikely]] {
-                            // the += paired with this load is made on the referenced lvalue, which it gets as the
-                            // reference itself (qore_rt_add_assign_local_any(), qore#7421)
-                            if (needs_deref && val.needsRef()) {
-                                val.discard(xsink);
-                            }
-                            out = QoreValue(reference_value->refRefSelf());
-                            local_flags = IRCallFrame::LocalOwned;
-                            result_slot_owned = true;
-                            goto load_local_done;
                         }
                         if (is_weak_ref_local && val.hasNode()) {
                             out = val;
@@ -20494,6 +20484,45 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::AddAssignAny:
+                if (inst->auto_local_string_append) [[unlikely]] {
+                    // a generic += of an "auto" local paired with its load and its store
+                    // (qore_ir_mark_auto_string_appends()): the helper changes a string, a list or a hash that the
+                    // local holds alone in place, and an operation whose load gave the reference that the local holds
+                    // is made through it, once, as the AST interpreter makes it, and the paired store, the next
+                    // instruction, stores nothing then (QoreIRInstruction::paired_auto_add_store, qore#7421)
+                    assert(inst->operands.size() == 2);
+                    QoreValue left = getIRValue(values, inst->operands[0]);
+                    bool through_reference = qore_ir_value_node_type(left) == NT_REFERENCE;
+                    QoreValue res = fromBits(qore_rt_add_assign_local_any(toBits(left),
+                        toBits(getIRValue(values, inst->operands[1])), xsink));
+                    if (xsink && *xsink) {
+                        res.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
+                    if (res.isPlainPointer() && addAssignGaveOperand(res, getIRValue(values, inst->operands[1]))) {
+                        releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                            weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                    }
+                    setValueSlot(values, inst->result.id, res, xsink);
+                    if (res.needsRef()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                    ++ip;
+                    if (through_reference) {
+                        assert(ip < block->instructions.size() && block->instructions[ip]->paired_auto_add_store);
+                        // the referenced lvalue can be another variable whose value a slot caches
+                        cleanupLocalCaches();
+                        ++ip;
+                    }
+                    break;
+                }
+                [[fallthrough]];
             case QoreIROpcode::AddInt:
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::AddAny:
@@ -20527,7 +20556,6 @@ load_local_done:
             case QoreIROpcode::ShrAssignAny:
             case QoreIROpcode::AddAssignInt:
             case QoreIROpcode::AddAssignFloat:
-            case QoreIROpcode::AddAssignAny:
             case QoreIROpcode::SubAssignInt:
             case QoreIROpcode::SubAssignFloat:
             case QoreIROpcode::SubAssignAny:
@@ -20655,17 +20683,7 @@ load_local_done:
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
                 QoreValue right = getIRValue(values, inst->operands[1]);
-                QoreValue res;
-                // a generic += of an "auto" local whose load gave the reference that the local holds is made through
-                // it, once, as the AST interpreter makes it, and the store paired with it, the next instruction,
-                // stores nothing (QoreIRInstruction::paired_auto_add_store, qore#7421)
-                bool skip_paired_store = false;
-                if (inst->auto_local_string_append && inst->opcode == QoreIROpcode::AddAssignAny) [[unlikely]] {
-                    skip_paired_store = qore_ir_value_node_type(left) == NT_REFERENCE;
-                    res = fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink));
-                } else {
-                    res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
-                }
+                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     // an operation with a handler in this frame - such as a compound assignment to an element of a
@@ -20691,9 +20709,6 @@ load_local_done:
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
-                if (skip_paired_store) [[unlikely]] {
-                    skipPairedAutoAddStore(block, ip);
-                }
                 break;
             }
             case QoreIROpcode::PluginUnary:
