@@ -307,8 +307,13 @@ list<string> OnnxIoBinding::getBoundOutputNames() [flags=RET_VALUE_ONLY] {
     @par Automatic Execution Providers
     When no \c providers are configured, the best available GPU execution provider is selected automatically
     (CUDA on Linux, CoreML on macOS).  A provider that cannot be appended or that cannot create the session of a
-    model is not selected automatically again for later models in the process; the model itself falls back to CPU
-    when \c allow_cpu_fallback permits it.  Only trusted code makes this process-wide record: a provider failure
+    model is not selected automatically for the later models of the process for a while: for one minute after its
+    first failure, then for a delay that doubles each time that it fails again when it is tried after the delay, up
+    to one hour; the models that fail at the same time count as one failure.  Once a model of trusted code has
+    created a session with it again, its failures are forgotten.  So a temporary failure (ex: a device without free
+    memory) does not disable it for good, but while the device's state, which all code of the process shares, makes
+    it fail, it can stay unselected for up to an hour.  The model itself falls back to CPU when
+    \c allow_cpu_fallback permits it.  Only trusted code makes this process-wide record: a provider failure
     of a model of code that a sandbox governs, also of trusted code that a sandboxed caller called (such as a
     capability made with @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"),
     does not change the provider choice of the models of other code.

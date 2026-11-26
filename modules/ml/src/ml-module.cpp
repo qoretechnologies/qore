@@ -292,6 +292,27 @@ static QoreValue f_ml_dbg_onnx_clear_auto_provider_failures(const QoreListNode* 
     qore_ml_onnx_clear_auto_provider_failures();
     return QoreValue();
 }
+
+// debug builds: records a session that the provider created, as a model's success records it
+static QoreValue f_ml_dbg_onnx_record_auto_provider_success(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper provider(args->retrieveEntry(0));
+    return qore_ml_onnx_record_auto_provider_success(provider->c_str());
+}
+
+// debug builds: makes the delays of the recorded failures pass at once
+static QoreValue f_ml_dbg_onnx_expire_auto_provider_failures(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_ml_onnx_expire_auto_provider_failures();
+    return QoreValue();
+}
+
+// debug builds: returns the record of a provider
+static QoreValue f_ml_dbg_onnx_auto_provider_failure_info(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper provider(args->retrieveEntry(0));
+    return qore_ml_onnx_auto_provider_failure_info(provider->c_str(), xsink);
+}
 #endif
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
@@ -463,6 +484,12 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
     MLNS.addBuiltinVariant("ml_dbg_onnx_clear_auto_provider_failures", f_ml_dbg_onnx_clear_auto_provider_failures,
         QCF_NO_FLAGS, QDOM_PROCESS, nothingTypeInfo);
+    MLNS.addBuiltinVariant("ml_dbg_onnx_record_auto_provider_success", f_ml_dbg_onnx_record_auto_provider_success,
+        QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
+    MLNS.addBuiltinVariant("ml_dbg_onnx_expire_auto_provider_failures", f_ml_dbg_onnx_expire_auto_provider_failures,
+        QCF_NO_FLAGS, QDOM_PROCESS, nothingTypeInfo);
+    MLNS.addBuiltinVariant("ml_dbg_onnx_auto_provider_failure_info", f_ml_dbg_onnx_auto_provider_failure_info,
+        QCF_NO_FLAGS, QDOM_DEFAULT, autoHashOrNothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
 #endif
 
     // Register algorithm deserializers for model persistence
