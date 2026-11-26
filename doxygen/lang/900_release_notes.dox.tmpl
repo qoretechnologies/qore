@@ -2369,6 +2369,10 @@
         option serves only its own handlers, never those of the server, and the stop of a listener refuses new
         connections before it waits for the requests in progress
         (<a href="https://github.com/qoretechnologies/qore/issues/7690">issue 7690</a>)
+      - the stop of a listener lets its requests and responses in progress complete (at most the \c drain_timeout
+        option), then closes its connections that are left before it returns (see
+        @ref HttpServer::HttpServer::stopListenerID() "stopListenerID()";
+        <a href="https://github.com/qoretechnologies/qore/issues/7692">issue 7692</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
