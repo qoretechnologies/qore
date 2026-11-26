@@ -1,0 +1,3 @@
+warm-up 600
+module: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: mod_checked:18 <- call_module:37
+local: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: local_checked:22 <- call_local:38
