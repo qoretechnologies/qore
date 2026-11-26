@@ -28,6 +28,10 @@ lock_path="${bootstrap_stamp}.lock"
 # this one rather than threaded through every caller's argument list.
 lock_tool=${QORE_QCC_LOCK_HELPER:-$(dirname "$0")/qore-qo-lock}
 outputs_file=
+# A copy of what the batch compile wrote to its standard error, and its exit
+# status; see run_batch_script().
+batch_errors=
+batch_status=
 # The ordering token's state before this run advanced it, and whether the run
 # reached its publication.
 #
@@ -133,35 +137,26 @@ run_source_order() {
     fi
 }
 
-#! Removes PATH, tolerating a remover that got there first.
-#  The caller wants a state -- PATH gone -- rather than the act of removing it,
-#  and it can race another builder that decided the same thing.  `rm -f` alone
-#  does not express that: it swallows a path that was already missing when it
-#  looked, but busybox reports an ENOENT unlink that follows a successful lstat
-#  and exits non-zero, so the caller that loses the race by microseconds fails --
-#  and under `set -e` that ends the build.  GNU coreutils ignores the same errno,
-#  which is why this shape only ever fails on musl/busybox hosts.  A removal that
-#  fails for any other reason is still an error and is still reported.
-#
-#  The lock paths this used to serve are gone: an fcntl lock is released by the
-#  kernel, so nothing reclaims one and nothing unlinks one.  What is left is the
-#  ordering token, which a run that published nothing must put back.
-remove_raced_path() {
-    if rm -f "$1" 2>/dev/null; then
-        return 0
-    fi
-    if [ ! -e "$1" ] && [ ! -L "$1" ]; then
-        return 0
-    fi
-    # Still there, so this was not the race: repeat the removal without
-    # suppressing it, and let the utility say why it cannot be done.
-    rm -f "$1"
-}
-
 #! Undoes this run's advance of the ordering token when it published nothing.
 #  Publication is all-or-nothing -- the batch touches no member stamp and writes
 #  no generation record until every object has been emitted -- so a run that did
 #  not reach it has changed nothing the token needs to dominate.
+#
+#  A token that did not exist before the run is put back as one dated at the
+#  epoch, not removed.  The token is also the OUTPUT of the build tool's
+#  bootstrap recipe and a prerequisite of the group's incremental plan, and a
+#  failed batch that falls back to per-source compilation exits 0: with the
+#  token removed, the recipe "succeeded" without producing its output, and in a
+#  fresh build tree Make stopped at the plan with "No rule to make target
+#  .qcc-batch-bootstrap.stamp" (qore#7723).  An epoch token satisfies the build
+#  graph and means "older than every member" to currency: no member stamp is
+#  older than it, so it marks no component stale, and each component is judged
+#  by its own generation record, which is what the per-source path needs (a
+#  fresh tree has no records, so all of it is stale; a missing token made the
+#  coordinator's currency pass call every component stale whatever its record
+#  said).  Being older than every input of the recipe, it also makes the
+#  next build run the recipe again, which adopts the tree the per-source path
+#  published or hands its stale part to the coordinator.
 restore_ordering_token() {
     if [ "$token_committed" = true ] || [ -z "$saved_stamp" ]; then
         return 0
@@ -169,7 +164,8 @@ restore_ordering_token() {
     if [ "$stamp_existed" = true ]; then
         touch -r "$saved_stamp" "$bootstrap_stamp" 2>/dev/null || true
     else
-        remove_raced_path "$bootstrap_stamp"
+        # -t with TZ=UTC0 rather than -d @0, which BSD touch does not accept
+        TZ=UTC0 touch -t 197001010000.00 "$bootstrap_stamp" 2>/dev/null || true
     fi
 }
 
@@ -225,6 +221,12 @@ cleanup() {
     fi
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
+    fi
+    if [ -n "$batch_errors" ]; then
+        rm -f "$batch_errors"
+    fi
+    if [ -n "$batch_status" ]; then
+        rm -f "$batch_status"
     fi
     # The group lock is not removed here, or anywhere: it is an fcntl lock held by
     # the process that re-executed this script, and the kernel drops it when that
@@ -638,24 +640,56 @@ touch "$bootstrap_stamp"
 echo "$0: compiling the group in one shared parse"
 date_generation_change
 
+#! Runs the batch compile, setting batch_rc to its exit status.
+#  Its standard error still reaches this script's as it is written, and a copy of
+#  it is kept in batch_errors so that a failure can be explained where it is
+#  reported: a qcc error printed above several screens of other build output is
+#  easy to miss, and the build then fails somewhere else (qore#7723).  The status
+#  is passed through a file because the compile runs on the left of a pipeline,
+#  whose status is that of tee.
+#  `$?` after a NEGATED condition is the negation's status, not the command's, so
+#  the batch status has to be captured in the else branch.
+run_batch_script() {
+    if [ -z "$batch_errors" ]; then
+        batch_errors=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-errors.XXXXXX")
+        batch_status=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-status.XXXXXX")
+    fi
+    {
+        {
+            if sh "$batch_script" 2>&1 1>&3 3>&-; then
+                printf '0\n' > "$batch_status"
+            else
+                printf '%s\n' "$?" > "$batch_status"
+            fi
+        } | tee "$batch_errors" >&2
+    } 3>&1
+    batch_rc=$(cat "$batch_status")
+}
+
+#! Prints why the batch compile failed: its first error, or else its last lines.
+#  qcc reports an error as "error: ..." or "FILE:LINE: error: ..."; a warning is
+#  reported as "warning: ..." even when it names an exception such as
+#  LOAD-MODULE-ERROR, so it is not taken for the error that the warning caused.
+report_batch_failure() {
+    batch_error=$(awk '/(^|: )error: / { print; exit }' "$batch_errors")
+    if [ -n "$batch_error" ]; then
+        echo "$0: the batch compile failed with: $batch_error" >&2
+    elif [ -s "$batch_errors" ]; then
+        echo "$0: the batch compile failed with exit code $batch_rc; its last output was:" >&2
+        tail -n 5 "$batch_errors" | sed 's/^/    /' >&2
+    else
+        echo "$0: the batch compile failed with exit code $batch_rc and no output" >&2
+    fi
+}
+
 # One rebuild, never a convergence loop.  A batch can report that its inputs
 # moved only because an agent outside the build rewrote a source while qcc was
 # reading it; the members of this group cannot move it, because this lock covers
 # all of them.
-# `$?` after a NEGATED condition is the negation's status, not the command's, so
-# the batch status has to be captured in the else branch.
-if sh "$batch_script"; then
-    batch_rc=0
-else
-    batch_rc=$?
-fi
+run_batch_script
 if [ "$batch_rc" -eq 75 ]; then
     echo "$0: qcc batch inputs moved during compilation; rebuilding the group once"
-    if sh "$batch_script"; then
-        batch_rc=0
-    else
-        batch_rc=$?
-    fi
+    run_batch_script
     if [ "$batch_rc" -eq 75 ]; then
         echo "$0: qcc batch inputs moved during the group rebuild; the sources are" \
             "being changed by something other than this build" >&2
@@ -669,14 +703,19 @@ if [ "$batch_rc" -ne 0 ]; then
         # rather than something the per-file path could finish.
         echo "$0: batch compile failed and this group has a component that spans" \
             "several sources; there is no per-source fallback" >&2
+        report_batch_failure
         exit "$batch_rc"
     fi
     echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
+    report_batch_failure
     # The EXIT handler puts the ordering token back, so the per-source path finds
     # exactly the components that were stale before this attempt.  Leaving the
     # token advanced instead -- which is what this did while the token was also
     # the publication marker -- made every member of the group look like it
-    # belonged to a previous bootstrap, so the fallback rebuilt all of them.
+    # belonged to a previous bootstrap, so the fallback rebuilt all of them.  A
+    # token that did not exist is put back dated at the epoch rather than removed,
+    # as the build tool requires this recipe to produce it: see
+    # restore_ordering_token().
     exit 0
 fi
 

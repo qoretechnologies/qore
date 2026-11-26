@@ -54,6 +54,8 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
             \testGroupExternalInputsDepfileNinja());
         addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
             \testPartialAggregateBodyContracts());
+        addPartCase(3, "a failed batch bootstrap falls back to per-source compiles in a fresh and in a built tree",
+            \testBatchBootstrapFallback());
 
         set_return_value(main());
     }
@@ -2026,6 +2028,100 @@ add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FU
         hash<auto> link_map = parse_json(read(build_dir + "/qo/AGG_link/AGG_PARTIAL.qo.qolink.json"));
         assertGt(0, link_map.unresolved_imports.size(),
             "the partial aggregate leaves the holder's declarations unresolved");
+    }
+
+    #! A batch bootstrap that fails falls back to per-source compiles, which build the group (qore#7723)
+    /** Two independent members declare the same function, which only their shared parse sees: each compiles on its
+        own, so the bootstrap's batch compile fails and the group is built by per-source compiles.
+
+        The fallback puts the ordering token, the bootstrap recipe's output, back as it was.  In a fresh build tree
+        there was none, and removing it stopped the build at the group's incremental plan with "No rule to make target
+        .qcc-batch-bootstrap.stamp"; it is now left as one dated at the epoch, which marks no member stale.  In a
+        built tree, the token keeps the date it had.  Either way the fallback message names the batch's error.
+    */
+    testBatchBootstrapFallback() {
+        TmpDir tmp("qore-cmake-qcc-batch-fallback-", NOTHING, cmakeTmpBase());
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+        # alpha and beta declare the same function: they conflict only when parsed together
+        code write_sources = sub (string tag) {
+            write(snippets_dir + "/alpha.qc", sprintf("%%new-style\nstring sub fallbackDup() {\n"
+                "    return \"alpha-%s\";\n}\n", tag));
+            write(snippets_dir + "/beta.qc", sprintf("%%new-style\nstring sub fallbackDup() {\n"
+                "    return \"beta-%s\";\n}\n", tag));
+            write(snippets_dir + "/gamma.qc", sprintf("%%new-style\nstring sub fallbackGamma() {\n"
+                "    return \"gamma-%s\";\n}\n", tag));
+        };
+        write_sources("one");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.20)
+project(QoreQoBatchFallback NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP fallback
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/alpha.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/beta.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/gamma.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+        string configure = run(sprintf("cmake -S %s -B %s%s", shellQuote(src_dir), shellQuote(build_dir),
+            qore_dir ? " -DQore_DIR=" + shellQuote(qore_dir) : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"), "configured the object group: " + configure);
+        string token = build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp";
+        # an object is named by the path of its source
+        list<string> objects = map build_dir + "/qo/" + regex_subst(snippets_dir + "/" + $1, "[^A-Za-z0-9_]", "_",
+            RE_Global) + "_qc.qo", ("alpha", "beta", "gamma");
+        string build = buildCommand(build_dir) + "; echo \"build-status=$?\"";
+
+        # a fresh build tree: no ordering token before the bootstrap
+        assertFalse(is_file(token), "a fresh build tree has no ordering token");
+        string fresh = run(build);
+        assertEq(-1, fresh.find("No rule to make target"), "the fallback leaves the token the build needs: " + fresh);
+        assertRegex("(?m)^build-status=0$", fresh, "the fresh build succeeds: " + fresh);
+        assertTrue(fresh.find("batch bootstrap failed; falling back to per-source compilation") >= 0,
+            "the batch compile fails and falls back: " + fresh);
+        assertRegex("the batch compile failed with: .*error: DUPLICATE-SIGNATURE: fallbackDup\\(\\)", fresh,
+            "the fallback names the batch's error: " + fresh);
+        foreach string object in (objects) {
+            assertTrue(is_file(object), "the per-source compiles build " + basename(object) + ": " + fresh);
+        }
+        assertTrue(is_file(token), "the token exists after the fallback");
+        assertEq(1970-01-01Z, mtime(token), "dated at the epoch, which marks no member stale");
+
+        string next = run(build);
+        assertRegex("(?m)^build-status=0$", next, "the next build succeeds: " + next);
+        assertEq(0, occurrences(next, "qcc: script-context .qo"), "and compiles nothing: " + next);
+
+        # a built tree: the token is put back with the date it had
+        date before = mtime(token);
+        assertNeq(1970-01-01Z, before, "the token of the built tree is dated by a build");
+        # a group context newer than every member is a generation transition of the whole group: the bootstrap runs
+        # again, finds every member stale, and reaches the batch compile again
+        write_sources("two");
+        string group_context = build_dir + "/qo-scripts/.qcc-context";
+        assertTrue(is_file(group_context), "the group has a context");
+        write(group_context, read(group_context));
+        string rebuilt = run(build);
+        assertRegex("(?m)^build-status=0$", rebuilt, "the rebuild succeeds: " + rebuilt);
+        assertTrue(rebuilt.find("batch bootstrap failed; falling back to per-source compilation") >= 0,
+            "the batch compile fails and falls back again: " + rebuilt);
+        assertRegex("the batch compile failed with: .*error: DUPLICATE-SIGNATURE: fallbackDup\\(\\)", rebuilt,
+            "the fallback names the batch's error: " + rebuilt);
+        assertEq(3, occurrences(rebuilt, "qcc: script-context .qo"),
+            "the per-source compiles rebuild every member: " + rebuilt);
+        assertEq(before, mtime(token), "the fallback puts back the token's date");
     }
 
     #! managed qcc outputs are pruned safely with each generator: the Ninja build refused to prune a removed object
