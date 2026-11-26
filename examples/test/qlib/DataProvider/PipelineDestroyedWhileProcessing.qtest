@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A pipeline whose last reference is released in another thread while its queue thread processes a record: the
+# destructor waits for the record, which completes, and the queue thread logs to the pipeline's logs and reports its
+# error to the destructor, which raises PIPELINE-FAILED, as it did before the queue thread could no longer call the
+# pipeline once its destructor runs in another thread (qore#7509).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class PipelineDestroyedWhileProcessingTest
+
+const HangTimeout = 30s;
+
+#! holds the record until it may go on; then outputs it or raises an error
+class HoldingProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        Counter entered(1);
+        Counter go(1);
+        bool fail;
+    }
+
+    constructor(bool fail) {
+        self.fail = fail;
+    }
+
+    string className() {
+        return "HoldingProcessor";
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        entered.dec();
+        go.waitForZero(HangTimeout);
+        if (fail) {
+            throw "TEST-ERROR", "the record failed";
+        }
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! tells when its destructor starts
+class TestPipeline inherits DataProvider::DataProviderPipeline {
+    public {
+        Counter test_in_dtor(1);
+    }
+
+    constructor(hash<PipelineOptionInfo> opts) : DataProviderPipeline(opts) {
+    }
+
+    destructor() {
+        test_in_dtor.dec();
+    }
+}
+
+class PipelineDestroyedWhileProcessingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("PipelineDestroyedWhileProcessing", "1.0") {
+        addTestCase("a record in progress completes while the pipeline is destroyed", \completesTest());
+        addTestCase("the error of a record in progress is reported while the pipeline is destroyed", \errorTest());
+        set_return_value(main());
+    }
+
+    completesTest() {
+        hash<auto> rv = run(False);
+        assertEq(NOTHING, rv.err, "no error");
+        assertTrue(rv.debug, "the queue thread logged the record's output");
+    }
+
+    errorTest() {
+        hash<auto> rv = run(True);
+        assertEq("PIPELINE-FAILED", rv.err);
+        assertEq("TEST-ERROR", rv.arg[0].err, "the record's error is reported");
+        assertTrue(rv.error_logged, "the queue thread logged the error");
+    }
+
+    #! submits a record, releases the pipeline in another thread while the record is processed, and lets the record go on
+    private hash<auto> run(bool fail) {
+        Queue debug_log();
+        Queue error_log();
+        HoldingProcessor proc(fail);
+        Queue handoff();
+        Counter in_dtor;
+        {
+            TestPipeline pipe(<PipelineOptionInfo>{
+                "name": "destroyed-while-processing",
+                "debug_log": sub (string fmt, ...) {
+                    debug_log.push(vsprintf(fmt, argv));
+                },
+                "error_log": sub (string fmt, ...) {
+                    error_log.push(vsprintf(fmt, argv));
+                },
+            });
+            pipe.append(proc);
+            pipe.submit({"a": 1});
+            in_dtor = pipe.test_in_dtor;
+            # the other thread releases the last reference: this thread hands its reference over and releases it
+            handoff.push(pipe);
+            remove pipe;
+        }
+        assertEq(0, proc.entered.waitForZero(HangTimeout), "the queue thread processes the record");
+
+        Queue result();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                TestPipeline pipe = handoff.get();
+                remove pipe;
+                result.push({});
+            } catch (hash<ExceptionInfo> ex) {
+                result.push({"err": ex.err, "arg": ex.arg});
+            }
+        }();
+        assertEq(0, in_dtor.waitForZero(HangTimeout), "the pipeline's destructor started");
+        # the record goes on while the destructor waits for it
+        proc.go.dec();
+        assertEq(0, done.waitForZero(HangTimeout), "the pipeline's destructor ended");
+        hash<auto> rv = result.get();
+        while (debug_log.size()) {
+            if (debug_log.get() =~ /data processor "HoldingProcessor" output/) {
+                rv.debug = True;
+            }
+        }
+        while (error_log.size()) {
+            if (error_log.get() =~ /TEST-ERROR/) {
+                rv.error_logged = True;
+            }
+        }
+        return rv;
+    }
+}

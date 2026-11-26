@@ -287,6 +287,109 @@ public hashdecl PipelineOptionInfo {
 }
 
 #! Pipeline element
+#! The state of a pipeline that its queue threads use: its name, its logs and its error status
+/** The queue threads hold their pipeline only by a weak reference, and cannot call it once its destructor runs in
+    another thread (a method call on an object whose destructor runs in another thread is refused, qore#7509), while
+    the destructor waits for them to process their records: they log, and report their errors, here, and the pipeline
+    reads its error status from here
+*/
+class PipelineSharedState {
+    public {
+        #! the name of the pipeline
+        string name;
+
+        #! the logs of the pipeline
+        *code<nothing(string, ...)> info_log;
+        *code<nothing(string, ...)> error_log;
+        *code<nothing(string, ...)> debug_log;
+
+        #! the lock of the pipeline
+        Mutex lck;
+
+        #! the errors of the queue threads
+        list<hash<ExceptionInfo>> error_list;
+
+        #! True if the pipeline is aborting
+        *bool abort_flag;
+
+        #! the queues of the pipeline (weak references: the pipeline holds them)
+        hash<string, auto> queues;
+    }
+
+    constructor(string name, *code<nothing(string, ...)> info_log, *code<nothing(string, ...)> error_log,
+            *code<nothing(string, ...)> debug_log, Mutex lck) {
+        self.name = name;
+        self.info_log = info_log;
+        self.error_log = error_log;
+        self.debug_log = debug_log;
+        self.lck = lck;
+    }
+
+    #! records a queue of the pipeline
+    registerQueue(PipelineQueue queue) {
+        queues{queue.id_str} := queue;
+    }
+
+    #! Called from a pipeline queue object to report a fatal error durring processing
+    reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
+        logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
+
+        bool lock = !lck.lockOwner();
+        if (lock) {
+            lck.lock();
+        }
+        on_exit if (lock) {
+            lck.unlock();
+        }
+
+        error_list += ex;
+        abort_flag = True;
+        foreach string id in (keys queues) {
+            *PipelineQueue q = queues{id};
+            if (!q) {
+                continue;
+            }
+            q.queue_abort = True;
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
+        }
+    }
+
+    #! Logs to the info log, if set
+    logInfo(string fmt, ...) {
+        if (info_log) {
+            softlist<auto> args += ("PIPELINE " + name + " INFO: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(info_log, args);
+        }
+    }
+
+    #! Logs to the error log, if set
+    logError(string fmt, ...) {
+        if (error_log) {
+            softlist<auto> args += ("PIPELINE " + name + " ERROR: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(error_log, args);
+        }
+    }
+
+    #! Logs to the debug log, if set
+    logDebug(string fmt, ...) {
+        if (debug_log) {
+            softlist<auto> args += ("PIPELINE " + name + " DEBUG: " + fmt);
+            if (argv) {
+                args += argv;
+            }
+            call_function_args(debug_log, args);
+        }
+    }
+}
+
 class PipelineQueue {
     public {
         #! Queue ID
@@ -394,12 +497,17 @@ class PipelineQueue {
 
         #! Parent object
         DataProviderPipeline parent;
+
+        #! The state of the pipeline that the queue thread uses while the pipeline is destroyed (qore#7509)
+        PipelineSharedState shared;
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size, bool start_thread = True) {
+    constructor(DataProviderPipeline parent, PipelineSharedState shared, Mutex lck, WaitGroup cnt, int id, int size,
+            bool start_thread = True) {
         self.size = size;
         self.parent := parent;
+        self.shared = shared;
         self.lck = lck;
         self.cnt = cnt;
 
@@ -442,11 +550,11 @@ class PipelineQueue {
     #! Processes data on the caller's thread for synchronous single-queue pipelines
     processSynchronously(auto qdata) {
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
         if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
-                "down", parent.getName());
+                "down", shared.name);
         }
 
         processing = True;
@@ -469,7 +577,7 @@ class PipelineQueue {
                 foreach auto data_elem in (data_recs) {
                     softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
                     new_recs += new_elem_recs;
-                    parent.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
+                    shared.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
                 }
 
                 if (output_callback && elem_index == elem_count - 1) {
@@ -479,7 +587,7 @@ class PipelineQueue {
                 ++elem_index;
             }
         } catch (hash<ExceptionInfo> ex) {
-            parent.reportError(self, ex);
+            shared.reportError(self, ex);
         }
     }
 
@@ -502,10 +610,10 @@ class PipelineQueue {
     */
     submit(auto qdata) {
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
 
-        parent.logDebug("queue %d data submission: %y", id, qdata);
+        shared.logDebug("queue %d data submission: %y", id, qdata);
         bool lock = !lck.lockOwner();
         if (lock) {
             lck.lock();
@@ -523,12 +631,12 @@ class PipelineQueue {
         }
 
         if (queue_abort) {
-            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", shared.name);
         }
 
         if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
-                "down", parent.getName());
+                "down", shared.name);
         }
 
         # Enqueue data; when metrics are enabled, wrap in a hash with the enqueue timestamp
@@ -852,7 +960,7 @@ class PipelineQueue {
                         foreach auto data_elem in (data_recs) {
                             softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
                             new_recs += new_elem_recs;
-                            parent.logDebug("queue %d data processor %y output: %y", id,
+                            shared.logDebug("queue %d data processor %y output: %y", id,
                                 elem.className(), new_elem_recs);
                         }
 
@@ -907,7 +1015,7 @@ class PipelineQueue {
                 if (mc_cache) {
                     mc_cache.recordError(id_str);
                 }
-                parent.reportError(self, ex);
+                shared.reportError(self, ex);
             }
 
             # Mark processing complete and wake waitDone() if waiting
@@ -1013,7 +1121,7 @@ class PipelineQueue {
                     }
 
                     softlist<auto> data_recs = flush_results;
-                    parent.logDebug("queue %d data processor %y flush output: %y", id, elem.className(),
+                    shared.logDebug("queue %d data processor %y flush output: %y", id, elem.className(),
                         flush_results);
                     int elem_size = elems.size();
                     # iterate subsequent processor elements in the queue
@@ -1036,7 +1144,7 @@ class PipelineQueue {
                                 }
 
                                 new_recs += new_elem_recs;
-                                parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
+                                shared.logDebug("queue %d data processor %y processing flushed output: %y", id,
                                     elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
@@ -1078,7 +1186,7 @@ class PipelineQueue {
             if (mc) {
                 mc.recordError(id_str);
             }
-            parent.reportError(self, ex);
+            shared.reportError(self, ex);
         }
     }
 }
@@ -1894,8 +2002,8 @@ public class DataProviderPipeline {
         #! Pipeline ID sequence generator
         Sequence seq(1);
 
-        #! list of exceptions in pipelines
-        list<hash<ExceptionInfo>> error_list;
+        #! the state that the queue threads use, with the pipeline's error status (qore#7509)
+        PipelineSharedState shared;
 
         #! run start time
         date start_time;
@@ -1930,8 +2038,6 @@ public class DataProviderPipeline {
         #! Stop flag
         bool stop_flag;
 
-        #! Abort flag
-        bool abort_flag;
 
         #! Thread WaitGroup
         WaitGroup cnt();
@@ -1975,7 +2081,9 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1, !synchronous);
+        shared = new PipelineSharedState(name, info_log, error_log, debug_log, lck);
+        pmap."0" = new PipelineQueue(self, shared, lck, cnt, 0, 1, !synchronous);
+        shared.registerQueue(pmap."0");
     }
 
     #! Copy constructor; creates an empty pipeline with the same configuration as the original
@@ -1986,6 +2094,8 @@ public class DataProviderPipeline {
         lck = new Mutex();
         seq = new Sequence();
         cnt = new WaitGroup();
+        # the copy's state, with its own errors and queues
+        shared = new PipelineSharedState(shared.name, info_log, error_log, debug_log, lck);
 
         # ensure the copy is reset
         resetIntern();
@@ -1995,6 +2105,7 @@ public class DataProviderPipeline {
 
         # rename to label as copy
         name = sprintf("copy of %s", name);
+        shared.name = name;
     }
 
     #! Destroys the object
@@ -2031,7 +2142,7 @@ public class DataProviderPipeline {
 
     #! Returns True if the object is aborting
     bool aborting() {
-        return abort_flag ?? False;
+        return shared.abort_flag ?? False;
     }
 
     #! Registers a new thread
@@ -2125,8 +2236,9 @@ public class DataProviderPipeline {
         checkUpdatePipelineIntern(id);
 
         int new_id = seq.next();
-        PipelineQueue queue(self, lck, cnt, new_id, 1);
+        PipelineQueue queue(self, shared, lck, cnt, new_id, 1);
         pmap{new_id} = queue;
+        shared.registerQueue(queue);
 
         if (!pmap{id}.elems || (pmap{id}.elems.last() instanceof AbstractDataProcessor)) {
             list<PipelineQueue> pipeline_list();
@@ -2247,7 +2359,7 @@ public class DataProviderPipeline {
         }
 
         logInfo("completed processing %d pipeline%s; status %y errors: %d processing time: %y records processed: %d",
-            pmap.size(), pmap.size() == 1 ? "" : "s", error_list ? "ERROR" : "COMPLETE", error_list.size(),
+            pmap.size(), pmap.size() == 1 ? "" : "s", shared.error_list ? "ERROR" : "COMPLETE", shared.error_list.size(),
             microseconds(stop_mono_us - start_mono_us), record_count);
 
         # throw any exceptions
@@ -2265,7 +2377,7 @@ public class DataProviderPipeline {
     */
     abort(*bool ignore_exceptions) {
         # do not grab the lock first to interrupt iterators adding data to the pipeline
-        abort_flag = True;
+        shared.abort_flag = True;
         foreach PipelineQueue q in (pmap.iterator()) {
             q.queue_abort = True;
         }
@@ -2300,7 +2412,7 @@ public class DataProviderPipeline {
         locked = False;
 
         if (ignore_exceptions) {
-            remove error_list;
+            remove shared.error_list;
         } else {
             throwPipelineException();
         }
@@ -2315,7 +2427,7 @@ public class DataProviderPipeline {
     */
     hash<PipelineInfo> getInfo() {
         string status;
-        if (abort_flag) {
+        if (shared.abort_flag) {
             status = PS_ABORTED;
         } else if (locked) {
             status = PS_RUNNING;
@@ -2384,24 +2496,7 @@ public class DataProviderPipeline {
 
     #! Called from a pipeline queue object to report a fatal error durring processing
     reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
-        logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
-
-        bool lock = !lck.lockOwner();
-        if (lock) {
-            lck.lock();
-        }
-        on_exit if (lock) {
-            lck.unlock();
-        }
-
-        error_list += ex;
-        abort_flag = True;
-        foreach PipelineQueue q in (pmap.iterator()) {
-            q.queue_abort = True;
-            if (q.queue_waiting || q.data_waiting) {
-                q.cond.broadcast();
-            }
-        }
+        shared.reportError(queue, ex);
     }
 
     #! Logs to the info log, if set
@@ -2441,8 +2536,9 @@ public class DataProviderPipeline {
     private:internal PipelineQueue copyPipeline(PipelineQueue old_queue) {
         *PipelineQueue queue = pmap{old_queue.id};
         if (!queue) {
-            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size, !synchronous);
+            queue = new PipelineQueue(self, shared, lck, cnt, old_queue.id, old_queue.size, !synchronous);
             pmap{old_queue.id} = queue;
+            shared.registerQueue(queue);
         }
 
         queue.elems = old_queue.elems;
@@ -2534,8 +2630,8 @@ public class DataProviderPipeline {
             }
         }
 
-        if (abort_flag) {
-            delete abort_flag;
+        if (shared.abort_flag) {
+            delete shared.abort_flag;
             foreach PipelineQueue q in (pmap.iterator()) {
                 q.queue_abort = False;
             }
@@ -2566,7 +2662,7 @@ public class DataProviderPipeline {
                 throw "PIPELINE-ERROR", sprintf("pipeline %y has no elements", name);
             }
 
-            if (error_list || abort_flag) {
+            if (shared.error_list || shared.abort_flag) {
                 throw "PIPELINE-ERROR", sprintf("pipeline %y has an error status; call %s::reset() or %s::abort() before "
                     "submitting new data", name, self.className(), self.className());
             }
@@ -2623,7 +2719,7 @@ public class DataProviderPipeline {
     */
     private:internal throwPipelineException() {
         # throw exceptions
-        if (*list<hash<ExceptionInfo>> errs = remove error_list) {
+        if (*list<hash<ExceptionInfo>> errs = remove shared.error_list) {
             throw "PIPELINE-FAILED", sprintf("pipeline %y: %d pipeline%s threw exceptions in processing", name,
                 errs.size(), errs.size() == 1 ? "" :"s"), errs;
         }
