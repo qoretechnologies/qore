@@ -3276,6 +3276,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
+                    pp.clearCommitRestrictedCaller();
                     pp.clearParseTidsIntern();
                 }
             private:

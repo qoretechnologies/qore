@@ -233,7 +233,7 @@ const qore_class_private* qore_serialization_caller_class() {
     // Serializable), the class context of the code that called it; the same for every form of the call
     const qore_class_private* class_ctx = qore_innermost_frame_is_builtin() ? runtime_get_caller_class()
         : runtime_get_class();
-    return class_ctx && !class_ctx->sys && !class_ctx->isSandboxDeclared() ? class_ctx : nullptr;
+    return class_ctx && !class_ctx->sys && !class_ctx->isSandboxDeclared(true) ? class_ctx : nullptr;
 }
 
 bool qore_serialization_calling_code_trusted() {
@@ -241,7 +241,7 @@ bool qore_serialization_calling_code_trusted() {
         : runtime_get_class();
     if (class_ctx && !class_ctx->sys) {
         // the code of a class that trusted code declared acts for itself
-        return !class_ctx->isSandboxDeclared();
+        return !class_ctx->isSandboxDeclared(true);
     }
     // the code of a trusted Program outside a class acts for itself; library code acts for its caller
     const QoreProgram* pgm = getProgram();
@@ -1016,7 +1016,7 @@ int QoreSerializable::checkProgramDeserializeClass(QoreProgram* caller_pgm, cons
         return 0;
     }
     const qore_class_private* cc = qore_class_private::get(*ccls);
-    if (cc->isSandboxDeclared() || !cc->hasSandboxSerialState()) {
+    if (cc->isSandboxDeclared(false) || !cc->hasSandboxSerialState()) {
         return 0;
     }
     xsink->raiseException("DESERIALIZATION-ERROR", "class '%s' of the data names a class declared by sandboxed code in "
@@ -1103,7 +1103,7 @@ QoreValue QoreSerializable::deserializeIntern(ExceptionSink* xsink, const QoreHa
                 }
                 // for Program::deserialize(): a name that names a class of the caller with protected state must not
                 // name a class of sandboxed code in the target Program, which would get that state (qore#7146)
-                if (context.caller_pgm && qore_class_private::get(*cls)->isSandboxDeclared()
+                if (context.caller_pgm && qore_class_private::get(*cls)->isSandboxDeclared(true)
                     && checkProgramDeserializeClass(context.caller_pgm, cname, xsink)) {
                     return QoreValue();
                 }

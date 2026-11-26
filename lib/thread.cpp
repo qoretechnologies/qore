@@ -8031,6 +8031,15 @@ bool qore_innermost_frame_is_builtin() {
     return own && own->getCallType() == CT_BUILTIN;
 }
 
+bool qore_caller_in_untrusted_module_init() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return false;
+    }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    return !mib.lift && mib.loader_untrusted;
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
@@ -8212,6 +8221,39 @@ static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
 
 int qore_caller_sandbox_state() {
     return qore_caller_sandbox_state_intern(nullptr);
+}
+
+bool qore_caller_has_restricted_code() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // restricted code: a sandbox that does not trust its code governs its Program, or it is sandboxed without a manager
+    // (fails closed, as qore_program_is_restricted())
+    auto restricted = [] (const QoreProgram* pgm) -> bool {
+        return pgm && qore_program_is_restricted(pgm);
+    };
+    // the same scope as qore_caller_sandbox_state_intern()
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())
+        && td->sandboxed_caller->isRestricted()) {
+        return true;
+    }
+    if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (restricted(td->current_pgm)) {
+            return true;
+        }
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            break;
+        }
+        if (restricted(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    return !mib && td->current_pgm != td->call_program_context && restricted(td->call_program_context);
 }
 
 bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
@@ -9611,6 +9653,8 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
     if (!qore_caller_is_sandboxed(&sandboxed_pgm_id)) {
         return;
     }
+    // decided before this record is pushed: an outer record of the caller is still the thread's
+    restricted = qore_caller_has_restricted_code();
     previous = td->sandboxed_caller;
     td->sandboxed_caller = this;
     pushed = true;
