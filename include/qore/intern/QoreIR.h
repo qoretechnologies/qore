@@ -5312,6 +5312,15 @@ public:
     */
     bool needs_call_frame = false;
 
+    //! true if the code of the function runs in a Program that allows the debugger, so that the code that it calls
+    //! (a callee, or a destructor that a release runs) can replace its locals and parameters by name with
+    //! set_local_var_value()
+    /** The execution tiers then read the variables again after such code, as they read them again after a debugger's
+        step event: the JIT creates the reload epoch of the function at its entry, and the IR interpreter and the JIT
+        reload the locals after a release that can run a destructor (qore#7646)
+    */
+    bool reflective_frame = false;
+
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code — never referenced by Invoke expression subtrees,
     // delegate-to-AST statements, or closure captures.  For these locals, the LLVM

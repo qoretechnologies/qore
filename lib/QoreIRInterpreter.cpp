@@ -2217,6 +2217,11 @@ struct IRCallFrame {
     //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
     //! so that the members used in every call keep their offsets
     QoreIRDebugNest dbg_nest;
+    //! a release in a reflective frame (QoreIRFunction::reflective_frame) may have run a destructor that replaced a
+    //! local by name: the next instruction invalidates the caches of the locals (qore#7646); set and read only by a
+    //! reflective frame (and on an exception branch), and not reset for a call: a value left by an earlier call of the
+    //! pooled frame only makes a reflective frame invalidate its caches once more, so that other frames pay nothing
+    bool reflective_release_pending = false;
 };
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
@@ -11820,6 +11825,87 @@ static QORE_IR_COLD_NOINLINE void qore_ir_raise_parent_slot_count_error(const Qo
         parent_slot_cache ? parent_slot_cache->size() : static_cast<size_t>(0));
 }
 
+//! Returns true if releasing the value can release an object, whose destructor runs user code
+static bool qore_ir_value_may_hold_object(const QoreValue& value) {
+    if (!value.hasNode()) {
+        return false;
+    }
+    switch (value.getType()) {
+        case NT_STRING:
+        case NT_BINARY:
+        case NT_NUMBER:
+        case NT_DATE:
+            return false;
+        default:
+            return true;
+    }
+}
+
+//! Returns true if the instruction, which is about to run in a reflective frame, can release a value that may hold an
+//! object: an update of an lvalue that may hold one (qore_ir_instruction_may_release_object()), the release of the
+//! temporaries of a statement (DiscardTemps) when one of them may hold an object, and a call when one of the arguments
+//! that it consumes may (qore#7646); decided before the instruction runs from the values that it will release
+static bool qore_ir_instruction_may_release_value_holding_object(const IRCallFrame& frame,
+        const QoreIRInstruction* inst) {
+    if (qore_ir_instruction_may_release_object(inst)) {
+        return true;
+    }
+    if (inst->opcode == QoreIROpcode::DiscardTemps) {
+        // the temporaries above the mark of the statement's temp scope (the nearest mark if it has none), as the
+        // dispatch releases them; all of them without a mark
+        size_t from = 0;
+        const auto& marks = frame.temp_cleanup_marks;
+        auto mark = std::find_if(marks.rbegin(), marks.rend(), [inst](const IRCallFrame::TempCleanupMark& m) {
+            return m.scope_id == inst->temp_scope_id;
+        });
+        if (mark == marks.rend() && !marks.empty()) {
+            mark = marks.rbegin();
+        }
+        if (mark != marks.rend()) {
+            from = mark->cleanup_size;
+        }
+        size_t count = frame.cleanup.size() > from ? frame.cleanup.size() - from : 0;
+        auto it = frame.cleanup.rbegin();
+        for (size_t i = 0; i < count; ++i, ++it) {
+            uint32_t id = *it;
+            if (id < frame.values.size() && qore_ir_value_may_hold_object(frame.values[id])) {
+                return true;
+            }
+        }
+        return false;
+    }
+    int arg_start = qore_ir_call_arg_start(inst);
+    if (arg_start >= 0) {
+        for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+            uint32_t id = inst->operands[i].id;
+            if (inst->operands[i].isValid() && id < frame.values.size()
+                    && qore_ir_value_may_hold_object(frame.values[id])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//! the per-instruction work of the frames that need it (QoreIRInterpreter::execute()): the silent-failure trace, and the
+//! reload of a reflective frame (QoreIRFunction::reflective_frame, qore#7646) after an instruction that may have released
+//! an object, whose destructor may have replaced locals of the frame on the runtime stack
+/** @return true if the caches of the frame's locals must be invalidated before the instruction runs
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_per_instruction_hooks(const QoreIRFunction& func, IRCallFrame& frame,
+        const QoreIRInstruction* inst) {
+    static constinit QoreEnvFlag trace_silent_fail_env("QORE_IR_TRACE_SILENT_FAIL");
+    if (trace_silent_fail_env.get()) {
+        qore_ir_record_silent_fail(inst);
+    }
+    if (!func.reflective_frame) {
+        return false;
+    }
+    bool invalidate = frame.reflective_release_pending;
+    frame.reflective_release_pending = qore_ir_instruction_may_release_value_holding_object(frame, inst);
+    return invalidate;
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated_set,
@@ -13101,6 +13187,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     using TempCleanupMark = IRCallFrame::TempCleanupMark;
     auto& temp_cleanup_marks = frame.temp_cleanup_marks;
 
+    // A destructor run by the release of a value that may hold an object can replace a local of a frame that
+    // reflection can reach by name (set_local_var_value()), as a callee can: in such a frame, the caches of the locals
+    // on the runtime stack are invalidated after an instruction that can release one when it changes an lvalue
+    // (qore_ir_instruction_may_release_object()), and after the release of a temporary that is or can hold an object,
+    // before the next instruction runs (qore#7646)
+    // a release of temporaries is a reload point of a reflective frame, whatever the values: the releases only set the
+    // flag (no test), and only a reflective frame reads it, in the per-instruction hooks
+
     // Returns true if the destructor of the object that the load kept for a call whose receiver it is raised an
     // exception: only such a load (see the LoadLocal of a weak-assigned local, qore#6590) has a cleanup entry, as it
     // holds a reference; any other borrows its value.  Such a load is released by its last use or with the temps of
@@ -13365,6 +13459,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (!raising->exception_target) {
             return false;
         }
+        // the temporaries released for the handler can hold an object (see the reflective frame in the dispatch)
+        frame.reflective_release_pending = true;
         cleanupToTempScope(exceptionBranchTempScope(raising), true, false, true);
         prev_block = block;
         block = raising->exception_target;
@@ -13628,7 +13724,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
     // the last instruction dispatched is recorded for dumpLastSilentFail() only when silent failures are traced
     static constinit QoreEnvFlag trace_silent_fail_env("QORE_IR_TRACE_SILENT_FAIL");
-    const bool trace_silent_fail = trace_silent_fail_env.get();
+    // the per-instruction work that only some frames do is behind one test: the silent-failure trace and the reload of
+    // a reflective frame (qore#7646)
+    const bool per_instruction_hooks = trace_silent_fail_env.get() | func.reflective_frame;
 
     // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
     auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
@@ -13707,13 +13805,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRBasicBlock* current_block = block;
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
-        // Track the last instruction dispatched so silent-failure tracing
-        // (QORE_IR_TRACE_SILENT_FAIL=1) can identify which opcode returned
-        // `ok=false` without raising an xsink exception.  Thread-local so
-        // the caller (StatementBlock::execImpl / evalTiered fallback) can
-        // read it post-return without plumbing it through the return value.
-        if (trace_silent_fail) {
-            qore_ir_record_silent_fail(inst);
+        // the per-instruction work of some frames is out of line, so that the dispatch of the others is unchanged
+        if (per_instruction_hooks && qore_ir_per_instruction_hooks(func, frame, inst)) {
+            invalidateExternalCaches();
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
