@@ -697,6 +697,7 @@ static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, 
 }
 
 QoreDataFrame::QoreDataFrame() {
+    QORE_KEYED_HASH_SITE("dataframe-1", col_index);
 }
 
 QoreDataFrame::~QoreDataFrame() {
@@ -1523,7 +1524,8 @@ QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
 
         // Unique count for string columns
         if (cd.type == ColumnType::STRING) {
-            std::unordered_set<std::string> uniq;
+            qore_keyed_string_set uniq;
+            QORE_KEYED_HASH_SITE("dataframe-5", uniq);
             for (int64_t i = 0; i < cd.n_rows; ++i) {
                 if (!cd.isNull(i)) {
                     uniq.insert(cd.str_data[i]);
@@ -2624,7 +2626,7 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         // and shared, so a snapshot only copies references to it.
         struct Snapshot {
             std::vector<Column> columns;
-            std::unordered_map<std::string, size_t> col_index;
+            df_col_index_t col_index;
             int64_t n_rows;
         };
         std::vector<Snapshot> snapshots;
@@ -3158,7 +3160,8 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
             bool is_null;
             int64_t count;
         };
-        std::unordered_map<int64_t, size_t> value_map;
+        qore_adaptive_int_map<int64_t, size_t> value_map("dataframe-6");
+        QORE_KEYED_HASH_SITE("dataframe-6", value_map);
         value_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         std::vector<IntCountEntry> entries;
         int64_t null_entry = -1;
@@ -3179,9 +3182,9 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
                 continue;
             }
             int64_t value = src.int_data[row];
-            auto it = value_map.find(value);
-            if (it == value_map.end()) {
-                value_map.emplace(value, entries.size());
+            // one search for a value that is counted and for a new one
+            auto [it, inserted] = value_map.try_emplace(value, entries.size());
+            if (inserted) {
                 entries.push_back({value, false, 1});
             } else {
                 ++entries[it->second].count;
@@ -3242,7 +3245,8 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
             bool is_null;
             int64_t count;
         };
-        std::unordered_map<std::string, size_t> value_map;
+        qore_keyed_string_map<size_t> value_map;
+        QORE_KEYED_HASH_SITE("dataframe-7", value_map);
         value_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         std::vector<StringCountEntry> entries;
         int64_t null_entry = -1;
@@ -3263,9 +3267,9 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
                 continue;
             }
             const std::string& value = src.str_data[row];
-            auto it = value_map.find(value);
-            if (it == value_map.end()) {
-                value_map.emplace(value, entries.size());
+            // one search for a value that is counted and for a new one
+            auto [it, inserted] = value_map.try_emplace(value, entries.size());
+            if (inserted) {
                 entries.push_back({value, false, 1});
             } else {
                 ++entries[it->second].count;
@@ -3402,7 +3406,8 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
         int64_t first_row;
         int64_t count;
     };
-    std::unordered_map<std::string, size_t> entry_map;
+    qore_keyed_string_map<size_t> entry_map;
+    QORE_KEYED_HASH_SITE("dataframe-8", entry_map);
     entry_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
     std::vector<CountEntry> entries;
 
@@ -3415,9 +3420,9 @@ QoreDataFrame* QoreDataFrame::valueCounts(const std::string& column, bool dropna
         }
 
         std::string key = dataFrameValueKey(src, row);
-        auto it = entry_map.find(key);
-        if (it == entry_map.end()) {
-            entry_map.emplace(std::move(key), entries.size());
+        // one search for a value that is counted and for a new one
+        auto [it, inserted] = entry_map.try_emplace(std::move(key), entries.size());
+        if (inserted) {
             entries.push_back({row, 1});
         } else {
             ++entries[it->second].count;
@@ -3541,7 +3546,8 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
 
     const ColumnData& src = *columns[idx].data;
     if (src.type == ColumnType::INT64) {
-        std::unordered_set<int64_t> seen;
+        qore_adaptive_int_set<int64_t> seen("dataframe-9");
+        QORE_KEYED_HASH_SITE("dataframe-9", seen);
         seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         bool seen_null = false;
         for (int64_t row = 0; row < n_rows; ++row) {
@@ -3559,7 +3565,8 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
         return static_cast<int64_t>(seen.size()) + (seen_null ? 1 : 0);
     }
     if (src.type == ColumnType::STRING) {
-        std::unordered_set<std::string> seen;
+        qore_keyed_string_set seen;
+        QORE_KEYED_HASH_SITE("dataframe-10", seen);
         seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         bool seen_null = false;
         for (int64_t row = 0; row < n_rows; ++row) {
@@ -3597,7 +3604,8 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
         return (seen_false ? 1 : 0) + (seen_true ? 1 : 0) + (seen_null ? 1 : 0);
     }
 
-    std::unordered_set<std::string> seen;
+    qore_keyed_string_set seen;
+    QORE_KEYED_HASH_SITE("dataframe-11", seen);
     seen.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
     for (int64_t row = 0; row < n_rows; ++row) {
         if (row && !(row % 100) && qore_check_cancel(xsink, "counting unique DataFrame values")) {

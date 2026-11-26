@@ -26,7 +26,7 @@ struct WindowSpec {
 };
 
 static bool parseWindowSpec(const QoreHashNode* spec, WindowSpec& ws,
-        const std::unordered_map<std::string, size_t>& col_index,
+        const df_col_index_t& col_index,
         ExceptionSink* xsink) {
     if (!spec) {
         return true;
@@ -123,7 +123,7 @@ __attribute__((always_inline)) static inline int windowCompareCells(const Column
 // values last, and a NaN value raises NAN-COMPARE-ERROR (qore#6100), in which case the vector is empty
 static std::vector<int64_t> computeWindowOrder(
         const std::vector<Column>& columns,
-        const std::unordered_map<std::string, size_t>& col_index,
+        const df_col_index_t& col_index,
         int64_t n_rows,
         const WindowSpec& ws,
         std::vector<int64_t>& original_to_output,
@@ -462,9 +462,11 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     // a column that is not an int or float column has only numbers or null cells here; its cells are read as floats
     if (idx_cd.type == ColumnType::INT64 && col_cd.type == ColumnType::STRING) {
         std::vector<int64_t> unique_indices;
-        std::unordered_map<int64_t, size_t> index_map;
+        qore_adaptive_int_map<int64_t, size_t> index_map("dataframe-15");
+        QORE_KEYED_HASH_SITE("dataframe-15", index_map);
         std::vector<std::string> unique_cols;
-        std::unordered_map<std::string, size_t> col_map;
+        qore_keyed_string_map<size_t> col_map;
+        QORE_KEYED_HASH_SITE("dataframe-16", col_map);
         index_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
         col_map.reserve(static_cast<size_t>(std::min<int64_t>(n_rows, 65536)));
 
@@ -477,12 +479,12 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
                 continue;
             }
             int64_t idx_val = idx_cd.int_data[i];
-            auto inserted = index_map.emplace(idx_val, unique_indices.size());
+            auto inserted = index_map.try_emplace(idx_val, unique_indices.size());
             if (inserted.second) {
                 unique_indices.push_back(idx_val);
             }
             const std::string& col_val = col_cd.str_data[i];
-            auto col_inserted = col_map.emplace(col_val, unique_cols.size());
+            auto col_inserted = col_map.try_emplace(col_val, unique_cols.size());
             if (col_inserted.second) {
                 unique_cols.push_back(col_val);
             }
@@ -579,14 +581,18 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     // values apart: the bits of a float, the microseconds of a date), and labelled with their string forms; a row
     // with a null index or columns cell is left out, as in the int/string path above (qore#6099)
     std::vector<std::string> unique_indices;
-    std::unordered_map<std::string, size_t> index_map;
+    qore_keyed_string_map<size_t> index_map;
+    QORE_KEYED_HASH_SITE("dataframe-17", index_map);
     std::vector<std::string> unique_cols;
-    std::unordered_map<std::string, size_t> col_map;
+    qore_keyed_string_map<size_t> col_map;
+    QORE_KEYED_HASH_SITE("dataframe-18", col_map);
     // the column names made so far, to raise an error for two values that make the same name
-    std::unordered_map<std::string, std::string> col_names;
+    qore_keyed_string_map<std::string> col_names;
+    QORE_KEYED_HASH_SITE("dataframe-19", col_names);
     col_names[index_col] = std::string();
     // the labels of the index values of a column that holds any value, to raise an error for two that are the same
-    std::unordered_set<std::string> index_labels;
+    qore_keyed_string_set index_labels;
+    QORE_KEYED_HASH_SITE("dataframe-20", index_labels);
     // the result row and column of each row, or no_slot for a row that is left out, so that the keys are made once
     constexpr size_t no_slot = std::numeric_limits<size_t>::max();
     std::vector<size_t> row_ri(n_rows, no_slot);
@@ -596,7 +602,7 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     // column is its own key and is not copied
     std::string key_buf;
     std::string label;
-    auto slot = [&] (const ColumnData& cd, int64_t i, std::unordered_map<std::string, size_t>& map, size_t& rv,
+    auto slot = [&] (const ColumnData& cd, int64_t i, qore_keyed_string_map<size_t>& map, size_t& rv,
             bool& added, const std::string& name) -> int {
         const std::string* key = &key_buf;
         if (cd.type == ColumnType::STRING) {
