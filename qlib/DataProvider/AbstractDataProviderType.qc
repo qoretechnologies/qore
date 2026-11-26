@@ -1285,7 +1285,8 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     #! Marks the type, and the types and fields that it holds, as shared by every Program of the process
     /** For a type that a module builds in a call that a sandbox governs and then keeps for every caller, such as in a
         process-wide cache: sandboxed code cannot change it afterwards, as if code that no sandbox governs had created
-        it (qore#6843, qore#6863).  It cannot be undone.
+        it (qore#6843, qore#6863).  It cannot be undone; a field or type that code adds to the type afterwards is
+        frozen as well, with the types that it holds, also a type that sandboxed code created (qore#7728).
 
         Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"),
         such as a shared REST schema that caches the types that it builds, also marks the type as a shared object
