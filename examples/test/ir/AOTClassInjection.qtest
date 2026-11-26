@@ -170,6 +170,8 @@ as base: stand
             \batchTypeFailureTest());
         addTestCase("a source whose class leads back to an injected class of a preloaded object",
             \sourceParseTest());
+        addTestCase("a source whose class leads back to an injected class of a preloaded object, and that is not "
+            "%modern", \sourceParseOptionsTest());
         set_return_value(main());
     }
 
@@ -271,6 +273,34 @@ as base: stand
         assertNeq(0, rc, "qcc: " + out);
         assertRegex("'X' cannot be injected in place of '(::)?Y': the injection leads back to the class itself",
             checkTeardown(out));
+    }
+
+    sourceParseOptionsTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        list<string> srcs = (writeFile(tmp.path, "a.qr", ScriptSourceA), writeFile(tmp.path, "b.qr", ScriptSourceB));
+        string obj_dir = tmp.path + DirSep + "obj";
+        mkdir(obj_dir);
+        string out = backquote(sprintf("%s QORE_AOT_TEST_INJECTED_CLASS=X=Y %s -O0 -c --output-dir=%s %s 2>&1", env,
+            qcc_bin, obj_dir, (foldl $1 + " " + $2, srcs)));
+        list<string> objs = glob(obj_dir + DirSep + "*.qo");
+        assertEq(2, objs.size(), "qcc: " + out);
+        # only the object of the other source is preloaded with the source compiled below
+        foreach string obj in (objs) {
+            if (obj =~ /_a_qr\.qo$/) {
+                unlink(obj);
+            }
+        }
+        # the first source again, as a .q file, which is not %modern: the compile fails once the source is committed,
+        # before the preloaded objects are finalized
+        string src = writeFile(tmp.path, "a.q", ScriptSourceA);
+        string out_dir = tmp.path + DirSep + "out";
+        mkdir(out_dir);
+        int rc;
+        out = backquote(sprintf("%s %s %s -O0 -c -L %s --output-dir=%s %s 2>&1", env, teardownEnv(), qcc_bin,
+            obj_dir, out_dir, src), \rc);
+        assertNeq(0, rc, "qcc: " + out);
+        assertRegex("AOT compilation requires %modern parse semantics", checkTeardown(out));
     }
 
     #! the environment of qcc for the injections and the typedef with a type that is not found given, if any

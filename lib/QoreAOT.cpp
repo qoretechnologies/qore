@@ -30298,6 +30298,41 @@ static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preload
     return false;
 }
 
+//! Checks the class injections of the preloaded siblings when a compile ends after their source-parse resolution
+//! and before their finalization, which checks them itself (qore#7664)
+/** The commit of the source attaches the base classes of its classes, which the classes of the siblings can inherit:
+    a class that then leads back to the class that it is injected in place of releases its reference, also when the
+    compile fails before the finalization.  Declared after the preload, so that it runs while the deserializer exists.
+*/
+class AOTSiblingInjectionCheckGuard {
+public:
+    //! Arms the guard once the source-parse resolution has succeeded
+    void arm(QoreAOTBinaryMultiDeserializer* m) {
+        mdes = m;
+    }
+
+    //! Disarms the guard when the finalization, which checks the injections, runs
+    void disarm() {
+        mdes = nullptr;
+    }
+
+    ~AOTSiblingInjectionCheckGuard() {
+        if (!mdes) {
+            return;
+        }
+        // the compile has failed already: its error is reported, and the result of the check is not
+        try {
+            std::string ignored;
+            mdes->checkSourceParseClassInjections(ignored);
+        } catch (...) {
+            // nothing can be reported from a destructor; the check itself only builds an error string
+        }
+    }
+
+private:
+    QoreAOTBinaryMultiDeserializer* mdes = nullptr;
+};
+
 struct QoreAOTSiblingPreload {
     //! The blob bytes the preloaded shells were built from.
     /** They must outlive the deserializer: the symbol index, the debug metadata
@@ -30961,6 +30996,7 @@ bool QoreAOT::compileScriptFilesBatch(
     // Resolve the preloaded siblings far enough that one parseCommit() can
     // commit the combined source/sibling program, then finalize them after it --
     // the same two-phase handoff the single-source path performs.
+    AOTSiblingInjectionCheckGuard injection_check_guard;
     if (sibling_preload.mdes) {
         ExceptionSink pch_xsink;
         ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
@@ -30981,6 +31017,7 @@ bool QoreAOT::compileScriptFilesBatch(
             aot_compile_failed_in_preload = true;
             return false;
         }
+        injection_check_guard.arm(sibling_preload.mdes.get());
     }
     {
         AOTSourceParseGuard source_guard(sibling_parse);
@@ -31012,6 +31049,7 @@ bool QoreAOT::compileScriptFilesBatch(
             &sibling_preload.source_labels);
         AOTParseSourceGuard parse_source_guard(&batch_target_set);
         std::string resolve_error;
+        injection_check_guard.disarm();
         if (!sibling_preload.mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
             aot_compile_failed_in_preload = true;
@@ -32304,6 +32342,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // deserializer-driven UserVariantBase construction can call
     // parse_get_parse_options() (same invariant the runtime module-init path
     // observes — see QoreAOTRuntime.cpp:6911).
+    AOTSiblingInjectionCheckGuard injection_check_guard;
     if (sibling_mdes) {
         ExceptionSink pch_xsink;
         ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
@@ -32323,6 +32362,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             aot_compile_failed_in_preload = true;
             return false;
         }
+        injection_check_guard.arm(sibling_mdes.get());
     }
 
     {
@@ -32358,6 +32398,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         std::string resolve_error;
+        injection_check_guard.disarm();
         if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
             aot_compile_failed_in_preload = true;

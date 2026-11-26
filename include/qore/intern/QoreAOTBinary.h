@@ -4424,9 +4424,11 @@ public:
         place of through the classes of another one; and, when a source is parsed with the blobs preloaded, again
         after the source is committed, which attaches the base classes of the source's classes that an AOT class can
         inherit (QoreAOTBinaryMultiDeserializer::finalizeAfterSourceParse()).  Every class that leads back to itself
-        releases its reference before the image is refused, so that none of them keeps its classes alive.  Classes
-        whose base classes are not attached yet, because the type resolution failed before reaching them, cannot close
-        a cycle through them.
+        releases its reference before the image is refused, so that none of them keeps its classes alive.  The walk
+        follows the base classes attached so far: a class whose own base classes are not attached yet, because the
+        type resolution failed before reaching it, is still found as the end of a cycle that the base classes attached
+        before it form.  A compile that ends between the source-parse resolution and finalizeAfterSourceParse() checks
+        them with QoreAOTBinaryMultiDeserializer::checkSourceParseClassInjections().
     */
     bool checkClassInjectionCycles(std::string& error);
 
@@ -5241,6 +5243,14 @@ public:
             [&error](QoreAOTBinaryDeserializer& sess) {
                 return sess.installSourceParseIRFallbacks(error);
             });
+    }
+
+    //! Checks the class injections of every session after resolveForSourceParse() (qore#7664)
+    /** For a compile that ends before finalizeAfterSourceParse(), which checks them itself: the commit of the source
+        can have attached base classes that close a cycle.  A class whose reference was already released is skipped.
+    */
+    bool checkSourceParseClassInjections(std::string& error) {
+        return checkClassInjectionCycles(error);
     }
 
     //! Finish AOT-only post-commit work after source parseCommit().
