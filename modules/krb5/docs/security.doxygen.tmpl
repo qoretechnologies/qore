@@ -98,12 +98,53 @@
     \c DIR backends) honour %Qore filesystem sandboxing: every read, write,
     or create operation passes through
     \c QoreSandboxManagerHelper::checkFilesystemAccess() against the
-    backend's underlying path. Non-filesystem backends (\c MEMORY, \c API,
-    \c KCM, \c KEYRING, \c MSLSA for caches; \c MEMORY for keytabs) are
-    allowed through without a filesystem check. Any backend outside these
-    two allowlists is rejected with a \c KRB5-SANDBOX-ERROR exception so
-    that new MIT Kerberos backends cannot accidentally become
-    sandbox-reachable without review.
+    backend's underlying path. Non-filesystem credential caches and \c MEMORY
+    keytabs are kept per isolation domain (see @ref krb5sec_cache_isolation).
+    Any backend outside these
+    allowlists is rejected with a \c KRB5-SANDBOX-ERROR exception so that new
+    MIT Kerberos backends cannot accidentally become sandbox-reachable without
+    review.
+
+    @section krb5sec_cache_isolation Credential Caches and Keytabs of Sandboxed Code
+
+    Credential caches that are not file based are shared by name: \c MEMORY
+    caches in the process, \c KEYRING caches by the OS user.  The caches of
+    code that a sandbox governs are therefore kept per isolation domain (the
+    domain of its sandbox, see \c SandboxManager::setIsolationDomain(), or its
+    own %Program for a sandbox without one):
+    - a \c MEMORY cache name, or a \c KEYRING cache name in the \c process
+      or \c thread keyring, that such code gives refers to a cache of its
+      domain, which no other code sees; the names that the module gives it back
+      (\c getName(), \c getFullName(), the cache listing) are the names that
+      it gave (other code that opens or lists them sees their real names); a
+      \c MEMORY keytab name refers to a keytab of its domain in the same way
+    - its default cache is the \c MEMORY:default cache of its domain, and its
+      default keytab the \c MEMORY:default keytab of its domain; the default
+      cache and keytab of the process are not visible to it
+    - the caches of other code are not visible to it: a cache object of
+      other code that is given to it, or another domain's cache found in a
+      cache collection, raises \c KRB5-SANDBOX-ERROR
+    - caches that cannot be kept apart per domain, as other processes of the
+      session or of the OS user share them (\c API, \c KCM, \c MSLSA, and the
+      \c KEYRING caches in the \c session, \c user and \c persistent keyrings
+      or with a legacy name), raise \c KRB5-SANDBOX-ERROR
+    - a GSSAPI initiator needs a credential of a cache of its own
+      (\c GssCredential::fromCredentialCache()): the default credentials of
+      the process are not visible to it; its client keytab, with which the
+      library gets a ticket for a cache that has none, is the \c MEMORY:client
+      keytab of its domain, not the client keytab of the process
+      (\c KRB5_CLIENT_KTNAME); this needs \c gss_acquire_cred_from() in the
+      GSSAPI library (MIT Kerberos), and raises \c KRB5-SANDBOX-ERROR without it; a GSSAPI acceptor needs a credential of
+      a keytab of its own (\c GssCredential::fromKeytab()), as the default
+      keytab of the process is not visible to it; a \c GssCredential object that trusted
+      code made and gives to it is a credential that it was given, which it
+      can use
+    - code in several isolation domains at once (the sandboxes of different
+      tenants govern it) has no caches that are not file based
+
+    Code that runs with the system policy (a capability that trusted code made
+    with \c SandboxManager::createSystemPolicyCall()) uses the caches of the
+    process.
 
     Credential-cache collection enumeration also checks each discovered cache
     before reading cache details. If the active filesystem sandbox denies a

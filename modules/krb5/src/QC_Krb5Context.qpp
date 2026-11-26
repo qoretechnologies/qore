@@ -126,22 +126,35 @@ string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
 }
 
 //! Returns the configured default credential-cache name
-/** @throw KRB5-CACHE-ERROR if no default credential cache name is available
+/** For code that a sandbox governs, \c "MEMORY:default", a cache of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-CACHE-ERROR if no default credential cache name is available
+    @throw KRB5-SANDBOX-ERROR the code belongs to more than one isolation domain or is not known
 */
 string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
     return ctx->getDefaultCredentialCacheName(xsink);
 }
 
 //! Returns the configured default keytab name
-/** @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+/** For code that a sandbox governs, \c "MEMORY:default", a keytab of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
     return ctx->getDefaultKeytabName(xsink);
 }
 
 //! Opens the default credential cache
-/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+/** For code that a sandbox governs, the \c MEMORY:default cache of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened
+    @throw KRB5-SANDBOX-ERROR the code belongs to more than one isolation domain or is not known
 */
 Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
     SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->openDefaultCredentialCache(xsink));
@@ -156,10 +169,14 @@ Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
 
 //! Opens a credential cache by name
 /** @param cache_name a cache spec such as \c "FILE:/tmp/krb5cc_test" or
-    \c "MEMORY:module-krb5"
+    \c "MEMORY:module-krb5"; for code that a sandbox governs, a cache that is
+    not file based is a cache of its isolation domain (see
+    @ref krb5sec_cache_isolation)
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-CACHE-ERROR if the cache name is empty or cannot be resolved
+    @throw KRB5-SANDBOX-ERROR the cache cannot be kept apart for the isolation
+    domain of the code that a sandbox governs
 */
 Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
     if (krb5_check_no_nul(cache_name, "credential cache name", "credential cache names", "KRB5-CACHE-ERROR", false,
@@ -177,8 +194,13 @@ Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
 }
 
 //! Opens the default keytab
-/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+/** For code that a sandbox governs, the \c MEMORY:default keytab of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 Krb5Keytab Krb5Context::openDefaultKeytab() {
     SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openDefaultKeytab(xsink));
@@ -192,11 +214,16 @@ Krb5Keytab Krb5Context::openDefaultKeytab() {
 }
 
 //! Opens a keytab by name
-/** @param keytab_name a keytab spec such as \c "FILE:/etc/krb5.keytab" or
+/** For code that a sandbox governs, a \c MEMORY keytab name refers to a keytab of its isolation
+    domain (see @ref krb5sec_cache_isolation)
+
+    @param keytab_name a keytab spec such as \c "FILE:/etc/krb5.keytab" or
     \c "MEMORY:module-krb5"
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-KEYTAB-ERROR if the keytab name is empty or cannot be resolved
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
     if (krb5_check_no_nul(keytab_name, "keytab name", "keytab names", "KRB5-KEYTAB-ERROR", false, xsink)) {
@@ -215,7 +242,9 @@ Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
 //! Creates and initializes an in-memory credential cache with the given principal
 /** The MIT Kerberos \c MEMORY cache backend is process-wide: reusing the same
     \a cache_name returns the same underlying cache, so callers that need
-    isolation should use distinct cache names.
+    isolation should use distinct cache names.  The caches of code that a
+    sandbox governs are kept per isolation domain (see
+    @ref krb5sec_cache_isolation).
 
     @param principal the primary principal to associate with the cache
     @param cache_name the in-memory cache identifier without the \c MEMORY:
@@ -363,7 +392,9 @@ Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreK
 //! Lists all credential caches known to the Kerberos credential cache collection
 /** Enumerates credential caches using the MIT krb5 credential cache
     collection API. This discovers caches across all configured backends
-    (FILE, MEMORY, KCM, KEYRING, etc.).
+    (FILE, MEMORY, KCM, KEYRING, etc.).  For code that a sandbox governs, the
+    caches that are not file based of other code are not listed (see
+    @ref krb5sec_cache_isolation).
 
     Caches whose principal cannot be read are included with
     \c has_principal set to \c False and \c principal set to \c NOTHING.
