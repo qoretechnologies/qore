@@ -1182,6 +1182,22 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
             : False;
     }
 
+    #! Returns True if the given type accepts no value: there is no type, or it is the @ref nothing type
+    /** Use this to decide whether a request or response type describes a value: an action whose request type is the
+        @ref nothing type takes no request, and one whose response type is the @ref nothing type returns no body.  A
+        nothing type is an object, so testing the type for truth or existence counts it as present.
+
+        @param type the type to check; may be @ref nothing
+
+        @return True if \a type is missing or is the @ref nothing type (it accepts only @ref nothing); False if it
+        accepts a value, including an "or nothing" type such as \c *string, which accepts a value or @ref nothing
+
+        @since DataProvider 3.13
+    */
+    static bool isNothingType(*AbstractDataProviderType type) {
+        return !type || type.getBaseTypeCode() == NT_NOTHING;
+    }
+
     #! get the given field type if it exists, otherwise return @ref nothing
     *AbstractDataProviderType getFieldType(string field_name) {
         *AbstractDataField field = getField(field_name);
