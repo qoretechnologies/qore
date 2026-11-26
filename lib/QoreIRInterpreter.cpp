@@ -26350,7 +26350,9 @@ static QORE_INTERN_ALWAYS_INLINE int qore_ir_plus_equals_on(LValueHelper& v, Qor
     if (*xsink) {
         return -1;
     }
-    result = rv.release();
+    // the value with its reference as the operation gave it: ValueHolder::release() would convert an opaque reference
+    // (the target of an opaque store) to an ordinary pointer, which the value of the operator is not
+    result.swap(*rv);
     return 0;
 }
 
