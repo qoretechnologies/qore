@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# Inlined scalar method bodies (the exact base class and up to three overrides)
+# must report the same debugger function events as the ordinary method call,
+# including when the debugger is attached in the middle of a loop whose class
+# admission was hoisted to the function entry.  The METHOD lines below are
+# matched by line number in OverrideRecorder; keep them in place.
+
+class OvBase {
+    int next(int value) {
+        return value + 17; # BASE_INT line 15
+    }
+    float nextf(float value) {
+        return value + 17.0; # BASE_FLOAT line 18
+    }
+}
+class OvFirst inherits OvBase {
+    int next(int value) {
+        return value + 19; # FIRST_INT line 23
+    }
+    float nextf(float value) {
+        return value + 19.0; # FIRST_FLOAT line 26
+    }
+}
+class OvSecond inherits OvBase {
+    int next(int value) {
+        return value + 23; # SECOND_INT line 31
+    }
+    float nextf(float value) {
+        return value + 23.0; # SECOND_FLOAT line 34
+    }
+}
+
+const Lines = {
+    "15": "base-int", "18": "base-float",
+    "23": "first-int", "26": "first-float",
+    "31": "second-int", "34": "second-float",
+};
+
+class OverrideRecorder inherits DebugProgram {
+    public {
+        hash<string, int> entries = {};
+        hash<string, int> exits = {};
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *string key = Lines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++entries{key};
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *string key = Lines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++exits{key};
+        }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+OverrideRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+int attach_at = -1;
+
+sub maybeAttach(int i) {
+    if (i == attach_at) {
+        recorder.addProgram(pc);
+    }
+}
+
+# non-loop call sites: combined per-call override guard
+int sub ovIntCall(OvBase input, int value) {
+    OvBase receiver = input;
+    return receiver.next(value);
+}
+float sub ovFloatCall(OvBase input, float value) {
+    OvBase receiver = input;
+    return receiver.nextf(value);
+}
+
+# loop call sites: override class admission hoisted to the function entry
+int sub ovIntLoop(OvBase a, OvBase b, int count) {
+    int value = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 2 == 0 ? a : b).next(value) & 65535;
+    }
+    return value;
+}
+float sub ovFloatLoop(OvBase a, OvBase b, int count) {
+    float value = 0.0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 2 == 0 ? a : b).nextf(value);
+    }
+    return value;
+}
+# loop call sites where the debugger is attached during the loop
+int sub ovIntLoopAttach(OvBase a, OvBase b, int count) {
+    int value = 0;
+    for (int i = 0; i < count; ++i) {
+        maybeAttach(i);
+        value = (i % 2 == 0 ? a : b).next(value) & 65535;
+    }
+    return value;
+}
+float sub ovFloatLoopAttach(OvBase a, OvBase b, int count) {
+    float value = 0.0;
+    for (int i = 0; i < count; ++i) {
+        maybeAttach(i);
+        value = (i % 2 == 0 ? a : b).nextf(value);
+    }
+    return value;
+}
+
+sub check(bool cond, string msg) {
+    if (!cond) {
+        throw "OVERRIDE-DEBUGGER-TEST", msg;
+    }
+}
+
+sub checkEvents(hash<string, int> expected, string label) {
+    foreach string key in (Lines.iterator()) {
+        int want = expected{key} ?? 0;
+        check((recorder.entries{key} ?? 0) == want && (recorder.exits{key} ?? 0) == want,
+            sprintf("%s: %s entry/exit events: %d/%d, expected %d", label, key, recorder.entries{key} ?? 0,
+                recorder.exits{key} ?? 0, want));
+    }
+    recorder.entries = {};
+    recorder.exits = {};
+}
+
+# expected results of ovIntLoop()/ovFloatLoop() for the given receivers
+int sub intLoopResult(int ia, int ib, int count) {
+    int value = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (value + (i % 2 == 0 ? ia : ib)) & 65535;
+    }
+    return value;
+}
+float sub floatLoopResult(float fa, float fb, int count) {
+    float value = 0.0;
+    for (int i = 0; i < count; ++i) {
+        value += i % 2 == 0 ? fa : fb;
+    }
+    return value;
+}
+
+OvBase base();
+OvFirst first();
+OvSecond second();
+
+sub runAll(int count) {
+    check(ovIntCall(base, 1) == 18 && ovIntCall(first, 1) == 20 && ovIntCall(second, 1) == 24, "int call");
+    check(ovFloatCall(base, 1.0) == 18.0 && ovFloatCall(first, 1.0) == 20.0 && ovFloatCall(second, 1.0) == 24.0,
+        "float call");
+    check(ovIntLoop(first, second, count) == intLoopResult(19, 23, count), "int override loop");
+    check(ovFloatLoop(first, second, count) == floatLoopResult(19.0, 23.0, count), "float override loop");
+    check(ovIntLoop(base, base, count) == intLoopResult(17, 17, count), "int base loop");
+    check(ovFloatLoop(base, base, count) == floatLoopResult(17.0, 17.0, count), "float base loop");
+}
+
+# warm up (and verify the results of) every site without a debugger
+for (int i = 0; i < 32; ++i) {
+    runAll(8);
+}
+checkEvents({}, "no debugger");
+
+# debugger attached before the calls
+recorder.addProgram(pc);
+runAll(8);
+recorder.removeProgram(pc);
+checkEvents({
+    "base-int": 1 + 8, "base-float": 1 + 8,
+    "first-int": 1 + 4, "first-float": 1 + 4,
+    "second-int": 1 + 4, "second-float": 1 + 4,
+}, "attached before");
+
+# detaching restores the native paths without events
+runAll(8);
+checkEvents({}, "detached");
+
+# debugger attached in the middle of loops that admitted the override classes at entry
+attach_at = 5;
+check(ovIntLoopAttach(first, second, 12) == intLoopResult(19, 23, 12), "int attach loop");
+recorder.removeProgram(pc);
+check(ovFloatLoopAttach(first, second, 12) == floatLoopResult(19.0, 23.0, 12), "float attach loop");
+recorder.removeProgram(pc);
+check(ovIntLoopAttach(base, base, 12) == intLoopResult(17, 17, 12), "int base attach loop");
+recorder.removeProgram(pc);
+check(ovFloatLoopAttach(base, base, 12) == floatLoopResult(17.0, 17.0, 12), "float base attach loop");
+recorder.removeProgram(pc);
+# iterations 5..11 run under the debugger: 6, 8, 10 use the first receiver, 5, 7, 9, 11 the second
+checkEvents({
+    "first-int": 3, "second-int": 4, "first-float": 3, "second-float": 4,
+    "base-int": 7, "base-float": 7,
+}, "attached during loop");
+
+attach_at = -1;
+runAll(8);
+checkEvents({}, "restored");
+printf("override-debugger: ok\n");

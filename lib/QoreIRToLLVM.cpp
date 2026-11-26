@@ -13992,6 +13992,26 @@ llvm::Value* QoreIRToLLVM::emitAOTFixedHashRemap(const BatchCalleeInfo& info,
          xsink_arg}, module, llvm_func, inst);
 }
 
+//! Returns an i1 that is true when no Program of the process has a debugger attached (qore#7676)
+/** A call through a fast entry or a summary of the callee is not reported to a debugger, so AOT code takes one only
+    while qore_rt_aot_direct_call_mode is below 2; with a debugger attached the call is made by the call path, which
+    reports it.  The counter is loaded at each call, as a debugger can be attached while the caller runs.  It is
+    referenced weakly so that an older libqore can map the module and refuse it with its runtime identity check
+    before any generated code runs, instead of failing in dlopen() with an unresolved symbol
+*/
+static llvm::Value* qore_llvm_emit_no_debugger_attached(llvm::IRBuilder<>& b, llvm::Module& module) {
+    llvm::LLVMContext& ctx = module.getContext();
+    llvm::Type* i32_type = llvm::Type::getInt32Ty(ctx);
+    auto* mode_gv = llvm::cast<llvm::GlobalVariable>(module.getOrInsertGlobal("qore_rt_aot_direct_call_mode",
+        i32_type));
+    mode_gv->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+    mode_gv->setAlignment(llvm::Align(4));
+    llvm::LoadInst* mode = b.CreateAlignedLoad(i32_type, mode_gv, llvm::Align(4), "aot_direct_call_mode");
+    // pairs with the release increment of qore_aot_debug_program_change()
+    mode->setAtomic(llvm::AtomicOrdering::Acquire);
+    return b.CreateICmpULT(mode, llvm::ConstantInt::get(i32_type, 2), "aot_no_debugger");
+}
+
 llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, int32_t slot, llvm::Function* fast_fn,
@@ -14202,6 +14222,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     if (take_over && !owned_fn) {
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
+    // a call that a debugger must see is made by the runtime path, which reports it (qore#7676)
+    can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, qore_llvm_emit_no_debugger_attached(*builder, module));
     llvm::AllocaInst* method_context = nullptr;
     if ((take_over && callee_info.guarded_method_entry) || (object_base && callee_info.receiver_context_fast_entry)) {
         auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
@@ -14418,6 +14440,85 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         result->addIncoming(llvm::Constant::getNullValue(fast_result->getType()), ref_error_bb);
     }
     (void)inst;
+    return result;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitAotDebuggerGuardedFastCall(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, int32_t slot, const BatchCalleeInfo& callee_info,
+        const std::vector<llvm::Value*>& raw_args, const std::vector<uint32_t>& raw_arg_ids,
+        const std::vector<llvm::Value*>& boxed_args, llvm::Value* arg_cleanups, int nargs,
+        bool has_arg_cleanups, const char* fallback_name, const char* fallback_consume_name,
+        llvm::BasicBlock* exception_target, const std::function<llvm::Value*(bool&)>& emit_fast,
+        bool& fast_nothrow, std::string& error) {
+    assert(raw_args.size() == static_cast<size_t>(nargs) && boxed_args.size() == static_cast<size_t>(nargs));
+    llvm::BasicBlock* fast_bb = llvm::BasicBlock::Create(ctx, "aot_no_debugger_call", llvm_func);
+    llvm::BasicBlock* debugger_bb = llvm::BasicBlock::Create(ctx, "aot_debugger_call", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "aot_debugger_call_merge", llvm_func);
+    builder->CreateCondBr(qore_llvm_emit_no_debugger_attached(*builder, module), fast_bb, debugger_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+
+    builder->SetInsertPoint(fast_bb);
+    fast_nothrow = false;
+    llvm::Value* fast_result = emit_fast(fast_nothrow);
+    if (!fast_result) {
+        assert(!error.empty());
+        return nullptr;
+    }
+    builder->CreateBr(merge_bb);
+    fast_bb = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(debugger_bb);
+    llvm::Value* args_array = nargs ? allocCallArray(llvm_func, static_cast<unsigned>(nargs))
+        : llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx));
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT debugger call argument boxing")) {
+            error = "cancelled during AOT debugger call argument boxing";
+            return nullptr;
+        }
+        llvm::Value* boxed = boxed_args[i] ? boxed_args[i] : boxValue(raw_args[i], raw_arg_ids[i]);
+        builder->CreateStore(boxed, builder->CreateGEP(i64_type, args_array, llvm::ConstantInt::get(i32_type, i)));
+    }
+    llvm::Value* debugger_result;
+    if (has_arg_cleanups) {
+        auto helper = module.getOrInsertFunction(fallback_consume_name, llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+        debugger_result = builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+            args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    } else {
+        auto helper = module.getOrInsertFunction(fallback_name, llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+        debugger_result = builder->CreateCall(helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+            args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+    }
+    debugger_result = emitFallbackResultToFastReturnKind(module, callee_info, debugger_result);
+    if (fast_nothrow) {
+        // the code after the call checks no exception: this call's exception is checked here
+        if (exception_target) {
+            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* has_exception = builder->CreateICmpNE(builder->CreateCall(has_ex, {xsink_arg}),
+                llvm::ConstantInt::get(i64_type, 0));
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "aot_debugger_call_cont", llvm_func);
+            builder->CreateCondBr(has_exception, getExceptionEdgeTarget(module, llvm_func, inst, exception_target),
+                cont_bb);
+            builder->SetInsertPoint(cont_bb);
+        } else {
+            emitExceptionCheck(module, llvm_func, inst);
+        }
+    }
+    builder->CreateBr(merge_bb);
+    debugger_bb = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
+    if (debugger_result->getType() != fast_result->getType()) {
+        error = "internal error: the result of a call made with a debugger attached does not have the type of the "
+            "fast entry's result";
+        return nullptr;
+    }
+    llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), 2, "aot_debugger_call_result");
+    result->addIncoming(fast_result, fast_bb);
+    result->addIncoming(debugger_result, debugger_bb);
     return result;
 }
 
@@ -25566,42 +25667,61 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_context_independent_fast_entry_call
                             && aot_approach_b_callee == aot_invoke_context_independent_callee
                             && take_over_slots.slots.empty()) {
-                        std::vector<llvm::Value*> call_args;
-                        call_args.reserve(aot_approach_b_callee->num_params + 2);
-                        for (unsigned i = 0; i < aot_approach_b_callee->num_params; ++i) {
-                            if (i && !(i % 100)
-                                    && qore_check_cancel(nullptr,
-                                        "AOT invoke context-independent fast-entry argument lowering")) {
-                                error = "cancelled during AOT invoke context-independent fast-entry argument lowering";
-                                return false;
-                            }
-                            call_args.push_back(getFastEntryCallArgument(
-                                    *aot_approach_b_callee, i, raw_args,
-                                    raw_arg_ids, boxed_args, module));
-                        }
-                        call_args.push_back(aot_ctx_arg);
-                        call_args.push_back(xsink_arg);
-                        bool summary_nothrow = false;
-                        // the frame of the call, also when the callee's body summary takes its place
+                        // while a debugger is attached, the call is made through the runtime, which reports it
+                        // (qore#7676)
                         uint64_t frame_expr_bits;
                         std::memcpy(&frame_expr_bits, &inv->expr, sizeof(frame_expr_bits));
-                        AotInlineCallFrame frame = emitPushAotInlineCallFrame(
-                            const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits), *aot_approach_b_callee,
-                            inst, module, llvm_func);
-                        result = emitAOTImportedSummary(
-                            *aot_approach_b_callee, call_args, aot_ctx_arg,
-                            module, aot_invoke_context_independent_fn,
-                            &summary_nothrow);
-                        const bool inline_body = result;
-                        if (!result) {
-                            frame.useCallerStatement(module);
-                            result = builder->CreateCall(
-                                aot_invoke_context_independent_fn, call_args);
+                        const int32_t call_slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits);
+                        auto except_it = block_map.find(inv->exception_target);
+                        if (except_it == block_map.end()) {
+                            error = "invoke exception target block not found";
+                            return false;
                         }
-                        endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
-                            has_arg_cleanups ? arg_cleanups : nullptr, nargs);
-                        result_proven_nothrow =
-                            summary_nothrow && !has_arg_cleanups;
+                        auto emit_fast = [&](bool& nothrow) -> llvm::Value* {
+                            std::vector<llvm::Value*> call_args;
+                            call_args.reserve(aot_approach_b_callee->num_params + 2);
+                            for (unsigned i = 0; i < aot_approach_b_callee->num_params; ++i) {
+                                if (i && !(i % 100)
+                                        && qore_check_cancel(nullptr,
+                                            "AOT invoke context-independent fast-entry argument lowering")) {
+                                    error = "cancelled during AOT invoke context-independent fast-entry argument"
+                                        " lowering";
+                                    return nullptr;
+                                }
+                                call_args.push_back(getFastEntryCallArgument(
+                                        *aot_approach_b_callee, i, raw_args,
+                                        raw_arg_ids, boxed_args, module));
+                            }
+                            call_args.push_back(aot_ctx_arg);
+                            call_args.push_back(xsink_arg);
+                            bool summary_nothrow = false;
+                            // the frame of the call, also when the callee's body summary takes its place
+                            AotInlineCallFrame frame = emitPushAotInlineCallFrame(call_slot,
+                                *aot_approach_b_callee, inst, module, llvm_func);
+                            llvm::Value* fast_result = emitAOTImportedSummary(
+                                *aot_approach_b_callee, call_args, aot_ctx_arg,
+                                module, aot_invoke_context_independent_fn,
+                                &summary_nothrow);
+                            const bool inline_body = fast_result;
+                            if (!fast_result) {
+                                frame.useCallerStatement(module);
+                                fast_result = builder->CreateCall(
+                                    aot_invoke_context_independent_fn, call_args);
+                            }
+                            endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
+                                has_arg_cleanups ? arg_cleanups : nullptr, nargs);
+                            nothrow = summary_nothrow && !has_arg_cleanups;
+                            return fast_result;
+                        };
+                        bool fast_nothrow = false;
+                        result = emitAotDebuggerGuardedFastCall(module, llvm_func, inst, call_slot,
+                            *aot_approach_b_callee, raw_args, raw_arg_ids, boxed_args, arg_cleanups, nargs,
+                            has_arg_cleanups, "qore_rt_call_direct_aot", "qore_rt_call_direct_aot_consume_args",
+                            except_it->second, emit_fast, fast_nothrow, error);
+                        if (!result) {
+                            return false;
+                        }
+                        result_proven_nothrow = fast_nothrow;
                         invoke_return_kind = aot_approach_b_callee->return_kind;
                     } else if (aot_approach_b_callee) {
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
@@ -25817,42 +25937,61 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_context_independent_fast_entry_call
                             && aot_static_batch_callee == aot_invoke_context_independent_callee
                             && take_over_slots.slots.empty()) {
-                        std::vector<llvm::Value*> call_args;
-                        call_args.reserve(aot_static_batch_callee->num_params + 2);
-                        for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
-                            if (i && !(i % 100)
-                                    && qore_check_cancel(nullptr,
-                                        "AOT static invoke context-independent argument lowering")) {
-                                error = "cancelled during AOT static invoke context-independent argument lowering";
-                                return false;
-                            }
-                            call_args.push_back(getFastEntryCallArgument(
-                                    *aot_static_batch_callee, i, raw_args,
-                                    raw_arg_ids, boxed_args, module));
-                        }
-                        call_args.push_back(aot_ctx_arg);
-                        call_args.push_back(xsink_arg);
-                        bool summary_nothrow = false;
-                        // the frame of the call, also when the callee's body summary takes its place
+                        // while a debugger is attached, the call is made through the runtime, which reports it
+                        // (qore#7676)
                         uint64_t frame_expr_bits;
                         std::memcpy(&frame_expr_bits, &inv->expr, sizeof(frame_expr_bits));
-                        AotInlineCallFrame frame = emitPushAotInlineCallFrame(
-                            const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits), *aot_static_batch_callee,
-                            inst, module, llvm_func);
-                        result = emitAOTImportedSummary(
-                            *aot_static_batch_callee, call_args, aot_ctx_arg,
-                            module, aot_invoke_context_independent_fn,
-                            &summary_nothrow);
-                        const bool inline_body = result;
-                        if (!result) {
-                            frame.useCallerStatement(module);
-                            result = builder->CreateCall(
-                                aot_invoke_context_independent_fn, call_args);
+                        const int32_t call_slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits);
+                        auto except_it = block_map.find(inv->exception_target);
+                        if (except_it == block_map.end()) {
+                            error = "invoke exception target block not found";
+                            return false;
                         }
-                        endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
-                            has_arg_cleanups ? arg_cleanups : nullptr, nargs);
-                        result_proven_nothrow =
-                            summary_nothrow && !has_arg_cleanups;
+                        auto emit_fast = [&](bool& nothrow) -> llvm::Value* {
+                            std::vector<llvm::Value*> call_args;
+                            call_args.reserve(aot_static_batch_callee->num_params + 2);
+                            for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
+                                if (i && !(i % 100)
+                                        && qore_check_cancel(nullptr,
+                                            "AOT static invoke context-independent argument lowering")) {
+                                    error = "cancelled during AOT static invoke context-independent argument lowering";
+                                    return nullptr;
+                                }
+                                call_args.push_back(getFastEntryCallArgument(
+                                        *aot_static_batch_callee, i, raw_args,
+                                        raw_arg_ids, boxed_args, module));
+                            }
+                            call_args.push_back(aot_ctx_arg);
+                            call_args.push_back(xsink_arg);
+                            bool summary_nothrow = false;
+                            // the frame of the call, also when the callee's body summary takes its place
+                            AotInlineCallFrame frame = emitPushAotInlineCallFrame(call_slot,
+                                *aot_static_batch_callee, inst, module, llvm_func);
+                            llvm::Value* fast_result = emitAOTImportedSummary(
+                                *aot_static_batch_callee, call_args, aot_ctx_arg,
+                                module, aot_invoke_context_independent_fn,
+                                &summary_nothrow);
+                            const bool inline_body = fast_result;
+                            if (!fast_result) {
+                                frame.useCallerStatement(module);
+                                fast_result = builder->CreateCall(
+                                    aot_invoke_context_independent_fn, call_args);
+                            }
+                            endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
+                                has_arg_cleanups ? arg_cleanups : nullptr, nargs);
+                            nothrow = summary_nothrow && !has_arg_cleanups;
+                            return fast_result;
+                        };
+                        bool fast_nothrow = false;
+                        result = emitAotDebuggerGuardedFastCall(module, llvm_func, inst, call_slot,
+                            *aot_static_batch_callee, raw_args, raw_arg_ids, boxed_args, arg_cleanups, nargs,
+                            has_arg_cleanups, "qore_rt_call_static_method_direct_aot",
+                            "qore_rt_call_static_method_direct_aot_consume_args", except_it->second, emit_fast,
+                            fast_nothrow, error);
+                        if (!result) {
+                            return false;
+                        }
+                        result_proven_nothrow = fast_nothrow;
                         invoke_return_kind = aot_static_batch_callee->return_kind;
                     } else if (aot_static_batch_callee) {
                         result = emitAotBatchFastEntryOrFallback(module, llvm_func,
@@ -29121,36 +29260,51 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_may_modify_runtime_locals = false;
             } else if (aot_context_independent_fast_entry_call) {
-                std::vector<llvm::Value*> call_args;
-                for (unsigned i = 0; i < aot_approach_b_callee->num_params; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT context-independent fast-entry argument lowering")) {
-                        error = "cancelled during AOT context-independent fast-entry argument lowering";
-                        return false;
+                // a call that is not fused with the expression that consumes its result: while a debugger is
+                // attached, it is made through the runtime, which reports it (qore#7676)
+                const int32_t call_slot = getCallDirectExprSlot(*direct_inst);
+                auto emit_fast = [&](bool& nothrow) -> llvm::Value* {
+                    std::vector<llvm::Value*> call_args;
+                    for (unsigned i = 0; i < aot_approach_b_callee->num_params; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT context-independent fast-entry argument lowering")) {
+                            error = "cancelled during AOT context-independent fast-entry argument lowering";
+                            return nullptr;
+                        }
+                        call_args.push_back(getFastEntryCallArgument(*aot_approach_b_callee,
+                                i, raw_args, raw_arg_ids, boxed_args, module));
                     }
-                    call_args.push_back(getFastEntryCallArgument(*aot_approach_b_callee,
-                            i, raw_args, raw_arg_ids, boxed_args, module));
-                }
-                call_args.push_back(aot_ctx_arg);
-                call_args.push_back(xsink_arg);
-                bool summary_nothrow = false;
-                // the frame of the call, also when the callee's body summary takes its place; the callee runs with
-                // this function's context, but the frame is taken from it here, where it is this function's
-                AotInlineCallFrame frame = emitPushAotInlineCallFrame(getCallDirectExprSlot(*direct_inst),
-                    *aot_approach_b_callee, inst, module, llvm_func);
-                call_result = emitAOTImportedSummary(*aot_approach_b_callee,
-                    call_args, aot_ctx_arg, module, aot_approach_b_fn,
-                    &summary_nothrow);
-                const bool inline_body = call_result;
+                    call_args.push_back(aot_ctx_arg);
+                    call_args.push_back(xsink_arg);
+                    bool summary_nothrow = false;
+                    // the frame of the call, also when the callee's body summary takes its place; the callee runs
+                    // with this function's context, but the frame is taken from it here, where it is this function's
+                    AotInlineCallFrame frame = emitPushAotInlineCallFrame(call_slot,
+                        *aot_approach_b_callee, inst, module, llvm_func);
+                    llvm::Value* fast_result = emitAOTImportedSummary(*aot_approach_b_callee,
+                        call_args, aot_ctx_arg, module, aot_approach_b_fn,
+                        &summary_nothrow);
+                    const bool inline_body = fast_result;
+                    if (!fast_result) {
+                        frame.useCallerStatement(module);
+                        fast_result = builder->CreateCall(
+                            aot_approach_b_fn, call_args);
+                    }
+                    endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
+                        has_arg_cleanups ? arg_cleanups : nullptr, nargs, summary_nothrow);
+                    nothrow = summary_nothrow && !has_arg_cleanups;
+                    return fast_result;
+                };
+                bool fast_nothrow = false;
+                call_result = emitAotDebuggerGuardedFastCall(module, llvm_func, inst, call_slot,
+                    *aot_approach_b_callee, raw_args, raw_arg_ids, boxed_args, arg_cleanups, nargs,
+                    has_arg_cleanups, "qore_rt_call_direct_aot", "qore_rt_call_direct_aot_consume_args", nullptr,
+                    emit_fast, fast_nothrow, error);
                 if (!call_result) {
-                    frame.useCallerStatement(module);
-                    call_result = builder->CreateCall(
-                        aot_approach_b_fn, call_args);
+                    return false;
                 }
-                endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
-                    has_arg_cleanups ? arg_cleanups : nullptr, nargs, summary_nothrow);
-                call_may_throw = !(summary_nothrow && !has_arg_cleanups);
+                call_may_throw = !fast_nothrow;
                 call_return_kind = aot_approach_b_callee->return_kind;
                 call_may_modify_runtime_locals = false;
             } else if (fused_string_consumer
@@ -30298,38 +30452,51 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     direct_inst->aot_string_consumer);
                 call_may_modify_runtime_locals = false;
             } else if (aot_context_independent_fast_entry_call) {
-                std::vector<llvm::Value*> call_args;
-                for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT static context-independent fast-entry argument lowering")) {
-                        error = "cancelled during AOT static context-independent fast-entry argument lowering";
-                        return false;
-                    }
-                    call_args.push_back(getFastEntryCallArgument(*aot_static_batch_callee,
-                            i, raw_args, raw_arg_ids, boxed_args, module));
-                }
-                call_args.push_back(aot_ctx_arg);
-                call_args.push_back(xsink_arg);
-                bool summary_nothrow = false;
-                // the frame of the call, also when the callee's body summary takes its place
+                // while a debugger is attached, the call is made through the runtime, which reports it (qore#7676)
                 QoreValue frame_expr = direct_inst->expr;
                 uint64_t frame_expr_bits;
                 std::memcpy(&frame_expr_bits, &frame_expr, sizeof(frame_expr_bits));
-                AotInlineCallFrame frame = emitPushAotInlineCallFrame(
-                    const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits),
-                    *aot_static_batch_callee, inst, module, llvm_func);
-                call_result = emitAOTImportedSummary(*aot_static_batch_callee,
-                    call_args, aot_ctx_arg, module, aot_static_batch_fn,
-                    &summary_nothrow);
-                const bool inline_body = call_result;
+                const int32_t call_slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(frame_expr_bits);
+                auto emit_fast = [&](bool& nothrow) -> llvm::Value* {
+                    std::vector<llvm::Value*> call_args;
+                    for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT static context-independent fast-entry argument lowering")) {
+                            error = "cancelled during AOT static context-independent fast-entry argument lowering";
+                            return nullptr;
+                        }
+                        call_args.push_back(getFastEntryCallArgument(*aot_static_batch_callee,
+                                i, raw_args, raw_arg_ids, boxed_args, module));
+                    }
+                    call_args.push_back(aot_ctx_arg);
+                    call_args.push_back(xsink_arg);
+                    bool summary_nothrow = false;
+                    // the frame of the call, also when the callee's body summary takes its place
+                    AotInlineCallFrame frame = emitPushAotInlineCallFrame(call_slot,
+                        *aot_static_batch_callee, inst, module, llvm_func);
+                    llvm::Value* fast_result = emitAOTImportedSummary(*aot_static_batch_callee,
+                        call_args, aot_ctx_arg, module, aot_static_batch_fn,
+                        &summary_nothrow);
+                    const bool inline_body = fast_result;
+                    if (!fast_result) {
+                        frame.useCallerStatement(module);
+                        fast_result = builder->CreateCall(aot_static_batch_fn, call_args);
+                    }
+                    endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
+                        has_arg_cleanups ? arg_cleanups : nullptr, nargs, summary_nothrow);
+                    nothrow = summary_nothrow && !has_arg_cleanups;
+                    return fast_result;
+                };
+                bool fast_nothrow = false;
+                call_result = emitAotDebuggerGuardedFastCall(module, llvm_func, inst, call_slot,
+                    *aot_static_batch_callee, raw_args, raw_arg_ids, boxed_args, arg_cleanups, nargs,
+                    has_arg_cleanups, "qore_rt_call_static_method_direct_aot",
+                    "qore_rt_call_static_method_direct_aot_consume_args", nullptr, emit_fast, fast_nothrow, error);
                 if (!call_result) {
-                    frame.useCallerStatement(module);
-                    call_result = builder->CreateCall(aot_static_batch_fn, call_args);
+                    return false;
                 }
-                endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
-                    has_arg_cleanups ? arg_cleanups : nullptr, nargs, summary_nothrow);
-                call_may_throw = !(summary_nothrow && !has_arg_cleanups);
+                call_may_throw = !fast_nothrow;
                 if (QORE_ENV_IS_SET(
                         "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
                     call_may_modify_runtime_locals = true;
@@ -34384,10 +34551,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::BasicBlock* guarded_fast_block = nullptr;
                         llvm::BasicBlock* guarded_fallback_block = nullptr;
                         llvm::BasicBlock* guarded_merge_block = nullptr;
-                        if (guarded_native_args) {
+                        // the call is made through the generic path while a debugger is attached (qore#7676), as
+                        // when its arguments do not have the types of the fast entry's native parameters
+                        {
                             llvm::Value* args_assigned =
-                                llvm::ConstantInt::getTrue(ctx);
-                            for (int i = 0; i < native_nargs; ++i) {
+                                qore_llvm_emit_no_debugger_attached(*builder, module);
+                            for (int i = 0; guarded_native_args && i < native_nargs; ++i) {
                                 if (i && !(i % 100)
                                         && qore_check_cancel(nullptr,
                                             "LLVM guarded call-reference"
@@ -34485,7 +34654,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module,
                             has_arg_cleanups ? arg_cleanups : nullptr, native_nargs);
                         llvm::Value* result = fast_result;
-                        if (guarded_native_args) {
+                        {
                             builder->CreateBr(guarded_merge_block);
                             guarded_fast_block = builder->GetInsertBlock();
 

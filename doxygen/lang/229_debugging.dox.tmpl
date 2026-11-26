@@ -427,5 +427,9 @@ qdbg-remote localhost:8001 < commands.txt
     - A function of AOT-compiled code that is already running when a debugger attaches, and a closure created in it,
       does not stop at breakpoints or steps, as it continues in its native code; functions that are called after the
       debugger attached are debugged
-      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>).
+      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>), also when such native code calls
+      them, except for the calls that code compiled at <tt>-O3</tt> made part of the expression that uses their
+      result (as in <tt>f(x).size()</tt> or <tt>g()[1]</tt>), replaced by the value that they return, or replaced by
+      the body of an object's method: they give the debugger no function events in such a running function
+      (<a href="https://github.com/qoretechnologies/qore/issues/7697">issue 7697</a>).
 */

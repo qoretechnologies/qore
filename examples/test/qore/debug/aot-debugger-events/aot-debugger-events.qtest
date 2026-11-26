@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - AOT code generation and linking of calls in programs that allow the debugger
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class AotDebuggerEventsTest
+
+#! a debugger attached while compiled code runs gets the entry and exit events of every call made after it attached
+/** In a Program that allows the debugger, AOT code compiled at -O3 called method fast entries, inline summaries of
+    small callees and other fast paths directly, so a debugger attached during a loop got no entry and exit events for
+    those calls (qore#7676).  Each worker records the events of its callees with a debugger attached at different
+    points; every execution mode and the programs compiled at -O0 and -O3 must print what the AST interpreter prints.
+*/
+class AotDebuggerEventsTest inherits QUnit::Test {
+    public {
+        const Workers = ("function-debugger", "override-debugger", "fused-call-debugger");
+
+        #! the event counts of the phases of the fused worker that attach the debugger while native code runs a loop
+        /** At -O3, calls fused with the expressions that consume their results, replaced by projections or by inline
+            object-method bodies give no events in a frame that already ran native code when the debugger attached
+            (qore#7697); their values are still compared
+        */
+        const KnownGapCounts = "^(during|kernel|batch) (entry|exit) counts: ";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("AotDebuggerEvents", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        foreach string worker in (Workers) {
+            # each closure captures a variable of its own: the loop variable is the same in every iteration
+            string name = worker;
+            addTestCase(name, sub () { checkWorker(name); });
+        }
+        addTestCase("fused-call-debugger: events in running native frames", sub () {
+            testSkip("known gap qore#7697: -O3 fused, projected and inline object-method calls give no events in "
+                "frames that ran native code when the debugger attached");
+        });
+        set_return_value(main());
+    }
+
+    private static string withoutKnownGapCounts(string output) {
+        list<string> lines = ();
+        foreach string line in (output.split("\n")) {
+            if (!line.regex(KnownGapCounts)) {
+                lines += line;
+            }
+        }
+        return lines.join("\n");
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkWorker(string name) {
+        string worker = get_script_dir() + "/" + name + ".qr";
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast "
+            + quote(worker), ExecModeHarness::NativeCheck::None);
+        assertTrue(ast.val(), name + ": the AST interpreter prints the results");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker), ExecModeHarness::NativeCheck::None), name + ": " + mode);
+        }
+        if (!qcc_bin) {
+            return;
+        }
+        TmpDir tmp("qore-aot-debugger-events-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + name + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), name + opt + ": qcc produced the executable");
+            string output = ExecModeHarness::run_any(prefix + quote(exe) + " -b");
+            if (name == "fused-call-debugger" && opt == "-O3") {
+                assertEq(withoutKnownGapCounts(ast), withoutKnownGapCounts(output), name + ": AOT " + opt
+                    + " (without the event counts of qore#7697)");
+            } else {
+                assertEq(ast, output, name + ": AOT " + opt);
+            }
+        }
+    }
+}
