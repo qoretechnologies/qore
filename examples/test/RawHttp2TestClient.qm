@@ -163,12 +163,18 @@ public class RawHttp2Client {
             switch (f.type) {
                 case FrameSettings:
                     if (!(f.flags & FlagAck)) {
-                        sock.send(frame(FrameSettings, FlagAck, 0, binary()), io_timeout);
+                        if (!sendOrClosed(frame(FrameSettings, FlagAck, 0, binary()))) {
+                            rv.closed = True;
+                            return rv;
+                        }
                     }
                     break;
                 case FramePing:
                     if (!(f.flags & FlagAck)) {
-                        sock.send(frame(FramePing, FlagAck, 0, f.payload), io_timeout);
+                        if (!sendOrClosed(frame(FramePing, FlagAck, 0, f.payload))) {
+                            rv.closed = True;
+                            return rv;
+                        }
                     }
                     break;
                 case FrameGoaway:
@@ -185,14 +191,8 @@ public class RawHttp2Client {
                         rv.data_bytes += f.payload.size();
                     }
                     if (f.payload.size() && !(f.flags & FlagEndStream)) {
-                        try {
-                            sock.send(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
-                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())), io_timeout);
-                        } catch (hash<ExceptionInfo> ex) {
-                            # a server that closes the connection with data of the client unread resets it
-                            if (!isPeerClose(ex)) {
-                                rethrow;
-                            }
+                        if (!sendOrClosed(frame(FrameWindowUpdate, 0, 0, u32(f.payload.size()))
+                                + frame(FrameWindowUpdate, 0, f.stream_id, u32(f.payload.size())))) {
                             rv.closed = True;
                             return rv;
                         }
@@ -232,11 +232,27 @@ public class RawHttp2Client {
         };
     }
 
+    #! Sends @p data; returns False if the server has closed or reset the connection
+    private bool sendOrClosed(binary data) {
+        try {
+            sock.send(data, io_timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            # a server that closes the connection with data of the client unread resets it
+            if (!isPeerClose(ex)) {
+                rethrow;
+            }
+            return False;
+        }
+        return True;
+    }
+
     #! Returns True if the exception is that of a connection that the server closed or reset
     /** A server that closes the connection while data of the client is unread makes its TCP stack reset it
     */
     private static bool isPeerClose(hash<ExceptionInfo> ex) {
-        return ex.err == "SOCKET-CLOSED" || (ex.arg.typeCode() == NT_INT && ex.arg == ECONNRESET);
+        # a send after the reset fails with EPIPE on macOS
+        return ex.err == "SOCKET-CLOSED" || (ex.arg.typeCode() == NT_INT && inlist(ex.arg, (ECONNRESET, EPIPE,
+            ECONNABORTED)));
     }
 
     #! Returns a serialized frame

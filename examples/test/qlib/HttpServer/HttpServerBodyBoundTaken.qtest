@@ -297,7 +297,7 @@ class HttpServerBodyBoundTakenTest inherits QUnit::Test {
     testStopsReadingBuffered() {
         BoundBodyHandler h();
         # far larger than the socket buffers
-        h.huge_body = binary(strmul("x", 256 * 1024 * 1024));
+        h.huge_body = binary(strmul("x", 64 * 1024 * 1024));
         hash<auto> setup = startServer(h);
         on_exit setup.server.stop();
         RawHttp2Client c(setup.port);

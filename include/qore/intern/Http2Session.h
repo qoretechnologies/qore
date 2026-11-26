@@ -847,7 +847,8 @@ public:
 
     //! Debug-only: holds the session's writes to the socket, as when its client stops reading (qore#7653)
     /** The output stays in the send buffer, which the session reports as nothing to write, so that its operation
-        waits for other events; tests use it to keep the end of a response in the send buffer
+        waits for other events; tests use it to keep the end of a response in the send buffer.  A release does not
+        wake the session's operation: the held output is written with its next event
     */
     DLLLOCAL void dbgHoldWrites(bool hold) {
         dbg_hold_writes.store(hold, std::memory_order_release);

@@ -4532,7 +4532,18 @@ void Http2Session::endBoundBody(int32_t stream_id, const char* reason, Exception
         if (iit != stream_input_streams_.end()) {
             iit->second.eof = true;
         }
-        submitRstStream(stream_id, NGHTTP2_CANCEL, nullptr);
+        if (submitRstStream(stream_id, NGHTTP2_CANCEL, nullptr)) {
+            // without the reset, the data provider would end the body without its data: the connection is ended
+            bound_bodies.erase(stream_id);
+            updateActiveInputStreams();
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2 connection ended: the RST_STREAM of the response body of "
+                "stream %d could not be submitted", stream_id);
+            if (!*xsink) {
+                xsink->raiseException("HTTP2-SEND-BOUND-ERROR", "the RST_STREAM of the response body of stream %d "
+                    "could not be submitted: %s", stream_id, reason);
+            }
+            return;
+        }
         // no DATA of the stream goes out before its RST_STREAM, which nghttp2 sends first and which closes the stream;
         // the data provider's context is kept until the stream closes, as in releaseResetStream()
         pending_body_data.erase(stream_id);
