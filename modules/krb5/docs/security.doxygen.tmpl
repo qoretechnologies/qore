@@ -140,22 +140,34 @@
       code made and gives to it is a credential that it was given, which it
       can use
     - the replay cache of a GSSAPI acceptor, to which the library writes every
-      authenticator that it accepts, is that of its domain: the credential that
-      it gets from a keytab names the file
-      <tt><i>tmp</i>/qore-sandbox-<i>domain</i>-krb5-rcache</tt>
-      (a \c file2 replay cache), where <i>tmp</i> is the temporary directory of
-      the process (\c TMPDIR, \c TMP, \c TEMP, \c TEMPDIR or \c /tmp, as
-      \c Util::tmp_location() finds it) and <i>domain</i> names the isolation
-      domain, not the replay cache of the process (the default one in the
-      system's temporary directory, or that of \c KRB5RCACHENAME,
-      \c KRB5RCACHETYPE and \c KRB5RCACHEDIR, which do not apply to it); the
-      filesystem policy of the sandbox must allow the file to be read, written
-      and created, or the credential raises \c FILESYSTEM-ACCESS-DENIED; this
-      needs \c gss_acquire_cred_from() in the GSSAPI library, and raises
+      authenticator that it accepts, is that of its domain, not the replay
+      cache of the process (the default one in the system's temporary
+      directory, or that of \c KRB5RCACHENAME, \c KRB5RCACHETYPE and
+      \c KRB5RCACHEDIR, which do not apply to it): the credential that it gets
+      from a keytab names a \c file2 replay cache in the directory
+      <tt><i>tmp</i>/qore-krb5-rcache-<i>euid</i></tt>, where <i>tmp</i> is
+      the temporary directory of the process (\c TMPDIR, \c TMP, \c TEMP,
+      \c TEMPDIR or \c /tmp, as \c Util::tmp_location() finds it) and
+      <i>euid</i> the effective user ID of the process; the file is named
+      after the isolation domain (and, for a sandbox without one, after its
+      %Program and the process); the replay cache is state of the module, like
+      the \c MEMORY caches of the domain, and needs no filesystem access of
+      the sandbox
+    - the module creates the directory with mode 0700 and refuses (with
+      \c KRB5-SANDBOX-ERROR) a directory that is a link, belongs to another
+      user or that other users can use, and a replay cache file that is not a
+      regular file of the effective user with one link, when the credential is
+      acquired and before each acceptor step, as the library opens the file by
+      name for every authenticator; no sandbox may be given access to the
+      directory (code that can create, remove or replace entries in it could
+      make the library write to other files, and code that can remove a replay
+      cache file turns off the replay protection of its acceptors until the
+      authenticators expire)
+    - this needs \c gss_acquire_cred_from() in the GSSAPI library, and raises
       \c KRB5-SANDBOX-ERROR without it; an acceptor credential of another
       domain raises \c KRB5-SANDBOX-ERROR in an acceptor of the domain; a
-      temporary directory of its own %Program can later replace that of the
-      process
+      temporary directory of its own %Program that no sandbox can access can
+      later replace that of the process
     - code in several isolation domains at once (the sandboxes of different
       tenants govern it) has no caches that are not file based
 
