@@ -402,6 +402,12 @@ public class Http1ClientConnection inherits HttpClientConnection {
         poll_op.installSseState(stream_id, queue, notifier, initial_body);
     }
 
+    #! Installs a decoder of the AWS binary event stream on a streaming request (qore#7247)
+    installEventStreamState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installEventStreamState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Submits an SSE request with Queue-based parsed event delivery
     /** Like submitRequestStreaming() but creates an SseAction that parses SSE
         events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.

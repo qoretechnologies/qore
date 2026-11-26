@@ -58,7 +58,15 @@
 namespace {
 
 std::mutex auto_provider_mutex;
-std::unordered_set<std::string> unusable_auto_providers;
+//! A failure of an automatically selected provider that trusted code recorded (qore#7672, qore#7688)
+struct AutoProviderFailure {
+    //! the number of consecutive failures
+    unsigned failures = 0;
+    //! the provider is not selected automatically before this time
+    std::chrono::steady_clock::time_point retry_at;
+};
+//! the recorded failures by provider name; a provider that works again is removed
+std::unordered_map<std::string, AutoProviderFailure> unusable_auto_providers;
 //! the fork handler of auto_provider_mutex, a leaf lock (see QoreForkHandler.h)
 QoreForkHandlerRegistration* auto_provider_fork_reg = nullptr;
 
@@ -87,9 +95,23 @@ Ort::Env& getOnnxEnv() {
 }
 using SteadyClock = std::chrono::steady_clock;
 
-bool isAutoProviderDisabled(const std::string& provider) {
+//! Returns the time until a provider whose failure was recorded is selected automatically again, or 0
+std::chrono::milliseconds autoProviderRetryDelay(const std::string& provider) {
     std::lock_guard<std::mutex> lock(auto_provider_mutex);
-    return unusable_auto_providers.find(provider) != unusable_auto_providers.end();
+    auto i = unusable_auto_providers.find(provider);
+    if (i == unusable_auto_providers.end()) {
+        return std::chrono::milliseconds(0);
+    }
+    auto now = std::chrono::steady_clock::now();
+    if (now >= i->second.retry_at) {
+        return std::chrono::milliseconds(0);
+    }
+    // rounded up, so that a delay that has not passed is never reported as 0
+    return std::chrono::ceil<std::chrono::milliseconds>(i->second.retry_at - now);
+}
+
+bool isAutoProviderDisabled(const std::string& provider) {
+    return autoProviderRetryDelay(provider).count() > 0;
 }
 
 double elapsedMilliseconds(const SteadyClock::time_point& start) {
@@ -110,11 +132,6 @@ std::string makeOutputNamesSignature(const QoreListNode* output_names) {
         rv += ';';
     }
     return rv;
-}
-
-void disableAutoProvider(const std::string& provider) {
-    std::lock_guard<std::mutex> lock(auto_provider_mutex);
-    unusable_auto_providers.insert(provider);
 }
 
 QoreBufferElementType onnxTypeToBufferElementType(ONNXTensorElementDataType type) {
@@ -1981,8 +1998,10 @@ void QoreOnnxModel::makeSession(const OnnxSessionSource& src, Ort::SessionOption
 
 void QoreOnnxModel::createSession(const OnnxSessionSource& src, Ort::SessionOptions& opts,
     const QoreHashNode* config, ExceptionSink* xsink) {
+    bool created = false;
     try {
         makeSession(src, opts);
+        created = true;
     } catch (const Ort::Exception& e) {
         if (explicit_provider_config && active_provider != "CPUExecutionProvider") {
             markProviderError(active_provider, e.what());
@@ -1999,7 +2018,7 @@ void QoreOnnxModel::createSession(const OnnxSessionSource& src, Ort::SessionOpti
         }
 
         std::string provider = active_provider;
-        disableAutoProvider(provider);
+        qore_ml_onnx_record_auto_provider_failure(provider);
         markProviderError(provider, e.what());
         if (!allow_cpu_fallback || fail_on_provider_fallback) {
             xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
@@ -2030,6 +2049,11 @@ void QoreOnnxModel::createSession(const OnnxSessionSource& src, Ort::SessionOpti
                 "CPU fallback also failed: %s", src.description.c_str(), provider.c_str(),
                 e.what(), cpu_e.what());
         }
+    }
+    // a provider that works again is selected automatically as if it never failed (qore#7688); the CPU fallback
+    // session clears auto_provider_selected
+    if (created && auto_provider_selected && active_provider != "CPUExecutionProvider") {
+        qore_ml_onnx_record_auto_provider_success(active_provider);
     }
 }
 
@@ -2209,8 +2233,10 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
     for (const auto& pref : preferred) {
         OnnxProviderDiagnostic& diag = providerDiagnostic(pref);
         if (std::find(available_providers.begin(), available_providers.end(), pref) != available_providers.end()) {
-            if (isAutoProviderDisabled(pref)) {
-                diag.error = "provider was disabled after a previous session creation failure";
+            std::chrono::milliseconds retry_delay = autoProviderRetryDelay(pref);
+            if (retry_delay.count() > 0) {
+                diag.error = "provider is not selected automatically after a recent failure of trusted code; it is "
+                    "tried again in " + std::to_string(retry_delay.count()) + " ms";
                 continue;
             }
 
@@ -2226,12 +2252,12 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
                 // Provider failed to initialize — try the next one
                 diag.error = "provider append failed";
                 xsink.clear();
-                disableAutoProvider(pref);
+                qore_ml_onnx_record_auto_provider_failure(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
             } catch (...) {
                 diag.error = "provider append raised an unknown C++ exception";
-                disableAutoProvider(pref);
+                qore_ml_onnx_record_auto_provider_failure(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
             }
@@ -6346,5 +6372,88 @@ void qore_ml_onnx_unregister_fork_handlers() {
     qore_unregister_fork_handler(auto_provider_fork_reg);
     auto_provider_fork_reg = nullptr;
 }
+
+bool qore_ml_onnx_record_auto_provider_failure(const std::string& provider) {
+    // a model of sandboxed code does not change the provider choice of the models of other code (qore#7672): the
+    // question is whether a sandbox governs the thread at all, also in a capability of trusted code that a sandboxed
+    // caller called (createSystemPolicyCall()), which suppresses the Policy check of onnxSandboxActive()
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+        if (smh) {
+            return false;
+        }
+    }
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    AutoProviderFailure& f = unusable_auto_providers[provider];
+    auto now = std::chrono::steady_clock::now();
+    // the models that selected the provider before its failure was recorded fail at the same time: a failure in the
+    // window of a recorded failure is the same failure, and the delay doubles only with each failure of a retry
+    // after the delay, up to the maximum (qore#7688)
+    if (f.failures && now < f.retry_at) {
+        return true;
+    }
+    if (f.failures < std::numeric_limits<unsigned>::max()) {
+        ++f.failures;
+    }
+    f.retry_at = now + qore_ml_onnx_auto_provider_failure_delay(f.failures);
+    return true;
+}
+
+std::chrono::milliseconds qore_ml_onnx_auto_provider_failure_delay(unsigned failures) {
+    std::chrono::milliseconds delay = qore_ml_onnx_auto_provider_retry_min;
+    for (unsigned i = 1; i < failures && delay < qore_ml_onnx_auto_provider_retry_max; ++i) {
+        delay *= 2;
+    }
+    return std::min(delay, qore_ml_onnx_auto_provider_retry_max);
+}
+
+bool qore_ml_onnx_record_auto_provider_success(const std::string& provider) {
+    // only trusted code writes the record (see qore_ml_onnx_record_auto_provider_failure())
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+        if (smh) {
+            return false;
+        }
+    }
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    return unusable_auto_providers.erase(provider) > 0;
+}
+
+bool qore_ml_onnx_auto_provider_disabled(const std::string& provider) {
+    return isAutoProviderDisabled(provider);
+}
+
+#ifdef DEBUG
+void qore_ml_onnx_clear_auto_provider_failures() {
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    unusable_auto_providers.clear();
+}
+
+void qore_ml_onnx_expire_auto_provider_failures() {
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    auto now = std::chrono::steady_clock::now();
+    for (auto& i : unusable_auto_providers) {
+        i.second.retry_at = now;
+    }
+}
+
+QoreHashNode* qore_ml_onnx_auto_provider_failure_info(const std::string& provider, ExceptionSink* xsink) {
+    unsigned failures;
+    {
+        std::lock_guard<std::mutex> lock(auto_provider_mutex);
+        auto i = unusable_auto_providers.find(provider);
+        if (i == unusable_auto_providers.end()) {
+            return nullptr;
+        }
+        failures = i->second.failures;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("failures", static_cast<int64>(failures), xsink);
+    rv->setKeyValue("delay_ms", static_cast<int64>(qore_ml_onnx_auto_provider_failure_delay(failures).count()),
+        xsink);
+    rv->setKeyValue("retry_in_ms", static_cast<int64>(autoProviderRetryDelay(provider).count()), xsink);
+    return rv.release();
+}
+#endif
 
 #endif // HAVE_ONNXRUNTIME

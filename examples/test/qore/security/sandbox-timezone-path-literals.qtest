@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - zoneinfo files loaded by path under a sandbox's file-system policy, in native code
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxTimeZonePathLiteralsTest
+
+#! The date literals of a sandboxed Program with a zoneinfo path zone keep that zone in every execution mode (qore#7566)
+/** A sandbox with a time zone path budget lets a Program's %set-time-zone directive name a zoneinfo file path, and
+    the Program's date literals are in that zone.  Native code finds the zone of a literal by its name: it gave the
+    literals UTC once the host had changed the Program's zone, as it took a path that was not the Program's current
+    zone for one that the Program could not use.  The worker
+    (\c sandbox-timezone-path-literals/sandbox-timezone-path-literals.q) prints literals before and after the change;
+    every mode, the IR tier and a qcc executable must print the output of the AST interpreter.
+*/
+class SandboxTimeZonePathLiteralsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string worker = get_script_dir() + "/sandbox-timezone-path-literals/sandbox-timezone-path-literals.q";
+        string fixture = get_script_dir() + "/../vars/fixtures/tzif/rfc9636/b4-jerusalem.tzif";
+
+        #! the output of the worker: the zone's winter and summer offsets, also after the change
+        const Expected = (map sprintf("own zone %d: 2038-01-15T12:00:00+02:00 2038-07-15T12:00:00+03:00\n", $1),
+            xrange(3)).join("") + (map sprintf("changed zone %d: 2038-01-15T12:00:00+02:00 "
+            "2038-07-15T12:00:00+03:00\n", $1), xrange(3)).join("");
+    }
+
+    constructor() : QUnit::Test("SandboxTimeZonePathLiteralsTest", "1.0", \ARGV) {
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("a qcc executable prints the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! returns the path of the zone file in a directory of its own, which the worker's sandbox allows
+    private string zone(TmpDir tmp) {
+        if (PlatformOS == "Windows") {
+            testSkip("restricted code cannot load time zones from paths on Windows");
+        }
+        string path = tmp.path + DirSep + "zone.tzif";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readBinaryFile(fixture));
+        f.close();
+        return path;
+    }
+
+    testModes() {
+        TmpDir tmp("tzpathlit");
+        string path = zone(tmp);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s -b --enable-debug --exec-mode=%s %s %s", quote(qore_bin),
+                mode, quote(worker), quote(path))), mode);
+        }
+    }
+
+    testIrTier() {
+        TmpDir tmp("tzpathlit");
+        string path = zone(tmp);
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s -b --enable-debug --exec-mode=tiered %s %s",
+            quote(qore_bin), quote(worker), quote(path))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string found = backquote("command -v qcc 2>/dev/null");
+            trim found;
+            if (!found) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = found;
+        }
+        TmpDir tmp("tzpathlit");
+        string path = zone(tmp);
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/worker-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", quote(qcc_bin), opt, quote(exe), quote(worker)),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the worker: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b %s 2>&1", quote(exe), quote(path)), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(Expected, result, sprintf("-O%s", opt));
+        }
+    }
+}

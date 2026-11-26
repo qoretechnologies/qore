@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "restrictedbuiltinprobe" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt
+# and is not installed
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires restrictedbuiltinprobe
+%requires QUnit
+
+%exec-class RestrictedBuiltinClassTest
+
+#! Verifies the object provenance predicates for a builtin class that a module created for a Program (qore#7677)
+/** A builtin class that keeps the Program it was created for is that Program's: an object of such a class created for
+    a restricted Program is restricted, also when trusted code holds it and the object has no Program of its own
+*/
+class RestrictedBuiltinClassTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+object sub make() {
+    return RestrictedBuiltinProbe::make();
+}
+";
+    }
+
+    constructor() : Test("SandboxManager: builtin classes created for a Program", "1.0", \ARGV) {
+        addTestCase("a restricted Program", \restrictedTest());
+        addTestCase("a sandbox that trusts its code", \trustingTest());
+        addTestCase("a trusted Program", \trustedTest());
+        set_return_value(main());
+    }
+
+    restrictedTest() {
+        Program p = getProgram(new SandboxManager());
+        object o = p.callFunction("make");
+        assertEq("ProbeClass", o.className());
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertEq(p.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    trustingTest() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        Program p = getProgram(sm);
+        object o = p.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+    }
+
+    trustedTest() {
+        Program p = getProgram();
+        object o = p.callFunction("make");
+        assertFalse(SandboxManager::isFromSandboxedProgram(o));
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+        # created for the test's own Program
+        o = RestrictedBuiltinProbe::make();
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+    }
+
+    #! returns a Program with the code that creates the objects, governed by \a sm if given
+    private static Program getProgram(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "probe");
+        return p;
+    }
+}

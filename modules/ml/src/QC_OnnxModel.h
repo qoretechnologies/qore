@@ -993,6 +993,51 @@ DLLLOCAL int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink);
 
 //! removes the fork handlers of the ONNX support's process-wide locks
 DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
+
+//! Records that an automatically selected execution provider failed, so that later models do not select it
+/** The record is process-wide: no later model of any code selects the provider automatically.  Only trusted code
+    makes it: a model of code that a sandbox governs (also trusted code in a capability that a sandboxed caller
+    called, see QoreSandboxManagerHelper::All) that fails on a provider, or whose provider cannot be appended, falls
+    back to CPU itself, but does not change the provider choice of the models of other code (qore#7672).
+
+    @param provider the name of the execution provider
+
+    @return true if the failure was recorded, false if the calling code is sandboxed
+*/
+DLLLOCAL bool qore_ml_onnx_record_auto_provider_failure(const std::string& provider);
+
+//! Returns true if a failure of the given automatically selected provider that trusted code recorded is recent
+/** A recorded failure keeps the provider from being selected automatically for a delay that doubles with each
+    failed retry, from qore_ml_onnx_auto_provider_retry_min to qore_ml_onnx_auto_provider_retry_max; then it is
+    tried again, so a temporary failure does not disable it for the life of the process (qore#7688)
+*/
+DLLLOCAL bool qore_ml_onnx_auto_provider_disabled(const std::string& provider);
+
+//! Records that an automatically selected provider created a session: its recorded failures are forgotten
+/** Only trusted code writes the record, as for qore_ml_onnx_record_auto_provider_failure()
+
+    @return true if a recorded failure was removed
+*/
+DLLLOCAL bool qore_ml_onnx_record_auto_provider_success(const std::string& provider);
+
+//! The delay after the first recorded failure of an automatically selected provider
+constexpr std::chrono::milliseconds qore_ml_onnx_auto_provider_retry_min{60 * 1000};
+//! The longest delay after consecutive recorded failures of an automatically selected provider
+constexpr std::chrono::milliseconds qore_ml_onnx_auto_provider_retry_max{60 * 60 * 1000};
+
+//! Returns the delay after the given number of consecutive failures (each one a failure of a retry after the delay)
+DLLLOCAL std::chrono::milliseconds qore_ml_onnx_auto_provider_failure_delay(unsigned failures);
+
+#ifdef DEBUG
+//! Debug builds: forgets the recorded provider failures (for tests)
+DLLLOCAL void qore_ml_onnx_clear_auto_provider_failures();
+
+//! Debug builds: makes the delays of the recorded failures pass at once (for tests)
+DLLLOCAL void qore_ml_onnx_expire_auto_provider_failures();
+
+//! Debug builds: returns the record of a provider (\c failures, \c delay_ms, \c retry_in_ms), or nullptr
+DLLLOCAL QoreHashNode* qore_ml_onnx_auto_provider_failure_info(const std::string& provider, ExceptionSink* xsink);
+#endif
 #else
 //! without ONNX Runtime support, there are no process-wide locks
 static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {

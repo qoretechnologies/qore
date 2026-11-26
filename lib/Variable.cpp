@@ -6131,6 +6131,12 @@ QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref,
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
+    // a pre-instantiated local that the compiled tiers cleared at the end of its block (del()) stays on the stack
+    // marked as cleared, which reflection leaves out; the variable is assigned or changed again only when its block
+    // runs again, so it is active again, as the AST interpreter's instantiation of the variable makes it (qore#7640)
+    if (block_cleared) {
+        const_cast<LocalVarValue*>(this)->block_cleared = false;
+    }
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,
     //    val.getTypeName(), val.getType(), val.assigned, QoreTypeInfo::getName(typeInfo),
     //    QoreTypeInfo::getName(refTypeInfo), refTypeInfo);

@@ -3580,6 +3580,14 @@ public:
         */
         not_module_decl : 1 = false
         ;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
 
     std::vector<QoreGenericTypeParam> type_params;
     //! the resolved bounds of the type parameters (nullptr for a parameter without one), resolved when the class is
@@ -3719,7 +3727,8 @@ public:
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
-    //! true if sandboxed code declared the class: it was sandboxed code when the class was committed (qore#6843)
+    //! true if sandboxed code declared the class: when the class was committed, a sandbox that does not trust its code
+    //! governed its Program (qore#6843, qore#7635)
     /** Its code has no private access to the members and methods that a class that trusted code declared declares
         (see sandboxDeniesPrivateAccess()); set in parseCommit(), copied with the class
     */
@@ -5381,11 +5390,28 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
+    //! Returns true if the class was declared by code that a sandbox that does not trust its code governs (qore#7635)
+    /** As isSandboxedCode(), with the trust rule of SandboxManager::isRestricted(): a sandbox that allows uncontrolled
+        APIs trusts its code; fails closed.  Once the source Program has released the class, its state is not known
+        and isSandboxedCode()'s is used, which is true whenever this is.  It decides whether the class is declared by
+        sandboxed code for the private access to the declarations of trusted classes (isSandboxDeclared()), which
+        trusts builtin classes itself.  Unlike isSandboxedCode(), a builtin class is judged by its source Program too
+        (qore#7677): one without a source Program, as most are, is not restricted
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedCode() const;
+
     //! Returns true if sandboxed code declared the class (qore#6843)
     /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,
-        the state of its Program now (isSandboxedCode()); a builtin class is trusted
+        the state of its Program now (isRestrictedCode()) and the sandbox of the code that parses it, which is attached
+        to the Program only when the code is committed (qore_program_private::pendingCreatorSandboxIsRestricted()): a
+        class of a Program whose sandbox trusts its code (allows uncontrolled APIs) and that code that its sandbox
+        trusts parses is not declared by sandboxed code (qore#7635); a builtin class is trusted
     */
-    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared() const;
+    /** @param unknown the result when the state of a class being parsed cannot be told (another thread parses it,
+        or it is not of the current Program): true for the class whose code would use a declaration, false for the
+        class that declares it, so that the access is refused either way
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared(bool unknown) const;
 
     //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
     /** A class that sandboxed code declared has no private access to the members, methods and static variables that
@@ -6956,7 +6982,7 @@ protected:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys;
+        return sys && !program_local.load(std::memory_order_acquire);
     }
 
     //! A builtin class that is not one of the static system namespace (Qore::), a pseudo-class or a tombstone: a
@@ -6964,11 +6990,32 @@ protected:
     /** Decided by ownership, not by the module context of its creation: a binary module can create builtin classes
         after its initialization (module-jni and module-python create them when they are first needed, with no module
         context or with that of a user module being parsed); a class shares its private data with its copies in
-        Programs, and an imported copy keeps the flag of its source
+        Programs, and an imported copy keeps the flag of its source; a class that a binary module added to a Program at
+        run time, and the imported copy of a builtin class, are the Program's (program_local, qore#7540)
     */
     DLLLOCAL bool isTypeOwnerModule() const {
-        return sys && !not_module_decl;
+        // a class that a binary module added to a Program at run time is the Program's (qore#7540)
+        return isTypeOwnerSystem() && !not_module_decl;
     }
+
+public:
+    //! Marks a builtin class as owned by the Program to whose namespace it is added; returns true if it was marked now
+    //! and adds its types to \a marked_types (qore#7540)
+    /** A class made with a type of its module (QoreClass(..., const QoreTypeInfo*)) is not marked and stays immortal:
+        the types derived from that type cannot be orphaned when the class is freed (getTypeOwnerType() is nullptr)
+    */
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
+        if (!sys || !owns_typeinfo || program_local.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        marked_types.push_back(getTypeInfo());
+        marked_types.push_back(getOrNothingTypeInfo());
+        marked_owners.push_back(&type_owner);
+        program_local.store(true, std::memory_order_release);
+        return true;
+    }
+
+protected:
 
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return false;

@@ -55,6 +55,7 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -1528,6 +1529,152 @@ private:
         CancelDeletedObj,
     };
 
+    //! What a submission finds under its key on the other I/O threads (qore#7624)
+    enum class KeyCollision {
+        None,        //!< no other thread has an operation with the key
+        Refuse,      //!< another thread has one and the submission does not replace it (qore#7108)
+        TakeOther,   //!< another thread has one of other code, which sandboxed code does not replace (qore#7010)
+        Replace,     //!< another thread has one that the submission replaces
+    };
+
+    //! The keys of the operations of all I/O threads of a controller (qore#7624)
+    /** The cache of an I/O thread holds the operations of the sockets that are routed to it (every operation on one
+        socket runs on one thread), so a collision of a submission's key with the key of an operation of another thread
+        cannot be seen in the cache of the submission's own thread.  The registry has the newest operation or submission
+        of each key, with a token that identifies it for as long as it lives, and it is consulted where the submissions
+        of all threads are ordered: under the lock of the controller, when a submission is queued (reserve()).  The
+        submission then knows if it is refused, or replaces the operation of another thread, which is canceled by its
+        token (Command::cancel_key_token), before it is processed.
+
+        An operation of an I/O thread keeps its token in its PollInfo and gives it back when it leaves the cache; a
+        submission that is not admitted gives its reservation back when it is discarded.  An operation that replaces
+        another one on its own thread takes over its token.
+
+        The lock is a leaf: nothing is called and no other lock is taken with it held.
+    */
+    class KeyRegistry {
+    public:
+        //! The newest operation or submission with a key
+        struct Entry {
+            //! the index of the I/O thread of the operation
+            int thread_idx = -1;
+            //! identifies the operation or submission; never reused
+            uint64_t token = 0;
+            //! the application that the operation was submitted for
+            qore_program_id_t app_pgm_id = 0;
+            //! the poll operation's object, compared by address only
+            const QoreObject* spop_obj = nullptr;
+        };
+
+        //! Returns true if a submission takes the key of an operation of other code: sandboxed code does not replace
+        //! the operation of another application (qore#7010)
+        DLLLOCAL static bool takesKeyOfOtherApp(bool sandboxed, qore_program_id_t app_id, qore_program_id_t other_app,
+                const QoreObject* other_spop, const QoreObject* spop_obj) {
+            if (!sandboxed || other_spop == spop_obj) {
+                return false;
+            }
+            // fails closed: sandboxed code that runs for no known application takes the key of no other operation
+            return app_id == QORE_NO_PROGRAM_ID || !app_id || other_app != app_id;
+        }
+
+        //! Reserves the key for a submission that is queued for the thread, and checks it against the other threads
+        /** The caller holds the lock of the controller, which orders the submissions.  An operation or submission of the
+            same thread, or of the same poll operation, is not a collision: the thread's commands are processed in
+            order, and its cache decides.
+
+            @param token receives the token of the reservation, 0 if none was made (the key is in use on the thread
+            or refused)
+            @param displaced receives the entry that a Replace took the key from
+        */
+        DLLLOCAL KeyCollision reserve(const std::string& key, int thread_idx, bool replace, bool sandboxed,
+                qore_program_id_t app_id, const QoreObject* spop_obj, uint64_t& token, Entry& displaced) {
+            token = 0;
+            std::lock_guard<std::mutex> lock(l);
+            auto i = map.find(key);
+            if (i == map.end()) {
+                Entry e;
+                e.thread_idx = thread_idx;
+                e.token = last_token + 1;
+                e.app_pgm_id = app_id;
+                e.spop_obj = spop_obj;
+                map.emplace(key, e);
+                token = ++last_token;
+                return KeyCollision::None;
+            }
+            Entry& e = i->second;
+            if (e.thread_idx == thread_idx || e.spop_obj == spop_obj) {
+                return KeyCollision::None;
+            }
+            if (!replace) {
+                return KeyCollision::Refuse;
+            }
+            if (takesKeyOfOtherApp(sandboxed, app_id, e.app_pgm_id, e.spop_obj, spop_obj)) {
+                return KeyCollision::TakeOther;
+            }
+            displaced = e;
+            e.thread_idx = thread_idx;
+            e.token = token = ++last_token;
+            e.app_pgm_id = app_id;
+            e.spop_obj = spop_obj;
+            return KeyCollision::Replace;
+        }
+
+        //! Returns the token for an operation that the thread admits without a reservation, registering it if the key
+        //! has no entry; 0 if the key's entry belongs to another thread (the operation is then not registered)
+        DLLLOCAL uint64_t adopt(const std::string& key, int thread_idx, qore_program_id_t app_id,
+                const QoreObject* spop_obj) noexcept {
+            try {
+                std::lock_guard<std::mutex> lock(l);
+                auto i = map.find(key);
+                if (i != map.end()) {
+                    return i->second.thread_idx == thread_idx ? i->second.token : 0;
+                }
+                Entry e;
+                e.thread_idx = thread_idx;
+                e.token = last_token + 1;
+                e.app_pgm_id = app_id;
+                e.spop_obj = spop_obj;
+                map.emplace(key, e);
+                return ++last_token;
+            } catch (...) {
+                // out of memory: the operation is not seen by the submissions of other threads
+                return 0;
+            }
+        }
+
+        //! Sets the owner of the entry when an operation takes it over from the operation of its thread that it replaced
+        /** Called as soon as the token is taken over, before the replaced operation is canceled: its canceled result is
+            the first thing that code of another thread can see, and a submission it makes then is decided against the
+            new owner
+        */
+        DLLLOCAL void update(const std::string& key, uint64_t token, qore_program_id_t app_id,
+                const QoreObject* spop_obj) noexcept {
+            std::lock_guard<std::mutex> lock(l);
+            auto i = map.find(key);
+            if (i != map.end() && i->second.token == token) {
+                i->second.app_pgm_id = app_id;
+                i->second.spop_obj = spop_obj;
+            }
+        }
+
+        //! Gives the key back when its operation or submission ends; the entry of a newer one stays
+        DLLLOCAL void release(const std::string& key, uint64_t token) noexcept {
+            if (!token) {
+                return;
+            }
+            std::lock_guard<std::mutex> lock(l);
+            auto i = map.find(key);
+            if (i != map.end() && i->second.token == token) {
+                map.erase(i);
+            }
+        }
+
+    private:
+        mutable std::mutex l;
+        std::unordered_map<std::string, Entry> map;
+        uint64_t last_token = 0;
+    };
+
     //! Forward declaration — full definition below (requires PollInfo)
     struct AsyncOpCompletion;
 
@@ -1587,6 +1734,11 @@ private:
             processed, so the address cannot be reused meanwhile
         */
         const QoreObject* cancel_spop_obj = nullptr;
+        //! For Cancel: if not 0, only the operation with this key token is canceled (qore#7624)
+        /** The tokens are never reused, so the cancel of the operation that another thread's submission replaced
+            cannot cancel the operation that has taken its key since
+        */
+        uint64_t cancel_key_token = 0;
         //! For Cancel / CancelOwner: the operations that the canceling code may cancel (qore#7010)
         AioAppRestriction restrict_app;
         //! For SubmitOp: the application that the operation is submitted for (see callerAppId())
@@ -1689,6 +1841,13 @@ private:
         bool submit_qop_registered = false;
         //! For SubmitOp: the generation of the registration (qore#7168)
         uint64_t submit_qop_gen = 0;
+        //! For SubmitOp: the token of the key reserved for the submission when it was queued, 0 if none (qore#7624)
+        /** The reservation is given back when the submission is discarded (takeSubmitPollInfo(),
+            cleanupAbandonedCommand()), and passes to the operation when it is admitted
+        */
+        uint64_t submit_key_token = 0;
+        //! For SubmitOp: a collision with the key of an operation of another thread that refuses the submission
+        KeyCollision submit_key_collision = KeyCollision::None;
     };
 
     //! A cancellation that a CancelByProgram command deferred until the result of the operation's step (qore#6703)
@@ -1725,6 +1884,8 @@ private:
         std::string owner;              //!< Owner identifier
         //! the application that the operation was submitted for (see callerAppId(), qore#7010)
         qore_program_id_t app_pgm_id = 0;
+        //! the token of the operation's key in the registry of the controller (qore#7624), 0 if it has none
+        uint64_t key_token = 0;
         //! Inherited cancel scope: the owner of the poll op whose
         //! continuePoll() spawned this op (empty if none).  cancelByOwner()
         //! matches this in addition to @ref owner so cancelling a poll op
@@ -2146,6 +2307,20 @@ private:
             return emplaceWithId(key, 0);
         }
 
+        //! Gives the keys of the cache's operations back to the registry when they leave (qore#7624)
+        /** Set once, before the cache is used; a cache of a test has none
+        */
+        DLLLOCAL void setRegistry(KeyRegistry* r) {
+            registry = r;
+        }
+
+        //! Gives a key back to the registry
+        DLLLOCAL void releaseKey(const std::string& key, uint64_t token) {
+            if (registry) {
+                registry->release(key, token);
+            }
+        }
+
         //! Returns the operation with the given key, inserting it with the given ID (or a new one if 0) if there is none
         DLLLOCAL PollInfo& emplaceWithId(const std::string& key, uint64_t id) {
             auto [it, inserted] = map.try_emplace(key);
@@ -2163,6 +2338,11 @@ private:
 
         //! Removes all operations
         DLLLOCAL void clear() {
+            if (registry) {
+                for (auto& i : map) {
+                    registry->release(i.first, i.second.key_token);
+                }
+            }
             by_id.clear();
             node_ids.clear();
             map.clear();
@@ -2180,6 +2360,11 @@ private:
             // the ID is looked up by node: the entry's PollInfo can have been reset before it is removed
             auto nit = node_ids.find(&*it);
             assert(nit != node_ids.end());
+            // an operation that is taken out to be replaced at once (takeOpKeepingId()) has no token left here: it
+            // passes to the operation that replaces it
+            if (registry) {
+                registry->release(it->first, it->second.key_token);
+            }
             by_id.erase(nit->second);
             node_ids.erase(nit);
             return map.erase(it);
@@ -2200,6 +2385,8 @@ private:
         std::unordered_map<const node_t*, uint64_t> node_ids;
         //! The last ID given to an operation
         uint64_t last_id = 0;
+        //! The registry of the keys of all I/O threads, if the cache has one (qore#7624)
+        KeyRegistry* registry = nullptr;
     };
 
     //! The sockets of an I/O thread that closes made by other threads woke (qore#7003)
@@ -2276,7 +2463,10 @@ private:
         */
         DLLLOCAL PollInfo takeUnregisteredOp(OpCache::iterator it) {
             assert(!hasRegistrations(it->second.op_id));
-            return takeOpKeepingId(it);
+            std::string key = it->first;
+            PollInfo rv = takeOpKeepingId(it);
+            cache.releaseKey(key, rv.key_token);
+            return rv;
         }
 
         //! Removes an operation with no registrations that has been processed in place from the cache
@@ -2587,6 +2777,8 @@ private:
     }
 
     // --- I/O thread contexts ---
+    //! The keys of the operations of all I/O threads; declared before the threads, whose caches use it (qore#7624)
+    KeyRegistry key_registry;
     std::vector<std::unique_ptr<IoThreadContext>> io_threads;  //!< One per I/O thread (default: getDefaultIoThreadCount())
     int num_io_threads;                       //!< Configured thread count
 
@@ -2717,9 +2909,15 @@ private:
         AioCallbackAppScope), except the sandboxed code of an application Program, which runs for its own application
 
         Operations record the application that they are submitted for; code that is sandboxed cancels, flushes and
-        replaces only the operations of its own application, as keys and owners can be guessed
+        replaces only the operations of its own application, as keys and owners can be guessed.  The trusted code of
+        a Program that is not a module and that runs for sandboxed code acts for that code's application, unless it
+        elevated explicitly (see qore_host_code_sandboxed_app_id(), qore#7148)
+
+        @param sandboxed the result of qore_caller_is_sandboxed() if the caller has it, or -1
     */
-    DLLLOCAL static qore_program_id_t callerAppId();
+    DLLLOCAL static qore_program_id_t callerAppId(int sandboxed = -1);
+    //! gives callerAppId() to the capture of the sandbox contexts (QoreSandboxContext::app_id, qore#7148)
+    friend qore_program_id_t qore_aio_caller_app_id(int sandboxed);
 
     //! Returns the operations that the calling code may cancel or flush by key or owner
     /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no
@@ -3456,6 +3654,19 @@ private:
         A registration left behind in spite of this is removed at its first event; see removeOrphanRegistration().
     */
     DLLLOCAL PollInfo retireOp(IoThreadContext& t, OpCache::iterator it, ExceptionSink* xsink);
+
+    //! Cancels the operation or submission with the key token on another I/O thread, as the replacement of its key does
+    /** @param old the entry that the replacing submission took the key from (qore#7624)
+
+        Called without the lock of the controller.
+    */
+    DLLLOCAL void cancelKeyedOp(const KeyRegistry::Entry& old, const std::string& key, ExceptionSink* xsink);
+
+    //! Gives the key reservation of a submission back when the submission is discarded (qore#7624)
+    DLLLOCAL void releaseSubmitKey(Command& cmd) {
+        key_registry.release(cmd.key, cmd.submit_key_token);
+        cmd.submit_key_token = 0;
+    }
 
     //! Returns true if an operation in the cache waits for the socket with the given hash
     DLLLOCAL static bool socketHasOperation(IoThreadContext& t, const std::string& sock_hash);

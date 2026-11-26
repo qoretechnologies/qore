@@ -982,6 +982,8 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
         ? static_cast<const QoreClosureBase*>(update) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     ClassAccess access;
+    // sandbox_ctx is set for a class of restricted code (qore#7635); the closure's code is that of pgm, which no
+    // sandbox governs (checked above), which keeps the rule for a class of any sandboxed code
     if (!closure_class || closure_class->sandbox_ctx
         || !qore_class_private::get(*theclass)->getAccessClass(*closure_class, access)
         || qore_closure_code_program(closure) != pgm) {
@@ -1026,6 +1028,8 @@ int qore_object_private::checkSharedCallback(const ResolvedCallReferenceNode* ca
         ? static_cast<const QoreClosureBase*>(callback) : nullptr;
     const qore_class_private* closure_class = closure ? closure->getClassContext() : nullptr;
     const QoreProgram* code_pgm = closure ? qore_closure_code_program(closure) : nullptr;
+    // sandbox_ctx is set for a class of restricted code (qore#7635); qore_program_is_sandboxed() refuses the closures
+    // of any sandboxed Program
     if (closure_class && !closure_class->sandbox_ctx && code_pgm && !qore_program_is_sandboxed(code_pgm)) {
         return 0;
     }
@@ -2929,7 +2933,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         in_destructor = true;
         // mark status as in destructor
-        status = q_gettid();
+        status = getDestroyingStatus();
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -3035,7 +3039,7 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
         (void)pd;
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
 
     // run the destructor
@@ -3392,14 +3396,14 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
         if (priv->status == OS_DELETED)
             return;
 
-        if (priv->in_destructor || priv->status > 0) {
+        if (priv->in_destructor || priv->status != OS_OK) {
             xsink->raiseException("DOUBLE-DELETE-EXCEPTION", "destructor called from within destructor for class %s",
                 getClassName());
             return;
         }
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
     priv->doDeleteIntern(xsink);
 }

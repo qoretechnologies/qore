@@ -115,6 +115,18 @@ public:
         return max_wait_charge_ms;
     }
 
+    //! Starts a new measurement with the same settings, as after the waits that were measured have ended
+    /** A sender that ends the waits of a peer below the rate starts again with a full credit, so that its later sends
+        are not charged for the ended ones
+    */
+    void restart() {
+        bool steps = progress_steps;
+        int64_t max_charge = max_wait_charge_ms;
+        *this = SendRateWindow(min_rate, window_ms);
+        progress_steps = steps;
+        max_wait_charge_ms = max_charge;
+    }
+
     //! Returns true if the check allows for progress in steps
     bool hasProgressSteps() const {
         return progress_steps;

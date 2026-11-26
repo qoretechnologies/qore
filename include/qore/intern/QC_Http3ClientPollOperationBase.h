@@ -196,7 +196,7 @@ public:
     //! Installs an SSE parser on an active ChannelAction stream
     DLLLOCAL void installSseState(int64_t stream_id, Queue* queue,
         QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool aws_event_stream = false);
 
     //! Wait on stream_capacity_cond (for STREAM_ID_BLOCKED retry)
     DLLLOCAL void waitStreamCapacity(int64_t timeout_ms);
@@ -587,7 +587,8 @@ private:
 
     //! Stream IDs registered for onStreamData() notifications
     /** Populated by registerStreamNotify(); checked in handleReading() to signal
-        data_ready_streams after ChannelAction dispatch.
+        data_ready_streams after ChannelAction dispatch, and in notifyPendingStreams(), which removes the streams that
+        the failure of the connection notifies (issue #7695).  Guarded by stream_lock.
     */
     std::unordered_set<int64_t> notify_streams;
 

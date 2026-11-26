@@ -1,0 +1,439 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) connections to the listeners of a server
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  qore#7690: a listener opened for the handlers of one client (a dedicated listener) serves only its own handlers
+    when it has the own_handlers_only option: never the handlers or the default handler of the server, also while it
+    has no handler (503); the QUIC listener paired with a TLS listener gets its handlers and the setting.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerDedicatedListenerTest
+
+#! answers with its name
+class NamedHandler inherits AbstractHttpRequestHandler {
+    private {
+        string name;
+        bool inline;
+    }
+
+    constructor(string name, bool inline = False) {
+        self.name = name;
+        self.inline = inline;
+    }
+
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return inline;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": name + "-inline"};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": name};
+    }
+}
+
+#! holds the request until released
+class HoldingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter held(1);
+        Counter release(1);
+        #! set when the handler returns
+        bool returned;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        held.dec();
+        release.waitForZero();
+        returned = True;
+        return <HttpResponseInfo>{"code": 200, "body": "held"};
+    }
+}
+
+class HttpServerDedicatedListenerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HTTP server: listeners that serve only their own handlers", "1.0", \ARGV) {
+        addTestCase("the feature option", \featureTest());
+        addTestCase("a listener without handlers does not serve those of the server", \noHandlersTest());
+        addTestCase("a listener without handlers does not serve the dynamic handlers of the server",
+            \dynamicHandlerTest());
+        addTestCase("a listener with handlers serves only its own", \ownHandlersTest());
+        addTestCase("the paired HTTP/3 listener gets the handlers and the setting", \pairedHttp3Test());
+        addTestCase("a TLS listener without handlers answers 503 over HTTP/2 and HTTP/3", \noHandlersTlsTest());
+        addTestCase("a listener does not serve the fast routes of the server", \fastRoutesTest());
+        addTestCase("a listener whose last handler is removed is stopped", \removeLastHandlerTest());
+        addTestCase("a listener's stop refuses new connections before it waits", \stopRefusesTest());
+        addTestCase("a listener's stop ends also when it raises an exception", \stopExceptionTest());
+        addTestCase("a listener's stop that raises an exception waits for the requests in progress",
+            \stopExceptionInProgressTest());
+        set_return_value(main());
+    }
+
+    #! returns a server with a global handler and a global default handler, which can answer inline
+    private HttpServer getServer() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setHandler("global", "", NOTHING, new NamedHandler("GLOBAL", True));
+        server.setDefaultHandler("global-default", new NamedHandler("GLOBAL-DEFAULT", True));
+        return server;
+    }
+
+    #! returns the status code and the body of a request
+    private list<auto> get(HTTPClient hc, string path = "/x") {
+        hash<auto> info;
+        try {
+            string body = hc.get(path, NOTHING, \info);
+            return (200, body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR") {
+                return (ex.arg.status_code, ex.err);
+            }
+            rethrow;
+        }
+    }
+
+    featureTest() {
+        bool have;
+%ifdef HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION
+        have = True;
+%endif
+        assertTrue(have, "HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION is defined");
+        assertTrue(Option::HAVE_HTTPSERVER_DEDICATED_LISTENER_ISOLATION);
+    }
+
+    noHandlersTest() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        # a listener of the server's handlers: serves them, as before
+        int shared = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        # a dedicated listener without handlers
+        int dedicated = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+        }).port;
+        server.waitForAsyncIo();
+        list<auto> rv = get(new HTTPClient({"url": "http://127.0.0.1:" + shared}));
+        assertEq(200, rv[0], "a listener of the server's handlers");
+        assertRegex("^GLOBAL", rv[1], "a listener of the server's handlers serves them");
+        assertEq(503, get(new HTTPClient({"url": "http://127.0.0.1:" + dedicated}))[0],
+            "a dedicated listener without handlers");
+    }
+
+    dynamicHandlerTest() {
+        # a server with only a dynamic handler
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDynamicHandler("dyn", "^dyn", NOTHING, new NamedHandler("DYN"));
+        int shared = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        int dedicated = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+        }).port;
+        server.waitForAsyncIo();
+        assertEq((200, "DYN"), get(new HTTPClient({"url": "http://127.0.0.1:" + shared}), "/dyn"),
+            "a listener of the server's handlers serves its dynamic handlers");
+        assertEq(503, get(new HTTPClient({"url": "http://127.0.0.1:" + dedicated}), "/dyn")[0],
+            "a dedicated listener without handlers: not a dynamic handler of the server");
+    }
+
+    noHandlersTlsTest() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "own_handlers_only": True,
+        });
+        server.waitForAsyncIo();
+        HTTPClient h2({"url": "https://127.0.0.1:" + li.port, "ssl_verify_cert": False, "http_version": "2.0"});
+        assertEq(503, get(h2)[0], "HTTP/2: a dedicated listener without handlers");
+        assertEq("HTTP/2", h2.getHttpVersion(), "HTTP/2 negotiated");
+        HTTPClient h3({"url": "https://127.0.0.1:" + li.port, "ssl_verify_cert": False, "http_version": "3"});
+        try {
+            h3.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("HTTP/3 not available: %s: %s", ex.err, ex.desc));
+        }
+        if (h3.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", h3.getHttpVersion()));
+        }
+        assertEq(503, get(h3)[0], "HTTP/3: the paired listener of a dedicated listener without handlers");
+    }
+
+    fastRoutesTest() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        # a route created before the listeners are added: attached when a listener starts
+        server.addFastRoute("/early", {"public": True, "response": {"code": 200, "body": "EARLY", "content_type": "text/plain"}});
+        int shared = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        int dedicated = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+            "handler_info": {"own": <HttpHandlerConfigInfo>{"path": "^own", "isregex": True, "handler": new NamedHandler("OWN")}},
+        }).port;
+        server.waitForAsyncIo();
+        HTTPClient shc({"url": "http://127.0.0.1:" + shared});
+        HTTPClient dhc({"url": "http://127.0.0.1:" + dedicated});
+        assertEq((200, "EARLY"), get(shc, "/early"), "a listener of the server's handlers serves its fast routes");
+        assertEq((200, "OWN"), get(dhc, "/early"), "a dedicated listener: not a fast route of the server");
+
+        # a server without routes, whose first route is created after the listeners were added: attached to the
+        # existing listeners
+        HttpServer server2 = getServer();
+        on_exit server2.stop();
+        shared = server2.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        dedicated = server2.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+            "handler_info": {"own": <HttpHandlerConfigInfo>{"path": "^own", "isregex": True, "handler": new NamedHandler("OWN")}},
+        }).port;
+        server2.waitForAsyncIo();
+        server2.addFastRoute("/late", {"public": True, "response": {"code": 200, "body": "LATE", "content_type": "text/plain"}});
+        shc = new HTTPClient({"url": "http://127.0.0.1:" + shared});
+        dhc = new HTTPClient({"url": "http://127.0.0.1:" + dedicated});
+        assertEq((200, "LATE"), get(shc, "/late"), "a listener of the server's handlers: a route created later");
+        assertEq((200, "OWN"), get(dhc, "/late"), "a dedicated listener: not a route created later");
+    }
+
+    removeLastHandlerTest() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+        });
+        server.waitForAsyncIo();
+        server.addHandlerToListenerID(li.id, "added", <HttpHandlerConfigInfo>{"path": "", "handler": new NamedHandler("ADDED")});
+        assertEq((200, "ADDED"), get(new HTTPClient({"url": "http://127.0.0.1:" + li.port})), "the added handler");
+        assertTrue(server.removeHandlerFromListenerID(li.id, "added"), "the listener is stopped");
+        assertFalse(exists server.getListeners(){li.id}, "the listener is removed");
+        Socket c();
+        assertThrows("SOCKET-CONNECT-ERROR", \c.connect(), ("127.0.0.1:" + li.port, 5s));
+    }
+
+    ownHandlersTest() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+            "handler_info": {"own": <HttpHandlerConfigInfo>{"path": "^own", "isregex": True, "handler": new NamedHandler("OWN")}},
+        });
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + li.port});
+        assertEq((200, "OWN"), get(hc, "/own"), "its own handler");
+        # a request that no handler of the listener matches: the listener's default handler (its first one), never
+        # the server's handler or default handler
+        assertEq((200, "OWN"), get(hc, "/other"), "no handler of the listener matches");
+        # a handler added to the listener is served
+        server.addHandlerToListenerID(li.id, "added", <HttpHandlerConfigInfo>{"path": "^added", "isregex": True,
+            "handler": new NamedHandler("ADDED")});
+        assertEq((200, "ADDED"), get(hc, "/added"), "an added handler");
+    }
+
+    stopRefusesTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
+        }
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        HoldingHandler h();
+        # the request held is released also when the test fails, so that the server's stop above does not wait for
+        # it forever
+        on_exit if (h.release.getCount()) {
+            h.release.dec();
+        }
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+            "handler_info": {"hold": <HttpHandlerConfigInfo>{"path": "", "handler": h}},
+        });
+        server.waitForAsyncIo();
+        # a request in progress, which the stop waits for
+        Counter held_done(1);
+        background sub () {
+            on_exit held_done.dec();
+            try {
+                # the timeout only bounds a failing run, whose connection can be left open
+                (new HTTPClient({"url": "http://127.0.0.1:" + li.port, "timeout": 20s})).get("/hold");
+            } catch (hash<ExceptionInfo> ex) {
+                # the delivery of the response in progress is qore#7692
+            }
+        }();
+        h.held.waitForZero();
+        # the stop is held after it has stopped accepting and before it waits for the request in progress
+        Counter in_hook(1);
+        Counter checked(1);
+        bool hook_ran;
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            if (l.getID() == li.id) {
+                hook_ran = True;
+                in_hook.dec();
+                checked.waitForZero();
+            }
+        });
+        on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+        Counter stop_done(1);
+        *hash<ExceptionInfo> stop_ex;
+        background sub () {
+            on_exit stop_done.dec();
+            # a stop that fails before the hook does not leave the test waiting for the hook
+            on_exit if (in_hook.getCount()) {
+                in_hook.dec();
+            }
+            try {
+                server.stopListenerID(li.id);
+            } catch (hash<ExceptionInfo> ex) {
+                stop_ex = ex;
+            }
+        }();
+        in_hook.waitForZero();
+        assertTrue(hook_ran, "the stop is held in the hook");
+        # a new connection is refused while the stop drains
+        Socket c();
+        assertThrows("SOCKET-CONNECT-ERROR", \c.connect(), ("127.0.0.1:" + li.port, 5s));
+        # a connection that was accepted (without the fix) is closed, so that the stop does not wait for it
+        if (c.isOpen()) {
+            c.close();
+        }
+        checked.dec();
+        h.release.dec();
+        held_done.waitForZero();
+        stop_done.waitForZero();
+        assertNothing(stop_ex, "the stop raised no exception");
+    }
+
+    stopExceptionTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
+        }
+        HttpServer server(<HttpServerOptionInfo>{});
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "own_handlers_only": True});
+        server.waitForAsyncIo();
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            if (l.getID() == li.id) {
+                throw "STOP-HOOK-ERROR", "the stop raises an exception";
+            }
+        });
+        on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+        assertThrows("STOP-HOOK-ERROR", \server.stopListenerID(), li.id);
+        # the server was notified of the stop of the listener: its own stop returns
+        server.stop();
+        assertEq(0, server.getListeners().size(), "no listener is left");
+    }
+
+    stopExceptionInProgressTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for HttpListener::dbgSetStoppingHook()");
+        }
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        HoldingHandler h();
+        # the request held is released also when the test fails, so that the server's stop above does not wait for
+        # it forever
+        on_exit if (h.release.getCount()) {
+            h.release.dec();
+        }
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "own_handlers_only": True,
+            "handler_info": {"hold": <HttpHandlerConfigInfo>{"path": "", "handler": h}},
+        });
+        server.waitForAsyncIo();
+        Counter held_done(1);
+        background sub () {
+            on_exit held_done.dec();
+            try {
+                # the timeout only bounds a failing run, whose connection can be left open
+                (new HTTPClient({"url": "http://127.0.0.1:" + li.port, "timeout": 20s})).get("/hold");
+            } catch (hash<ExceptionInfo> ex) {
+                # the delivery of the response in progress is qore#7692
+            }
+        }();
+        h.held.waitForZero();
+        Counter in_hook(1);
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook", sub (HttpListener l) {
+            if (l.getID() == li.id) {
+                in_hook.dec();
+                throw "STOP-HOOK-ERROR", "the stop raises an exception";
+            }
+        });
+        on_exit call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+        Counter stop_done(1);
+        *string err;
+        # whether the request in progress had ended when the stop returned
+        bool request_ended;
+        background sub () {
+            on_exit stop_done.dec();
+            try {
+                server.stopListenerID(li.id);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            request_ended = h.returned;
+        }();
+        in_hook.waitForZero();
+        h.release.dec();
+        held_done.waitForZero();
+        stop_done.waitForZero();
+        assertEq("STOP-HOOK-ERROR", err, "the exception of the stop is raised");
+        assertTrue(request_ended, "the stop waited for the request in progress");
+        assertFalse(exists server.getListeners(){li.id}, "the listener is removed");
+    }
+
+    pairedHttp3Test() {
+        HttpServer server = getServer();
+        on_exit server.stop();
+        server.addFastRoute("/fast", {"public": True, "response": {"code": 200, "body": "FAST", "content_type": "text/plain"}});
+        hash<auto> li = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "own_handlers_only": True,
+            "handler_info": {"own": <HttpHandlerConfigInfo>{"path": "^own", "isregex": True, "handler": new NamedHandler("OWN")}},
+        });
+        server.waitForAsyncIo();
+        # the TLS listener
+        HTTPClient h2({"url": "https://127.0.0.1:" + li.port, "ssl_verify_cert": False, "http_version": "2.0"});
+        assertEq((200, "OWN"), get(h2, "/own"), "HTTP/2: its own handler");
+        assertEq((200, "OWN"), get(h2, "/other"), "HTTP/2: no handler of the listener matches");
+        assertEq((200, "OWN"), get(h2, "/fast"), "HTTP/2: not a fast route of the server");
+        # the paired QUIC listener, on the same port
+        HTTPClient h3({"url": "https://127.0.0.1:" + li.port, "ssl_verify_cert": False, "http_version": "3"});
+        try {
+            h3.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("HTTP/3 not available: %s: %s", ex.err, ex.desc));
+        }
+        if (h3.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", h3.getHttpVersion()));
+        }
+        assertEq((200, "OWN"), get(h3, "/own"), "HTTP/3: the handler of the TLS listener");
+        assertEq((200, "OWN"), get(h3, "/other"), "HTTP/3: not the server's handlers");
+        assertEq((200, "OWN"), get(h3, "/fast"), "HTTP/3: not a fast route of the server");
+    }
+}

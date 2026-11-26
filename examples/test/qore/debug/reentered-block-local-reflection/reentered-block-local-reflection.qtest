@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes
+# test-platform: macos - JIT code generation of loop bodies whose locals are visible to reflection
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class ReenteredBlockLocalReflectionTest
+
+#! a local of a block that runs again is a local of the frame for reflection in every run of the block
+/** The IR interpreter cleared such a local at the end of the block (it stays on the stack, marked as cleared) and did
+    not mark it active again when the block ran again, so get_local_vars() left it out in every iteration of a loop
+    after the first (qore#7640).  Every execution mode must give the values of the AST interpreter.  Programs compiled
+    with qcc are not checked: AOT code does not give the locals that it keeps in native code to reflection.
+*/
+class ReenteredBlockLocalReflectionTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string worker = get_script_dir() + "/reentered-block-local-reflection-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ReenteredBlockLocalReflection", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("locals of re-entered blocks in every execution mode", \checkModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkOutput(string out, string mode) {
+        list<string> lines = select out.split("\n"), $1;
+        assertEq(6, lines.size(), mode + ": all cases ran");
+        assertEq((), (select lines, !($1 =~ /^PASS /)), mode + ": every case gives the expected value");
+    }
+
+    checkModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker)), mode);
+        }
+        checkOutput(ExecModeHarness::run_ir_tier(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker)), ExecModeHarness::IRTierName);
+    }
+}

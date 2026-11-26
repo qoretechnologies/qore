@@ -306,6 +306,7 @@ public class DataProvider {
             "sglang": "SGLangDataProvider",
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
+            "pdf": "PdfDataProvider",
             "pdfco": "PdfCoDataProvider",
             "convertapi": "ConvertApiDataProvider",
             "segment": "SegmentDataProvider",
@@ -949,6 +950,10 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     DataProvider::listKnownFactories()), exists $1;
         @endcode
 
+        The optional native PDF factory (\c pdf) exposes form actions when \c PdfDataProvider is installed.
+        Its render and text-extraction actions also require PDFium. Regenerate the provider index after changing
+        these installed capabilities. The PDF.co service uses its own factory, \c pdfco.
+
         @note Without an index recording factory info, a returned factory may not be available, as when the module
         of a known factory is not installed; @ref tryGetFactoryInfoAsData() then returns @ref nothing for it
 
@@ -1093,8 +1098,12 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
 
         @throw PROVIDER-ERROR the given provider has already been registered
 
-        @note types are stored based on the path provided which may differ from their type names (which may be generic
-        and therefore not suitable for indexing)
+        @note
+        - types are stored based on the path provided which may differ from their type names (which may be generic
+          and therefore not suitable for indexing)
+        - every caller of the process-wide cache gets the type, so a type that code no sandbox governs registers is
+          frozen (see AbstractDataProviderType::freeze()): sandboxed code cannot change or delete it, or the types
+          and fields that it holds, also those added to it later (qore#7728)
     */
     static registerType(string path, AbstractDataProviderType type) [dom=PROCESS_CONTROL] {
         # a type path taken by sandboxed code would be denied to the module that owns it
