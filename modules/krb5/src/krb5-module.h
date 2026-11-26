@@ -278,6 +278,9 @@ class QoreKrb5Keytab : public AbstractPrivateData {
 public:
     krb5_context ctx = nullptr;
     krb5_keytab keytab = nullptr;
+    //! the prefix of the names of the keytabs of the isolation domain of the code that a sandbox governs that opened
+    //! the keytab, which the names that it gives leave out (qore#7736)
+    std::string visible_prefix;
 
     DLLLOCAL QoreKrb5Keytab(const char* keytab_name, bool use_default, ExceptionSink* xsink);
     DLLLOCAL ~QoreKrb5Keytab() override;

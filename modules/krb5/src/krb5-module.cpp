@@ -497,7 +497,14 @@ static int krb5_map_cache_name(const char* name, const Krb5CacheNamespace& ns, s
     if (type == "KEYRING") {
         size_t off = krb5_keyring_name_offset(residual);
         if (off != std::string::npos) {
-            out = "KEYRING:" + residual.substr(0, off) + ns.prefix + residual.substr(off);
+            // the collection, and the cache name in it if one is given (kind:coll:name), get the prefix, as the names
+            // given back leave it out of both (see krb5_visible_cache_name())
+            std::string rest = residual.substr(off);
+            size_t sub = rest.find(':');
+            if (sub != std::string::npos) {
+                rest = rest.substr(0, sub + 1) + ns.prefix + rest.substr(sub + 1);
+            }
+            out = "KEYRING:" + residual.substr(0, off) + ns.prefix + rest;
             return 0;
         }
     }
@@ -651,12 +658,42 @@ static bool krb5_check_keytab_access(krb5_context ctx, krb5_keytab keytab, int m
     }
 
     if (krb5_keytab_backend_is_non_filesystem(type)) {
-        return true;
+        // only a keytab of the caller's isolation domain (qore#7736): memory keytabs are shared by name in the
+        // process, as memory credential caches are (qore#7671)
+        Krb5CacheNamespace ns;
+        if (krb5_cache_namespace(ns, xsink, context)) {
+            return false;
+        }
+        const char* residual = strchr(name, ':');
+        residual = residual ? residual + 1 : name;
+        if (!strncmp(residual, ns.prefix.c_str(), ns.prefix.size())) {
+            return true;
+        }
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "%s: the %s keytab belongs to other code than the code that a "
+            "sandbox governs, and is not visible to it", context, type);
+        return false;
     }
 
     xsink->raiseException("KRB5-SANDBOX-ERROR",
         "%s: keytab backend '%s' is not supported in sandboxed mode", context, type);
     return false;
+}
+
+//! Gives the name of the keytab of the caller's namespace that a keytab name that it gives refers to (qore#7736)
+/** File based keytabs keep their names (the filesystem sandbox applies); a \c MEMORY keytab name refers to a keytab
+    of the caller's isolation domain; other keytab types are refused by the access check
+
+*/
+static void krb5_map_keytab_name(const char* name, const Krb5CacheNamespace& ns, std::string& out) {
+    out = name;
+    if (!ns.sandboxed) {
+        return;
+    }
+    std::string type, residual;
+    krb5_split_cache_name(name, type, residual);
+    if (type == "MEMORY") {
+        out = "MEMORY:" + ns.prefix + residual;
+    }
 }
 
 static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsink, const char* context) {
@@ -1432,6 +1469,17 @@ void QoreGssAcceptorContext::reset() {
 }
 
 QoreHashNode* QoreGssAcceptorContext::step(const char* token_hex, ExceptionSink* xsink) {
+    // without a credential, the acceptor uses the default keytab of the process, which is not visible to code that
+    // a sandbox governs (qore#7736): it gives a credential of a keytab of its own
+    if (!cred_ref) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh) {
+            xsink->raiseException("KRB5-SANDBOX-ERROR", "accepting GSSAPI security context: the default keytab of the "
+                "process is not visible to code that a sandbox governs; give a credential of a keytab of its own "
+                "(GssCredential::fromKeytab())");
+            return nullptr;
+        }
+    }
     if (!token_hex || !*token_hex) {
         xsink->raiseException("KRB5-TOKEN-ERROR", "GSSAPI acceptor input token cannot be empty");
         return nullptr;
@@ -1758,6 +1806,54 @@ QoreGssCredential::QoreGssCredential(gss_cred_id_t existing_cred) : cred(existin
 
 QoreGssCredential::QoreGssCredential(const QoreKrb5CredentialCache& cache, ExceptionSink* xsink) {
     if (!krb5_check_cache_access(cache.ctx, cache.cache, QSEC_READ, xsink, "importing GSSAPI credential from cache")) {
+        return;
+    }
+
+    // an initiator credential of a cache without a ticket gets one with the client keytab, which is the default client
+    // keytab of the process when the credential names none: the credential of code that a sandbox governs names the
+    // cache and a client keytab of its isolation domain (qore#7736)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "importing GSSAPI credential from cache")) {
+        return;
+    }
+    if (ns.sandboxed) {
+#ifdef HAVE_GSS_ACQUIRE_CRED_FROM
+        // the library gets a ticket with a key of the domain's client keytab when the cache has none, and stores it and
+        // the tickets that it refreshes in the cache: a request to the KDC that writes the cache
+        if (!krb5_check_cache_access(cache.ctx, cache.cache, QSEC_READ | QSEC_WRITE, xsink,
+                "importing GSSAPI credential from cache")
+            || !krb5_network_sandbox_allows_unmanaged_library_io(xsink, "importing GSSAPI credential from cache")
+            || qore_check_cancel(xsink, "importing GSSAPI credential from cache")) {
+            return;
+        }
+        char* full_name = nullptr;
+        krb5_error_code rc = krb5_cc_get_full_name(cache.ctx, cache.cache, &full_name);
+        if (rc) {
+            krb5_raise_exception(xsink, cache.ctx, rc, "KRB5-CACHE-ERROR", "getting credential cache full name");
+            return;
+        }
+        std::string ccache_name(full_name);
+        krb5_free_string(cache.ctx, full_name);
+        std::string client_keytab = "MEMORY:" + ns.prefix + "client";
+        gss_key_value_element_desc elements[2] = {
+            {"ccache", ccache_name.c_str()},
+            {"client_keytab", client_keytab.c_str()},
+        };
+        gss_key_value_set_desc store = {2, elements};
+        // the Kerberos mechanism only, as the import of a cache: no default credentials of other mechanisms
+        gss_OID_set_desc mechs = {1, gss_mech_krb5};
+        OM_uint32 min_stat = 0;
+        OM_uint32 maj = gss_acquire_cred_from(&min_stat, GSS_C_NO_NAME, GSS_C_INDEFINITE, &mechs,
+            GSS_C_INITIATE, &store, &cred, nullptr, nullptr);
+        if (maj != GSS_S_COMPLETE) {
+            gss_raise_exception(xsink, "KRB5-GSS-ERROR", maj, min_stat,
+                "importing GSSAPI credential from credential cache");
+        }
+#else
+        xsink->raiseException("KRB5-SANDBOX-ERROR", "importing GSSAPI credential from cache: this GSSAPI library cannot "
+            "keep the client keytab of code that a sandbox governs apart from that of the process "
+            "(gss_acquire_cred_from() is not available)");
+#endif
         return;
     }
 
@@ -2248,6 +2344,14 @@ QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xs
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultKeytabName(ExceptionSink* xsink) const {
+    // the default keytab of code that a sandbox governs is a memory keytab of its isolation domain (qore#7736)
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "getting the default keytab name")) {
+        return nullptr;
+    }
+    if (ns.sandboxed) {
+        return new QoreStringNode("MEMORY:default");
+    }
     char name[MAX_KEYTAB_NAME_LEN] = {0};
     krb5_error_code rc = krb5_kt_default_name(ctx, name, sizeof(name));
     if (rc) {
@@ -2899,6 +3003,26 @@ QoreKrb5Keytab::QoreKrb5Keytab(const char* keytab_name, bool use_default, Except
         return;
     }
 
+    // the keytabs of code that a sandbox governs are those of its isolation domain (qore#7736): the default keytab
+    // is a memory keytab of the domain, and a memory keytab name refers to a keytab of the domain
+    Krb5CacheNamespace ns;
+    if (krb5_cache_namespace(ns, xsink, "opening keytab")) {
+        return;
+    }
+    std::string mapped;
+    if (ns.sandboxed) {
+        visible_prefix = ns.prefix;
+        if (use_default) {
+            mapped = "MEMORY:" + ns.prefix + "default";
+            use_default = false;
+        } else if (keytab_name && *keytab_name) {
+            krb5_map_keytab_name(keytab_name, ns, mapped);
+        }
+        if (!mapped.empty()) {
+            keytab_name = mapped.c_str();
+        }
+    }
+
     if (use_default) {
         rc = krb5_kt_default(ctx, &keytab);
         if (rc) {
@@ -2935,7 +3059,9 @@ QoreStringNode* QoreKrb5Keytab::getName(ExceptionSink* xsink) const {
         return nullptr;
     }
 
-    return new QoreStringNode(name);
+    // the name that the code of a sandbox gave, for that code (qore#7736)
+    return new QoreStringNode(krb5_visible_cache_name(krb5_kt_get_type(ctx, keytab), name,
+        krb5_caller_visible_prefix(visible_prefix), true));
 }
 
 QoreStringNode* QoreKrb5Keytab::getType() const {

@@ -137,7 +137,12 @@ string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
 }
 
 //! Returns the configured default keytab name
-/** @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+/** For code that a sandbox governs, \c "MEMORY:default", a keytab of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
     return ctx->getDefaultKeytabName(xsink);
@@ -189,8 +194,13 @@ Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
 }
 
 //! Opens the default keytab
-/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+/** For code that a sandbox governs, the \c MEMORY:default keytab of its isolation domain (see
+    @ref krb5sec_cache_isolation)
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 Krb5Keytab Krb5Context::openDefaultKeytab() {
     SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openDefaultKeytab(xsink));
@@ -204,11 +214,16 @@ Krb5Keytab Krb5Context::openDefaultKeytab() {
 }
 
 //! Opens a keytab by name
-/** @param keytab_name a keytab spec such as \c "FILE:/etc/krb5.keytab" or
+/** For code that a sandbox governs, a \c MEMORY keytab name refers to a keytab of its isolation
+    domain (see @ref krb5sec_cache_isolation)
+
+    @param keytab_name a keytab spec such as \c "FILE:/etc/krb5.keytab" or
     \c "MEMORY:module-krb5"
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
     @throw KRB5-KEYTAB-ERROR if the keytab name is empty or cannot be resolved
+    @throw KRB5-SANDBOX-ERROR if the code that a sandbox governs belongs to more than one isolation domain or is
+    not known, or the keytab belongs to other code
 */
 Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
     if (krb5_check_no_nul(keytab_name, "keytab name", "keytab names", "KRB5-KEYTAB-ERROR", false, xsink)) {
