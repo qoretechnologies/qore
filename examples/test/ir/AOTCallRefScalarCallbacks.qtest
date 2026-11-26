@@ -54,8 +54,8 @@ class CallRefScalarCallbacksTest inherits QUnit::Test {
     constructor() : QUnit::Test("scalar callbacks through call-reference entries", "1.0", \ARGV) {
         foreach string fixture in (keys Fixtures) {
             string f = fixture;
-            foreach string mode in (ExecModeHarness::ExecModes) {
-                string m = mode;
+            foreach string exec_mode in (ExecModeHarness::ExecModes) {
+                string m = exec_mode;
                 addTestCase(f + " " + m, sub () {
                     assertEq(Fixtures{f}, ExecModeHarness::run(sprintf("%s --exec-mode=%s %s", shellQuote(qore_bin),
                         m, shellQuote(dir + "/" + f))));
