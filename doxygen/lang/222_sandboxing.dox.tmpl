@@ -333,6 +333,9 @@ auto result = p.callFunction("main");
     filesystem and network policy|apply|apply
     |@ref sandbox_process_wide_registries "process-wide registrations" (\c \
     SandboxManager::isProcessWideRegistrationAllowed())|refused|refused
+    |a module loaded by path in place of a module of the module path, or into a %Program container under its \
+    name (it would replace the module for every later user), and the modules that the governed code chose|refused, \
+    or private to the loading code|refused, or private to the loading code
     |a change, copy or serialization of a @ref sandbox_shared_objects "shared object", and objects created as \
     shared|allowed, as trusted code|refused
     |a process-shared @ref sandbox_lazy_shared_values "lazy value", and the capabilities of trusted code (\c \
@@ -345,8 +348,8 @@ auto result = p.callFunction("main");
     controller)|returned|withheld
     |@ref sandbox_private_access "private access" through reflection and @ref sandbox_serialization \
     "serialization"|allowed|refused
-    |module paths, modules loaded by path in place of a module of the module path, module commands to another %Program \
-    and the names of encodings that are not known|allowed|refused
+    |the module paths of a %Program, module commands to another %Program and the names of encodings that are not \
+    known|allowed|refused
     |the mark of @ref sandbox_exception_reports "exception reports"|unmarked, as the host's|marked
     |the per-%Program cache (\c SandboxManager::getProgramCacheValue())|the cache of the host's %Program|the cache of \
     its own %Program
@@ -355,9 +358,9 @@ auto result = p.callFunction("main");
     teardown)|kept, as for trusted code|never deferred
     |uncontrolled APIs (@ref sandbox_uncontrolled_api)|allowed|refused
 
-    The process-wide registrations stay refused to code that any manager governs, because what such code registers
-    carries its manager (see @ref sandbox_provenance), whose interrupts and limits would then apply to every later
-    user of the registration.  A manager's own configuration cannot be loosened by the code that it governs, whatever
+    The process-wide registrations, and the modules that replace a module of the module path, stay refused to code
+    that any manager governs, because what such code registers or loads carries its manager (see
+    @ref sandbox_provenance), whose interrupts, limits and isolation domain would then apply to every later user.  A manager's own configuration cannot be loosened by the code that it governs, whatever
     its class.
 
     @since %Qore 3.0

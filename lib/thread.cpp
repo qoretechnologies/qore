@@ -8019,8 +8019,9 @@ bool qore_scope_creator_is_restricted() {
 
 bool qore_sandbox_context_is_restricted(const QoreSandboxContext* ctx) {
     assert(ctx);
-    // the restrictions of the code that created it
-    if (!ctx->origin_restrictions.empty()) {
+    // the code that created it was restricted, or acted for restricted code, when it was captured; and the
+    // restrictions of the code that created it
+    if (ctx->restricted || !ctx->origin_restrictions.empty()) {
         return true;
     }
     bool any = false;
@@ -8097,7 +8098,9 @@ bool qore_builtin_caller_is_restricted() {
     if (!own || own->getCallType() != CT_BUILTIN) {
         return true;
     }
-    return qore_program_is_restricted(own->getProgram()) || qore_program_is_restricted(td->current_pgm);
+    // and the class of the calling code, as for qore_caller_is_restricted()
+    return qore_program_is_restricted(own->getProgram()) || qore_program_is_restricted(td->current_pgm)
+        || qore_calling_class_is_restricted();
 }
 
 QoreProgram* qore_builtin_caller_program() {
@@ -8406,8 +8409,11 @@ bool qore_caller_is_restricted(qore_program_id_t* pgm_id) {
 
 bool qore_calling_code_is_restricted() {
     ThreadData* td = thread_data.get();
-    return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm)
-        && qore_program_is_restricted(td->current_pgm);
+    if (!td) {
+        return false;
+    }
+    // the calling Program, and the class of the calling code, as for qore_caller_is_restricted() (qore#7737)
+    return (td->current_pgm && qore_program_is_restricted(td->current_pgm)) || qore_calling_class_is_restricted();
 }
 
 bool qore_caller_has_restricted_code() {
@@ -8464,7 +8470,9 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
         return false;
     }
     // only restricted code counts (qore#7737): code that a trusted (governed) sandbox governs changes shared objects
-    // as trusted code
+    // as trusted code.  Only the Programs entered since the marker are looked at: a callback with the provenance of
+    // restricted code that runs in the code of the scope's own Program (called inside a scope that the host or the
+    // code of a trusted sandbox opened) counts as the scope's code, as it did before qore#7737 for the host's scopes
     auto restricted = [] (const QoreProgram* pgm) -> bool {
         return qore_program_is_restricted(pgm);
     };
@@ -9656,6 +9664,13 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         // and continues its work (qore#7010)
         work_gen = td->work_gen;
     }
+    // the capturing code is restricted or acts for restricted code (qore#7737): recorded, as the managers alone do not
+    // tell it (the code of a trusted, governed, sandbox that runs for restricted code is restricted); looked up only
+    // where a sandbox or a sandboxed Program is involved, as code that neither governs is not restricted; fails closed
+    if (td && (current || policy || provenance || provenance_policy || td->sandboxed_caller
+            || thread_stack_has_sandboxed_program(td))) {
+        restricted = qore_caller_is_restricted();
+    }
     manager = current.release();
     policy_manager = policy.release();
     provenance_manager = provenance.release();
@@ -9679,6 +9694,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
     inherited_only = src->inherited_only;
     capturer_sandboxed = src->capturer_sandboxed;
     capturer_module = src->capturer_module;
+    restricted = src->restricted;
     app_id = src->app_id;
     // copied first, as they can throw std::bad_alloc; the references below are taken only after that
     program_ids = src->program_ids;

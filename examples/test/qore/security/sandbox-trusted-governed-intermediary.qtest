@@ -1,0 +1,440 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SandboxTrustedGovernedIntermediaryTest
+
+#! Restricted code stays restricted through the code of a trusted (governed) sandbox (qore#7737)
+/** The rules that restrict what code may do apply to restricted code also when it reaches them through a Program that
+    a trusted (governed) sandbox governs (a sandbox that allows uncontrolled APIs): through a thread that the host
+    starts for it, through callbacks and call references that the code of such a Program creates for it, through the
+    code of its own classes, and when its manager is changed.  Each case runs for a tenant with no manager, with a
+    trusted manager and with a restricting manager (restricted), unless it says otherwise.
+*/
+
+#! a class of the host that is related by injection
+class QdspClient inherits Qore::SQL::AbstractDatasource {}
+
+#! a Program that relates the classes by injection
+class HostProgram inherits Program {
+    constructor() : Program(PO_NO_SYSTEM_API | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE) {
+        importClass("QdspClient", "Qore::SQL::DatasourcePool", True);
+        importSystemApi();
+    }
+}
+
+#! an object that the host shares with every Program
+class SharedBox {
+    public {
+        int v = 1;
+    }
+}
+
+our SharedBox shared_box;
+
+#! the Program of the code of a trusted (governed) sandbox, created by the host
+our Program governed;
+
+#! the sandbox manager of the tenant of the current case
+our *SandboxManager current_sm;
+
+#! a closure of the host created before any tenant runs
+our code pre_bg;
+
+#! the wrappers that the governed code created for the tenant
+our code wrapper;
+our code wrapped_ref;
+
+object sub get_shared_box() {
+    return shared_box;
+}
+
+string sub build_host_program(string label) {
+    HostProgram p();
+    return label + ": built";
+}
+
+#! a host function that a thread runs: it calls the governed code
+sub bg_ops(Queue q) {
+    q.push(governed.callFunction("g_ops"));
+}
+
+#! the host starts a thread for its caller, with an existing host function (no closure created in the call)
+string sub run_bg_ops() {
+    Queue q();
+    background bg_ops(q);
+    return q.get();
+}
+
+#! the same with a closure of the host created before the tenant ran
+string sub run_bg_closure_ops() {
+    Queue q();
+    background pre_bg(q);
+    return q.get();
+}
+
+#! the host calls the governed code directly for its caller
+string sub direct_ops() {
+    return governed.callFunction("g_ops");
+}
+
+#! the governed code wraps the caller's callback, and creates a call reference, for its caller
+sub make_wrappers(code cb) {
+    wrapper = governed.callFunction("g_wrap", cb);
+    wrapped_ref = governed.callFunction("g_ref");
+}
+
+#! the governed code parses code into another Program for its caller
+string sub governed_parse(Program target, string src) {
+    return governed.callFunction("g_parse", target, src);
+}
+
+#! the governed code defers cancellation and calls the caller's code
+sub governed_defer(code c) {
+    governed.callFunction("g_defer", c);
+}
+
+sub interrupt_me() {
+    current_sm.requestInterrupt();
+}
+
+#! the governed code changes the shared object for its caller, with the sandbox resolution failing (debug builds)
+string sub fail_closed_ops() {
+    list<string> r = ();
+    call_function("dbg_sandbox_fail_next_resolutions", 1);
+    r += "change:" + governed.callFunction("g_change");
+    call_function("dbg_sandbox_fail_next_resolutions", 1);
+    r += "creates:" + governed.callFunction("g_creates");
+    return r.join(",");
+}
+
+class SandboxTrustedGovernedIntermediaryTest inherits QUnit::Test {
+    public {
+        const Modes = ("none", "trusted", "restricting");
+
+        #! the code of the trusted (governed) Program
+        const GovernedSource = "%requires reflection
+class PrivG {
+    private {
+        string secret = 's';
+    }
+}
+string sub g_change() {
+    try {
+        object o = get_shared_box();
+        o.v = o.v;
+        return 'ok';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub g_creates() {
+    return SandboxManager::createsSharedObjects() ? '1' : '0';
+}
+string sub g_ops() {
+    list<string> r = ('change:' + g_change(), 'creates:' + g_creates());
+    try {
+        build_host_program('x');
+        r += 'inject:ok';
+    } catch (hash<ExceptionInfo> ex) {
+        r += 'inject:' + ex.err;
+    }
+    try {
+        PrivG p();
+        auto x = Class::getClass(p).getMember('secret').getValue(p);
+        r += 'refl:ok';
+    } catch (hash<ExceptionInfo> ex) {
+        r += 'refl:' + ex.err;
+    }
+    return r.join(',');
+}
+code sub g_wrap(code cb) {
+    return sub () { return cb(); };
+}
+auto sub g_target() {
+    return 1;
+}
+code sub g_ref() {
+    return \\g_target();
+}
+string sub g_parse(Program target, string src) {
+    try {
+        target.parse(src, 'governed-parse');
+        return 'parsed';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+sub g_defer(code c) {
+    defer_thread_cancel(c);
+}
+string sub g_load(string path) {
+    try {
+        load_module(path);
+        return 'loaded';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the code of the tenants
+        const TenantSource = "
+string sub run(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
+}
+string sub bg() {
+    return run(\\run_bg_ops());
+}
+string sub bg_closure() {
+    return run(\\run_bg_closure_ops());
+}
+string sub direct() {
+    return run(\\direct_ops());
+}
+sub wrappers() {
+    make_wrappers(int sub () { return 7; });
+}
+string sub parse_into(Program target, string src) {
+    return governed_parse(target, src);
+}
+string sub deferred() {
+    try {
+        governed_defer(sub () {
+            interrupt_me();
+            Mutex m();
+            m.lock();
+            m.unlock();
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return 'completed';
+}
+string sub fail_closed() {
+    return run(\\fail_closed_ops());
+}
+class TenantBox {
+    string change() {
+        try {
+            object o = get_shared_box();
+            o.v = o.v;
+            return 'ok';
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+TenantBox sub tenant_box() {
+    return new TenantBox();
+}
+";
+
+        #! what the governed code gets for trusted callers
+        const Trusted = "change:ok,creates:1,inject:ok,refl:ok";
+        #! what it gets for restricted callers
+        const Restricted = "change:SHARED-OBJECT-ERROR,creates:0,inject:CLASS-IMPORT-ERROR,refl:REFLECTION-ACCESS-ERROR";
+    }
+
+    constructor() : QUnit::Test("SandboxTrustedGovernedIntermediaryTest", "1.0") {
+        addTestCase("a thread that the host starts with a host function for the caller", \threadTest());
+        addTestCase("a thread that the host starts with an existing host closure", \threadClosureTest());
+        addTestCase("the governed code called directly for the caller", \directTest());
+        addTestCase("callbacks and call references that the governed code creates for the caller", \wrapperTest());
+        addTestCase("a module loaded by the governed code in place of a module of the module path", \shadowingTest());
+        addTestCase("a failed parse of restricted code does not mark a Program restricted", \failedParseTest());
+        addTestCase("the code of a class of restricted code after its manager is relaxed", \classMarkTest());
+        addTestCase("the sandbox resolution fails closed under a trusted manager", \failClosedTest());
+        addTestCase("restricted code called in the deferral of the governed code", \deferralTest());
+        addTestCase("a manager that is tightened and relaxed, for the shared objects", \liveSharedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        shared_box = new SharedBox();
+        SandboxManager::shareObject(shared_box);
+        pre_bg = sub (Queue q) { q.push(governed.callFunction("g_ops")); };
+        SandboxManager gsm();
+        gsm.setFilesystemDefaultPolicy(True);
+        gsm.setNetworkDefaultPolicy(True);
+        gsm.setUncontrolledApiPolicy(True);
+        governed = new Program(PO_NEW_STYLE);
+        governed.importFunction("get_shared_box");
+        governed.importFunction("build_host_program");
+        governed.setSandboxManager(gsm);
+        governed.parse(GovernedSource, "governed");
+    }
+
+    private static *SandboxManager manager(string mode) {
+        if (mode == "none") {
+            return;
+        }
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        if (mode == "trusted") {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        return sm;
+    }
+
+    private static Program tenant(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        foreach string f in (("run_bg_ops", "run_bg_closure_ops", "direct_ops", "make_wrappers", "governed_parse",
+                "governed_defer", "interrupt_me", "fail_closed_ops", "get_shared_box")) {
+            p.importFunction(f);
+        }
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! runs \a func in a tenant of each mode; returns the result for each mode
+    private hash<auto> runAll(string func) {
+        hash<auto> rv;
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            rv{mode} = p.callFunction(func);
+            remove current_sm;
+        }
+        return rv;
+    }
+
+    private check(string func, string allowed, string refused) {
+        hash<auto> rv = runAll(func);
+        assertEq(allowed, rv.none, func + ": no manager");
+        assertEq(allowed, rv.trusted, func + ": trusted manager");
+        assertEq(refused, rv.restricting, func + ": restricting manager");
+    }
+
+    #! the thread inherits the restricting sandbox of the caller; the governed code that it calls acts for it
+    threadTest() {
+        check("bg", Trusted, Restricted);
+    }
+
+    threadClosureTest() {
+        check("bg_closure", Trusted, Restricted);
+    }
+
+    directTest() {
+        check("direct", Trusted, Restricted);
+    }
+
+    #! a callback or call reference that the governed code creates while it acts for restricted code is restricted:
+    #! a lazy value with it as its builder is private, and no capability of trusted code can be created with it
+    wrapperTest() {
+        foreach string mode in (Modes) {
+            current_sm = manager(mode);
+            Program p = tenant(current_sm);
+            p.callFunction("wrappers");
+            bool restricted = mode == "restricting";
+            foreach hash<auto> i in ({"what": "wrapper", "code": wrapper}, {"what": "call reference",
+                    "code": wrapped_ref}) {
+                string what = sprintf("%s: %s", mode, i.what);
+                LazySharedValue v(i.code);
+                assertEq(!restricted, v.isProcessShared(), what + ": lazy value mode");
+                if (restricted) {
+                    assertThrows("SANDBOX-CAPABILITY-ERROR", \SandboxManager::createTrustedBuildCall(), (i.code,),
+                        what + ": trusted build");
+                    assertThrows("SANDBOX-CAPABILITY-ERROR", \SandboxManager::createSystemPolicyCall(), (i.code,),
+                        what + ": system-policy capability");
+                } else {
+                    assertEq(NT_CALLREF, SandboxManager::createTrustedBuildCall(i.code).typeCode(),
+                        what + ": trusted build");
+                    assertEq(NT_CALLREF, SandboxManager::createSystemPolicyCall(i.code).typeCode(),
+                        what + ": system-policy capability");
+                }
+            }
+            remove wrapper;
+            remove wrapped_ref;
+            remove current_sm;
+        }
+    }
+
+    #! a module that the governed code loads by path under the name of a module of the module path would replace it
+    #! for every later user, with the governed code's sandbox: refused, as for a restricted loader
+    shadowingTest() {
+        TmpDir tmp();
+        string path = tmp.path + DirSep + "TelnetClient.qm";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\nmodule TelnetClient {\n    version = \"99.0\";\n    desc = \"replacement\";\n"
+            "    author = \"test\";\n    url = \"https://qore.org\";\n    license = \"MIT\";\n}\n");
+        f.close();
+        assertEq("LOAD-MODULE-ERROR", governed.callFunction("g_load", path));
+    }
+
+    #! the governed code parses code for restricted code into a Program that a trusted sandbox governs: a parse that
+    #! fails does not mark the Program restricted; a parse that is committed does
+    failedParseTest() {
+        SandboxManager rsm = manager("restricting");
+        Program r = tenant(rsm);
+        foreach bool commit in ((False, True)) {
+            SandboxManager tsm = manager("trusted");
+            Program target(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+            target.importFunction("build_host_program");
+            target.setSandboxManager(tsm);
+            target.parse("string sub inject() { try { return build_host_program('t'); } catch (hash<ExceptionInfo> "
+                "ex) { return ex.err; } }", "target");
+            string src = commit ? "sub more() {}" : "sub more( {";
+            assertEq(commit ? "parsed" : "PARSE-EXCEPTION", r.callFunction("parse_into", target, src));
+            assertEq(commit ? "CLASS-IMPORT-ERROR" : "t: built", target.callFunction("inject"),
+                commit ? "after a committed parse" : "after a failed parse");
+        }
+    }
+
+    #! an object of a class that restricted code declared stays restricted when trusted code calls it after its
+    #! manager is relaxed
+    classMarkTest() {
+        SandboxManager rsm = manager("restricting");
+        Program r = tenant(rsm);
+        object box = r.callFunction("tenant_box");
+        assertEq("SHARED-OBJECT-ERROR", box.change());
+        rsm.setUncontrolledApiPolicy(True);
+        assertEq("SHARED-OBJECT-ERROR", box.change());
+    }
+
+    #! debug builds: the resolution of the sandbox fails as if no memory could be allocated
+    failClosedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not a debug build (dbg_sandbox_fail_next_resolutions())");
+        }
+        current_sm = manager("trusted");
+        Program p = tenant(current_sm);
+        # the change is refused and what is created is shared
+        assertEq("change:SHARED-OBJECT-ERROR,creates:1", p.callFunction("fail_closed"));
+        remove current_sm;
+    }
+
+    #! restricted code that the governed code calls in its deferral is interrupted in it
+    deferralTest() {
+        hash<auto> rv = runAll("deferred");
+        assertEq("PROGRAM-INTERRUPTED", rv.restricting);
+    }
+
+    liveSharedTest() {
+        current_sm = manager("trusted");
+        Program p = tenant(current_sm);
+        object box = p.callFunction("tenant_box");
+        assertEq("ok", box.change());
+        current_sm.setUncontrolledApiPolicy(False);
+        assertEq("SHARED-OBJECT-ERROR", box.change());
+        current_sm.setUncontrolledApiPolicy(True);
+        assertEq("ok", box.change());
+        remove current_sm;
+    }
+}

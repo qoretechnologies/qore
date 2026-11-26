@@ -2535,10 +2535,9 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
         return -1;
     }
     // restricted code with no restricting sandbox that the Program could keep (a Program restricted by its flag
-    // alone): the Program is marked restricted for good, as the sandbox that it keeps would not tell (qore#7737)
-    if (pcs.restricted && !(pcs.sm && !pcs.sm->trustsUncontrolledApis())) {
-        restricted_marked.store(true, std::memory_order_release);
-    }
+    // alone): the Program is marked restricted for good when the code is committed, as the sandbox that it keeps would
+    // not tell (qore#7737; see pendCreatorSandbox() and commitPendingCreatorSandbox())
+    pcs.mark_restricted = pcs.restricted && !(pcs.sm && !pcs.sm->trustsUncontrolledApis());
     return 0;
 }
 
@@ -2582,6 +2581,10 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
     if (pcs.sandboxed && pcs.restricted) {
         pending_restricted_caller = true;
     }
+    // the mark of a Program restricted by its flag alone, set if the code is committed (qore#7737)
+    if (pcs.mark_restricted) {
+        pending_restricted_mark = true;
+    }
     return 0;
 }
 
@@ -2613,6 +2616,7 @@ bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
 
 void qore_program_private::dropPendingCreatorSandbox() {
     pending_restricted_caller = false;
+    pending_restricted_mark = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2627,6 +2631,7 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
     // goes ahead, cleared when it ends
     const bool restricted = pending_restricted_caller;
+    const bool mark = pending_restricted_mark;
     if (pending_creator_sandbox || pending_creator_policy) {
         try {
             addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
@@ -2637,6 +2642,11 @@ int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
     }
     dropPendingCreatorSandbox();
     commit_restricted_caller = restricted;
+    // restricted code commits code with no restricting sandbox that the Program keeps: restricted for good
+    // (qore#7737); set only when the code is committed, so a parse that fails or is rolled back does not mark it
+    if (mark) {
+        restricted_marked.store(true, std::memory_order_release);
+    }
     return 0;
 }
 

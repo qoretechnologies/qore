@@ -638,9 +638,11 @@ DLLLOCAL bool qore_scope_creator_is_sandboxed();
 DLLLOCAL bool qore_scope_creator_is_restricted();
 
 //! Returns true if the provenance \a ctx of a callback or object is restricted (qore#7737)
-/** True if a manager that it records refuses uncontrolled APIs (a composition: if any member does), if it records
+/** True if the code that created it was restricted or acted for restricted code (QoreSandboxContext::restricted), if
+    a manager that it records refuses uncontrolled APIs (a composition: if any member does), if it records
     functional-domain restrictions of the code that created it, or if it records sandboxed code without a manager
-    (fails closed); provenance that only trusted (governed) sandboxes recorded is not restricted
+    (fails closed); provenance that only the code of trusted (governed) sandboxes recorded, for no restricted code, is
+    not restricted
 */
 DLLLOCAL bool qore_sandbox_context_is_restricted(const QoreSandboxContext* ctx);
 
@@ -1486,6 +1488,14 @@ public:
     //! the thread was started by module code, whose work can serve every caller of the module and so runs for no
     //! application (qore#7010), also the host code that it calls (qore#7148)
     bool capturer_module = false;
+    //! True if the capturing code was restricted, or acted for restricted code, when the context was captured
+    //! (qore_caller_is_restricted(), which fails closed; qore#7737)
+    /** The managers that the context records do not tell it alone: code that a trusted (governed) sandbox governs and
+        that runs for restricted code (restricted code called it) is restricted, while the context records only the
+        trusted manager; what that code creates (a callback, a call reference, an object) stays restricted with it
+        (qore_sandbox_context_is_restricted())
+    */
+    bool restricted = false;
     //! The application that the capturing code acted for (see qore_aio_caller_app_id()), QORE_NO_PROGRAM_ID for none,
     //! or 0 if no sandbox governed it (qore#7148)
     /** The host's code that continues the context (in a thread or a task that the capturing code started or submitted,
@@ -2572,7 +2582,8 @@ DLLLOCAL bool qore_caller_is_restricted(qore_program_id_t* pgm_id = nullptr);
 
 //! Returns true if the code that calls the current builtin is the code of a restricted Program (qore#7737)
 /** As qore_calling_code_is_sandboxed(), where a Program counts only if qore_program_is_restricted() reports it
-    restricted: a Program that a trusted (governed) sandbox governs is not
+    restricted: a Program that a trusted (governed) sandbox governs is not; the code of a class that restricted code
+    declared counts as well (qore_calling_class_is_restricted())
 */
 DLLLOCAL bool qore_calling_code_is_restricted();
 

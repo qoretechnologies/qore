@@ -4822,8 +4822,10 @@ int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path
     tenant_chosen = false;
     owner = nullptr;
     owner_pgm_id = QORE_NO_PROGRAM_ID;
-    // code that a trusted (governed) sandbox governs loads modules as trusted code (qore#7737)
-    if (trusted || !qore_caller_is_restricted_or_untrusted()) {
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
+    if (trusted || !qore_caller_is_untrusted()) {
         return 0;
     }
     // a private module is registered under a name of its own, which no other code requests
@@ -4856,7 +4858,8 @@ bool QoreModuleManager::mayUseTenantModule(const QoreAbstractModule& mi, const Q
     assert(mi.isTenantChosen());
     // library code does not bind to a module that a tenant chose, whoever loaded it, when it is initialized or later
     // (a module loaded into a library module's Program at run time is used by every caller)
-    if (!qore_caller_is_restricted_or_untrusted() || qore_module_init_library()
+    // the same classification as checkShadowingLoad(), which decides whether a module is tenant-chosen
+    if (!qore_caller_is_untrusted() || qore_module_init_library()
         || (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module)) {
         return false;
     }
@@ -5168,7 +5171,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     // a library module that code that is not trusted loads into a Program container of its own is parsed and
     // initialized with the container's code and parse defines: it is not library code
-    const bool untrusted_container = mpgm && qore_caller_is_restricted_or_untrusted();
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
@@ -5192,7 +5198,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
-    const bool untrusted_loader = trusted && qore_caller_is_restricted_or_untrusted();
+    // as checkShadowingLoad() (qore#7737)
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
         xsink.outOfMemory();
@@ -6456,7 +6463,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     // a library module that code that is not trusted loads into a Program container of its own is parsed and
     // initialized with the container's code and parse defines: it is not library code
-    const bool untrusted_container = mpgm && qore_caller_is_restricted_or_untrusted();
+    // any manager, also a trusted (governed) one, as for process-wide registrations (qore#7737, qore#7745): a module
+    // that replaces a module of the module path, or that a governed loader chose, carries the loader's manager (its
+    // interrupts, limits and isolation domain) to every later user of the module
+    const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
@@ -6480,7 +6490,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
-    const bool untrusted_loader = trusted && qore_caller_is_restricted_or_untrusted();
+    // as checkShadowingLoad() (qore#7737)
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
     if (init_barrier.failed()) {
         xsink.outOfMemory();
@@ -6955,8 +6966,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner_holder.release(), owner_pgm_id);
     // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
     // that code; checked before the barrier is set
+    // as checkShadowingLoad() (qore#7737)
     if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module
-            && qore_caller_is_restricted_or_untrusted()) {
+            && qore_caller_is_untrusted()) {
         path_pgm = nullptr;
     }
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
