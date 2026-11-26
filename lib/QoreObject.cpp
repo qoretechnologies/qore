@@ -1067,6 +1067,21 @@ int qore_object_private::checkSharedMethodChange(const char* what, ExceptionSink
     return -1;
 }
 
+int qore_object_private::checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const {
+    assert(isShared());
+    // fails closed, as checkSharedChangeIntern(); no update-scope exemption, as checkSharedMethodChange()
+    if (!qore_caller_is_sandboxed() || copy_cls.hasUserCopyMethod()) {
+        return 0;
+    }
+    if (qore_shared_object_trace()) {
+        fprintf(stderr, "QORE-SHARED-OBJECT-TRACE: refused: copy of class '%s'\n", theclass->getName());
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot copy an "
+        "object of class '%s', as no class of the copy declares a copy() method in Qore code: the object is shared "
+        "by every Program of the process", copy_cls.name.c_str());
+    return -1;
+}
+
 void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (!cls->has_member_accessors) {

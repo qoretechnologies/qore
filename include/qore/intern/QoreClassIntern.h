@@ -5745,6 +5745,12 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreObject* execCopyImpl(LexicalSemanticPolicy policy, QoreObject* old, ExceptionSink* xsink) const;
 
+    //! Returns true if the class or one of the base classes whose copy methods run declares copy() in Qore code
+    /** A class that copies a shared object for sandboxed code needs one (qore#7667; see
+        qore_object_private::checkSharedCopy()): a builtin copy method does not count
+    */
+    DLLLOCAL bool hasUserCopyMethod() const;
+
     // returns a non-static method if it exists in the local class
     DLLLOCAL QoreMethod* parseFindLocalMethod(const char* nme) {
         hm_method_t::iterator i = hm.find(nme);

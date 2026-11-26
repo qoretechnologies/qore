@@ -9659,13 +9659,21 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
         return nullptr;
     }
 
+    qore_object_private* old_priv = qore_object_private::get(*old);
+    // a shared object is copied for sandboxed code only by a class that declares copy() (qore#7667); checked before
+    // anything is made, so that a refused copy runs no code
+    if (old_priv->isShared()) [[unlikely]] {
+        if (old_priv->checkSharedCopy(*this, xsink)) {
+            return nullptr;
+        }
+    }
+
     QoreProgram* object_pgm = cls->getProgram();
     if (!object_pgm) {
         object_pgm = old->getProgram();
     }
     ReferenceHolder<QoreObject> self(new QoreObject(cls, object_pgm, (QoreHashNode*)nullptr), xsink);
     qore_object_private* self_priv = qore_object_private::get(**self);
-    qore_object_private* old_priv = qore_object_private::get(*old);
     if (self_priv->copyData(xsink, *old_priv)) {
         return nullptr;
     }
@@ -9679,6 +9687,24 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
     }
 
     return *xsink ? nullptr : self.release();
+}
+
+bool qore_class_private::hasUserCopyMethod() const {
+    if (copyMethod && copyMethod->isUser()) {
+        return true;
+    }
+    // the copy methods of the base classes that run (see BCSMList::execCopyMethodsImpl())
+    if (scl) {
+        for (const class_virt_pair_t& i : scl->sml) {
+            if (!i.second) {
+                const QoreMethod* m = i.first->priv->copyMethod;
+                if (m && m->isUser()) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 int qore_class_private::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {

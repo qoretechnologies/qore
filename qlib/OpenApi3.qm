@@ -2160,6 +2160,16 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         }
     }
 
+    #! Copies the document without its type cache, which a copy builds for itself
+    /** The type cache is what the document guards when it is shared (see getType()); code that is sandboxed or acts
+        for sandboxed code can copy a shared document because this class declares a copy method (qore#7667)
+
+        @since OpenApi3 1.0
+    */
+    copy() {
+        remove typemap;
+    }
+
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
     private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         return components.schemas{rstr};
@@ -6381,6 +6391,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Copies the schema object
+    /** What the schema object guards when it is shared (the caches of its types, see getDataType()) is kept by its
+        base class, whose copy method resets it
+        (\c AbstractRestSchemaObject::copy()); code that is
+        sandboxed or acts for sandboxed code can copy a shared schema object because this class declares a copy method
+        (qore#7667)
+    */
     copy(SchemaObject old) {
     }
 

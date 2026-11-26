@@ -4758,6 +4758,9 @@
       derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
       @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
       @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - sandboxed code cannot copy a @ref sandbox_shared_objects "shared object" unless a class of the copy declares a
+      \c copy() method, which resets what the class guards for a shared object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7667">issue 7667</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement

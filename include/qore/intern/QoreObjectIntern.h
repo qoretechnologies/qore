@@ -393,6 +393,20 @@ public:
     */
     DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
 
+    //! Returns 0 if the calling code can copy the object with the copy method of \a copy_cls, or raises
+    //! SHARED-OBJECT-ERROR and returns -1 (qore#7667)
+    /** Called only for an object marked as shared, before the copy is made.  It decides as checkSharedMethodChange()
+        does (code that is sandboxed or acts for sandboxed code; fails closed), with no update-scope exemption: such
+        code can copy a shared object only if \a copy_cls or one of its base classes declares copy() in Qore code
+        (qore_class_private::hasUserCopyMethod()), as the copy is an ordinary object with copies of all members, also
+        of the private members that the classes of the object protect with SandboxManager::isSharedObject(), and a
+        copy method is where a class resets them.  The copy is never marked as shared here.
+
+        @param copy_cls the class whose copy runs
+        @param xsink for the exception
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedCopy(const qore_class_private& copy_cls, ExceptionSink* xsink) const;
+
     //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
     /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
     */
