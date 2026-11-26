@@ -56,10 +56,17 @@
 
 static const char* qore_hash_type_name = "hash";
 
+#ifdef DEBUG
+std::atomic<int64> qore_dbg_live_hashes{0};
+#endif
+
 // hashes should always be empty by the time they are deleted
 // because object destructors need to be run...
 qore_hash_private::~qore_hash_private() {
     assert(member_list.empty());
+#ifdef DEBUG
+    qore_dbg_live_hashes.fetch_sub(1, std::memory_order_relaxed);
+#endif
     sb.release();
     if (hashdecl) {
         typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hashdecl))->deref();
@@ -208,27 +215,57 @@ HashMember* qore_hash_private::findCreateMember(const char* key, bool& created) 
     return createMemberKnownAbsent(k);
 }
 
+HashMember* qore_hash_private::findCreateMemberFor(const char* key, QoreValue value, ExceptionSink* xsink,
+        bool& created) {
+    qore_hash_lookup_key k(key);
+    HashMember* om = findMember(k);
+    if (om) {
+        created = false;
+        return om;
+    }
+    created = true;
+    try {
+        return createMemberKnownAbsent(k);
+    } catch (...) {
+        discardUnstoredValue(value, xsink);
+        throw;
+    }
+}
+
+HashMember* qore_hash_private::createMemberKnownAbsentFor(const char* key, QoreValue value, ExceptionSink* xsink) {
+    try {
+        return createMemberKnownAbsent(key);
+    } catch (...) {
+        discardUnstoredValue(value, xsink);
+        throw;
+    }
+}
+
 HashMember* qore_hash_private::findCreateMemberPrehashed(const char* key, size_t hash) {
     qore_hash_lookup_key k(key, strlen(key), hash);
     HashMember* om = findMember(k);
     return om ? om : createMemberKnownAbsent(k);
 }
 
+#ifdef DEBUG
+//! the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466), in each way to create a member
+#define QORE_DBG_HASH_MEMBER_FAILS() if (qore_dbg_hash_member_fails()) throw std::bad_alloc()
+#else
+#define QORE_DBG_HASH_MEMBER_FAILS()
+#endif
+
 HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
+    QORE_DBG_HASH_MEMBER_FAILS();
     return addMemberKnownAbsent(new HashMember(qore_hash_lookup_key(key)));
 }
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
-#ifdef DEBUG
-    // the debug hook of a failed allocation (dbg_fail_allocation(); qore#7466)
-    if (qore_dbg_hash_member_fails()) {
-        throw std::bad_alloc();
-    }
-#endif
+    QORE_DBG_HASH_MEMBER_FAILS();
     return addMemberKnownAbsent(new HashMember(key));
 }
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
+    QORE_DBG_HASH_MEMBER_FAILS();
     return addMemberKnownAbsent(new HashMember(old.key, old.hash));
 }
 
@@ -1087,7 +1124,10 @@ int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* x
         value.discard(xsink);
         return -1;
     }
-    hash_assignment_priv ha(*priv, key);
+    // the value is released if its member cannot be created (qore#7763)
+    bool created;
+    HashMember* om = priv->findCreateMemberFor(key, value, xsink, created);
+    hash_assignment_priv ha(*priv, om, created);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
     return ha.assignNative(value, xsink);
@@ -1106,7 +1146,10 @@ static QORE_INTERN_ALWAYS_INLINE int qore_hash_set_key_value_canonical(QoreHashN
         value.discard(xsink);
         return -1;
     }
-    hash_assignment_priv ha(*hp, key);
+    // the value is released if its member cannot be created (qore#7763)
+    bool created;
+    HashMember* om = hp->findCreateMemberFor(key, value, xsink, created);
+    hash_assignment_priv ha(*hp, om, created);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
     int rc = ha.assign(value, xsink);
@@ -1159,10 +1202,55 @@ int qore_hash_private::setKeyValueLexical(QoreHashNode& hash, const char* key, Q
         return -1;
     }
     SafeDerefHelper sdh(xsink);
-    hash_assignment_priv ha(*hash.priv, key);
+    // the value is released if its member cannot be created (qore#7763)
+    bool created;
+    HashMember* om = hash.priv->findCreateMemberFor(key, value, xsink, created);
+    hash_assignment_priv ha(*hash.priv, om, created);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
     return ha.assign(value, sdh, xsink, policy);
+}
+
+void qore_hash_private::discardUnstoredValue(QoreValue value, ExceptionSink* xsink) {
+    if (xsink) {
+        value.discard(xsink);
+        return;
+    }
+    ExceptionSink xs;
+    value.discard(&xs);
+}
+
+QoreHashNode* qore_hash_private::copyStripped() const {
+    QoreHashNode* h = new QoreHashNode;
+    qore_hash_private& hp = *h->priv;
+    try {
+        hp.reserveForCopy(*this);
+        // copy all members to new object
+        for (const HashMember* i : member_list) {
+            HashMember* om = hp.createMemberKnownAbsent(*i);
+            hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
+        }
+    } catch (...) {
+        releaseFailedCopy(h);
+        throw;
+    }
+    copyFreedState(hp);
+    return h;
+}
+
+void qore_hash_private::copyInternOrRelease(QoreHashNode* h) const {
+    try {
+        copyIntern(*h->priv);
+    } catch (...) {
+        releaseFailedCopy(h);
+        throw;
+    }
+}
+
+void qore_hash_private::releaseFailedCopy(QoreHashNode* h) {
+    // the members hold references of their own to the values of the hash copied
+    ExceptionSink xsink;
+    h->deref(&xsink);
 }
 
 int QoreHashNode::setKeyValue(const QoreString& key, QoreValue value, ExceptionSink* xsink) {

@@ -6116,13 +6116,25 @@ QoreValue LValueHelper::remove(bool& static_assignment) {
 }
 
 LValueRemoveHelper::LValueRemoveHelper(const QoreValue& exp, ExceptionSink* n_xsink, bool fd) : xsink(n_xsink), for_del(fd) {
-    doRemove(exp);
+    try {
+        doRemove(exp);
+    } catch (...) {
+        // the destructor does not run when the constructor is left with an exception (qore#7763)
+        releaseRemoved();
+        throw;
+    }
 }
 
 LValueRemoveHelper::LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* n_xsink, bool fd) : xsink(n_xsink), for_del(fd) {
     RuntimeReferenceHelper rrh(ref, xsink);
-    if (rrh)
-        doRemove(lvalue_ref::get(&ref)->vexp);
+    if (rrh) {
+        try {
+            doRemove(lvalue_ref::get(&ref)->vexp);
+        } catch (...) {
+            releaseRemoved();
+            throw;
+        }
+    }
 }
 
 namespace {
@@ -6407,14 +6419,18 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
                     return;
 
                 // issue #4122: do not write output for nonexistent keys
-                bool exists;
-                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
-                if (!exists) {
+                if (!hp->findMember(mem.c_str())) {
                     continue;
                 }
 
+                // the member of the result is created before the value leaves the hash: memory that cannot be
+                // allocated for it leaves the value in the hash (qore#7763)
+                hash_assignment_priv ha(*rvh, mem.c_str());
+                bool exists;
+                QoreValue n = hp->takeKeyValueIntern(mem.c_str(), exists);
+                assert(exists);
                 // note that no exception can occur here
-                rvh->setKeyValue(mem.c_str(), n, xsink);
+                ha.assignNative(n, xsink);
                 assert(!*xsink);
             }
             // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed
