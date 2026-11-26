@@ -13913,52 +13913,10 @@ bool AsyncIoControllerPriv::logOwnV(int level, const char* fmt, va_list args, Ex
         lgr->ref();
     }
 
-    // an exception that the logger raises is the caller's to report
-    {
-        ExceptionSink enabled_xsink;
-        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
-        if (enabled_xsink) {
-            if (logger_xsink) {
-                logger_xsink->assimilate(enabled_xsink);
-            } else {
-                enabled_xsink.clear();
-            }
-        }
-        if (!enabled) {
-            lgr->derefLogged(logger_xsink != nullptr);
-            return true;
-        }
-    }
-
-    // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
-    // re-copy the va_list and retry until it fits, mirroring the established
-    // pattern in support.cpp printe()/print_debug().  Without the loop, large
-    // owner / key strings (e.g. socket-sync owners) silently render as empty
-    // log messages.
-    QoreStringNode* msg = new QoreStringNode();
-    while (true) {
-        va_list iter_args;
-        va_copy(iter_args, args);
-        int rc = msg->vsprintf(fmt, iter_args);
-        va_end(iter_args);
-        if (!rc) {
-            break;
-        }
-    }
-
-    ExceptionSink xsink;
-    lgr->logArgs(level, msg, nullptr, &xsink);
-    msg->deref();
-    if (xsink) {
-        // the caller reports the logger's exception, or it is discarded
-        if (logger_xsink) {
-            logger_xsink->assimilate(xsink);
-        } else {
-            xsink.clear();
-        }
-    }
-    lgr->derefLogged(logger_xsink != nullptr);
-    return true;
+    // an exception that the logger raises is the caller's to report; a logger that cannot take the message leaves it
+    // to the caller, which reports it otherwise (qore#7698)
+    QoreLoggerBridgeLoggedHolder holder(lgr, logger_xsink != nullptr);
+    return lgr->logV(level, fmt, args, logger_xsink);
 }
 
 bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args, ExceptionSink* logger_xsink) {

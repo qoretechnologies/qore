@@ -84,53 +84,22 @@ bool qore_async_io_log_v(int level, const char* fmt, va_list args, ExceptionSink
             lgr->ref();
         }
     }
-    if (!lgr) {
-        // no global async I/O logger: use the global controller's logger, if it has one
-        return qore_async_io_controller_log_v(level, fmt, args, logger_xsink);
-    }
-    // Check level outside lock (calls Qore method); an exception that the logger raises is the caller's to report
-    {
-        ExceptionSink enabled_xsink;
-        bool enabled = lgr->isEnabledFor(level, &enabled_xsink);
-        if (enabled_xsink) {
-            if (logger_xsink) {
-                logger_xsink->assimilate(enabled_xsink);
-            } else {
-                enabled_xsink.clear();
-            }
-        }
-        if (!enabled) {
-            lgr->derefLogged(logger_xsink != nullptr);
+    if (lgr) {
+        // logs outside the lock (calls Qore methods); an exception that the logger raises is the caller's to report
+        QoreLoggerBridgeLoggedHolder holder(lgr, logger_xsink != nullptr);
+        // the arguments are copied, as they may be rendered again for the global controller's logger
+        va_list own_args;
+        va_copy(own_args, args);
+        bool logged = lgr->logV(level, fmt, own_args, logger_xsink);
+        va_end(own_args);
+        if (logged) {
             return true;
         }
+        // the logger cannot take the message, because its Program is being torn down: the global controller's logger
+        // is tried, as when there is no global async I/O logger, and then the caller reports the message (qore#7698)
     }
-    // Format and log.  QoreString::vsprintf returns -1 (no retry) when its
-    // buffer is too small; re-copy the va_list and retry until it fits.
-    // Without the loop, large substituted values silently render as empty
-    // log messages.
-    QoreStringNode* msg = new QoreStringNode();
-    while (true) {
-        va_list iter_args;
-        va_copy(iter_args, args);
-        int rc = msg->vsprintf(fmt, iter_args);
-        va_end(iter_args);
-        if (!rc) {
-            break;
-        }
-    }
-    ExceptionSink xsink;
-    lgr->logArgs(level, msg, nullptr, &xsink);
-    msg->deref();
-    if (xsink) {
-        // the caller reports the logger's exception, or it is discarded
-        if (logger_xsink) {
-            logger_xsink->assimilate(xsink);
-        } else {
-            xsink.clear();
-        }
-    }
-    lgr->derefLogged(logger_xsink != nullptr);
-    return true;
+    // no global async I/O logger that can take the message: use the global controller's logger, if it has one
+    return qore_async_io_controller_log_v(level, fmt, args, logger_xsink);
 }
 
 void qore_async_io_log(int level, const char* fmt, ...) {
