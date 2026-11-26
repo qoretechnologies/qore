@@ -442,6 +442,34 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         priv->keepCopyModuleNames(nullptr);
     }
 
+    // an instance of a generic hashdecl that a binary module added to a Program at run time is mortal, as its base is:
+    // it references the binary module declarations and the declarations of other Programs that it names before it is
+    // published, not at its Program's teardown (qore#7680); a failed allocation fails the call with no reference taken
+    bool refs_taken = false;
+    // the declaration for the take below, if its base is marked while it is made; allocated before it is published
+    std::vector<QoreTypeOwner*> late_owners;
+    if (program_local.load(std::memory_order_acquire)) {
+        try {
+            std::vector<QoreTypeOwner*> owners = {&priv->type_owner};
+            if (!qore_type_owner_take_runtime_refs(owners, ns ? ns->getRoot() : nullptr)) {
+                throw std::bad_alloc();
+            }
+        } catch (...) {
+            // the unpublished declaration is released with the references that it took
+            typed_hash_decl_private::get(*priv->thd)->deref();
+            throw;
+        }
+        refs_taken = true;
+    } else if (sys && !copied) {
+        // only a builtin generic hashdecl can be marked
+        try {
+            late_owners.push_back(&priv->type_owner);
+        } catch (...) {
+            typed_hash_decl_private::get(*priv->thd)->deref();
+            throw;
+        }
+    }
+
     TypedHashDecl* existing = nullptr;
     ParameterizedHashDeclCache* registration;
     {
@@ -491,6 +519,14 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     // its members name the declarations of its type arguments without references: they are retired, not freed,
     // while it lives (issue #6419)
     qore_type_owner_keep_type_args(&priv->type_owner, args);
+    // the base was marked while the instance was made: the instance is mortal, and the marking event did not see it; if
+    // an allocation fails, the completion of the next marking event of its Program takes them (qore#7680)
+    if (!refs_taken && priv->program_local.load(std::memory_order_acquire)) {
+        qore_root_ns_private* rns = ns ? ns->getRoot() : nullptr;
+        if (!qore_type_owner_take_runtime_refs(late_owners, rns) && rns) {
+            rns->addPendingRuntimeRefs(late_owners);
+        }
+    }
     return priv->thd;
 }
 

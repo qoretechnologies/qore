@@ -80,6 +80,14 @@ Var* GlobalVariableList::import(Var* v, ExceptionSink* xsink, bool readonly, con
     }
 
     Var* var = new Var(v, readonly, false, import_as);
+    // the type of the variable can name declarations of the other Program, which can be deleted before this one is
+    // parsed with it (qore#7680)
+    try {
+        var->refTypeDecls();
+    } catch (...) {
+        var->deref(xsink);
+        throw;
+    }
     // vmap keys are raw const char*, so they must outlive every entry.  The
     // new Var's name is a std::string copied from import_as/v->getName() and
     // lives as long as the Var itself — use var->getName() instead of the

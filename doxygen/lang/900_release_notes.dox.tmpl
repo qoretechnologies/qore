@@ -2989,9 +2989,9 @@
       add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
       assertion of a debug build (<a href="https://github.com/qoretechnologies/qore/issues/7622">issue 7622</a>)
     - fixed a memory-safety issue with the builtin declarations that a binary module adds to a Program at run time,
-      in a namespace or one at a time, which are now freed with their Program only once nothing uses them
-      (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>,
-      <a href="https://github.com/qoretechnologies/qore/issues/7649">issue 7649</a>)
+      which are now freed with their Program only once nothing, also in another Program, uses them (issues
+      <a href="https://github.com/qoretechnologies/qore/issues/7540">7540</a>, <a href="https://github.com/qoretechnologies/qore/issues/7649">7649</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7680">7680</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - fixed a memory-safety issue with a child @ref Qore::Program "Program" that outlives its parent: the parent's

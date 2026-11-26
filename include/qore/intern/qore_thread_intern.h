@@ -179,6 +179,11 @@ public:
         return xsink;
     }
 
+    //! Returns the sink of the module's initialization (qore#7680)
+    DLLLOCAL ExceptionSink& getXSink() {
+        return xsink;
+    }
+
     DLLLOCAL void commit();
 
     DLLLOCAL void rollback() {
