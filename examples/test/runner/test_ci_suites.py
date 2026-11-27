@@ -113,32 +113,76 @@ class SuiteHelperTest(unittest.TestCase):
 
 
 class JobScriptTest(unittest.TestCase):
+    # the checkers of check-docs.sh, as stubs that print their name and exit with the given status
+    DOCS_CHECKS = {"examples/test/cmake/test_module_release_notes.py": 1,
+                   "doxygen/check-module-release-notes.py": 0,
+                   "examples/test/cmake/test_release_notes.py": 0,
+                   "doxygen/check-release-notes.py": 0,
+                   "examples/test/cmake/test_module_mainpage_layout.py": 0,
+                   "doxygen/check-module-mainpage.py": 0}
+    # the checkers that check-docs.sh runs with the files of its git ls-files patterns
+    DOCS_FILE_CHECKS = ("doxygen/check-module-release-notes.py", "doxygen/check-module-mainpage.py")
+
+    @staticmethod
+    def xargs_variants(tmp):
+        """Returns the PATH prefixes to run check-docs.sh with: the platform's xargs, and with GNU xargs also one that
+        behaves as BSD xargs (macOS), which runs nothing when its input is empty"""
+        variants = {"native xargs": ""}
+        probe = subprocess.run(["xargs", "--version"], capture_output=True, text=True)
+        if probe.returncode == 0 and "GNU" in probe.stdout:
+            shim = Path(tmp) / "bsd-xargs"
+            shim.mkdir()
+            real = shutil.which("xargs")
+            (shim / "xargs").write_text(f'#!/bin/sh\nexec "{real}" --no-run-if-empty "$@"\n')
+            (shim / "xargs").chmod(0o755)
+            variants["BSD-like xargs"] = str(shim) + os.pathsep
+        return variants
+
+    def run_check_docs(self, tmp, files, path_prefix):
+        """Runs check-docs.sh in a tree of stub checkers with the given tracked files; returns the result"""
+        tree = Path(tmp) / "tree"
+        shutil.rmtree(tree, ignore_errors=True)
+        (tree / "examples" / "test" / "docker_test").mkdir(parents=True)
+        (tree / "examples" / "test" / "cmake").mkdir()
+        (tree / "doxygen").mkdir()
+        shutil.copy(SUITES, tree / "examples" / "test" / "docker_test")
+        shutil.copy(DOCKER / "check-docs.sh", tree / "examples" / "test" / "docker_test")
+        (tree / "test").symlink_to("examples/test")
+        for path, rc in self.DOCS_CHECKS.items():
+            (tree / path).write_text(f"import sys\nprint('ran {Path(path).name}')\nsys.exit({rc})\n")
+        subprocess.run(["git", "init", "-q"], cwd=tree, check=True)
+        for path in files:
+            (tree / path).parent.mkdir(parents=True, exist_ok=True)
+            (tree / path).write_text("\n")
+            subprocess.run(["git", "add", path], cwd=tree, check=True)
+        env = {**os.environ, "QORE_SRC_DIR": str(tree), "PATH": path_prefix + os.environ.get("PATH", "")}
+        return subprocess.run(["sh", "examples/test/docker_test/check-docs.sh"], cwd=tree, capture_output=True,
+                              text=True, env=env)
+
     def test_check_docs_runs_every_check(self):
-        # the docs job with a failing first check still runs the others and fails
+        # the docs job with a failing first check still runs the others and fails, with GNU and BSD xargs alike
         with tempfile.TemporaryDirectory(prefix="qore-ci-suites-") as tmp:
-            tree = Path(tmp)
-            (tree / "examples" / "test" / "docker_test").mkdir(parents=True)
-            (tree / "examples" / "test" / "cmake").mkdir()
-            (tree / "doxygen").mkdir()
-            shutil.copy(SUITES, tree / "examples" / "test" / "docker_test")
-            shutil.copy(DOCKER / "check-docs.sh", tree / "examples" / "test" / "docker_test")
-            (tree / "test").symlink_to("examples/test")
-            checks = {"examples/test/cmake/test_module_release_notes.py": 1,
-                      "doxygen/check-module-release-notes.py": 0,
-                      "examples/test/cmake/test_release_notes.py": 0,
-                      "doxygen/check-release-notes.py": 0,
-                      "examples/test/cmake/test_module_mainpage_layout.py": 0,
-                      "doxygen/check-module-mainpage.py": 0}
-            for path, rc in checks.items():
-                (tree / path).write_text(f"import sys\nprint('ran {Path(path).name}')\nsys.exit({rc})\n")
-            subprocess.run(["git", "init", "-q"], cwd=tree, check=True)
-            r = subprocess.run(["sh", "examples/test/docker_test/check-docs.sh"], cwd=tree, capture_output=True,
-                               text=True, env={**os.environ, "QORE_SRC_DIR": str(tree)})
-            self.assertNotEqual(0, r.returncode, r.stdout + r.stderr)
-            for path in checks:
-                self.assertIn(f"ran {Path(path).name}", r.stdout, path)
-            self.assertIn("FAILED: module release notes tests (exit code 1)", r.stdout)
-            self.assertIn("6 suites, 1 failed", r.stdout)
+            for label, prefix in self.xargs_variants(tmp).items():
+                # files that the checks' git ls-files patterns name
+                r = self.run_check_docs(tmp, ("qlib/T.qm", "qlib/T/T.qc", "modules/m/docs/m.dox.tmpl"), prefix)
+                self.assertNotEqual(0, r.returncode, label + ": " + r.stdout + r.stderr)
+                for path in self.DOCS_CHECKS:
+                    self.assertIn(f"ran {Path(path).name}", r.stdout, f"{label}: {path}")
+                self.assertIn("FAILED: module release notes tests (exit code 1)", r.stdout, label)
+                self.assertIn("6 suites, 1 failed", r.stdout, label)
+
+    def test_check_docs_without_files(self):
+        # with no file that the patterns of a checker match, the checker is not run, with GNU and BSD xargs alike (GNU
+        # xargs ran it once with no file, BSD xargs did not), and the suite says so
+        with tempfile.TemporaryDirectory(prefix="qore-ci-suites-") as tmp:
+            for label, prefix in self.xargs_variants(tmp).items():
+                r = self.run_check_docs(tmp, (), prefix)
+                for path in self.DOCS_FILE_CHECKS:
+                    self.assertNotIn(f"ran {Path(path).name}", r.stdout, f"{label}: {path}")
+                self.assertEqual(2, r.stdout.count(": nothing to check"), label + ": " + r.stdout)
+                self.assertIn("passed: module release notes\n", r.stdout, label)
+                self.assertIn("passed: module main pages\n", r.stdout, label)
+                self.assertIn("6 suites, 1 failed", r.stdout, label)
 
     def test_scripts_run_their_suites_through_the_helper(self):
         for script, suites in SUITE_SCRIPTS.items():
