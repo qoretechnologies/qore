@@ -77,6 +77,7 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         addTestCase("spellings beyond the limit get the zone of the entry name", \testBounded());
         addTestCase("concurrent spellings stay within the limit", \testConcurrent());
         addTestCase("the zoneinfo directory hook is refused for restricted code", \testRootHook());
+        addTestCase("the zoneinfo directory hook takes a short path", \testShortRoot());
         set_return_value(main());
     }
 
@@ -112,7 +113,7 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
     }
 
     globalTearDown() {
-        if (tree_root) {
+        if (tree_root && Option::HAVE_LIBRARY_DEBUGGING) {
             call_function("dbg_tz_set_zoneinfo_root");
         }
         foreach string d in (created) {
@@ -355,6 +356,65 @@ string sub tzinfo(string r) { TimeZone t(r); return sprintf(\"%s|%d\", t.region(
         assertLe(ZoneLimit + entries, st.region_names - st0.region_names, "the region names are bounded");
         assertEq(zone_limit, st.spelling_zones, "the zones of spellings stay within the limit");
         assertLe(NameLimit, st.spelling_names, "the remembered entry names stay within the limit");
+    }
+
+    #! the hook takes a path that is an inline short string (at most 6 bytes: qore#7038), as it takes any other path
+    /** A short path is made with a link in /tmp whose name is one character (the first free of a few), to a zoneinfo
+        directory of the test's own with a zone that no other directory has: the zone loads only if the hook set that
+        directory as the root.  Read as an absent argument, a short path would reset the root to the default.
+    */
+    testShortRoot() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_tz_set_zoneinfo_root() is only in debug builds of the library");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("the zoneinfo directory hook is not available on Windows");
+        }
+        # the zone data to copy: the system's zoneinfo directory (zroot can be the test's own directory)
+        *string sysdir;
+        foreach string zd in (ZoneinfoDirs) {
+            if (is_file(zd + "/UTC")) {
+                sysdir = zd;
+                break;
+            }
+        }
+        if (!sysdir) {
+            testSkip("no zoneinfo directory to copy a zone from");
+        }
+        string dir = tmp_location() + DirSep + "qore-tz-short-" + get_random_string(10, 1);
+        mkdir(dir, 0700);
+        created += dir;
+        dir = realpath(dir);
+        mkdir(dir + "/SS");
+        File f();
+        f.open2(dir + "/SS/Z1", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(File::readBinaryFile(sysdir + "/UTC"));
+        f.close();
+        # the first free one-character name: /tmp/<c> has 6 bytes
+        *string link;
+        foreach string c in ("q", "z", "y", "x", "w", "v", "u", "t") {
+            try {
+                symlink(dir, "/tmp/" + c);
+                link = "/tmp/" + c;
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (!link) {
+            testSkip("no free one-character name in /tmp for the link");
+        }
+        on_exit {
+            call_function("dbg_tz_set_zoneinfo_root", tree_root);
+            try {
+                unlink(link);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        assertEq(6, link.size(), "the path is a short string");
+        # the path as an inline short string (dbg_make_short_string() makes it inline in every execution mode)
+        call_function("dbg_tz_set_zoneinfo_root", call_function("dbg_make_short_string", link));
+        # a zone that only the directory of the test has loads: the hook set it as the root
+        assertEq("SS/Z1", (new TimeZone("SS/Z1")).region(), "the short path is the root of the zones");
     }
 
     testRootHook() {

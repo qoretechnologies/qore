@@ -25314,12 +25314,14 @@ static QoreValue f_dbg_tz_set_zoneinfo_root(const QoreListNode* params, RuntimeC
 #ifdef _Q_WINDOWS
     xsink->raiseException("DBG-UNSUPPORTED", "dbg_tz_set_zoneinfo_root() is not available on Windows");
 #else
-    const QoreStringNode* dir = get_param_value(params, 0).get<const QoreStringNode>();
-    if (dir && strlen(dir->c_str()) != dir->size()) {
+    // the directory can be an inline short string (issue #7038), which get<const QoreStringNode>() reads as an absent
+    // argument, and the root would be reset
+    QoreStringDataHelper dir(get_param_value(params, 0));
+    if (dir && strlen(dir.c_str()) != dir.size()) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "the zoneinfo directory has a NUL character");
         return QoreValue();
     }
-    QTZM.dbgSetZoneinfoRoot(dir ? dir->c_str() : nullptr, xsink);
+    QTZM.dbgSetZoneinfoRoot(dir ? dir.c_str() : nullptr, xsink);
 #endif
     return QoreValue();
 }
