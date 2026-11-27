@@ -65,6 +65,7 @@ public class RemoveTreeTest inherits QUnit::Test {
 
         # now let's create a file (not a directory)...
         hash<TmpFileHash> file_path = make_tmp_file();
+        on_exit remove_file(file_path.path);
         file_path.file.close();
         assertTrue(is_file(file_path.path));
         assertTrue(is_writable(file_path.path));

@@ -12,16 +12,16 @@
           "message": "Dateisystem-Verbindung"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
-          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
-          "message": "Markiert die Verbindung nicht als ausgefallen, wenn der Dateisystempfad schreibgeschützt ist. Geeignet für schreibgeschützte Basisverzeichnisse; Schnittstellenverzeichnisse sollten normalerweise beschreibbar sein"
+          "source": "Does not mark the connection as down if the filesystem location is read only, and makes the data providers that the connection returns read-only: they cannot create, delete, move, copy to or make directories in the location; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Markiert die Verbindung nicht als ausgefallen, wenn der Dateisystempfad schreibgeschützt ist, und macht die Datenanbieter, die die Verbindung zurückgibt, schreibgeschützt: Sie können am Speicherort nichts erstellen, löschen, verschieben, dorthin kopieren oder Verzeichnisse anlegen. Geeignet für schreibgeschützte Basisverzeichnisse; Schnittstellenverzeichnisse sollten normalerweise beschreibbar sein"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
           "source": "Read-Only",
           "message": "Schreibgeschützt"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
-          "source": "Sets the read-only flag on the connection",
-          "message": "Legt das schreibgeschützte Flag für die Verbindung fest"
+          "source": "Makes the connection and its data providers read-only",
+          "message": "Macht die Verbindung und ihre Datenanbieter schreibgeschützt"
         },
         "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
           "source": "A connection to the local filesystem",

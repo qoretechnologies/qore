@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-bounded-int-expression-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -54,7 +64,7 @@ int sub main() {
 }
 ";
 
-string root = "/tmp/qore-aot-bounded-int-expression-" + string(getpid());
+string root = tmp.path + "/bounded-int-expression";
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
@@ -62,9 +72,6 @@ mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
-on_exit {
-    backquote(sprintf("rm -rf %s", root));
-}
 
 string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
@@ -92,7 +99,7 @@ foreach string mode in (("ir", "tiered", "jit")) {
     if (actual != expected) {
         printf("%s mismatch:\nexpected:\n%sactual:\n%s",
             mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -102,7 +109,7 @@ string provider_compile = backquote(sprintf(
 string provider_qo = provider_dir + "/provider.qo";
 if (!is_file(provider_qo)) {
     printf("provider compile failed:\n%s", provider_compile);
-    exit(2);
+    test_exit(2);
 }
 string provider_index = backquote(sprintf(
     "%s --dump-index-json %s 2>&1", qcc_bin, provider_qo));
@@ -111,7 +118,7 @@ if (provider_index
         || provider_index
             !~ /\"qore_path\": \"tooLargeExpression\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/) {
     printf("unexpected bounded expression metadata:\n%s", provider_index);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
@@ -131,7 +138,7 @@ if (!is_file(enabled_qo) || !is_file(disabled_qo)
         || enabled_compile !~ /call i64 @tooLargeExpression/) {
     printf("unexpected bounded expression lowering:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
@@ -145,7 +152,7 @@ string disabled_link = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("link failed:\nenabled:\n%sdisabled:\n%s",
         enabled_link, disabled_link);
-    exit(2);
+    test_exit(2);
 }
 string enabled = run_executable(sprintf(
     "LD_LIBRARY_PATH=%s %s", libqore_dir, enabled_exe));
@@ -154,5 +161,5 @@ string disabled = run_executable(sprintf(
 if (expected != enabled || expected != disabled) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         expected, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }

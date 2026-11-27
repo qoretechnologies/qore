@@ -468,6 +468,12 @@ class PipelineQueue {
         /** See DataProviderPipeline::setTestHooks()
         */
         static *code after_flush_test_hook;
+
+        #! Called by a queue thread when it releases its reference to the pipeline, with the pipeline lock released
+        #! (debug builds only)
+        /** See DataProviderPipeline::setTestHooks()
+        */
+        static *code release_test_hook;
 %endif
 
         #! True while the pipeline's run ends: the queue accepts no data from the pipeline (see submit())
@@ -835,6 +841,21 @@ class PipelineQueue {
         }
         lck.unlock();
         on_exit lck.lock();
+%ifdef QoreDebug
+        if (*code hook = PipelineQueue::release_test_hook) {
+            try {
+                # the hook can run code before and after the release; the reference is released below if it did not
+                # release it
+                hook(id, \releasePipelineUnlocked());
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+%endif
+        releasePipelineUnlocked();
+    }
+
+    #! Releases the queue thread's reference to the pipeline without the pipeline's lock (see releasePipeline())
+    private releasePipelineUnlocked() {
         try {
             remove thread_hold;
         } catch (hash<ExceptionInfo> ex) {
@@ -2850,11 +2871,15 @@ public class DataProviderPipeline {
         (<tt>sub (int id, code unlocked)</tt>)
         @param after_stop called when the end of a run has stopped the queues, with the pipeline lock held, before it
         waits for their threads to end
+        @param release called by a queue thread when it releases its reference to the pipeline (see
+        PipelineQueue::getPipeline()), without the pipeline lock, with the queue ID and a closure that releases the
+        reference, which can destroy the pipeline in the thread (<tt>sub (int id, code release)</tt>); the reference is
+        released after the hook if it has not released it
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL or is governed by a
         sandbox
     */
-    static setTestHooks(*code after_flush, *code after_stop) [dom=PROCESS_CONTROL] {
+    static setTestHooks(*code after_flush, *code after_stop, *code release) [dom=PROCESS_CONTROL] {
         if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
                 || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set a pipeline test hook from a context with restricted process "
@@ -2865,6 +2890,7 @@ public class DataProviderPipeline {
             throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the pipeline's test hooks";
         }
         PipelineQueue::after_flush_test_hook = after_flush;
+        PipelineQueue::release_test_hook = release;
         stop_test_hook = after_stop;
     }
 

@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-direct-self-member-mutation-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -26,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-direct-self-member-mutation-" + string(getpid());
+string root = tmp.path + "/direct-self-member-mutation";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -207,7 +217,7 @@ hash<string, string> sub runAot(bool disabled) {
         libqore_dir, qcc_bin, exe, source_path));
     if (!is_file(exe)) {
         printf("%s AOT compile failed:\n%s", suffix, compile_out);
-        exit(2);
+        test_exit(2);
     }
     return ("compile": compile_out,
         "output": run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)));
@@ -227,7 +237,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 
@@ -236,11 +246,11 @@ hash<string, string> disabled = runAot(True);
 if (enabled.output != expected || disabled.output != expected) {
     printf("AOT mismatch\nexpected:\n%sEnabled:\n%sDisabled:\n%s",
         expected, enabled.output, disabled.output);
-    exit(2);
+    test_exit(2);
 }
 if (enabled.compile !~ /AOT: direct self member mutation lowered in /
         || disabled.compile =~ /AOT: direct self member mutation lowered in /) {
     printf("unexpected lowering diagnostics:\nenabled:\n%sdisabled:\n%s",
         enabled.compile, disabled.compile);
-    exit(2);
+    test_exit(2);
 }

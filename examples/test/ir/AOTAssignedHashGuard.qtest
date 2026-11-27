@@ -6,6 +6,17 @@
 %no-child-restrictions
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+# the test's files are in a temporary directory of its own, which is removed also when a check fails, as exit()
+# runs no destructors (qore#7817)
+TmpDir tmp("qore-aot-assigned-hash-guard-");
+
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -25,7 +36,7 @@ if (!is_file(qcc_bin)) {
     qcc_bin = "qcc";
 }
 
-string root = "/tmp/qore-aot-assigned-hash-guard-" + string(getpid());
+string root = tmp.path + "/assigned-hash-guard";
 mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
@@ -82,14 +93,14 @@ string disabled_compile = backquote(sprintf(
 if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 if (enabled_compile
         !~ /assignedAccess.*assigned-hash-guards-elided=[1-9][0-9]*/
         || disabled_compile =~ /assigned-hash-guards-elided=/) {
     printf("unexpected optimization stats:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
-    exit(2);
+    test_exit(2);
 }
 
 # the qore runs that the executables' output is compared with run the same way
@@ -108,7 +119,7 @@ if (!ast || ast !~ /:True:True\n$/
     printf("execution mismatch:\nAST:\n%sJIT:\n%sJIT disabled:\n%s"
         "AOT:\n%sAOT disabled:\n%s",
         ast, jit, jit_disabled, enabled, disabled);
-    exit(2);
+    test_exit(2);
 }
 
 unlink(enabled_exe);
