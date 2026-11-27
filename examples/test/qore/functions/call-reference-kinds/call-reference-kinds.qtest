@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of calls through call references and the tests of their classes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class CallReferenceKindsTest
+
+#! Calls through every kind of call reference give the same results in every execution mode
+/** The call paths of the compiled execution modes identify the class of a call reference (a reference to a method
+    of an object, whose object a call checks before it evaluates the arguments; a reference that a call can give its
+    temporary argument list to; a closure; a reference bound to the sandbox, which takes named arguments as its
+    callback does) by its type, not with a dynamic_cast.
+
+    CallReferenceKinds.q calls references to a function, to a static method, to both by a scoped path, to methods of
+    objects (made with typed, object and auto receivers, in the class and through self, dispatched on a subclass),
+    closures, closures of an object and pseudo-methods of a hash with code members, and each of them bound to the
+    sandbox, positionally, in a try block, with named arguments, through call_function_args() and in the background,
+    compares them, and calls method references to deleted objects, and calls the code members of a hash as its methods,
+    also with a temporary argument; its output must be the one in CallReferenceKinds.expected, which the AST interpreter
+    prints, in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class CallReferenceKindsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/CallReferenceKinds.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/CallReferenceKinds.expected");
+    }
+
+    constructor() : QUnit::Test("call reference kinds", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc not found");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/call-reference-kinds";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -2486,11 +2486,6 @@ uint64_t qore_rt_call_method_fast_consume_args(const QoreMethod* method,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
     int nargs, ExceptionSink* xsink);
 
-//! Fast call reference/closure call — takes the pre-evaluated call reference value and
-//! pre-evaluated args (both NaN-boxed). Calls ResolvedCallReferenceNode::execValue() directly,
-//! bypassing the dynamic_cast chain and AST node copy in qore_rt_call_with_args().
-uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
-
 //! Fast function call with explicit target function pointer — used for multi-function LLVM
 //! module compilation where the callee's native code address is known at compile time.
 //! Same parameter setup as qore_rt_call_fast(), but calls the provided function pointer

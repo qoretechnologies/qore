@@ -105,8 +105,9 @@ printf(\"%s\\n\", XnrConsumer::unknownName(1));
 
         #! the provider, consumer and entry point of an executable built from per-file objects: the consumer is compiled
         #! with a source symbol manifest that names the provider's file for its function and class, so its call
-        #! references to them are compiled as deferred references (DeferredFunctionCallReferenceNode,
-        #! DeferredStaticMethodCallReferenceNode), resolved when they are evaluated
+        #! references to them are resolved when the code is loaded or run (the deferred references of the parse tree,
+        #! DeferredFunctionCallReferenceNode and DeferredStaticMethodCallReferenceNode, which resolve when they are
+        #! evaluated; the AOT code creates the resolved references); the values are always the resolved references
         const ProviderCode = "string sub f(int count, string label) {
     return sprintf(\"f(int count, string label) count=%y label=%y\", count, label);
 }
@@ -139,6 +140,17 @@ string sub unknownName(auto v) {
         return ex.err;
     }
 }
+# compares and calls the references that the deferred references of the source resolve to: the values are resolved
+# references (FunctionCallReferenceNode, StaticMethodCallReferenceNode); a deferred reference is never a value, so its
+# is_equal_hard(), dispatchValue() and dispatchNamed() do not run
+string sub comparisons() {
+    code f1 = \\f();
+    code f2 = \\f();
+    code s1 = \\K::s();
+    code s2 = \\K::s();
+    return sprintf(\"function: %y static method: %y function and static method: %y calls: %s / %s\", f1 == f2,
+        s1 == s2, f1 == s1, f1(1, \"p\"), s2(\"q\", 1.5));
+}
 ";
 
         const MainCode = "int sub main() {
@@ -146,6 +158,7 @@ string sub unknownName(auto v) {
         printf(\"%s\\n%s\\n\", viaFunctionRef(v), viaStaticRef(v));
     }
     printf(\"%s\\n\", unknownName(1));
+    printf(\"%s\\n\", comparisons());
     return 0;
 }
 ";
@@ -155,6 +168,12 @@ K::s(int count, string label) count=1 label=\"y\"
 f(string label, float count) label=\"x\" count=2.5
 K::s(string label, float count) label=\"y\" count=2.5
 RUNTIME-OVERLOAD-ERROR
+";
+
+        #! the output of the comparisons of the references that the deferred references resolve to, which only the
+        #! executable built from per-file objects prints
+        const DeferredComparisons = "function: True static method: True function and static method: False calls: "
+            "f(int count, string label) count=1 label=\"p\" / K::s(string label, float count) label=\"q\" count=1.5
 ";
     }
 
@@ -239,7 +258,8 @@ RUNTIME-OVERLOAD-ERROR
             string exe = tmp.path + DirSep + "deferred" + opt;
             out = backquote(sprintf("%s %s %s -o %s %s/*.qo 2>&1", env, qcc_bin, opt, exe, lib));
             assertTrue(is_file(exe), "linked the executable " + opt + ": " + out);
-            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "deferred references " + opt);
+            assertEq(Expected + DeferredComparisons, backquote(sprintf("%s %s 2>&1", env, exe)),
+                "deferred references " + opt);
         }
     }
 }

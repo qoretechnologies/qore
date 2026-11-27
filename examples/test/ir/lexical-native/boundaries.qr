@@ -133,9 +133,35 @@ int sub show(Program p, string state) {
     auto cb = CompatProbe::native_callback(False, False);
     foreach string fn in ("modern_native_reference", "legacy_native_reference") {
         auto actual = p.callFunction(fn, cb);
-        bool expected = fn == "modern_native_reference";
-        if (actual !== expected) ++failures;
-        printf("%s %s expected=%y actual=%y\n", state, fn, expected, actual);
+        bool native_expected = fn == "modern_native_reference";
+        if (actual !== native_expected) {
+            ++failures;
+        }
+        printf("%s %s expected=%y actual=%y\n", state, fn, native_expected, actual);
+    }
+    # calls of the module's call reference in this Program: in a try block (which the JIT and AOT code make as an
+    # invoke with a landing pad) and with named arguments, which a module's reference cannot bind
+    auto try_result;
+    try {
+        try_result = cb();
+    } catch (hash<ExceptionInfo> ex) {
+        try_result = ex.err;
+    }
+    printf("%s module reference in a try block: %s expected=True actual=%y\n", state,
+        try_result === True ? "PASS" : "FAIL", try_result);
+    if (try_result !== True) {
+        ++failures;
+    }
+    auto named_result;
+    try {
+        named_result = cb(a: 1);
+    } catch (hash<ExceptionInfo> ex) {
+        named_result = ex.err;
+    }
+    printf("%s module reference named call: %s expected=\"NAMED-CALL-NOT-SUPPORTED\" actual=%y\n", state,
+        named_result === "NAMED-CALL-NOT-SUPPORTED" ? "PASS" : "FAIL", named_result);
+    if (named_result !== "NAMED-CALL-NOT-SUPPORTED") {
+        ++failures;
     }
     return failures;
 }

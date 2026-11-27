@@ -25424,6 +25424,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool result_borrowed = false;
             BatchCalleeReturnKind invoke_return_kind = BatchCalleeReturnKind::Boxed;
 
+            if (inv->invoke_opcode == QoreIROpcode::CallIndirect) {
+                // reserved: no lowering emits it (call references use CallClosureDirect), and the verifier rejects it
+                error = "reserved IR opcode CallIndirect (297) cannot be lowered to LLVM";
+                return false;
+            }
+
             // Dispatch based on invoke_opcode and operand availability to avoid
             // double-evaluating pre-evaluated operands via qore_rt_invoke_expr
             if (!inv->operands.empty() && isUnaryInvokeOpcode(inv->invoke_opcode)
@@ -25731,7 +25737,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         || inv->invoke_opcode == QoreIROpcode::CallStatic
                         || inv->invoke_opcode == QoreIROpcode::CallStaticDirect)) {
                 // Call invoke: build args array from pre-evaluated operands
-                int arg_start = (inv->invoke_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
+                int arg_start = 0;
                 if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect
                         && qore_llvm_is_aot_deferred_source_function_call(inv->expr)) {
                     arg_start = 1;
@@ -26278,17 +26284,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     module, llvm_func, inst);
                         }
                     }
-                } else if (inv->invoke_opcode == QoreIROpcode::CallIndirect && !aot_mode) {
-                    // CallIndirect invoke: use fast path — pass pre-evaluated call reference
-                    // directly to qore_rt_call_ref_fast() instead of AST expression
-                    auto* ref_val = getVal(inv->operands[0].id, error);
-                    if (!ref_val) { return false; }
-                    llvm::Value* ref_boxed = boxValue(ref_val, inv->operands[0].id);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_ref_fast",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {ref_boxed, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode
                         && qore_ir_static_call_node_method(inv->expr)) {
                     // CallStaticDirect invoke: call static method directly with embedded pointer; a call whose method
@@ -28175,8 +28170,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Expression-based operations (delegate to runtime) ===
+        // CallIndirect is reserved (no lowering emits it; call references use CallClosureDirect; the verifier rejects
+        // it), so it is left to the default case's error
         case QoreIROpcode::Call:
-        case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic: {
             // These are expression-based ops that need the AST node.
@@ -28192,7 +28188,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     || inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallMethod
                     || inst->opcode == QoreIROpcode::CallStatic) {
-                int arg_start = (inst->opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
+                int arg_start = 0;
                 int nargs = static_cast<int>(inst->operands.size()) - arg_start;
 
                 // the array is in the call array buffer, which the instruction's code uses (qore#6415)
@@ -28210,18 +28206,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* arg_cleanups = buildArgCleanupArray(inst, arg_start,
                         llvm_func, nargs, has_arg_cleanups);
 
-                if (inst->opcode == QoreIROpcode::CallIndirect && !aot_mode) {
-                    // CallIndirect: use fast path — pass pre-evaluated call reference
-                    // directly to qore_rt_call_ref_fast() instead of AST expression
-                    auto* ref_val = getVal(inst->operands[0].id, error);
-                    if (!ref_val) { return false; }
-                    llvm::Value* ref_boxed = boxValue(ref_val, inst->operands[0].id);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_ref_fast",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {ref_boxed, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                } else if (aot_mode) {
+                if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     if (has_arg_cleanups) {
                         auto ft = llvm::FunctionType::get(i64_type,

@@ -35,6 +35,8 @@
 
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <typeinfo>
 #include <vector>
 
 class QoreParseTypeInfo;
@@ -264,7 +266,7 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
 };
 
-class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
+class StaticMethodCallReferenceNode final : public LocalStaticMethodCallReferenceNode {
 protected:
     QoreProgram* pgm;
     const qore_class_private* class_ctx;
@@ -327,7 +329,7 @@ private:
 };
 
 //! a call reference to a static user method resolved after AOT source linking
-class DeferredStaticMethodCallReferenceNode : public ResolvedCallReferenceNodeIntern {
+class DeferredStaticMethodCallReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const char* n_class_path,
             const char* n_method_name);
@@ -368,7 +370,7 @@ private:
 };
 
 //! a call reference to a user function resolved after AOT source linking
-class DeferredFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
+class DeferredFunctionCallReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc, const char* n_function_name);
 
@@ -440,7 +442,7 @@ public:
     DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
-class MethodCallReferenceNode : public LocalMethodCallReferenceNode {
+class MethodCallReferenceNode final : public LocalMethodCallReferenceNode {
 protected:
     QoreObject* obj;
 
@@ -533,7 +535,7 @@ protected:
     its functions when it is deleted, and a call of the reference must then fail as a call into a deleted Program
     does (see qore_get_function_pgm_context()), not use a freed function
 */
-class FunctionCallReferenceNode : public LocalFunctionCallReferenceNode {
+class FunctionCallReferenceNode final : public LocalFunctionCallReferenceNode {
 public:
     DLLLOCAL FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
             QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
@@ -625,7 +627,7 @@ protected:
 class ImportedFunctionEntry;
 
 //! a run-time call reference to a method of a particular object
-class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimeObjectMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
     //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
@@ -717,7 +719,7 @@ private:
     to a pseudo-method of an object is a RunTimeObjectMethodReferenceNode, whose call looks the method up by name as a
     direct call does.  The value is scanned for recursive references (qore_get_call_reference_scan_node())
 */
-class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimePseudoMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     //! a pseudo-method is builtin code
     DLLLOCAL const QoreProgram* getOriginCodeProgram() const override {
@@ -783,7 +785,7 @@ DLLLOCAL bool qore_object_has_pseudo_or_member_method(const qore_class_private* 
 
 //! a run-time call reference to a method of a particular object where the method's class
 // is known when the method reference node object is created
-class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+class RunTimeResolvedMethodReferenceNode final : public ResolvedCallReferenceNodeIntern {
 public:
     DLLLOCAL const QoreProgram* getOriginCodeProgram() const override;
 
@@ -897,5 +899,62 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
 */
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
         ExceptionSink* xsink, bool* restricted = nullptr);
+
+// declared in QoreSandboxProvenance.h: the callback that a sandbox-bound call reference wraps, otherwise nullptr
+DLLLOCAL const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if its class is one of the final classes of the call
+//! reference values that the library creates, otherwise nullptr (also for a closure)
+/** The type tests of qore_get_resolved_call_reference_intern() without its fallback: a nullptr result does not mean
+    that the node is not a ResolvedCallReferenceNodeIntern.  The classes are identified by the address of their
+    type_info object, as qore_exact_node_cast() does.
+*/
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_listed_call_reference_intern(
+        const AbstractQoreNode* r) {
+    static_assert(std::is_final_v<FunctionCallReferenceNode> && std::is_final_v<MethodCallReferenceNode>
+        && std::is_final_v<StaticMethodCallReferenceNode> && std::is_final_v<RunTimeObjectMethodReferenceNode>
+        && std::is_final_v<RunTimeResolvedMethodReferenceNode> && std::is_final_v<DeferredFunctionCallReferenceNode>
+        && std::is_final_v<DeferredStaticMethodCallReferenceNode> && std::is_final_v<RunTimePseudoMethodReferenceNode>,
+        "an exact type test is only equivalent to a dynamic_cast for a final class");
+    if (!r || r->getType() == NT_RUNTIME_CLOSURE) {
+        return nullptr;
+    }
+    const std::type_info* t = &typeid(*r);
+    if (t == &typeid(FunctionCallReferenceNode) || t == &typeid(MethodCallReferenceNode)
+            || t == &typeid(StaticMethodCallReferenceNode) || t == &typeid(RunTimeObjectMethodReferenceNode)
+            || t == &typeid(RunTimeResolvedMethodReferenceNode) || t == &typeid(DeferredFunctionCallReferenceNode)
+            || t == &typeid(DeferredStaticMethodCallReferenceNode) || t == &typeid(RunTimePseudoMethodReferenceNode)) {
+        const ResolvedCallReferenceNodeIntern* rv = static_cast<const ResolvedCallReferenceNodeIntern*>(r);
+        assert(rv == dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
+        return rv;
+    }
+    return nullptr;
+}
+
+//! Returns the node as a ResolvedCallReferenceNodeIntern if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const ResolvedCallReferenceNodeIntern*>(), which is too slow for the per-call
+    paths: a dynamic_cast compares the type names with strcmp() as it searches the class hierarchy.
+
+    ResolvedCallReferenceNode is a class of the public API, whose layout and vtable modules depend on, so it has no
+    flag or virtual function for its internal subclasses, and all of them have the type code NT_FUNCREF.  Instead,
+    a closure is excluded by its type code (only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE), and the
+    classes of the call reference values that the library creates, which are final, are identified by the address of
+    their type_info object (qore_get_listed_call_reference_intern()).  A call reference that wraps a callback
+    (AbstractCallReferenceNode::getSandboxBoundCallback(): a sandbox-bound reference) is not one either, as no
+    internal class overrides that function.  Any other class (the base classes of the references in the parse tree, a
+    module's call reference, a node that is not a call reference) is tested with the dynamic_cast, so the result does
+    not depend on the list being complete.
+*/
+DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_reference_intern(
+        const AbstractQoreNode* r) {
+    if (const ResolvedCallReferenceNodeIntern* rv = qore_get_listed_call_reference_intern(r)) {
+        return rv;
+    }
+    if (!r || r->getType() == NT_RUNTIME_CLOSURE || qore_get_sandbox_bound_callback(r)) {
+        assert(!dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r));
+        return nullptr;
+    }
+    return dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r);
+}
 
 #endif

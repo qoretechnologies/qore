@@ -2528,6 +2528,17 @@ private:
     std::unique_ptr<uint64_t[]> heap;
 };
 
+//! Returns the node as a CallReferenceCallNode if it is a named call through a call reference, otherwise nullptr
+/** Out of line: the main loop of QoreIRInterpreter::execute() tests for it only in the fallback of a Call that is
+    not a function call, and the inlined type test there changes the code of the loop's other paths (+2 to +8
+    instructions per iteration of the IR rows in callgrind)
+*/
+static __attribute__((noinline)) const CallReferenceCallNode* qore_ir_named_call_reference_call(
+        const AbstractQoreNode* n) {
+    const CallReferenceCallNode* crc = qore_get_call_reference_call_node(n);
+    return (crc && crc->getRuntimeArgNames()) ? crc : nullptr;
+}
+
 // Attempt the decomposed-background path for one of the five supported inner
 // expression shapes (self.method / foo(args) / Class::sm(args) / obj.method(args) /
 // callref(args)).  Returns {true, result} if the shape matched and the spawned
@@ -2605,7 +2616,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background callref(args) — call-ref pre-evaluated in operand 0
-    if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+    if (auto* crcn = qore_get_call_reference_call_node(inner)) {
         QoreValue callee = getIRValue(values, operands[0]);
         if (callee.needsRef()) {
             callee.refSelf();
@@ -9002,7 +9013,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         res = evalTmpCallAndRef(&clone, xsink);
                     }
                     used_operands = true;
-                } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(inv->expr.getInternalNode());
+                } else if (auto* crc = qore_get_call_reference_call_node(inv->expr.getInternalNode());
                         crc && crc->getRuntimeArgNames()) {
                     // a named call through a call reference or closure: the callable is the first operand
                     res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
@@ -23102,8 +23113,7 @@ load_local_done:
                                 res = evalTmpCallAndRef(&clone, xsink);
                             }
                             used_operands = true;
-                        } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(
-                                call_expr.getInternalNode()); crc && crc->getRuntimeArgNames()) {
+                        } else if (auto* crc = qore_ir_named_call_reference_call(call_expr.getInternalNode())) {
                             // a named call through a call reference or closure: the callable is the first operand
                             res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;

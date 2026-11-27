@@ -11282,7 +11282,7 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         if (ntype == NT_RUNTIME_CLOSURE) {
             return toBits(static_cast<const QoreClosureBase*>(node)->execValueTmpArgs(*arg_list, xsink));
         }
-        if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+        if (auto* rcr = qore_get_resolved_call_reference_intern(callref)) {
             return toBits(rcr->execValueTmpArgs(*arg_list, xsink));
         }
     }
@@ -17336,47 +17336,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_consume_args(const QoreMe
         return qore_rt_call_method_fast(method, variant, args, nargs, xsink);
     }
     return qore_rt_call_method_fast_impl(method, variant, args, arg_cleanups, nargs, xsink);
-}
-
-// --- Fast call reference/closure call ---
-
-extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs,
-        ExceptionSink* xsink) {
-    if (check_stack(xsink)) {
-        return toBits(QoreValue());
-    }
-    QoreValue ref_val = fromBits(ref_bits);
-    if (!ref_val.hasNode()) {
-        xsink->raiseException("JIT-ERROR", "call reference value is not a node");
-        return toBits(QoreValue());
-    }
-
-    // The call reference is a ResolvedCallReferenceNode (closure, function ref, method ref, etc.)
-    auto* ref_node = dynamic_cast<ResolvedCallReferenceNode*>(ref_val.getInternalNode());
-    if (!ref_node) {
-        xsink->raiseException("JIT-ERROR", "call reference is not a ResolvedCallReferenceNode");
-        return toBits(QoreValue());
-    }
-
-    // Build QoreListNode from the NaN-boxed args array
-    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
-    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    if (nargs > 0) {
-        qore_list_private* priv = qore_list_private::get(**arg_list);
-        priv->reserve(nargs);
-        for (int i = 0; i < nargs; ++i) {
-            QoreValue val = fromBits(args[i]);
-            if (val.needsRef()) {
-                val.refSelf();
-            }
-            priv->pushIntern(val);
-        }
-    }
-
-    // Call execValue() directly — avoids the dynamic_cast chain and AST node copy
-    // that qore_rt_call_with_args() performs
-    QoreValue result = ref_node->invoke(*arg_list, xsink);
-    return toBits(result);
 }
 
 // --- On-block-exit handler support for JIT ---
@@ -25087,7 +25046,7 @@ static QoreValue qore_rt_invoke_call_ref_given_list(const ResolvedCallReferenceN
     if (callref->getType() == NT_RUNTIME_CLOSURE) {
         return static_cast<const QoreClosureBase*>(callref)->execValueTmpArgs(args, xsink);
     }
-    if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(callref)) {
+    if (auto* rcr = qore_get_resolved_call_reference_intern(callref)) {
         QoreSandboxProvenanceHelper provenance(callref);
         return rcr->execValueTmpArgs(args, xsink);
     }
@@ -28278,7 +28237,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     if (!bg_op) {
         return 0;
     }
-    auto* crcn = dynamic_cast<const CallReferenceCallNode*>(bg_op->getExp().getInternalNode());
+    auto* crcn = qore_get_call_reference_call_node(bg_op->getExp().getInternalNode());
     if (!crcn) {
         xsink->raiseException("AOT-BACKGROUND-ERROR",
             "background expression slot %d is not a call-reference call", slot);
