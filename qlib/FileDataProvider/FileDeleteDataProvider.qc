@@ -66,6 +66,8 @@ public class FileDeleteDataProvider inherits FileDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the paths are the caller's input (qore#7806)
+        checkCallerFileAccess();
         if (root.val() && lock) {
             checkPath(\req.path);
         }

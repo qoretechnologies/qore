@@ -390,6 +390,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
 
     @section filelocationhandler_v3_0 FileLocationHandler v3.0
+    - added @ref FileLocationHandler::FileLocationHandler::checkCallerLocation() "FileLocationHandler::checkCallerLocation()",
+      which library code that uses a location that its caller gives calls first; it also refuses the code that a lent
+      object was lent to (issue #7806)
     - a caller restricted from the functional domain of a location's scheme cannot read or write the location:
       \c file locations (and locations without a scheme) are in the \c FILESYSTEM domain, and \c http, \c https,
       \c ftp, \c ftps, \c sftp, \c rest and \c rests locations in the \c NETWORK domain, unless the handler is bound

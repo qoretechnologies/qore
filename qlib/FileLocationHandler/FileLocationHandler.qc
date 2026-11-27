@@ -1110,6 +1110,50 @@ public class FileLocationHandler {
         return exists cache{scheme};
     }
 
+    #! Refuses a location that the calling code gives if that code is restricted from a functional domain of its handler
+    /** Library code that reads or writes a location that its caller gives (for example a field of a data provider
+        action's request) calls this method before it uses the location and before any other operation for the
+        request.
+
+        The handler of the location's scheme decides the domains (see
+        @ref FileLocationHandler::AbstractFileLocationHandler::getCallerDomains() "AbstractFileLocationHandler::getCallerDomains()"),
+        as for the read and write methods, which refuse a calling code that is restricted from them themselves; the
+        calling code is judged here as by @ref Qore::SandboxManager::isLentToRestricted()
+        "SandboxManager::isLentToRestricted()", however: in a method of an object that the host lent to restricted code
+        (see @ref sandbox_lent_objects), which lends the file system and the network to the code that it calls, the code
+        that the object was lent to counts, as the location is that code's input, whoever created the object.
+
+        A @ref Qore::SandboxManager "SandboxManager" policy that governs the calling code is not checked here: it
+        applies when the location is used.
+
+        @param location the location, as given to the read or write methods
+        @param read @ref True if the location is read, @ref False if it is written (for the check of its options)
+
+        @throw LOCATION-ERROR the location string cannot be parsed; unknown location scheme; invalid location option
+        @throw PERMISSION-DENIED the calling code (or the code that a lent object was lent to) is restricted from a
+        functional domain of the location's handler
+
+        @par Example:
+        @code{.py}
+FileLocationHandler::checkCallerLocation(req.location);
+binary data = FileLocationHandler::getBinaryFileFromLocation(req.location);
+        @endcode
+
+        @since %FileLocationHandler 3.0
+    */
+    static checkCallerLocation(string location, bool read = True) {
+        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, read);
+        int dom = info.handler.getCallerDomains(info.scheme, info.opts);
+        if (!dom || !SandboxManager::isLentToRestricted(dom)) {
+            return;
+        }
+        # the names of the domains that the caller is restricted from
+        list<string> denied = map $1.key, AbstractFileLocationHandler::DomainNames.pairIterator(),
+            (dom & $1.value) && SandboxManager::isLentToRestricted($1.value);
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use this %y location, as it is restricted from "
+            "the %s functional domain%s", info.scheme, denied.join(" and "), denied.size() > 1 ? "s" : "");
+    }
+
     #! Returns string data for the given file location
     /** @param location the location of the file data
 

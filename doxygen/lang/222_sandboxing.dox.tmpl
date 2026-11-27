@@ -1212,6 +1212,18 @@ authenticate();
     either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
     must therefore create them in the host's context, or before restricted code can look them up.
 
+    Library code that reads or writes a local path or file location that its caller gives checks the caller in the
+    same way, before it uses the path or makes any other call for it: a path given in a request (the field of a data
+    provider action's request, such as the \c file_path of a document upload) is the caller's input also when the
+    host lent the provider, so it is checked with @ref Util::check_caller_file_access() "check_caller_file_access()"
+    or, for a location, @ref FileLocationHandler::FileLocationHandler::checkCallerLocation()
+    "FileLocationHandler::checkCallerLocation()", which judge the code that a lent object was lent to (see
+    @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()"); a path given when an
+    object is created (a data provider's \c path option) is the creator's, and is checked with
+    @ref Util::check_creator_file_access() "check_creator_file_access()", so the objects that the host creates with
+    its paths, and the data providers of the file connections that it lends, keep working for the code that it lends
+    them to.  Both raise \c PERMISSION-DENIED; the file-system policy of a sandbox applies when the path is opened.
+
     @since %Qore 3.0
 
     @subsection sandbox_lent_connections Connections That the Host Lends

@@ -168,6 +168,8 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
             if (req.document_path.typeCode() != NT_STRING || !req.document_path.val()) {
                 throw "AWS-TEXTRACT-INPUT-ERROR", "document_path must be a nonempty local file path";
             }
+            # the path is the caller's input: refused before it is read or anything is sent (qore#7806)
+            check_caller_file_access("the 'document_path' field of the request");
             document = {"Bytes": read_file ? File::readBinaryFile(req.document_path) : binary("validation")};
         } else {
             foreach string field in ("s3_bucket", "s3_name") {
