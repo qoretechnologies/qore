@@ -26081,6 +26081,17 @@ static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params,
     return QoreValue();
 }
 
+//! Debug-only: makes the next given number of callback worker starts of the async I/O controller fail
+//! (THREAD-CREATION-FAILURE), as a thread or stack limit does; with the second argument True, only the starts made when
+//! work is queued fail, not those of the retries when a worker may start again; the third argument is the number of
+//! starts that succeed before the failures begin (qore#7834)
+static QoreValue f_dbg_async_io_fail_callback_worker_starts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreCallDispatcher::dbgFailCallbackWorkerStarts(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBool(), static_cast<int>(get_param_value(params, 2).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
 static QoreValue f_dbg_async_io_fail_next_timer_hold(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -40307,6 +40318,9 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_fail_next_timer_hold", f_dbg_async_io_fail_next_timer_hold,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_fail_callback_worker_starts", f_dbg_async_io_fail_callback_worker_starts,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        boolTypeInfo, QoreValue(false), "enqueue_only", bigIntTypeInfo, QoreValue((int64)0), "after");
     qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
