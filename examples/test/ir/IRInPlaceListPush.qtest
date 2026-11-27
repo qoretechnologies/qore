@@ -7,6 +7,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
 %requires ../TestInterpreter.qm
+%requires FsUtil
+
+#! the files of the test, removed at every exit of the script (qore#7817)
+TmpDir tmp("qore-ir-in-place-list-push-");
+
+#! ends the script after removing its files: exit() runs no destructors
+sub test_exit(int rc) {
+    remove_tree(tmp.path);
+    exit(rc);
+}
 
 #! runs a qcc executable and returns its output (qore#7805)
 /** @return the output on stdout followed by the output on stderr, apart from the module loader's
@@ -206,18 +216,11 @@ printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s\\n\", as
     exactFloatPush(), exactBoolPush(), maybeFloatPush(False), maybeFloatPush(True));
 ";
 
-string script_path = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + ".qr";
+string script_path = tmp.path + "/in-place-list-push.qr";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
 script.close();
-
-on_exit {
-    unlink(script_path);
-    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()));
-    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-disabled");
-    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-native-disabled");
-}
 
 string sub runMode(string mode) {
     return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
@@ -225,12 +228,12 @@ string sub runMode(string mode) {
 }
 
 string sub runAot(string suffix, string env, bool expect_effect_refinement) {
-    string exe = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + suffix;
+    string exe = tmp.path + "/in-place-list-push" + suffix;
     string compile_out = backquote(sprintf("%s QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         env, libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
-        exit(2);
+        test_exit(2);
     }
     bool has_effect_refinement = compile_out
             =~ /IR-OPT-AOT-EFFECTS: noescapeCallPush[^\n]*:.*inplace-push=1/
@@ -246,7 +249,7 @@ string sub runAot(string suffix, string env, bool expect_effect_refinement) {
             =~ /IR-OPT-AOT-EFFECTS: referenceClosureCallPush[^\n]*:.*inplace-push=[1-9]/;
     if (has_effect_refinement != expect_effect_refinement || has_unsafe_refinement) {
         printf("unexpected AOT effect refinement (%y):\n%s", expect_effect_refinement, compile_out);
-        exit(2);
+        test_exit(2);
     }
     return run_executable(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
 }
@@ -256,7 +259,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
-        exit(2);
+        test_exit(2);
     }
 }
 string aot = runAot("", "", True);
@@ -266,26 +269,26 @@ string native_disabled_aot = runAot("-native-disabled",
 if (aot != expected || disabled_aot != expected || native_disabled_aot != expected) {
     printf("mismatch in aot\nexpected:\n%sactual:\n%sdisabled:\n%snative disabled:\n%s",
         expected, aot, disabled_aot, native_disabled_aot);
-    exit(2);
+    test_exit(2);
 }
 
 string stats = ExecModeHarness::run(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s",
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: assignedPush:.*inplace-push=1/) {
     printf("missing assigned in-place push optimization:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: singlePush:.*inplace-push=1/) {
     printf("missing single in-place push optimization:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: buildAndReturn:.*inplace-push=1/) {
     printf("missing build-and-return in-place push optimization:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: softPush:.*inplace-push=1/) {
     printf("missing soft-list in-place push optimization:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
 if (stats !~ /IR-OPT: unassignedPush:.*inplace-push=0/
         || stats !~ /IR-OPT: removedPush:.*inplace-push=0/
@@ -294,5 +297,5 @@ if (stats !~ /IR-OPT: unassignedPush:.*inplace-push=0/
         || stats !~ /IR-OPT: aliasedPush:.*inplace-push=0/
         || stats !~ /IR-OPT: referencePush:.*inplace-push=0/) {
     printf("unsafe in-place push selection:\n%s", stats);
-    exit(2);
+    test_exit(2);
 }
