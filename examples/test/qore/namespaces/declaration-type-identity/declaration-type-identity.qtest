@@ -52,7 +52,12 @@ class NamespaceTypesTest inherits QUnit::Test {
         string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
             shellQuote(fixture)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        # the program runs in its default environment; a warning of the module loader on stderr is not its output
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(shellQuote(program), NOTHING,
+            "QORE_JIT_TIMING=1");
+        assertEq(0, r.rc, "exit status: " + r.out);
+        assertEq(expected, r.stdout);
+        assertEq("", r.stderr, "stderr");
     }
 
     private static string shellQuote(string value) {
