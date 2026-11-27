@@ -99,12 +99,17 @@ ALLOWED = {
         "key=<number> pairs",
     ("examples/test/ir/AOTDataProviderExecutable.qtest", 'echo $? > %s", libqore_dir, exe_path, status_path)'):
         "the executable runs a QUnit test: its exit status and a regex match of the QUnit summary line",
+    ("examples/test/ir/AOTModuleMetadataSection.qtest", '"%s %s 2>&1", reseal_bin, qmod)'):
+        "runs the qore-aot-reseal tool on a module, not an executable: only its exit status is checked",
+    ("examples/test/ir/AOTLinkDeploymentTarget.qtest", 'shellQuote(lib_dir), cmd)'):
+        "run() runs qcc links (the command in cmd), checked for no linker warning and by the files they write; the "
+        "executable runs through checkExecutable()",
 }
 
 
 #: the number of entries of each list, which only shrinks: when a test is converted, remove its entry and lower the
 #: number
-SIZES = {"ALLOWED": 14, "PENDING_AOT3": 14, "PENDING": 61}
+SIZES = {"ALLOWED": 16, "PENDING_AOT3": 14, "PENDING": 46}
 
 #: the tests that still run qcc executables with 2>&1, which are to be converted: test -> the number of its flagged
 #: calls; the lists only shrink (test_pending_counts fails when the number of a test's calls changes: when one is
@@ -130,21 +135,6 @@ PENDING_AOT3 = {
 PENDING = {
     # runs with an environment prefix or other forms that the #7805 inventory did not find: to be converted (or, if a
     # loader warning cannot fail what they check, moved to ALLOWED with the reason)
-    "examples/test/ir/AOTLLVM23Terminator.qtest": 1,
-    "examples/test/ir/AOTLateExceptionEdgeElision.qtest": 1,
-    "examples/test/ir/AOTLinkDeploymentTarget.qtest": 1,
-    "examples/test/ir/AOTLinkUnresolvedReference.qtest": 1,
-    "examples/test/ir/AOTLinkedExitWaitsForThreads.qtest": 1,
-    "examples/test/ir/AOTMemberInitNegativeOffsets.qtest": 1,
-    "examples/test/ir/AOTModuleDependencyRestrictions.qtest": 1,
-    "examples/test/ir/AOTModuleHeaderRequests.qtest": 1,
-    "examples/test/ir/AOTModuleMetadataSection.qtest": 1,
-    "examples/test/ir/AOTNamedCallRefModules.qtest": 1,
-    "examples/test/ir/AOTNativeClosure.qtest": 8,
-    "examples/test/ir/AOTNestedCfgSelectSummary.qtest": 2,
-    "examples/test/ir/AOTNonescapingObjectScalarProjection.qtest": 1,
-    "examples/test/ir/AOTNoopDecrefPrune.qtest": 2,
-    "examples/test/ir/AOTObjectMemberCompoundGet.qtest": 2,
     "examples/test/ir/AOTObjectMemberCompoundGetCrossObject.qtest": 1,
     "examples/test/ir/AOTObjectMemberSetGet.qtest": 5,
     "examples/test/ir/AOTObjectMemberSetGetCrossObject.qtest": 1,

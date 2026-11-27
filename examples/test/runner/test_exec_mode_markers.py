@@ -178,8 +178,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
         # - AOTModuleMissingDependencyFallback (#7004): its checks compile modules and run drivers that load them, in
         #   child processes that set their own --exec-mode, and compiled with qcc
-        # - AOTNamedCallRefModules (M4 phase 3): its checks compile modules with qcc and run the interpreter and the
-        #   compiled programs in child processes
         # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
         #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
@@ -221,7 +219,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
         # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
         #   and in qcc executables
-        # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -238,8 +235,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   whose standard output and error output it reads
         # - asyncio_poll_complete_notify (#6804): its checks run in child processes without an execution mode, whose
         #   standard output and error output it reads
-        # - AOTMemberInitNegativeOffsets (#6294): its checks run in child processes of the interpreter and of qcc
-        #   executables
         # - QUnit result-counts (#2297): the test whose results it counts runs in child processes without an
         #   execution mode
         # - JITFinalizeCancellation (#6305): its checks run in child processes that set their own --exec-mode and arm
@@ -253,8 +248,6 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
-        # - AOTModuleDependencyRestrictions (#6406) and AOTModuleHeaderRequests (#6386): their checks run in child
-        #   processes that set their own --exec-mode and in qcc executables
         # - include-failure-diagnostics (#6509): its checks run the command line in child processes started without an
         #   execution mode
         # - DeserializationSizes (#6502): each case is deserialized in a child process started without an execution mode
@@ -317,8 +310,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
-                                 "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
-                                 "examples/test/ir/AOTModuleHeaderRequests.qtest",
                                  "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
                                  "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/alloc-failure/alloc-failure.qtest",
@@ -326,13 +317,11 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
-                                 "examples/test/ir/AOTLinkUnresolvedReference.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/image-ir-temp-drain/image-ir-temp-drain.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
-                                 "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
                                  "examples/test/qore/misc/process-end-callbacks/process-end-callbacks.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
@@ -363,7 +352,6 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
-                                 "examples/test/ir/AOTNamedCallRefModules.qtest",
                                  "examples/test/ir/AOTModuleMissingDependencyFallback.qtest",
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
