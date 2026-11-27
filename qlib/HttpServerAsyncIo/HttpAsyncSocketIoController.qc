@@ -3722,20 +3722,28 @@ public class HttpAsyncSocketIoController {
                 # the connection of the request that this thread runs (see running_stream_conn, qore#7692), cleared
                 # when the task ends, in the cleanup block below
                 Priv::running_stream_conn = uh;
+                # the hold of the request's result (see HttpRequestResultInfo::request_hold), released in the cleanup
+                # block below once the stream has been cleaned up, while the thread's connection is still set, so that
+                # the stop of a destructor of the server that the release runs does not wait for this request
+                # (qore#7509)
+                *object request_hold;
                 # Clean up dispatched stream state after handler completes
                 # (applies to all headers-only dispatched streams, not just body_streaming)
                 # NOTE: on_exit must be at closure scope (not inside if-block), otherwise
                 # the cleanup fires immediately when the if-block exits
                 on_exit {
-                    Priv::running_stream_conn = NOTHING;
+                    # the connection is cleared last, also when the release of the hold raises an error
+                    on_exit Priv::running_stream_conn = NOTHING;
                     if (request.hdr) {
                         try {
                             listener.cleanupQuicStream(session_id, stream_id);
                         } catch () {}
                     }
+                    remove request_hold;
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
+                    request_hold = result.request_hold;
                     if (result.persistent_request_end) {
                         persistentRequestReturned(target, conn_info, result.persistent_request_end);
                     }
@@ -6743,13 +6751,21 @@ public class HttpAsyncSocketIoController {
                 # the connection of the request that this thread runs (see running_stream_conn, qore#7692), cleared
                 # when the task ends, in the cleanup block below
                 Priv::running_stream_conn = dispatch_uh;
+                # the hold of the request's result (see HttpRequestResultInfo::request_hold), released in the cleanup
+                # block below once the stream has been cleaned up, while the thread's connection is still set, so that
+                # the stop of a destructor of the server that the release runs does not wait for this request
+                # (qore#7509)
+                *object request_hold;
                 # NOTE: on_exit must be at closure scope, so that it runs when the request has been handled
                 on_exit {
-                    Priv::running_stream_conn = NOTHING;
+                    # the connection is cleared last, also when the cleanup or the release of the hold raise an error
+                    on_exit Priv::running_stream_conn = NOTHING;
                     cleanup_stream();
+                    remove request_hold;
                 }
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                    request_hold = result.request_hold;
                     if (result.persistent_request_end) {
                         persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
                     }

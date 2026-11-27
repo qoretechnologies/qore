@@ -25701,6 +25701,44 @@ static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, R
     return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: holds or releases the flushes of the callbacks of the global async I/O controller made in callbacks
+/** A held flush may return, and still counts as a callback that waits in the flush, so that a test can check what a
+    flush made by another thread does then (qore#7509)
+*/
+static QoreValue f_dbg_async_io_hold_callback_flush(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    bool hold = get_param_value(params, 0).getAsBool();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgHoldCallbackFlush(hold);
+    return QoreValue();
+}
+
+//! Debug-only: waits until a flush of the callbacks of the global async I/O controller made in a callback is held
+/** @return True if a flush is held, False if none was when the timeout elapsed
+*/
+static QoreValue f_dbg_async_io_wait_callback_flush_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitCallbackFlushHeld(static_cast<int>(timeout_ms));
+}
+
 //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner of the global async I/O controller
 /** AsyncIoController::flushCallbacksByOwner() marks the owner, then waits for its callbacks; a test that checks what
     the mark does waits until it is set (qore#7010)
@@ -39287,6 +39325,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_callback_flush", f_dbg_async_io_hold_callback_flush,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_callback_flush_held", f_dbg_async_io_wait_callback_flush_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
