@@ -59,6 +59,7 @@
 
 #include <cerrno>
 #include "qore-json-module.h"
+#include "qore/intern/qore_keyed_hash.h"
 
 #include "ql_toon.h"
 
@@ -680,7 +681,8 @@ static ToonArrayForm toon_array_form(ToonEncCtx& c, const QoreListNode* l, std::
             return TAF_EXPANDED;
         }
         if (!f.empty()) {
-            std::unordered_set<std::string> fset(f.begin(), f.end());
+            qore_keyed_string_set fset(f.begin(), f.end());
+            QORE_KEYED_HASH_SITE("json-1", fset);
             bool ok = (fset.size() == f.size());
             for (size_t i = 0; ok && i < n; ++i) {
                 if (c.checkCancel("serializing TOON array")) {

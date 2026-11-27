@@ -75,6 +75,14 @@ document converted from Qore data to the nesting depth that jsoncons' parser acc
 `make_json_schema()`, which takes them by value, as copying a document recurses for each level. Keep the hook calls
 when updating jsoncons.
 
+The sets of the property names of a validated instance (the `evaluated_properties` of `evaluation_results` in
+`jsonschema/common/validator.hpp` and the `allowed_properties` sets of `jsonschema/common/keyword_validator.hpp`) have
+the type `jsoncons::jsonschema::property_name_set`, a local patch: `validator.hpp` defines it from
+`JSONCONS_JSONSCHEMA_PROPERTY_NAME_SET`, `std::unordered_set<std::string>` by default, and
+`modules/json/src/QC_JsonSchema.h` defines that to `qore_keyed_string_set` before including jsoncons, so that these
+sets hash the names with the keyed hash of the process (qore#7750); the module's initialization creates its key.  Keep
+the alias, and use it for every set of instance property names, when updating jsoncons.
+
 The module's own parsers and serializers (JSON, CBOR, TOON, the SAX parser and the stream writer) call
 `q_check_stack()` for each nested container, so the nesting depth that they accept is limited by the thread's stack
 rather than by a fixed limit; the sandbox limit of 256 levels still applies in a sandbox. `make_cbor()` also reports
