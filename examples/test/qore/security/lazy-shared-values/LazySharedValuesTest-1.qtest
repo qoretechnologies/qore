@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - threads waiting on condition variables, trusted builds and AOT-compiled calls of builtin classes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include LazySharedValuesTest.qc
+
+%exec-class LazySharedValuesTestPart1
+
+#! runs part 1 of 3 of the cases of LazySharedValuesTestBase: LazySharedVendoredSchemas.q in every execution mode
+class LazySharedValuesTestPart1 inherits LazySharedValuesTestBase {
+    constructor() : LazySharedValuesTestBase("LazySharedValuesTestPart1", 1) {
+    }
+}
