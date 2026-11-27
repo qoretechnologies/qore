@@ -7102,13 +7102,31 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_return_by_type_path_aot(
         type_info, value, cleanup_ptr, xsink);
 }
 
-// applies the declared return type to a missing return value like the caller of a standard entry does
-static uint64_t qore_rt_coerce_nothing_return_value(const QoreTypeInfo* ti, uint64_t* cleanup_ptr,
-        ExceptionSink* xsink) {
+#ifdef DEBUG
+//! Debug-only: the number of missing return values that the fast entries of native code have rejected in this thread
+static thread_local int64 missing_return_coercion_error_count = 0;
+
+//! Debug-only: returns the number of missing return values that the fast entries of native code have rejected in this
+//! thread (qore_rt_coerce_nothing_return_value()); for the tests that check that native code ran its fast entries
+int64 qore_rt_dbg_missing_return_coercion_error_count() {
+    return missing_return_coercion_error_count;
+}
+#endif
+
+// applies the declared return type to a missing return value like the caller of a standard entry does, which locates
+// the error at the signature of the code (UserVariantBase::evalIntern(), qore#7787)
+static uint64_t qore_rt_coerce_nothing_return_value(const QoreTypeInfo* ti, const QoreProgramLocation* loc,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val;
     QoreTypeInfo::acceptAssignment(ti, "<block return>", val, xsink, nullptr);
     if (*xsink) {
+#ifdef DEBUG
+        ++missing_return_coercion_error_count;
+#endif
+        if (loc) {
+            qore_exception_sink_ops(xsink).overrideLocation(*loc);
+        }
         xsink->appendLastDescription(": block missing return statement");
         val.discard(xsink);
         return toBits(QoreValue());
@@ -7121,7 +7139,8 @@ static uint64_t qore_rt_coerce_nothing_return_value(const QoreTypeInfo* ti, uint
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return_by_type_path_aot(
-        QoreAOTContext* ctx, const char* type_path, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+        QoreAOTContext* ctx, const char* type_path, const QoreProgramLocation* loc, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink) {
     const QoreTypeInfo* type_info = nullptr;
     if (type_path && *type_path) {
         type_info = qore_rt_resolve_full_type_path_cached(
@@ -7130,7 +7149,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return_by_type_path_aot(
             return toBits(QoreValue());
         }
     }
-    return qore_rt_coerce_nothing_return_value(type_info, cleanup_ptr, xsink);
+    return qore_rt_coerce_nothing_return_value(type_info, loc, cleanup_ptr, xsink);
 }
 
 //! As qore_rt_accept_return_statement_nothing(), with the return type identified by its type path
@@ -7236,9 +7255,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_return(const QoreTypeInfo* ti, uint
     return qore_rt_coerce_return_value(ti, value, cleanup, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, uint64_t* cleanup,
-        ExceptionSink* xsink) {
-    return qore_rt_coerce_nothing_return_value(ti, cleanup, xsink);
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, const QoreProgramLocation* loc,
+        uint64_t* cleanup, ExceptionSink* xsink) {
+    return qore_rt_coerce_nothing_return_value(ti, loc, cleanup, xsink);
 }
 
 static uint64_t qore_rt_new_complex_hash_from_hash_impl(const QoreTypeInfo* typeInfo,

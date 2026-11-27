@@ -224,13 +224,16 @@ public:
     //! @param return_kind native or boxed fast-entry return ABI
     //! @param return_type the declared return type from the signature; a fast entry applies it to its return
     //! values itself, since it is called directly instead of through a runtime helper that applies it
+    //! @param signature_loc the location of the signature, which locates the error of a missing return value of a
+    //! type that rejects NOTHING, as the caller of a standard entry does (UserVariantBase::evalIntern(), qore#7787)
     void setFastEntryMode(const std::string& name,
             const std::unordered_map<const void*, llvm::Value*>* args,
             const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
             const std::unordered_set<const void*>* borrowed_args = nullptr,
             BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed,
-            const QoreTypeInfo* return_type = nullptr) {
+            const QoreTypeInfo* return_type = nullptr, const QoreProgramLocation* signature_loc = nullptr) {
         fast_entry_name = name;
+        fast_entry_signature_loc = signature_loc;
         fast_entry_args = args;
         fast_entry_arg_kinds = arg_kinds;
         fast_entry_borrowed_args = borrowed_args;
@@ -428,6 +431,8 @@ private:
     bool fast_entry_rejects_nothing_return = false;
     //! the declared return type of a fast entry
     const QoreTypeInfo* fast_entry_return_type = nullptr;
+    //! the location of the signature of a fast entry, of the error of a missing return value (qore#7787)
+    const QoreProgramLocation* fast_entry_signature_loc = nullptr;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -1903,6 +1908,9 @@ private:
     llvm::Constant* getNothingReturnValue() const;
     //! Emits the declared return type's conversion of a returned value, or of a missing return value when
     //! @p boxed is null, and returns the converted NaN-boxed value; the result is released by invoke cleanup
+    /** The error of a missing return value is located at the signature of the fast entry
+        (fast_entry_signature_loc), as the caller of a standard entry locates it (qore#7787).
+    */
     llvm::Value* emitReturnTypeConversion(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type);
     //! Converts a NaN-boxed return value to the fast-entry return ABI

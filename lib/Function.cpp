@@ -8104,7 +8104,11 @@ StatementBlock* UserVariantBase::getAOTClosureDebugBlock() const {
     if (!pgm || !qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return nullptr;
     }
-    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(signature.getParseLocation());
+    // the location of the closure's block, which the AOT image records apart from the location of its signature
+    // (qore#7787)
+    const QoreProgramLocation* loc = is_closure
+        ? static_cast<const UserClosureVariant*>(this)->getAOTBlockLocation() : nullptr;
+    return qore_program_private::get(*pgm)->getAOTClosureDebugBlock(loc ? loc : signature.getParseLocation());
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {

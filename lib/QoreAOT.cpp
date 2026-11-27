@@ -20063,7 +20063,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     fast_lowerer.setFastEntryMode(fast_name, &param_map,
                         &param_kind_map, &borrowed_params,
-                        return_kind, ir_func->specializeType(sig->getReturnTypeInfo()));
+                        return_kind, ir_func->specializeType(sig->getReturnTypeInfo()), sig->getParseLocation());
                     fast_lowered = fast_lowerer.lowerFunction(*ir_func, module,
                         fast_error);
                 }
@@ -22558,7 +22558,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 sig->getReturnTypeInfo());
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                 &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                fast_return_type);
+                                fast_return_type, sig->getParseLocation());
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
@@ -23050,7 +23050,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     sig->getReturnTypeInfo());
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                     &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                    fast_return_type);
+                                    fast_return_type, sig->getParseLocation());
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(
                                     *fast_ir_func, module, fast_error)) {

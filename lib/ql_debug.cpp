@@ -28059,6 +28059,19 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
 }
 
 // defined in JITRuntime.cpp
+DLLLOCAL int64 qore_rt_dbg_missing_return_coercion_error_count();
+
+//! Debug-only: returns the number of missing return values that the fast entries of native code have rejected in the
+//! current thread (qore#7787)
+/** A test uses it to check that the error of a missing return value came from the fast entry of native code, whose
+    location it checks, and not from the caller of a standard entry
+*/
+static QoreValue f_dbg_get_missing_return_coercion_error_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_rt_dbg_missing_return_coercion_error_count();
+}
+
+// defined in JITRuntime.cpp
 DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats();
 DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
         ExceptionSink* xsink);
@@ -29270,6 +29283,10 @@ static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
             e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str);
             // the location of the closure (format version 26: QORE_AOT_SOURCE_LOCATIONS_VERSION): none (lines 0)
             if (a.r.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                e.u32(0).u32(0).i64(0).u32(str).u32(str);
+            }
+            // the location of its signature (QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION): none
+            if (a.r.getHeader().version >= QORE_AOT_CLOSURE_SIGNATURE_LOCATION_VERSION) {
                 e.u32(0).u32(0).i64(0).u32(str).u32(str);
             }
             // return type, one parameter with a default
@@ -38191,6 +38208,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stats", f_dbg_aot_dispatch_reclaim_stats, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_get_missing_return_coercion_error_count",
+        f_dbg_get_missing_return_coercion_error_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stress", f_dbg_aot_dispatch_reclaim_stress, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "target", bigIntTypeInfo,
         QORE_PARAM_NO_ARG, "threads", bigIntTypeInfo, QORE_PARAM_NO_ARG, "iterations");

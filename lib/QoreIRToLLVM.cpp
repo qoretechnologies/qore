@@ -10939,9 +10939,14 @@ llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::
                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, i64_type, ptr_type, ptr_type}, false));
             result = builder->CreateCall(helper, {aot_ctx_arg, type_path, boxed, cleanup, xsink_arg});
         } else {
+            // the location of the signature as the image holds it (getAotLocationConstant()), for the error
+            llvm::Value* loc = getAotLocationConstant(fast_entry_signature_loc, module);
+            if (!loc) {
+                loc = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+            }
             auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return_by_type_path_aot",
-                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
-            result = builder->CreateCall(helper, {aot_ctx_arg, type_path, cleanup, xsink_arg});
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {aot_ctx_arg, type_path, loc, cleanup, xsink_arg});
         }
     } else {
         llvm::Value* type_info = getTypeInfoPointerArg(return_type);
@@ -10950,9 +10955,14 @@ llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::
                 llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
             result = builder->CreateCall(helper, {type_info, boxed, cleanup, xsink_arg});
         } else {
+            // the location of the signature, which the Program keeps while its native code exists, for the error
+            llvm::Value* loc = fast_entry_signature_loc
+                ? llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(fast_entry_signature_loc)), llvm::PointerType::getUnqual(ctx))
+                : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
             auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return",
-                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
-            result = builder->CreateCall(helper, {type_info, cleanup, xsink_arg});
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {type_info, loc, cleanup, xsink_arg});
         }
     }
     emitExceptionCheck(module, llvm_func, inst);
