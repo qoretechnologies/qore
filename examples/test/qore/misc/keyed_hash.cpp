@@ -37,6 +37,8 @@ static_assert(std::__cache_default<std::string, qore_keyed_string_hash>::value,
     "the nodes of a container with qore_keyed_string_hash store the hashes of their keys");
 static_assert(std::__cache_default<int64_t, qore_keyed_int_hash>::value,
     "the nodes of a container with qore_keyed_int_hash store the hashes of their keys");
+static_assert(std::__cache_default<int64_t, qore_keyed_fold_int_hash>::value,
+    "the nodes of a container with qore_keyed_fold_int_hash store the hashes of their keys");
 #endif
 static_assert(qore_is_keyed_hasher<qore_keyed_string_map<int>::hasher>::value);
 static_assert(qore_is_keyed_hasher<qore_keyed_string_set::hasher>::value);

@@ -226,7 +226,7 @@ inline uint64_t qore_keyed_fold64(uint64_t k0, uint64_t k1, uint64_t v) {
 
 //! The keyed folded-multiply hash of the process (qore_keyed_fold64()), for std::unordered_* containers with integer
 //! keys of data operations
-/** libstdc++ takes it for a "fast" hash (it is), so the nodes do not store the hashes of their keys.
+/** libstdc++ stores its hashes in the nodes (see below), so that a search does not hash the keys of a chain again.
 */
 class qore_keyed_fold_int_hash {
 public:
@@ -255,6 +255,16 @@ private:
 template <>
 struct qore_is_keyed_hasher<qore_keyed_fold_int_hash> : public std::true_type {
 };
+
+#ifdef __GLIBCXX__
+// the nodes store the hashes of their keys: without them, libstdc++ hashes the key of each node of a chain that a
+// search walks again, to find the end of its bucket
+namespace std {
+template <>
+struct __is_fast_hash<qore_keyed_fold_int_hash> : public std::false_type {
+};
+}
+#endif
 
 //! an unordered map with integer keys of data operations and the keyed folded-multiply hash of the process
 template <typename K, typename V>
