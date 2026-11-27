@@ -289,7 +289,8 @@ public class RawHttp2Client {
         readUntil(bool sub (hash<auto> f) { return False; }, read_timeout);
     }
 
-    #! Handles a frame read: acknowledges SETTINGS and PING, credits DATA back (see credit_data), records RST_STREAM and GOAWAY
+    #! Handles a frame read: acknowledges SETTINGS and PING, credits DATA back (see credit_data), records RST_STREAM
+    #! and GOAWAY
     /** @return False if the server has closed or reset the connection (a send failed for it)
     */
     private bool handleFrame(hash<auto> f) {
