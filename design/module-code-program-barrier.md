@@ -340,7 +340,8 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     gate of QoreLlmTypes' `LlmAsyncOperation`, whose posted tasks carry their own handles), which push a handle and run
     each pass (or frame, or message round) as counted work under the first handle left to them, then release the
     handles; and the code given to another thread through `wrapModuleCleanupWork()`:
-    `HttpAsyncSocketIoController::submitToHandlerPool()` (centrally), `runOnThreadOfItsOwn()`, `runOnHandlerPool()`,
+    `HttpAsyncSocketIoController::submitToHandlerPool()` and `submitDispatchToHandlerPool()` (HTTP/1.1 requests;
+    centrally), `runOnThreadOfItsOwn()`, `runOnHandlerPool()`,
     `dispatchResponseSendResult()` (after_send), the end of an HTTP/1.1 WebSocket connection
     (`HttpWebSocketPollOperation::scheduleDoneCallback()`), `HttpPersistentRequestEnd::notify()`, the pool stop in the
     controller's `stop()`, HttpServer's handler-pool submitter and `ResponseAfterSendNotifier`, QoreLlmTypes' transport
