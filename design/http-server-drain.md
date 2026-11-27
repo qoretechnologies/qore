@@ -215,6 +215,14 @@ So the drain counts with deterministic objects instead:
   `handleRequestResult()`, and, for a new connection, the registration guards and drain checks in
   `handleAcceptComplete()`; the inline path is short, so the same fixed cost weighs more there. Removing it needs a
   restructured hot path (no per-listener count of the dispatches, or a Counter that costs nothing per request).
+- Measured cost of the HTTP/1.1 dispatch runner (qore#7769; same method, 2026-11-27): about +2.3k Ir per request
+  (+0.04%), from `runDispatchBody()` (+211 exclusive over `runHandlerBody()`) and its frame (type resolution, cleanup);
+  the submission is unchanged. That is below the spread between two trees of the same build (an A/A pair: 2-4k), and
+  with the trees swapped the keep-alive minimum was 1.9k lower with qore#7769. Single minima differ by up to 25k with
+  the layout (malloc and reference-cycle scan), and the same build by about 14k between sessions: a comparison is
+  valid in one session only, with a swap or an A/A pair as its control. Follow-ups: qore#7791 (`remove` of a local is
+  not lowered natively by AOT, which made a transfer of the work item cost about +15k Ir per request) and qore#7792
+  (the submitter's references release a pool task's body on the submitting thread when the worker ends first).
 
 ## Per-listener drain (qore#7692)
 
@@ -306,20 +314,28 @@ draining listener while `listeners_draining` is set (`draining_lids`, filled in 
 8. `cThreads.wait()`, then the qore#7690 tail: the listener is removed from the controller, its socket closed, its
    dedicated connections stopped, and the server notified.
 
-An HTTP/1.1 dispatch that is handed to the handler pool and whose task never runs its body stays counted; the task
-carries nothing for its dispatch (a member or a key in the work item costs every request: +18.5k Ir, and +5.5k Ir in the
-submission alone, were measured per pool request for the two ways tried), and `waitListenerDispatches()` has no
-timeout:
-- the target's `saveDispatchContext()` raises an exception (a target that saves its thread-local state there, such as
-  Qorus's `QorusHttpAsyncTarget`, on an internal failure): the request is not answered and stays counted, and a
-  later stop of the listener waits for the drain timeout and then until the server is stopped, as the controller's
-  `stop()` ends the counts that are left (`endStaleDispatches()`); qore#7769 tracks it;
-- the pool cancels a queued task: only while the controller stops it and a worker cannot be started (a thread limit),
-  or when it is destroyed with queued tasks (the server is stopped in one of its own requests, and the background
-  thread that stops the pool cannot be started). The controller's `stop()`, once its pool has stopped in another
-  thread than its own and the callbacks are flushed, ends the counts that are left; when the pool was stopped by one
-  of its own threads, or its `stopWait()` failed, they stay, and a stop of the listener that runs at the same time
-  waits forever, as does the server's stop, which waits for it.
+An HTTP/1.1 dispatch that is handed to the handler pool always ends its count, with no cost on the success path
+(qore#7769):
+- the dispatch is submitted with a runner of its own (`submitDispatchToHandlerPool()`, `dispatchTaskRunner()`,
+  `runDispatchPoolTask()`, `runDispatchBody()`), whose success path has the shape of `runHandlerBody()`: the same
+  handoff and work item, and a `try` around `saveDispatchContext()` only. When it raises an exception, the body is
+  called with the thread-local `aborting_dispatch` set: the body reads it first and ends its dispatch
+  (`endAbortedDispatch()`: the count is decremented and the connection closed, the request is not handled); the
+  exception is then raised as before. Nothing is carried in the work item (a member or a key in it was measured at
+  +18.5k and +5.5k Ir per pool request).
+- a task that is still queued when the controller stops is run: the controller stops its pool with `stopWait()`,
+  whose manager gives every queued task to a worker and, when no worker can be started (a thread limit), waits and
+  retries instead of cancelling (`ThreadPool::worker()` leaves its loop on a failed start only with `stopflag`, which
+  `stopWait()` does not set). A pool cancels its queued tasks only when it is stopped with `stop()`, or destroyed
+  with tasks queued (`stopFromOwnWorker()`, the destructor). The controller's `stop()` ends the counts that are left
+  after `stopWait()` (`endStaleDispatches()`), which covers a `stop()` from outside. One branch remains, under a
+  thread limit only: when the controller is stopped in a task of its own pool and `background stop_pool()` cannot
+  start its thread, the pool is not stopped and keeps running its tasks until it is destroyed (`start()` replacing
+  it, or the destruction of the controller); its destructor then cancels the tasks still queued, whose counts are not
+  ended.
+- the HTTP/2, HTTP/3, SSE and WebSocket bodies of a task whose target's `saveDispatchContext()` raises an exception
+  are skipped as before; their connections are counted by the drain, which waits for them until the drain timeout
+  (not a hang). They are outside the scope of qore#7769.
 
 The HTTP/2 and HTTP/3 tasks set `running_stream_conn` and clear it in their existing cleanup.
 
