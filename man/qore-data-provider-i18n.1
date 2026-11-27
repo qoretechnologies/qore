@@ -24,6 +24,13 @@ identifiers.
 One file is written for each catalog domain as
 \fIdirectory/domain/root.json\fR.  Existing files are replaced unless
 \fB\-\-check\fR is used.
+.PP
+A registration of a provider module that fails while the module is loaded (for
+example the initialization of an app whose action script cannot be opened),
+and an owner module that has catalogs (or, when catalogs are extracted, that
+\fB\-\-owner\fR names) but registers nothing, end the run with an error that names the module and gives
+the original error, and the exit status is 1, before any catalog is compared or
+written: the catalogs of such a module are not reported as orphaned or stale.
 .SH OPTIONS
 .TP
 .BR \-o ", " \-\-output =\fIdirectory\fP
